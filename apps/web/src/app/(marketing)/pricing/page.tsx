@@ -1,4 +1,3 @@
-import { priceCatalogue } from '@dr/shared'
 import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
@@ -6,9 +5,8 @@ import { Container } from '@/components/layout/site-shell'
 import { FeaturedPricing } from '@/features/pricing/components/featured-pricing'
 import { PricingTable } from '@/features/pricing/components/pricing-table'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
-import { toFxSettings } from '@/features/pricing/lib/fx'
 import { NIGERIAN_TLDS, sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
-import { displayRate, getActiveRate } from '@/features/pricing/queries/active-rate'
+import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 
 export const metadata: Metadata = {
   title: 'Domain pricing',
@@ -17,9 +15,9 @@ export const metadata: Metadata = {
 }
 
 export default async function PricingPage() {
-  const active = await getActiveRate()
+  const priced = await getPricedCatalogue()
 
-  if (!active) {
+  if (!priced) {
     return (
       <>
         <SiteHeader className="border-border/60 border-b" />
@@ -36,11 +34,10 @@ export default async function PricingPage() {
     )
   }
 
-  const effectiveRate = displayRate(active)
+  const effectiveRate = priced.effectiveRate
 
-  // Priced on the server. Cost and margin never leave it — see toPublicRow.
-  const priced = priceCatalogue(toFxSettings(active))
-  const rows = sortForDisplay(priced.map(toPublicRow))
+  // Cost and margin never leave the server — see toPublicRow.
+  const rows = sortForDisplay(priced.tlds.map(toPublicRow))
   const featured = (NIGERIAN_TLDS as readonly string[])
     .map((tld) => rows.find((row) => row.tld === tld))
     .filter((row): row is (typeof rows)[number] => Boolean(row))

@@ -1,150 +1,142 @@
 /**
- * Retail pricing. PRD §8.3.
+ * Pricing.
  *
- * Money is handled in integer minor units (kobo) internally. Never use floats
- * for money arithmetic — compute in kobo, format at the edge.
+ * Every input comes from the database — wholesale cost from the synced
+ * catalogue, the exchange rate from the FX feed, margin and fees from
+ * pricing settings. Nothing here carries a hardcoded number.
+ *
+ * Money is handled in integer minor units (kobo). Never floats.
  */
 
 export const KOBO_PER_NAIRA = 100
 
-/** ICANN transaction fee: USD 0.20 per year, gTLDs only. Raised from 0.18 on 2025-07-01. */
-export const ICANN_FEE_USD_PER_YEAR = 0.2
+export type TradeKind = 'registration' | 'renewal' | 'transfer' | 'restore'
 
-export const VAT_RATE = 0.075
+/** Wholesale costs for one extension, in USD, as the supplier quotes them. */
+export type TldCost = {
+  name: string
+  registerUsd: number
+  renewUsd: number
+  transferUsd: number | null
+  restoreUsd: number | null
+  isCountryCode: boolean
+}
 
-export type TradeType = 'registration' | 'renewal' | 'transfer' | 'restore'
-
-export type PriceInput = {
-  /** Wholesale cost from the supplier, in USD, for the whole period. */
-  supplierCostUsd: number
-  /** Registration period in years. */
-  periodYears: number
-  /** True for gTLDs (.com, .net, .org). False for ccTLDs (.ng, .co, .ai). */
-  icannFeeApplies: boolean
-  /** NGN per USD, mid-market. */
-  fxMidRate: number
-  /** Buffer applied on top of the mid rate to absorb intraday movement, e.g. 4 for 4%. */
+/** Everything needed to turn a USD cost into a naira price. */
+export type PricingInputs = {
+  /** Naira per dollar, before the buffer. */
+  fxRate: number
+  /** Percentage added to the rate to cover settlement lag. */
   fxBufferPct: number
-  /** Gross margin for this TLD and trade type, e.g. 22 for 22%. */
-  marginPct: number
-  /** Flat markup in naira added after margin. */
-  fixedMarkupNgn?: number
-  /** Overrides the computed price entirely (merchandised loss-leaders, promos). */
-  manualOverrideNgn?: number
+  /** Flat profit per domain, in naira. */
+  marginNgn: number
+  /** ICANN transaction fee per year, in USD. gTLDs only. */
+  icannFeeUsd: number
 }
 
-export type PriceBreakdown = {
-  supplierCostKobo: number
-  icannFeeKobo: number
-  subtotalKobo: number
-  vatKobo: number
-  totalKobo: number
-  effectiveFxRate: number
+export type Price = {
+  tld: string
+  kind: TradeKind
+  /** Landed wholesale cost including any ICANN fee, in kobo. */
+  costKobo: number
+  /** What the customer pays, in kobo. */
+  priceKobo: number
+  /** Profit, in kobo. At least the configured margin. */
+  marginKobo: number
 }
 
-function toKobo(naira: number): number {
-  return Math.round(naira * KOBO_PER_NAIRA)
+export function effectiveFxRate(rate: number, bufferPct: number): number {
+  if (!Number.isFinite(rate) || rate <= 0) throw new RangeError('FX rate must be positive')
+  if (!Number.isFinite(bufferPct) || bufferPct < 0) {
+    throw new RangeError('FX buffer cannot be negative')
+  }
+  return rate * (1 + bufferPct / 100)
 }
 
 /**
- * Round up to a price that looks deliberate rather than converted.
- * ₦17,214 → ₦17,500 · ₦17,640 → ₦17,900 · ₦17,950 → ₦18,000 (PRD FR-PRICE-4).
+ * Round up to the next ₦100.
+ *
+ * Only ever upward, so the configured margin is a floor rather than a target:
+ * rounding down would quietly sell below it.
  */
-export function roundToPsychological(kobo: number): number {
-  const naira = Math.ceil(kobo / KOBO_PER_NAIRA)
-  const thousands = Math.floor(naira / 1000)
-  const remainder = naira - thousands * 1000
-
-  // The ladder of acceptable endings within a thousand, then the next thousand.
-  // Rounding must never go DOWN — the price would fall through the margin floor.
-  if (remainder === 0) return toKobo(naira)
-  if (remainder <= 500) return toKobo(thousands * 1000 + 500)
-  if (remainder <= 900) return toKobo(thousands * 1000 + 900)
-  return toKobo((thousands + 1) * 1000)
+export function roundUpToHundred(kobo: number): number {
+  return Math.ceil(kobo / (100 * KOBO_PER_NAIRA)) * 100 * KOBO_PER_NAIRA
 }
 
-export function effectiveFxRate(midRate: number, bufferPct: number): number {
-  if (midRate <= 0) throw new RangeError('FX mid rate must be positive')
-  if (bufferPct < 0) throw new RangeError('FX buffer cannot be negative')
-  return midRate * (1 + bufferPct / 100)
-}
-
-export function computePrice(input: PriceInput): PriceBreakdown {
-  const {
-    supplierCostUsd,
-    periodYears,
-    icannFeeApplies,
-    fxMidRate,
-    fxBufferPct,
-    marginPct,
-    fixedMarkupNgn = 0,
-    manualOverrideNgn,
-  } = input
-
-  if (periodYears < 1) throw new RangeError('Period must be at least one year')
-  if (supplierCostUsd < 0) throw new RangeError('Supplier cost cannot be negative')
-
-  const rate = effectiveFxRate(fxMidRate, fxBufferPct)
-
-  const icannFeeUsd = icannFeeApplies ? ICANN_FEE_USD_PER_YEAR * periodYears : 0
-  const supplierCostKobo = toKobo(supplierCostUsd * rate)
-  const icannFeeKobo = toKobo(icannFeeUsd * rate)
-
-  let subtotalKobo: number
-  if (manualOverrideNgn !== undefined) {
-    subtotalKobo = toKobo(manualOverrideNgn)
-  } else {
-    const withMargin = (supplierCostKobo + icannFeeKobo) * (1 + marginPct / 100)
-    subtotalKobo = roundToPsychological(withMargin + toKobo(fixedMarkupNgn))
-  }
-
-  const vatKobo = Math.round(subtotalKobo * VAT_RATE)
-
-  return {
-    supplierCostKobo,
-    icannFeeKobo,
-    subtotalKobo,
-    vatKobo,
-    totalKobo: subtotalKobo + vatKobo,
-    effectiveFxRate: rate,
+function costUsdFor(tld: TldCost, kind: TradeKind): number | null {
+  switch (kind) {
+    case 'registration':
+      return tld.registerUsd
+    case 'renewal':
+      return tld.renewUsd
+    case 'transfer':
+      return tld.transferUsd
+    case 'restore':
+      return tld.restoreUsd
   }
 }
 
-/**
- * Premium domains bypass the margin table — registry premiums range from
- * USD 50 to USD 50,000, so a percentage alone is unusable (PRD FR-PRICE-5).
- */
-export function computePremiumPrice(input: {
-  supplierCostUsd: number
-  fxMidRate: number
-  fxBufferPct: number
-  markupPct: number
-  minMarkupNgn: number
-  maxMarkupNgn: number
-}): PriceBreakdown {
-  const rate = effectiveFxRate(input.fxMidRate, input.fxBufferPct)
-  const supplierCostKobo = toKobo(input.supplierCostUsd * rate)
+export function priceFor(tld: TldCost, kind: TradeKind, inputs: PricingInputs): Price | null {
+  const costUsd = costUsdFor(tld, kind)
+  if (costUsd === null || !Number.isFinite(costUsd) || costUsd <= 0) return null
 
-  const rawMarkup = supplierCostKobo * (input.markupPct / 100)
-  const markupKobo = Math.min(
-    Math.max(rawMarkup, toKobo(input.minMarkupNgn)),
-    toKobo(input.maxMarkupNgn),
-  )
+  const rate = effectiveFxRate(inputs.fxRate, inputs.fxBufferPct)
+  // ccTLDs such as .ng carry no ICANN fee.
+  const icannUsd = tld.isCountryCode ? 0 : inputs.icannFeeUsd
 
-  const subtotalKobo = roundToPsychological(supplierCostKobo + markupKobo)
-  const vatKobo = Math.round(subtotalKobo * VAT_RATE)
+  const costKobo = Math.round((costUsd + icannUsd) * rate * KOBO_PER_NAIRA)
+  const priceKobo = roundUpToHundred(costKobo + inputs.marginNgn * KOBO_PER_NAIRA)
 
-  return {
-    supplierCostKobo,
-    icannFeeKobo: 0,
-    subtotalKobo,
-    vatKobo,
-    totalKobo: subtotalKobo + vatKobo,
-    effectiveFxRate: rate,
-  }
+  return { tld: tld.name, kind, costKobo, priceKobo, marginKobo: priceKobo - costKobo }
 }
 
-const NGN_FORMATTER = new Intl.NumberFormat('en-NG', {
+export type TldPricing = {
+  tld: string
+  isCountryCode: boolean
+  minPeriod: number
+  maxPeriod: number
+  redemptionDays: number
+  requiresExtraFields: boolean
+  registration: Price
+  renewal: Price
+  transfer: Price | null
+  /** True when renewal costs more than the first year. */
+  renewalIsHigher: boolean
+}
+
+export type TldRecord = TldCost & {
+  minPeriod: number
+  maxPeriod: number
+  redemptionDays: number
+  requiresExtraFields: boolean
+}
+
+export function priceCatalogue(tlds: TldRecord[], inputs: PricingInputs): TldPricing[] {
+  const out: TldPricing[] = []
+
+  for (const tld of tlds) {
+    const registration = priceFor(tld, 'registration', inputs)
+    const renewal = priceFor(tld, 'renewal', inputs)
+    if (!registration || !renewal) continue
+
+    out.push({
+      tld: tld.name,
+      isCountryCode: tld.isCountryCode,
+      minPeriod: tld.minPeriod,
+      maxPeriod: tld.maxPeriod,
+      redemptionDays: tld.redemptionDays,
+      requiresExtraFields: tld.requiresExtraFields,
+      registration,
+      renewal,
+      transfer: priceFor(tld, 'transfer', inputs),
+      renewalIsHigher: renewal.priceKobo > registration.priceKobo,
+    })
+  }
+
+  return out
+}
+
+const NGN = new Intl.NumberFormat('en-NG', {
   style: 'currency',
   currency: 'NGN',
   minimumFractionDigits: 0,
@@ -152,5 +144,5 @@ const NGN_FORMATTER = new Intl.NumberFormat('en-NG', {
 })
 
 export function formatNaira(kobo: number): string {
-  return NGN_FORMATTER.format(kobo / KOBO_PER_NAIRA)
+  return NGN.format(kobo / KOBO_PER_NAIRA)
 }

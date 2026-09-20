@@ -1,34 +1,63 @@
-import { request as httpsRequest } from 'node:https'
 import type { FxSource, RateQuote } from '@dr/shared'
+import { getJson } from './http'
 
-/**
- * Sources for the naira/dollar rate.
- *
- * We track the PARALLEL market, not the official window, because that is where
- * dollars to fund the supplier balance are actually bought. The official rate
- * would understate our cost.
- */
 export interface FxProvider {
   readonly source: FxSource
   fetchQuote(): Promise<RateQuote>
 }
 
-type AbokiResponse = {
-  timestamp?: string
-  baseCurrency?: string
-  rateType?: string
-  rates?: Record<string, { buy?: number; sell?: number }>
+/** ExchangeRate-API's open endpoint. No key, updates daily. */
+export class ErApiProvider implements FxProvider {
+  readonly source: FxSource = 'er-api'
+
+  async fetchQuote(): Promise<RateQuote> {
+    const data = (await getJson('https://open.er-api.com/v6/latest/USD')) as {
+      result?: string
+      rates?: Record<string, number>
+      time_last_update_unix?: number
+    }
+
+    if (data.result && data.result !== 'success') {
+      throw new Error(`er-api returned result=${data.result}`)
+    }
+    const rate = data.rates?.NGN
+    if (typeof rate !== 'number') throw new Error('er-api response has no NGN rate')
+
+    return {
+      source: this.source,
+      rate,
+      quotedAt: data.time_last_update_unix
+        ? new Date(data.time_last_update_unix * 1000)
+        : new Date(),
+    }
+  }
+}
+
+/** An independent open dataset, used to cross-check the first. */
+export class CurrencyApiProvider implements FxProvider {
+  readonly source: FxSource = 'currency-api'
+
+  async fetchQuote(): Promise<RateQuote> {
+    const data = (await getJson(
+      'https://latest.currency-api.pages.dev/v1/currencies/usd.json',
+    )) as { date?: string; usd?: Record<string, number> }
+
+    const rate = data.usd?.ngn
+    if (typeof rate !== 'number') throw new Error('currency-api response has no NGN rate')
+
+    return {
+      source: this.source,
+      rate,
+      quotedAt: data.date ? new Date(data.date) : new Date(),
+    }
+  }
 }
 
 /**
- * Aboki Forex parallel-market API.
+ * Aboki Forex parallel-market rates. Paid, and optional.
  *
- * https://abokiforex.app/api — paid, ₦70,000/month, 100 requests a day, rates
- * refresh hourly. We need one call a day, so the quota is ample.
- *
- * [VERIFY] The response shape below follows their published documentation but
- * has not been exercised against a live key. Run the job once in report mode
- * after subscribing and confirm before trusting it to move prices.
+ * [VERIFY] Shape follows their published docs; not yet exercised with a key.
+ * When FX_PARALLEL_API_KEY is set this joins the cross-check.
  */
 export class AbokiParallelProvider implements FxProvider {
   readonly source: FxSource = 'aboki-parallel'
@@ -39,66 +68,29 @@ export class AbokiParallelProvider implements FxProvider {
   ) {}
 
   async fetchQuote(): Promise<RateQuote> {
-    const payload = (await this.get('/rates/USD')) as AbokiResponse
-
-    const usd = payload.rates?.USD
-    if (!usd || typeof usd.buy !== 'number' || typeof usd.sell !== 'number') {
-      throw new Error(
-        `Unexpected response shape from ${this.source}: ${JSON.stringify(payload).slice(0, 200)}`,
-      )
+    const data = (await getJson(`${this.baseUrl}/rates/USD`, { 'X-API-Key': this.apiKey })) as {
+      timestamp?: string
+      rates?: Record<string, { buy?: number; sell?: number }>
     }
 
-    // Guard against them switching to NGN-as-base or an official feed without
-    // telling us — either would silently reprice the whole catalogue.
-    if (payload.baseCurrency && payload.baseCurrency !== 'NGN') {
-      throw new Error(`Expected NGN-denominated rates, got ${payload.baseCurrency}`)
-    }
-    if (payload.rateType && payload.rateType !== 'black_market') {
-      throw new Error(`Expected parallel-market rates, got ${payload.rateType}`)
-    }
+    const usd = data.rates?.USD
+    // We BUY dollars, so we pay what the dealer sells at — never the midpoint.
+    if (typeof usd?.sell !== 'number') throw new Error('aboki response has no USD sell rate')
 
     return {
       source: this.source,
-      buy: usd.buy,
-      sell: usd.sell,
-      quotedAt: payload.timestamp ? new Date(payload.timestamp) : new Date(),
+      rate: usd.sell,
+      quotedAt: data.timestamp ? new Date(data.timestamp) : new Date(),
     }
   }
+}
 
-  /** node:https — Node's fetch trips a TLS error against some of these hosts. */
-  private get(path: string): Promise<unknown> {
-    return new Promise((resolve, reject) => {
-      const req = httpsRequest(
-        `${this.baseUrl}${path}`,
-        {
-          method: 'GET',
-          headers: { 'X-API-Key': this.apiKey, Accept: 'application/json' },
-          timeout: 30_000,
-        },
-        (res) => {
-          const chunks: Buffer[] = []
-          res.on('data', (c: Buffer) => chunks.push(c))
-          res.on('end', () => {
-            const body = Buffer.concat(chunks).toString('utf8')
-            if (res.statusCode === 429) {
-              reject(new Error('Rate limit reached (100/day). Quota resets at 00:00 UTC.'))
-              return
-            }
-            if (!res.statusCode || res.statusCode >= 400) {
-              reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 200)}`))
-              return
-            }
-            try {
-              resolve(JSON.parse(body))
-            } catch {
-              reject(new Error(`Non-JSON response: ${body.slice(0, 200)}`))
-            }
-          })
-        },
-      )
-      req.on('error', reject)
-      req.on('timeout', () => req.destroy(new Error('timeout')))
-      req.end()
-    })
-  }
+/** Every provider we can use right now, given the configured keys. */
+export function availableProviders(): FxProvider[] {
+  const providers: FxProvider[] = [new ErApiProvider(), new CurrencyApiProvider()]
+
+  const parallelKey = process.env.FX_PARALLEL_API_KEY
+  if (parallelKey) providers.push(new AbokiParallelProvider(parallelKey))
+
+  return providers
 }

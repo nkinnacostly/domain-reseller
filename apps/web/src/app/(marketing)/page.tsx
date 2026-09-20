@@ -1,3 +1,4 @@
+import { formatNaira } from '@dr/shared'
 import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
@@ -8,13 +9,11 @@ import { HowItWorks } from '@/features/marketing/components/how-it-works'
 import { PricingPromise } from '@/features/marketing/components/pricing-promise'
 import { StatsStrip } from '@/features/marketing/components/stats-strip'
 import { WhyUs } from '@/features/marketing/components/why-us'
-import { toFxSettings } from '@/features/pricing/lib/fx'
-import { getActiveRate } from '@/features/pricing/queries/active-rate'
+import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { DomainSearch } from '@/features/search/components/domain-search'
 import { HeroVisual } from '@/features/search/components/hero-visual'
 import { PopularExtensions } from '@/features/search/components/popular-extensions'
 import { TrendingDomains } from '@/features/search/components/trending-domains'
-import { featuredTlds } from '@/features/search/lib/featured-tlds'
 
 export const metadata: Metadata = {
   title: 'Domain names, priced in naira',
@@ -25,8 +24,8 @@ export const metadata: Metadata = {
 export default async function HomePage() {
   // The hero card shows a real quote, so it reads the live rate like every
   // other price on the site.
-  const active = await getActiveRate()
-  const ng = active ? featuredTlds(toFxSettings(active)).find((t) => t.tld === 'ng') : undefined
+  const priced = await getPricedCatalogue()
+  const ng = priced?.tlds.find((t) => t.tld === 'ng')
 
   return (
     <>
@@ -67,8 +66,8 @@ export default async function HomePage() {
 
             <HeroVisual
               className="mx-auto max-w-md lg:max-w-none"
-              firstYear={ng?.firstYear ?? null}
-              renewal={ng?.renewal ?? null}
+              firstYear={ng ? formatNaira(ng.registration.priceKobo) : null}
+              renewal={ng ? formatNaira(ng.renewal.priceKobo) : null}
             />
           </Container>
         </div>

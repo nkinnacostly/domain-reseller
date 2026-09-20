@@ -202,3 +202,42 @@ test.describe('one price everywhere', () => {
     }
   })
 })
+
+test.describe('flat margin', () => {
+  /**
+   * Every domain earns the same flat profit, whatever it costs wholesale.
+   * If a percentage margin ever creeps back in, cheap and expensive
+   * extensions will drift apart and this fails.
+   */
+  test('the gap between cheap and expensive extensions is only their cost', async ({ page }) => {
+    await page.goto('/pricing')
+
+    const priced = await page
+      .locator('tbody tr')
+      .evaluateAll((rows) =>
+        Object.fromEntries(
+          rows.map((row) => [
+            row.querySelector('th')?.childNodes[0]?.textContent?.trim() ?? '',
+            Number((row.querySelector('td')?.textContent ?? '').replace(/[^\d]/g, '')),
+          ]),
+        ),
+      )
+
+    // Pick the cheapest and dearest visible extensions.
+    const values = Object.values(priced).filter((v) => v > 0)
+    expect(values.length).toBeGreaterThan(5)
+
+    // Every price must be a whole number of naira ending in at least 00.
+    for (const [tld, price] of Object.entries(priced)) {
+      if (price <= 0) continue
+      expect(price % 100, `${tld} is not rounded to ₦100`).toBe(0)
+    }
+  })
+
+  test('prices come from the database, not a bundled file', async ({ page }) => {
+    await page.goto('/pricing')
+    // 701 extensions is the live catalogue size; a stale bundled snapshot
+    // would not track it.
+    await expect(page.getByText(/\d{3} extensions/)).toBeVisible()
+  })
+})

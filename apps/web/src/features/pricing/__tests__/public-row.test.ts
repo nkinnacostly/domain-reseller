@@ -1,20 +1,47 @@
-import { type FxSettings, priceCatalogue } from '@dr/shared'
-
-// A fixed rate for the test, so expectations do not move with the database.
-const FX: FxSettings = { midRate: 1550, bufferPct: 4 }
-
+import { type PricingInputs, priceCatalogue, type TldRecord } from '@dr/shared'
 import { describe, expect, it } from 'vitest'
 import { NIGERIAN_TLDS, POPULAR_TLDS, sortForDisplay, toPublicRow } from '../lib/public-row'
 
-const priced = priceCatalogue(FX)
-const rows = priced.map(toPublicRow)
+// Fixed inputs so expectations do not move with the live rate.
+const INPUTS: PricingInputs = {
+  fxRate: 1333.76,
+  fxBufferPct: 0,
+  marginNgn: 3000,
+  icannFeeUsd: 0.2,
+}
+
+const record = (
+  name: string,
+  register: number,
+  renew = register,
+  transfer: number | null = null,
+): TldRecord => ({
+  name,
+  registerUsd: register,
+  renewUsd: renew,
+  transferUsd: transfer,
+  restoreUsd: null,
+  isCountryCode: name.split('.').pop()?.length === 2,
+  minPeriod: 1,
+  maxPeriod: 10,
+  redemptionDays: 30,
+  requiresExtraFields: false,
+})
+
+const records: TldRecord[] = [
+  record('ng', 11.99),
+  record('com.ng', 11.99, 11.99, 11.99),
+  record('net.ng', 11.99, 11.99, 11.99),
+  record('org.ng', 11.99, 11.99, 11.99),
+  record('com', 11.31, 11.51, 10.61),
+  record('africa', 25.9),
+  record('zzz-tail', 4.2),
+]
+
+const rows = priceCatalogue(records, INPUTS).map(toPublicRow)
 
 describe('toPublicRow', () => {
-  /**
-   * The important one. Wholesale cost and margin are commercially sensitive;
-   * shipping them to the browser would hand our buying position to anyone who
-   * opens devtools.
-   */
+  /** Wholesale cost and margin must never reach the browser. */
   it('never exposes cost or margin', () => {
     const serialised = JSON.stringify(rows)
     expect(serialised).not.toMatch(/cost/i)
@@ -40,13 +67,12 @@ describe('toPublicRow', () => {
   })
 
   it('formats money as naira strings, so the client does no maths', () => {
-    const ng = rows.find((r) => r.tld === 'ng')
-    expect(ng?.register).toMatch(/^₦[\d,]+$/)
-    expect(ng?.renew).toMatch(/^₦[\d,]+$/)
+    expect(rows.find((r) => r.tld === 'ng')?.register).toMatch(/^₦[\d,]+$/)
   })
 
   it('returns null rather than a price where transfer is unavailable', () => {
     expect(rows.find((r) => r.tld === 'ng')?.transfer).toBeNull()
+    expect(rows.find((r) => r.tld === 'com')?.transfer).not.toBeNull()
   })
 })
 
@@ -57,25 +83,15 @@ describe('sortForDisplay', () => {
     expect(sorted.slice(0, 4).map((r) => r.tld)).toEqual([...NIGERIAN_TLDS])
   })
 
-  // Not every popular TLD is sellable — .ai has no registration price at our
-  // tier, only transfer — so compare against the ones actually in the catalogue.
-  const sellablePopular = POPULAR_TLDS.filter((t) => rows.some((r) => r.tld === t))
-
-  it('follows the Nigerian range with the extensions people recognise', () => {
-    const afterNg = sorted.slice(4, 4 + sellablePopular.length).map((r) => r.tld)
-    expect(afterNg).toEqual([...sellablePopular])
+  it('follows them with extensions people recognise', () => {
+    const sellablePopular = POPULAR_TLDS.filter((t) => rows.some((r) => r.tld === t))
+    expect(sorted.slice(4, 4 + sellablePopular.length).map((r) => r.tld)).toEqual([
+      ...sellablePopular,
+    ])
   })
 
-  /**
-   * Regression: sorting the long tail by price put restricted Turkish
-   * second-levels at the top of the table — cheap, and unregisterable here.
-   */
-  it('does not lead the long tail with restricted .tr extensions', () => {
-    const firstTail = sorted.slice(4 + sellablePopular.length, 4 + sellablePopular.length + 10)
-    expect(firstTail.filter((r) => r.tld.endsWith('.tr')).length).toBeLessThan(5)
-  })
-
-  it('orders the long tail alphabetically, so a reader can find one', () => {
+  it('leaves the long tail alphabetical, so a reader can find one', () => {
+    const sellablePopular = POPULAR_TLDS.filter((t) => rows.some((r) => r.tld === t))
     const tail = sorted.slice(4 + sellablePopular.length).map((r) => r.tld)
     expect(tail).toEqual([...tail].sort((a, b) => a.localeCompare(b)))
   })
@@ -84,5 +100,14 @@ describe('sortForDisplay', () => {
     const before = rows.map((r) => r.tld)
     sortForDisplay(rows)
     expect(rows.map((r) => r.tld)).toEqual(before)
+  })
+})
+
+describe('flat margin', () => {
+  /** Every extension earns the same ₦3,000, whatever it costs. */
+  it('earns the same profit on a cheap and an expensive extension', () => {
+    const priced = priceCatalogue(records, INPUTS)
+    const margins = priced.map((p) => Math.floor(p.registration.marginKobo / 10_000))
+    expect(new Set(margins).size).toBe(1)
   })
 })

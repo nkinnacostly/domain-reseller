@@ -1,50 +1,83 @@
 /**
  * Exchange rate handling.
  *
- * We buy US dollars on the parallel market to fund the supplier balance, so
- * the rate that matters is what a dealer SELLS dollars to us for — not the
- * buy rate, and not the midpoint. Costing off `buy` or the mid would
- * understate our cost on every single domain.
+ * Rates come from live market feeds. Two independent sources are fetched and
+ * cross-checked: if they disagree materially one of them is wrong, and pricing
+ * the whole catalogue off a wrong rate is worse than not updating today.
  */
 
-export const FX_SOURCES = ['aboki-parallel', 'manual', 'official'] as const
+export const FX_SOURCES = ['er-api', 'currency-api', 'aboki-parallel', 'manual'] as const
 export type FxSource = (typeof FX_SOURCES)[number]
 
 export type RateQuote = {
   source: FxSource
-  /** What a dealer pays to buy dollars from you. */
-  buy: number
-  /** What a dealer charges to sell dollars to you — our cost basis. */
-  sell: number
-  /** When the provider says the quote was taken. */
+  /** Naira per dollar. */
+  rate: number
   quotedAt: Date
 }
 
-/** The rate we actually cost against. */
-export function costingRate(quote: Pick<RateQuote, 'buy' | 'sell'>): number {
-  if (quote.sell <= 0) throw new RangeError('Sell rate must be positive')
-  if (quote.buy > quote.sell) {
-    // A dealer never sells cheaper than they buy. Inverted fields mean the
-    // provider changed its shape, and costing off it would be silently wrong.
-    throw new RangeError('Buy rate above sell rate — provider response looks inverted')
-  }
-  return quote.sell
-}
+/** Two sources further apart than this mean one of them is wrong. */
+export const DEFAULT_CROSS_CHECK_TOLERANCE_PCT = 2
+
+/** A single update moving more than this is held for a human to look at. */
+export const DEFAULT_MOVE_THRESHOLD_PCT = 5
+
+export type CrossCheck =
+  | { agreed: true; rate: number; spreadPct: number }
+  | { agreed: false; spreadPct: number; reason: string }
 
 /**
- * FR-FX-5 — a large single move is held for review rather than applied.
+ * Reconcile several independent quotes into one rate.
  *
- * A bad feed, a decimal slip or a market shock should not silently reprice the
- * whole catalogue. Anything beyond the threshold is stored but not activated,
- * and someone looks at it.
+ * Uses the median so a single bad feed cannot drag the result, and refuses
+ * outright when the spread is too wide to call.
  */
-export const DEFAULT_MOVE_THRESHOLD_PCT = 5
+export function crossCheckQuotes(
+  quotes: RateQuote[],
+  tolerancePct: number = DEFAULT_CROSS_CHECK_TOLERANCE_PCT,
+): CrossCheck {
+  const rates = quotes
+    .map((q) => q.rate)
+    .filter((r) => Number.isFinite(r) && r > 0)
+    .sort((a, b) => a - b)
+
+  if (rates.length === 0) {
+    return { agreed: false, spreadPct: 0, reason: 'No usable quotes' }
+  }
+  if (rates.length === 1) {
+    return { agreed: true, rate: rates[0] as number, spreadPct: 0 }
+  }
+
+  const low = rates[0] as number
+  const high = rates[rates.length - 1] as number
+  const spreadPct = ((high - low) / low) * 100
+
+  if (spreadPct > tolerancePct) {
+    return {
+      agreed: false,
+      spreadPct,
+      reason: `Sources disagree by ${spreadPct.toFixed(2)}% (${low} vs ${high}), beyond ${tolerancePct}%`,
+    }
+  }
+
+  const middle = Math.floor(rates.length / 2)
+  const median =
+    rates.length % 2 === 1
+      ? (rates[middle] as number)
+      : ((rates[middle - 1] as number) + (rates[middle] as number)) / 2
+
+  return { agreed: true, rate: median, spreadPct }
+}
 
 export type RateDecision =
   | { action: 'accept'; movePct: number }
   | { action: 'hold_for_review'; movePct: number; reason: string }
   | { action: 'reject'; reason: string }
 
+/**
+ * A large single move is stored but not applied. A bad feed, a decimal slip or
+ * a genuine shock should not silently reprice the catalogue unattended.
+ */
 export function evaluateRateChange(
   currentRate: number | null,
   incomingRate: number,
@@ -54,8 +87,6 @@ export function evaluateRateChange(
     return { action: 'reject', reason: 'Incoming rate is not a positive number' }
   }
 
-  // No rate yet: the first one has nothing to be compared against, and someone
-  // should look at it before the catalogue prices against it.
   if (currentRate === null) {
     return { action: 'hold_for_review', movePct: 0, reason: 'First rate — no baseline to compare' }
   }
@@ -66,27 +97,9 @@ export function evaluateRateChange(
     return {
       action: 'hold_for_review',
       movePct,
-      reason: `Moved ${movePct.toFixed(1)}% in one update, beyond the ${thresholdPct}% threshold`,
+      reason: `Moved ${movePct.toFixed(2)}% in one update, beyond the ${thresholdPct}% threshold`,
     }
   }
 
   return { action: 'accept', movePct }
-}
-
-/**
- * The rate the storefront prices against, plus the buffer.
- *
- * The buffer covers the gap between quoting a price and actually settling the
- * dollars — the rate can move in between, and the supplier balance is funded
- * in batches rather than per order.
- */
-export type ActiveRate = {
-  costingRate: number
-  bufferPct: number
-  source: FxSource
-  effectiveFrom: Date
-}
-
-export function effectiveRateFrom(active: ActiveRate): number {
-  return active.costingRate * (1 + active.bufferPct / 100)
 }

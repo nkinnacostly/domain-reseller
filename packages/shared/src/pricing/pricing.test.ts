@@ -1,22 +1,45 @@
 import { describe, expect, it } from 'vitest'
 import {
-  computePremiumPrice,
-  computePrice,
   effectiveFxRate,
   formatNaira,
-  ICANN_FEE_USD_PER_YEAR,
-  roundToPsychological,
-  VAT_RATE,
+  KOBO_PER_NAIRA,
+  type PricingInputs,
+  priceCatalogue,
+  priceFor,
+  roundUpToHundred,
+  type TldCost,
+  type TldRecord,
 } from './index'
 
+const INPUTS: PricingInputs = {
+  fxRate: 1335.69,
+  fxBufferPct: 0,
+  marginNgn: 3000,
+  icannFeeUsd: 0.2,
+}
+
+const tld = (over: Partial<TldCost> & { name: string }): TldCost => ({
+  registerUsd: 10,
+  renewUsd: 10,
+  transferUsd: null,
+  restoreUsd: null,
+  isCountryCode: false,
+  ...over,
+})
+
+const naira = (kobo: number) => kobo / KOBO_PER_NAIRA
+
 describe('effectiveFxRate', () => {
-  it('applies the buffer on top of the mid rate', () => {
+  it('applies the buffer', () => {
     expect(effectiveFxRate(1000, 4)).toBe(1040)
   })
 
-  it('rejects a non-positive mid rate rather than producing free domains', () => {
-    expect(() => effectiveFxRate(0, 4)).toThrow(RangeError)
-    expect(() => effectiveFxRate(-1, 4)).toThrow(RangeError)
+  it('passes the rate through when there is no buffer', () => {
+    expect(effectiveFxRate(1335.69, 0)).toBe(1335.69)
+  })
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])('rejects %p', (rate) => {
+    expect(() => effectiveFxRate(rate, 0)).toThrow(RangeError)
   })
 
   it('rejects a negative buffer', () => {
@@ -24,127 +47,158 @@ describe('effectiveFxRate', () => {
   })
 })
 
-describe('roundToPsychological', () => {
+describe('roundUpToHundred', () => {
   it.each([
-    [1_721_400, 1_750_000], // ₦17,214 → ₦17,500
-    [1_764_000, 1_790_000], // ₦17,640 → ₦17,900
-    [1_000_000, 1_000_000], // exact thousands stay put
-    [1_050_000, 1_050_000], // ₦10,500 is already a clean ending
-  ])('rounds %i kobo to %i kobo', (input, expected) => {
-    expect(roundToPsychological(input)).toBe(expected)
-  })
-
-  it('carries a remainder above 900 up to the next thousand', () => {
-    // Regression: this range used to round DOWN, dropping the price through
-    // the margin floor. ₦45,950 became ₦45,900.
-    expect(roundToPsychological(4_595_000)).toBe(4_600_000)
-    expect(roundToPsychological(4_590_100)).toBe(4_600_000)
+    [1_600_000, 1_600_000],
+    [1_600_001, 1_610_000],
+    [1_659_900, 1_660_000],
+  ])('rounds %i kobo to %i', (input, expected) => {
+    expect(roundUpToHundred(input)).toBe(expected)
   })
 
   it('never rounds down, at any remainder', () => {
-    // Sweep every remainder within a thousand rather than sampling a few.
-    for (let remainder = 0; remainder < 1000; remainder++) {
-      const kobo = (45_000 + remainder) * 100
-      expect(roundToPsychological(kobo), `remainder ${remainder}`).toBeGreaterThanOrEqual(kobo)
+    for (let r = 0; r < 10_000; r += 37) {
+      const kobo = 1_600_000 + r
+      expect(roundUpToHundred(kobo)).toBeGreaterThanOrEqual(kobo)
     }
   })
 })
 
-describe('computePrice', () => {
-  const base = {
-    supplierCostUsd: 8,
-    periodYears: 1,
-    icannFeeApplies: true,
-    fxMidRate: 1550,
-    fxBufferPct: 4,
-    marginPct: 22,
-  }
-
-  it('produces a coherent breakdown for a one-year .com', () => {
-    const result = computePrice(base)
-    expect(result.effectiveFxRate).toBeCloseTo(1612, 5)
-    expect(result.supplierCostKobo).toBe(Math.round(8 * 1612 * 100))
-    expect(result.icannFeeKobo).toBe(Math.round(0.2 * 1612 * 100))
-    expect(result.totalKobo).toBe(result.subtotalKobo + result.vatKobo)
+describe('priceFor', () => {
+  /** The whole pricing rule: cost plus a flat ₦3,000. */
+  it('earns exactly the configured margin, before rounding', () => {
+    const price = priceFor(
+      tld({ name: 'ng', isCountryCode: true, registerUsd: 11.99 }),
+      'registration',
+      INPUTS,
+    )
+    expect(price).not.toBeNull()
+    expect(naira(price?.costKobo ?? 0)).toBeCloseTo(11.99 * 1335.69, 1)
+    expect(naira(price?.marginKobo ?? 0)).toBeGreaterThanOrEqual(3000)
   })
 
-  it('charges VAT at 7.5% of the subtotal', () => {
-    const result = computePrice(base)
-    expect(result.vatKobo).toBe(Math.round(result.subtotalKobo * VAT_RATE))
+  it('never earns less than the margin, on any cost', () => {
+    for (const costUsd of [0.5, 1, 2.49, 11.31, 44.99, 500, 5000]) {
+      const price = priceFor(tld({ name: 'x', registerUsd: costUsd }), 'registration', INPUTS)
+      expect(naira(price?.marginKobo ?? 0), `cost $${costUsd}`).toBeGreaterThanOrEqual(3000)
+    }
   })
 
-  it('omits the ICANN fee for ccTLDs', () => {
-    const result = computePrice({ ...base, icannFeeApplies: false })
-    expect(result.icannFeeKobo).toBe(0)
+  it('never overshoots the margin by more than a rounding step', () => {
+    for (const costUsd of [0.5, 11.31, 44.99, 500]) {
+      const price = priceFor(tld({ name: 'x', registerUsd: costUsd }), 'registration', INPUTS)
+      expect(naira(price?.marginKobo ?? 0), `cost $${costUsd}`).toBeLessThan(3100)
+    }
   })
 
-  it('scales the ICANN fee by the number of years', () => {
-    const oneYear = computePrice(base)
-    const threeYears = computePrice({ ...base, periodYears: 3, supplierCostUsd: 24 })
-    expect(threeYears.icannFeeKobo).toBeCloseTo(oneYear.icannFeeKobo * 3, -2)
+  it('adds the ICANN fee to a gTLD', () => {
+    const price = priceFor(tld({ name: 'com', registerUsd: 11.31 }), 'registration', INPUTS)
+    expect(naira(price?.costKobo ?? 0)).toBeCloseTo((11.31 + 0.2) * 1335.69, 1)
   })
 
-  it('uses USD 0.20 per year, the rate in force since 2025-07-01', () => {
-    expect(ICANN_FEE_USD_PER_YEAR).toBe(0.2)
+  it('does not add it to a ccTLD', () => {
+    const price = priceFor(
+      tld({ name: 'ng', isCountryCode: true, registerUsd: 11.99 }),
+      'registration',
+      INPUTS,
+    )
+    expect(naira(price?.costKobo ?? 0)).toBeCloseTo(11.99 * 1335.69, 1)
   })
 
-  it('honours a manual override and skips psychological rounding', () => {
-    const result = computePrice({ ...base, manualOverrideNgn: 9900 })
-    expect(result.subtotalKobo).toBe(990_000)
+  it('prices renewal off the renewal cost, not registration', () => {
+    const entry = tld({ name: 'org', registerUsd: 8.49, renewUsd: 13.99 })
+    const reg = priceFor(entry, 'registration', INPUTS)
+    const ren = priceFor(entry, 'renewal', INPUTS)
+    expect(ren?.priceKobo ?? 0).toBeGreaterThan(reg?.priceKobo ?? 0)
   })
 
-  it('adds a fixed naira markup on top of the margin', () => {
-    const without = computePrice(base)
-    const with500 = computePrice({ ...base, fixedMarkupNgn: 500 })
-    expect(with500.subtotalKobo).toBeGreaterThan(without.subtotalKobo)
-  })
-
-  it('rejects a sub-one-year period', () => {
-    expect(() => computePrice({ ...base, periodYears: 0 })).toThrow(RangeError)
-  })
-
-  it('rejects a negative supplier cost', () => {
-    expect(() => computePrice({ ...base, supplierCostUsd: -1 })).toThrow(RangeError)
+  it('returns null where the supplier does not price that trade', () => {
+    expect(priceFor(tld({ name: 'ng', transferUsd: null }), 'transfer', INPUTS)).toBeNull()
+    expect(priceFor(tld({ name: 'ng', restoreUsd: null }), 'restore', INPUTS)).toBeNull()
   })
 
   it('never sells below landed cost', () => {
-    const result = computePrice(base)
-    expect(result.subtotalKobo).toBeGreaterThan(result.supplierCostKobo + result.icannFeeKobo)
+    for (const costUsd of [0.5, 11.31, 500]) {
+      const price = priceFor(tld({ name: 'x', registerUsd: costUsd }), 'registration', INPUTS)
+      expect(price?.priceKobo ?? 0).toBeGreaterThan(price?.costKobo ?? 0)
+    }
+  })
+
+  it('moves the price when the rate moves', () => {
+    const cheap = priceFor(tld({ name: 'x', registerUsd: 10 }), 'registration', INPUTS)
+    const dear = priceFor(tld({ name: 'x', registerUsd: 10 }), 'registration', {
+      ...INPUTS,
+      fxRate: 2000,
+    })
+    expect(dear?.priceKobo ?? 0).toBeGreaterThan(cheap?.priceKobo ?? 0)
+  })
+
+  it('moves the price when the margin changes', () => {
+    const base = priceFor(tld({ name: 'x', registerUsd: 10 }), 'registration', INPUTS)
+    const fatter = priceFor(tld({ name: 'x', registerUsd: 10 }), 'registration', {
+      ...INPUTS,
+      marginNgn: 5000,
+    })
+    expect(naira((fatter?.priceKobo ?? 0) - (base?.priceKobo ?? 0))).toBeGreaterThanOrEqual(1900)
   })
 })
 
-describe('computePremiumPrice', () => {
-  const base = {
-    fxMidRate: 1550,
-    fxBufferPct: 4,
-    markupPct: 15,
-    minMarkupNgn: 5_000,
-    maxMarkupNgn: 500_000,
-  }
+describe('priceCatalogue', () => {
+  const records: TldRecord[] = [
+    {
+      ...tld({ name: 'ng', isCountryCode: true, registerUsd: 11.99, renewUsd: 11.99 }),
+      minPeriod: 1,
+      maxPeriod: 5,
+      redemptionDays: 30,
+      requiresExtraFields: false,
+    },
+    {
+      ...tld({ name: 'com', registerUsd: 11.31, renewUsd: 11.51, transferUsd: 10.61 }),
+      minPeriod: 1,
+      maxPeriod: 10,
+      redemptionDays: 30,
+      requiresExtraFields: false,
+    },
+    {
+      ...tld({ name: 'broken', registerUsd: 0, renewUsd: 0 }),
+      minPeriod: 1,
+      maxPeriod: 1,
+      redemptionDays: 0,
+      requiresExtraFields: false,
+    },
+  ]
 
-  it('applies the markup floor on a cheap premium', () => {
-    const result = computePremiumPrice({ ...base, supplierCostUsd: 50 })
-    const costKobo = result.supplierCostKobo
-    expect(result.subtotalKobo - costKobo).toBeGreaterThanOrEqual(500_000)
+  const priced = priceCatalogue(records, INPUTS)
+
+  it('skips extensions the supplier does not price', () => {
+    expect(priced.map((p) => p.tld)).toEqual(['ng', 'com'])
   })
 
-  it('applies the markup ceiling on an expensive premium', () => {
-    const result = computePremiumPrice({ ...base, supplierCostUsd: 50_000 })
-    const costKobo = result.supplierCostKobo
-    expect(result.subtotalKobo - costKobo).toBeLessThanOrEqual(50_000_000 + 90_000)
+  it('flags .com, where renewal costs more than the first year', () => {
+    expect(priced.find((p) => p.tld === 'com')?.renewalIsHigher).toBe(true)
   })
 
-  it('charges no ICANN fee line on premiums', () => {
-    expect(computePremiumPrice({ ...base, supplierCostUsd: 500 }).icannFeeKobo).toBe(0)
+  it('does not flag a flat-cost extension', () => {
+    expect(priced.find((p) => p.tld === 'ng')?.renewalIsHigher).toBe(false)
+  })
+
+  it('gives every extension exactly the same profit', () => {
+    const margins = priced.map((p) => Math.floor(naira(p.registration.marginKobo) / 100))
+    expect(new Set(margins).size).toBe(1)
+  })
+
+  it('omits transfer where it is unpriced', () => {
+    expect(priced.find((p) => p.tld === 'ng')?.transfer).toBeNull()
+    expect(priced.find((p) => p.tld === 'com')?.transfer).not.toBeNull()
   })
 })
 
 describe('formatNaira', () => {
-  it('formats kobo as whole naira', () => {
-    expect(formatNaira(1_750_000)).toMatch(/17,500/)
+  it('formats whole naira', () => {
+    expect(formatNaira(1_800_000)).toMatch(/18,000/)
   })
 
-  it('never shows fractional kobo to a user', () => {
-    expect(formatNaira(1_750_049)).not.toMatch(/\./)
+  it('never shows kobo', () => {
+    expect(formatNaira(1_800_049)).not.toMatch(/\./)
   })
 })

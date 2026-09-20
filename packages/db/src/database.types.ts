@@ -179,6 +179,36 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_settings: {
+        Row: {
+          fx_buffer_pct: number
+          fx_move_threshold_pct: number
+          icann_fee_usd: number
+          id: boolean
+          margin_ngn: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          fx_buffer_pct?: number
+          fx_move_threshold_pct?: number
+          icann_fee_usd?: number
+          id?: boolean
+          margin_ngn: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          fx_buffer_pct?: number
+          fx_move_threshold_pct?: number
+          icann_fee_usd?: number
+          id?: boolean
+          margin_ngn?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           account_type: Database["public"]["Enums"]["account_type"]
@@ -221,6 +251,51 @@ export type Database = {
         }
         Relationships: []
       }
+      tlds: {
+        Row: {
+          is_country_code: boolean
+          is_sellable: boolean
+          max_period: number
+          min_period: number
+          name: string
+          redemption_days: number
+          register_usd: number
+          renew_usd: number
+          requires_extra_fields: boolean
+          restore_usd: number | null
+          synced_at: string
+          transfer_usd: number | null
+        }
+        Insert: {
+          is_country_code?: boolean
+          is_sellable?: boolean
+          max_period?: number
+          min_period?: number
+          name: string
+          redemption_days?: number
+          register_usd: number
+          renew_usd: number
+          requires_extra_fields?: boolean
+          restore_usd?: number | null
+          synced_at?: string
+          transfer_usd?: number | null
+        }
+        Update: {
+          is_country_code?: boolean
+          is_sellable?: boolean
+          max_period?: number
+          min_period?: number
+          name?: string
+          redemption_days?: number
+          register_usd?: number
+          renew_usd?: number
+          requires_extra_fields?: boolean
+          restore_usd?: number | null
+          synced_at?: string
+          transfer_usd?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -257,7 +332,12 @@ export type Database = {
     }
     Enums: {
       account_type: "individual" | "business"
-      fx_source: "aboki-parallel" | "manual" | "official"
+      fx_source:
+        | "aboki-parallel"
+        | "manual"
+        | "official"
+        | "er-api"
+        | "currency-api"
       fx_status: "active" | "pending_review" | "superseded" | "rejected"
     }
     CompositeTypes: {
@@ -852,7 +932,13 @@ export const Constants = {
   public: {
     Enums: {
       account_type: ["individual", "business"],
-      fx_source: ["aboki-parallel", "manual", "official"],
+      fx_source: [
+        "aboki-parallel",
+        "manual",
+        "official",
+        "er-api",
+        "currency-api",
+      ],
       fx_status: ["active", "pending_review", "superseded", "rejected"],
     },
   },

@@ -1,8 +1,7 @@
+import { formatNaira } from '@dr/shared'
 import Link from 'next/link'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
-import { toFxSettings } from '@/features/pricing/lib/fx'
-import { getActiveRate } from '@/features/pricing/queries/active-rate'
-import { featuredTlds } from '../lib/featured-tlds'
+import { FEATURED_TLDS, getPricedCatalogue } from '@/features/pricing/queries/pricing'
 
 /**
  * Decorative wash per card — stands in for the reference's photography.
@@ -16,8 +15,21 @@ const WASH = [
 ] as const
 
 export async function PopularExtensions() {
-  const active = await getActiveRate()
-  const tlds = active ? featuredTlds(toFxSettings(active)) : []
+  const priced = await getPricedCatalogue()
+
+  const tlds = FEATURED_TLDS.flatMap(({ tld, blurb }) => {
+    const entry = priced?.tlds.find((t) => t.tld === tld)
+    if (!entry) return []
+    return [
+      {
+        tld,
+        blurb,
+        firstYear: formatNaira(entry.registration.priceKobo),
+        renewal: formatNaira(entry.renewal.priceKobo),
+        renewalIsHigher: entry.renewalIsHigher,
+      },
+    ]
+  })
 
   return (
     <section aria-labelledby="popular-extensions">

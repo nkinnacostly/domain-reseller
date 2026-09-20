@@ -1,0 +1,66 @@
+name: Pricing data
+
+# Prices only change when these jobs run, so they run on a schedule.
+# The FX rate moves daily; the supplier catalogue moves rarely but matters
+# more — Verisign raises .com on 1 November 2026.
+on:
+  schedule:
+    - cron: '0 7 * * *'    # 08:00 WAT, daily — exchange rate
+    - cron: '0 6 * * 1'    # 07:00 WAT Monday — supplier catalogue
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which job to run
+        type: choice
+        options: [fx, catalogue, both]
+        default: both
+
+concurrency:
+  group: pricing-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      DNA_RESELLER_ID: ${{ secrets.DNA_RESELLER_ID }}
+      DNA_API_KEY: ${{ secrets.DNA_API_KEY }}
+      DNA_ENV: production
+      FX_PARALLEL_API_KEY: ${{ secrets.FX_PARALLEL_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      # The scripts read the workspace .env; in CI the values come from secrets.
+      - name: Write env
+        run: |
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"
+            echo "SUPABASE_SECRET_KEY=$SUPABASE_SECRET_KEY"
+            echo "DNA_RESELLER_ID=$DNA_RESELLER_ID"
+            echo "DNA_API_KEY=$DNA_API_KEY"
+            echo "DNA_ENV=$DNA_ENV"
+            echo "FX_PARALLEL_API_KEY=$FX_PARALLEL_API_KEY"
+          } > .env
+
+      - name: Update exchange rate
+        if: github.event.schedule == '0 7 * * *' || inputs.job != 'catalogue'
+        run: pnpm --filter @dr/gateway fx:update -- --apply
+        # Exit 3 means the rate moved too far and is waiting for review —
+        # that is a working outcome, not a failed job.
+        continue-on-error: true
+
+      - name: Sync supplier catalogue
+        if: github.event.schedule == '0 6 * * 1' || inputs.job != 'fx'
+        run: pnpm --filter @dr/gateway sync:catalogue -- --apply
+        continue-on-error: true
+
+      - name: Report held rates
+        run: |
+          echo "Any rate held for review stays pending until activated."
+          echo "Check fx_rates where status = 'pending_review'."

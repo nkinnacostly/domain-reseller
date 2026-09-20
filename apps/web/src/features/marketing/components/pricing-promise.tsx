@@ -1,13 +1,13 @@
 import { Container } from '@/components/layout/site-shell'
-import { displayRate, getActiveRate } from '@/features/pricing/queries/active-rate'
+import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 
 /**
  * The FX policy, stated plainly (PRD FR-FX-3). Publishing this is the point —
  * every incumbent hides the conversion inside the price.
  */
 export async function PricingPromise() {
-  const active = await getActiveRate()
-  const rate = active ? displayRate(active) : null
+  const priced = await getPricedCatalogue()
+  const rate = priced?.effectiveRate ?? null
   return (
     <section aria-labelledby="pricing-promise-heading">
       <Container className="py-14 sm:py-20">
