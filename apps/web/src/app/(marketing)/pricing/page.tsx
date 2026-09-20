@@ -5,8 +5,10 @@ import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
 import { FeaturedPricing } from '@/features/pricing/components/featured-pricing'
 import { PricingTable } from '@/features/pricing/components/pricing-table'
-import { EFFECTIVE_RATE, FX } from '@/features/pricing/lib/fx'
+import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
+import { toFxSettings } from '@/features/pricing/lib/fx'
 import { NIGERIAN_TLDS, sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
+import { displayRate, getActiveRate } from '@/features/pricing/queries/active-rate'
 
 export const metadata: Metadata = {
   title: 'Domain pricing',
@@ -14,9 +16,30 @@ export const metadata: Metadata = {
     'Every extension we sell, with the first-year price and the renewal price side by side. Naira, VAT and ICANN fees explained in full.',
 }
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const active = await getActiveRate()
+
+  if (!active) {
+    return (
+      <>
+        <SiteHeader className="border-border/60 border-b" />
+        <main id="main">
+          <Container className="py-20">
+            <h1 className="text-3xl font-bold tracking-tight">Domain pricing</h1>
+            <div className="mt-8 max-w-2xl">
+              <PricingUnavailable />
+            </div>
+          </Container>
+        </main>
+        <SiteFooter />
+      </>
+    )
+  }
+
+  const effectiveRate = displayRate(active)
+
   // Priced on the server. Cost and margin never leave it — see toPublicRow.
-  const priced = priceCatalogue(FX)
+  const priced = priceCatalogue(toFxSettings(active))
   const rows = sortForDisplay(priced.map(toPublicRow))
   const featured = (NIGERIAN_TLDS as readonly string[])
     .map((tld) => rows.find((row) => row.tld === tld))
@@ -108,7 +131,7 @@ export default function PricingPage() {
               Registries bill in US dollars and we sell in naira. Every price on this page is
               converted at a fixed rate of{' '}
               <strong className="font-semibold text-foreground">
-                ₦{EFFECTIVE_RATE.toLocaleString('en-NG')} to the dollar
+                ₦{effectiveRate.toLocaleString('en-NG')} to the dollar
               </strong>
               . It does not move with the market during the day, so a price you see in the morning
               is the price you pay in the evening, and a domain in your cart holds its price for 30

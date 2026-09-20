@@ -1,6 +1,9 @@
-import { priceCatalogue } from '@dr/shared'
+import { type FxSettings, priceCatalogue } from '@dr/shared'
+
+// A fixed rate for the test, so expectations do not move with the database.
+const FX: FxSettings = { midRate: 1550, bufferPct: 4 }
+
 import { describe, expect, it } from 'vitest'
-import { FX } from '../lib/fx'
 import { NIGERIAN_TLDS, POPULAR_TLDS, sortForDisplay, toPublicRow } from '../lib/public-row'
 
 const priced = priceCatalogue(FX)

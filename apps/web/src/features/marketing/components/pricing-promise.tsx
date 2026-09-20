@@ -1,11 +1,13 @@
 import { Container } from '@/components/layout/site-shell'
-import { EFFECTIVE_RATE } from '@/features/pricing/lib/fx'
+import { displayRate, getActiveRate } from '@/features/pricing/queries/active-rate'
 
 /**
  * The FX policy, stated plainly (PRD FR-FX-3). Publishing this is the point —
  * every incumbent hides the conversion inside the price.
  */
-export function PricingPromise() {
+export async function PricingPromise() {
+  const active = await getActiveRate()
+  const rate = active ? displayRate(active) : null
   return (
     <section aria-labelledby="pricing-promise-heading">
       <Container className="py-14 sm:py-20">
@@ -27,8 +29,9 @@ export function PricingPromise() {
             <div className="border-border/70 border-b pb-5">
               <dt className="font-semibold text-foreground">One published rate</dt>
               <dd className="mt-1.5 text-sm/6 text-muted-foreground">
-                We convert at a fixed rate of ₦{EFFECTIVE_RATE.toLocaleString('en-NG')} to the
-                dollar, stated on the pricing page rather than buried in the total.
+                {rate === null
+                  ? 'We publish the exact rate we convert at on the pricing page, rather than burying it in the total.'
+                  : `We convert at a rate of ₦${rate.toLocaleString('en-NG')} to the dollar, stated on the pricing page rather than buried in the total.`}
               </dd>
             </div>
             <div className="border-border/70 border-b pb-5">

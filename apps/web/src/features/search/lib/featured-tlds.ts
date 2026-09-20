@@ -1,5 +1,5 @@
+import type { FxSettings } from '@dr/shared'
 import { findTld, formatNaira, quote } from '@dr/shared'
-import { FX } from '@/features/pricing/lib/fx'
 
 /**
  * The extensions merchandised on the home page.
@@ -23,15 +23,15 @@ export type FeaturedTld = {
   renewalIsHigher: boolean
 }
 
-export function featuredTlds(): FeaturedTld[] {
+export function featuredTlds(fx: FxSettings): FeaturedTld[] {
   const out: FeaturedTld[] = []
 
   for (const { tld, blurb } of FEATURED) {
     const entry = findTld(tld)
     if (!entry) continue
 
-    const registration = quote(entry, 'registration', FX)
-    const renewal = quote(entry, 'renewal', FX)
+    const registration = quote(entry, 'registration', fx)
+    const renewal = quote(entry, 'renewal', fx)
     if (!registration || !renewal) continue
 
     out.push({

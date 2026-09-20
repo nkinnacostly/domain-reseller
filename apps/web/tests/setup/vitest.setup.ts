@@ -8,6 +8,7 @@ process.env.NEXT_PUBLIC_APP_URL ??= 'http://localhost:3000'
 process.env.NEXT_PUBLIC_APP_NAME ??= 'Domain Reseller'
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'http://127.0.0.1:54321'
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= 'test-anon-key'
+process.env.LOG_LEVEL ??= 'silent'
 process.env.SKIP_ENV_VALIDATION = 'true'
 
 // Unhandled requests fail loudly — a test must never hit the real network.

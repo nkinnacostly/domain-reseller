@@ -119,6 +119,66 @@ export type Database = {
           },
         ]
       }
+      fx_rates: {
+        Row: {
+          base: string
+          buffer_pct: number
+          buy_rate: number
+          costing_rate: number
+          created_at: string
+          effective_from: string | null
+          id: string
+          move_pct: number | null
+          quote: string
+          quoted_at: string
+          raw_payload: Json | null
+          review_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sell_rate: number
+          source: Database["public"]["Enums"]["fx_source"]
+          status: Database["public"]["Enums"]["fx_status"]
+        }
+        Insert: {
+          base?: string
+          buffer_pct?: number
+          buy_rate: number
+          costing_rate: number
+          created_at?: string
+          effective_from?: string | null
+          id?: string
+          move_pct?: number | null
+          quote?: string
+          quoted_at: string
+          raw_payload?: Json | null
+          review_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sell_rate: number
+          source: Database["public"]["Enums"]["fx_source"]
+          status?: Database["public"]["Enums"]["fx_status"]
+        }
+        Update: {
+          base?: string
+          buffer_pct?: number
+          buy_rate?: number
+          costing_rate?: number
+          created_at?: string
+          effective_from?: string | null
+          id?: string
+          move_pct?: number | null
+          quote?: string
+          quoted_at?: string
+          raw_payload?: Json | null
+          review_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sell_rate?: number
+          source?: Database["public"]["Enums"]["fx_source"]
+          status?: Database["public"]["Enums"]["fx_status"]
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           account_type: Database["public"]["Enums"]["account_type"]
@@ -166,10 +226,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      activate_fx_rate: {
+        Args: { actor?: string; rate_id: string }
+        Returns: {
+          base: string
+          buffer_pct: number
+          buy_rate: number
+          costing_rate: number
+          created_at: string
+          effective_from: string | null
+          id: string
+          move_pct: number | null
+          quote: string
+          quoted_at: string
+          raw_payload: Json | null
+          review_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sell_rate: number
+          source: Database["public"]["Enums"]["fx_source"]
+          status: Database["public"]["Enums"]["fx_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fx_rates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       account_type: "individual" | "business"
+      fx_source: "aboki-parallel" | "manual" | "official"
+      fx_status: "active" | "pending_review" | "superseded" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -763,6 +852,8 @@ export const Constants = {
   public: {
     Enums: {
       account_type: ["individual", "business"],
+      fx_source: ["aboki-parallel", "manual", "official"],
+      fx_status: ["active", "pending_review", "superseded", "rejected"],
     },
   },
   storage: {

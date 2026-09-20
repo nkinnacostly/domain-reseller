@@ -1,4 +1,7 @@
 import Link from 'next/link'
+import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
+import { toFxSettings } from '@/features/pricing/lib/fx'
+import { getActiveRate } from '@/features/pricing/queries/active-rate'
 import { featuredTlds } from '../lib/featured-tlds'
 
 /**
@@ -12,14 +15,21 @@ const WASH = [
   'from-wash-3-from to-wash-3-to',
 ] as const
 
-export function PopularExtensions() {
-  const tlds = featuredTlds()
+export async function PopularExtensions() {
+  const active = await getActiveRate()
+  const tlds = active ? featuredTlds(toFxSettings(active)) : []
 
   return (
     <section aria-labelledby="popular-extensions">
       <h2 id="popular-extensions" className="text-xl font-bold tracking-tight sm:text-2xl">
         Popular extensions
       </h2>
+
+      {tlds.length === 0 ? (
+        <div className="mt-6 max-w-xl">
+          <PricingUnavailable />
+        </div>
+      ) : null}
 
       <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {tlds.map((item, index) => (

@@ -183,6 +183,15 @@ test.describe('one price everywhere', () => {
         })),
       )
 
+    // The hero card quotes a real .ng price and must agree too — it carried a
+    // hardcoded ₦18,500 while .ng was ₦20,900.
+    const heroPrice = await page
+      .locator('div', { hasText: /^getpaid\.ng/ })
+      .first()
+      .evaluate((el) => (el.textContent?.match(/₦[\d,]+/) ?? [])[0] ?? '')
+    expect(heroPrice, 'hero card shows no price').toBeTruthy()
+    expect(heroPrice, 'hero price disagrees with the pricing table').toBe(fromTable['.ng'])
+
     expect(cards.length).toBeGreaterThan(0)
     for (const card of cards) {
       const tablePrice = fromTable[card.tld]

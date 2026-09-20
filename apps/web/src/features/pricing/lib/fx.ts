@@ -1,18 +1,13 @@
-import { PLACEHOLDER_FX } from '@dr/shared'
+import type { ActiveRate, FxSettings } from '@dr/shared'
 
 /**
- * FX used for every displayed price.
+ * Converting a stored rate into the shape the pricing functions take.
  *
- * Re-exported from @dr/shared rather than redeclared. This module previously
- * carried its own `{ midRate: 1550 }` literal alongside the shared one — two
- * constants that could drift, which is exactly the bug that let the home page
- * and the pricing page quote different prices.
- *
- * The rate is a FIXED figure, not a feed. There is no `fx_rates` table and no
- * daily job yet (PRD FR-FX-1/2), so nothing on this site may claim the rate
- * tracks the market or updates on a schedule — it does neither.
+ * There is deliberately NO constant here. The rate lives in the `fx_rates`
+ * table and is read by `getActiveRate()`. A hardcoded fallback would quietly
+ * price the catalogue against an invented number — which this project shipped
+ * once already, at roughly 19% above the rate the page claimed.
  */
-export const FX = PLACEHOLDER_FX
-
-/** The rate customers are actually charged at, after the buffer. */
-export const EFFECTIVE_RATE = Math.round(FX.midRate * (1 + FX.bufferPct / 100))
+export function toFxSettings(active: ActiveRate): FxSettings {
+  return { midRate: active.costingRate, bufferPct: active.bufferPct }
+}

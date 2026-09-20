@@ -1,6 +1,7 @@
 export * from './domain/index'
 export * from './errors/index'
 export * from './pricing/diff'
+export * from './pricing/fx'
 export * from './pricing/index'
 export * from './pricing/policy'
 export * from './schemas/index'
