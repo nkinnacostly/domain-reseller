@@ -190,3 +190,69 @@ test.describe('shell containment', () => {
     expect(spanned).toBeGreaterThan((card?.width ?? 0) * 0.8)
   })
 })
+
+test.describe('horizontal alignment', () => {
+  /**
+   * Every section shares one gutter. This caught the header carrying its own
+   * padding (lg:px-12) while the rest of the page used Container
+   * (lg:px-14 2xl:px-20) — a 52px drift that put the logo and Login button out
+   * of line with everything below them.
+   *
+   * Anything that sets its own horizontal padding instead of using Container
+   * will fail here.
+   */
+  const leftEdge = (
+    label: string,
+    locate: (
+      p: import('@playwright/test').Page,
+    ) => ReturnType<import('@playwright/test').Page['locator']>,
+  ) => ({ label, locate })
+
+  const ANCHORS = [
+    leftEdge('header logo', (p) => p.getByRole('banner').getByRole('link').first()),
+    leftEdge('hero heading', (p) => p.getByRole('heading', { level: 1 })),
+    leftEdge('stats', (p) => p.getByText('Extensions available')),
+    leftEdge('popular extensions', (p) => p.getByRole('heading', { name: 'Popular extensions' })),
+    leftEdge('how it works', (p) => p.getByRole('heading', { name: 'Three steps, no tutorial' })),
+    leftEdge('why us', (p) =>
+      p.getByRole('heading', { name: 'Built for how domains are actually bought in Nigeria' }),
+    ),
+    leftEdge('faq', (p) => p.getByRole('heading', { name: 'Questions people actually ask' })),
+    leftEdge('footer tagline', (p) => p.getByText('Domain registration for Nigeria.')),
+  ]
+
+  for (const width of [1280, 1440, 1920, 2560]) {
+    test(`every section shares the same left gutter at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/')
+
+      const measured: Record<string, number> = {}
+      for (const anchor of ANCHORS) {
+        const box = await anchor.locate(page).first().boundingBox()
+        expect(box, `${anchor.label} not found`).not.toBeNull()
+        measured[anchor.label] = Math.round(box?.x ?? -1)
+      }
+
+      const unique = [...new Set(Object.values(measured))]
+      expect(unique, `left edges differ: ${JSON.stringify(measured)}`).toHaveLength(1)
+    })
+  }
+
+  test('the header right edge matches the content right edge', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 })
+    await page.goto('/')
+
+    const login = await page.getByRole('banner').getByRole('link', { name: 'Login' }).boundingBox()
+    const trending = await page.getByRole('heading', { name: 'Trending this week' }).boundingBox()
+
+    // Trending's section is the rightmost content column on the page.
+    const section = await page
+      .locator('section', { has: page.getByRole('heading', { name: 'Trending this week' }) })
+      .boundingBox()
+
+    expect(Math.round((login?.x ?? 0) + (login?.width ?? 0))).toBe(
+      Math.round((section?.x ?? 0) + (section?.width ?? 0)),
+    )
+    expect(trending).not.toBeNull()
+  })
+})
