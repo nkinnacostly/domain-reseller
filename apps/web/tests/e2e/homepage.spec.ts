@@ -142,3 +142,51 @@ test.describe('long-page responsiveness', () => {
     expect(card?.width ?? 0).toBeGreaterThan(1600)
   })
 })
+
+test.describe('shell containment', () => {
+  /**
+   * Regression: the header is absolutely positioned so the hero can sit inside
+   * <main>. When the shell card was not itself a containing block, the header
+   * resolved against the viewport and the logo and Login button spilled onto
+   * the canvas either side of the card.
+   */
+  for (const width of [1280, 1440, 1680, 1920, 2560]) {
+    test(`the header stays inside the card at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/')
+
+      const card = await page.locator('main').first().boundingBox()
+      const header = await page.getByRole('banner').boundingBox()
+      expect(card).not.toBeNull()
+      expect(header).not.toBeNull()
+
+      expect(Math.round(header?.x ?? -1)).toBe(Math.round(card?.x ?? -2))
+      expect(Math.round(header?.width ?? -1)).toBe(Math.round(card?.width ?? -2))
+    })
+  }
+
+  test('the logo and the Login button sit within the card, not on the canvas', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 })
+    await page.goto('/')
+
+    const card = await page.locator('main').first().boundingBox()
+    const logo = await page.getByRole('banner').getByRole('link').first().boundingBox()
+    const login = await page.getByRole('banner').getByRole('link', { name: 'Login' }).boundingBox()
+
+    expect(logo?.x ?? 0).toBeGreaterThan(card?.x ?? 0)
+    expect((login?.x ?? 0) + (login?.width ?? 0)).toBeLessThan((card?.x ?? 0) + (card?.width ?? 0))
+  })
+
+  test('content uses the card width rather than a narrow inner column', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 })
+    await page.goto('/')
+
+    const card = await page.locator('main').first().boundingBox()
+    const stats = await page.getByText('Extensions available').boundingBox()
+    const lastStat = await page.getByText('Hidden fees at checkout').boundingBox()
+
+    // The stats row should span most of the card, not huddle in the middle.
+    const spanned = (lastStat?.x ?? 0) + (lastStat?.width ?? 0) - (stats?.x ?? 0)
+    expect(spanned).toBeGreaterThan((card?.width ?? 0) * 0.8)
+  })
+})

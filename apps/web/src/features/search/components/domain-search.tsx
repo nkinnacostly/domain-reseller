@@ -28,7 +28,6 @@ export function DomainSearch({
   const inputId = useId()
   const errorId = useId()
 
-  const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   /**
@@ -40,13 +39,23 @@ export function DomainSearch({
   const [isEnhanced, setIsEnhanced] = useState(false)
   useEffect(() => setIsEnhanced(true), [])
 
-  function onSubmit(event: React.FormEvent) {
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const parsed = parseSearchQuery(value)
+
+    /**
+     * Read the submitted field, not React state.
+     *
+     * A controlled value can lag or be bypassed entirely — browser autofill and
+     * password managers set `input.value` without firing React's onChange, and
+     * the state would still be empty at submit. The form data is what the user
+     * actually typed.
+     */
+    const submitted = String(new FormData(event.currentTarget).get('q') ?? '')
+    const parsed = parseSearchQuery(submitted)
 
     if (!parsed.isValid) {
       setError(
-        value.trim()
+        submitted.trim()
           ? 'Use letters, numbers and hyphens — for example getpaid.ng'
           : 'Type a name to search for',
       )
@@ -54,7 +63,7 @@ export function DomainSearch({
     }
 
     setError(null)
-    router.push(searchHref(value))
+    router.push(searchHref(submitted))
   }
 
   return (
@@ -88,9 +97,14 @@ export function DomainSearch({
             spellCheck={false}
             // biome-ignore lint/a11y/noAutofocus: opt-in only, used on the search page where the field is the page's purpose
             autoFocus={autoFocus}
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value)
+            /**
+             * Deliberately uncontrolled. A controlled value is reset by React
+             * whenever something sets the field without firing onChange —
+             * browser autofill, password managers, and some automation all do.
+             * The submit handler reads FormData, so React never needs to own
+             * this value; onChange exists only to clear a stale error.
+             */
+            onChange={() => {
               if (error) setError(null)
             }}
             placeholder="yourbrand.ng"

@@ -19,7 +19,7 @@ export function SiteShell({
     <div className="min-h-dvh bg-canvas px-3 py-3 sm:px-6 sm:py-6 lg:px-8 lg:py-8 2xl:px-12 2xl:py-12">
       <div
         className={cn(
-          'mx-auto w-full max-w-[1800px] overflow-hidden rounded-2xl bg-background shadow-2xl sm:rounded-3xl',
+          'relative mx-auto w-full max-w-[1800px] overflow-hidden rounded-2xl bg-background shadow-2xl sm:rounded-3xl',
           className,
         )}
       >
@@ -32,6 +32,10 @@ export function SiteShell({
 /**
  * Horizontal rhythm for everything inside the shell. One component so the
  * gutter and max width can never drift between sections.
+ *
+ * It tracks the card's width rather than sitting in a narrow column inside it.
+ * Long-form text is kept readable by the individual blocks (`max-w-xl` on a
+ * paragraph, for instance), not by squeezing the whole page.
  */
 export function Container({
   children,
@@ -41,7 +45,7 @@ export function Container({
   className?: string
 }) {
   return (
-    <div className={cn('mx-auto w-full max-w-[1320px] px-5 sm:px-8 lg:px-12', className)}>
+    <div className={cn('mx-auto w-full max-w-[1760px] px-5 sm:px-8 lg:px-14 2xl:px-20', className)}>
       {children}
     </div>
   )

@@ -99,6 +99,34 @@ test.describe('home page search', () => {
     await expect(page).toHaveURL(/\/search\?q=getpaid\.com\.ng$/)
   })
 
+  test('pressing Enter submits, which is how most people search', async ({ page }) => {
+    await page.goto('/')
+    const form = page.getByRole('form', { name: 'Domain search', exact: true })
+    await form.waitFor()
+
+    const field = form.getByLabel('Find your domain')
+    await field.click()
+    await field.pressSequentially('getpaid.ng')
+    await field.press('Enter')
+
+    await expect(page).toHaveURL(/\/search\?q=getpaid\.ng$/)
+  })
+
+  test('a value set without a change event still submits', async ({ page }) => {
+    // Browser autofill and password managers set input.value directly. A
+    // controlled input would be reset to empty state before submit.
+    await page.goto('/')
+    const form = page.getByRole('form', { name: 'Domain search', exact: true })
+    await form.waitFor()
+
+    await form.getByLabel('Find your domain').evaluate((el) => {
+      ;(el as HTMLInputElement).value = 'autofilled.ng'
+    })
+    await form.getByRole('button', { name: /search/i }).click()
+
+    await expect(page).toHaveURL(/\/search\?q=autofilled\.ng$/)
+  })
+
   test('an empty search explains itself instead of navigating', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('form', { name: 'Domain search', exact: true }).waitFor()

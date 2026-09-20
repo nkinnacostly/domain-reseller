@@ -17,13 +17,12 @@ export function StatsStrip() {
       <Container className="py-8 sm:py-10">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-8 lg:grid-cols-4">
           {STATS.map((stat) => (
-            <div key={stat.label}>
-              <dt className="sr-only">{stat.label}</dt>
-              <dd>
-                <span className="block text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                  {stat.value}
-                </span>
-                <span className="mt-1 block text-sm text-muted-foreground">{stat.label}</span>
+            // flex-col-reverse puts the value above its label visually while
+            // keeping dt before dd in the DOM, so the label is stated once.
+            <div key={stat.label} className="flex flex-col-reverse gap-1">
+              <dt className="text-sm text-muted-foreground">{stat.label}</dt>
+              <dd className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                {stat.value}
               </dd>
             </div>
           ))}
