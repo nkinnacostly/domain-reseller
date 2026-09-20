@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist node_modules coverage",
-    "verify:supplier": "tsx scripts/verify-supplier.ts"
+    "verify:supplier": "tsx scripts/verify-supplier.ts",
+    "sync:catalogue": "tsx scripts/sync-catalogue.ts"
   },
   "dependencies": {
     "@dr/db": "workspace:*",

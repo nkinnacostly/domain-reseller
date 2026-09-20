@@ -133,6 +133,14 @@ export type Quote = {
 
 export type FxSettings = { midRate: number; bufferPct: number }
 
+/**
+ * PLACEHOLDER FX until the `fx_rates` table and the daily job exist
+ * (PRD FR-FX-1/2). Lives here, not in the web app, so the catalogue sync
+ * script and the storefront price against the same rate — two sources of
+ * pricing truth is a bug we have already shipped once.
+ */
+export const PLACEHOLDER_FX: FxSettings = { midRate: 1550, bufferPct: 4 }
+
 export function quote(entry: CatalogueEntry, kind: TradeKind, fx: FxSettings): Quote | null {
   const costUsd =
     kind === 'registration' ? entry.register : kind === 'renewal' ? entry.renew : entry.transfer

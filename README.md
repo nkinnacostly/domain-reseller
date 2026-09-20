@@ -36,6 +36,21 @@ supabase/       config.toml + migrations
 The gateway is separate because DomainNameAPI allowlists egress IPs and Vercel's are
 dynamic. It is also the only place supplier credentials exist.
 
+## Supplier data
+
+Retail prices are computed from `packages/shared/src/pricing/catalogue.json`, a
+snapshot of wholesale costs from the live DomainNameAPI catalogue. It is data —
+regenerate it, never hand-edit:
+
+```bash
+pnpm --filter @dr/gateway sync:catalogue             # what changed?
+pnpm --filter @dr/gateway sync:catalogue -- --write  # update the snapshot
+```
+
+The report names every wholesale change, what it does to the price customers
+see, and any price that no longer covers cost. Prices only move on deploy, so
+run this on a schedule — Verisign raises `.com` on 1 November 2026.
+
 ## Checks
 
 ```bash
