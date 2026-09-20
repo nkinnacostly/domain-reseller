@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { PopularExtensions } from '../components/popular-extensions'
-import { featuredPricing, priceTld } from '../lib/placeholder-pricing'
+import { featuredTlds } from '../lib/featured-tlds'
 
 describe('PopularExtensions', () => {
   it('lists the Nigerian extensions first', () => {
@@ -19,7 +19,7 @@ describe('PopularExtensions', () => {
   it('shows a renewal price for every extension', () => {
     render(<PopularExtensions />)
     const renewals = screen.getAllByText(/Renews at/i)
-    expect(renewals).toHaveLength(featuredPricing().length)
+    expect(renewals).toHaveLength(featuredTlds().length)
   })
 
   it('renders prices in naira', () => {
@@ -43,38 +43,25 @@ describe('PopularExtensions', () => {
   })
 })
 
-describe('priceTld', () => {
-  it('flags .com, where renewal costs more than the first year', () => {
-    const com = priceTld({
-      tld: 'com',
-      costUsd: 11.31,
-      renewCostUsd: 11.51,
-      icannFeeApplies: true,
-      blurb: '',
-    })
-    expect(com.renewalIsHigher).toBe(true)
+describe('featuredTlds', () => {
+  const featured = featuredTlds()
+
+  it('merchandises the Nigerian extensions first', () => {
+    expect(featured.map((f) => f.tld)).toEqual(['ng', 'com.ng', 'com'])
   })
 
-  it('does not flag a flat-priced ccTLD such as .ng', () => {
-    const ng = priceTld({
-      tld: 'ng',
-      costUsd: 11.99,
-      renewCostUsd: 11.99,
-      icannFeeApplies: false,
-      blurb: '',
-    })
-    expect(ng.renewalIsHigher).toBe(false)
-    expect(ng.firstYear).toBe(ng.renewal)
+  it('flags .com, where renewal costs more than the first year', () => {
+    expect(featured.find((f) => f.tld === 'com')?.renewalIsHigher).toBe(true)
+  })
+
+  it('does not flag the flat-priced .ng family', () => {
+    expect(featured.find((f) => f.tld === 'ng')?.renewalIsHigher).toBe(false)
+    expect(featured.find((f) => f.tld === 'ng')?.firstYear).toBe(
+      featured.find((f) => f.tld === 'ng')?.renewal,
+    )
   })
 
   it('formats prices as whole naira', () => {
-    const ng = priceTld({
-      tld: 'ng',
-      costUsd: 11.99,
-      renewCostUsd: 11.99,
-      icannFeeApplies: false,
-      blurb: '',
-    })
-    expect(ng.firstYear).toMatch(/^₦[\d,]+$/)
+    for (const f of featured) expect(f.firstYear).toMatch(/^₦[\d,]+$/)
   })
 })

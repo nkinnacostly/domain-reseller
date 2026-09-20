@@ -133,3 +133,47 @@ test.describe('pricing page', () => {
     expect(Math.round(allExt?.x ?? -1)).toBe(Math.round(h1?.x ?? -2))
   })
 })
+
+test.describe('one price everywhere', () => {
+  /**
+   * Regression: the home page and /pricing each had their own pricing path,
+   * and drifted — .com showed ₦22,900 on the home page and ₦20,500 on
+   * /pricing. A storefront whose whole pitch is honest pricing cannot quote
+   * two prices for the same domain.
+   */
+  test('the home page and the pricing page agree on every featured price', async ({ page }) => {
+    await page.goto('/pricing')
+    const fromTable = await page.locator('tbody tr').evaluateAll((rows) =>
+      Object.fromEntries(
+        rows.map((row) => [
+          // The th holds the TLD as its first text node, then an
+          // "+ ICANN fee" span — textContent would merge the two.
+          row.querySelector('th')?.childNodes[0]?.textContent?.trim() ?? '',
+          row.querySelector('td')?.textContent?.trim() ?? '',
+        ]),
+      ),
+    )
+
+    await page.goto('/')
+    // Scope to the Popular extensions section — the sibling "Trending this
+    // week" list also renders <li> elements.
+    const cards = await page
+      .locator('section', { has: page.getByRole('heading', { name: 'Popular extensions' }) })
+      .locator('li')
+      .evaluateAll((items) =>
+        items.map((li) => ({
+          tld: li.querySelector('p')?.textContent?.trim() ?? '',
+          badge: li.querySelector('span[class*="rounded-full"]')?.textContent?.trim() ?? '',
+        })),
+      )
+
+    expect(cards.length).toBeGreaterThan(0)
+    for (const card of cards) {
+      const tablePrice = fromTable[card.tld]
+      expect(tablePrice, `${card.tld} missing from the pricing table`).toBeTruthy()
+      expect(card.badge, `${card.tld} priced differently on the home page`).toContain(
+        tablePrice ?? '',
+      )
+    }
+  })
+})

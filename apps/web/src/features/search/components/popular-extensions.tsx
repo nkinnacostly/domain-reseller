@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { featuredPricing } from '../lib/placeholder-pricing'
+import { featuredTlds } from '../lib/featured-tlds'
 
 /**
  * Decorative wash per card — stands in for the reference's photography.
@@ -13,7 +13,7 @@ const WASH = [
 ] as const
 
 export function PopularExtensions() {
-  const tlds = featuredPricing()
+  const tlds = featuredTlds()
 
   return (
     <section aria-labelledby="popular-extensions">
