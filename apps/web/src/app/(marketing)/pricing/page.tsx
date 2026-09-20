@@ -5,7 +5,7 @@ import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
 import { FeaturedPricing } from '@/features/pricing/components/featured-pricing'
 import { PricingTable } from '@/features/pricing/components/pricing-table'
-import { FX, FX_UPDATED_LABEL } from '@/features/pricing/lib/fx'
+import { EFFECTIVE_RATE, FX } from '@/features/pricing/lib/fx'
 import { NIGERIAN_TLDS, sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
 
 export const metadata: Metadata = {
@@ -105,10 +105,14 @@ export default function PricingPage() {
 
             <p className="mt-10 max-w-2xl text-pretty text-sm/6 text-muted-foreground">
               <strong className="font-semibold text-foreground">On the exchange rate.</strong>{' '}
-              Registries bill in US dollars and we sell in naira. We convert at the mid-market rate
-              plus a {FX.bufferPct}% buffer that absorbs intraday movement and settlement lag,{' '}
-              {FX_UPDATED_LABEL}. The buffer is published rather than folded into the price, and a
-              domain in your cart holds its price for 30 minutes.
+              Registries bill in US dollars and we sell in naira. Every price on this page is
+              converted at a fixed rate of{' '}
+              <strong className="font-semibold text-foreground">
+                ₦{EFFECTIVE_RATE.toLocaleString('en-NG')} to the dollar
+              </strong>
+              . It does not move with the market during the day, so a price you see in the morning
+              is the price you pay in the evening, and a domain in your cart holds its price for 30
+              minutes.
             </p>
           </Container>
         </div>

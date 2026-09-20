@@ -96,10 +96,26 @@ test.describe('pricing page', () => {
     expect(find('.com.ng')?.hasIcannMark, 'ccTLD .com.ng should not').toBe(false)
   })
 
-  test('publishes the FX policy rather than hiding the conversion', async ({ page }) => {
+  test('states the exchange rate customers are charged at', async ({ page }) => {
     await page.goto('/pricing')
-    await expect(page.getByText(/mid-market rate plus a 4% buffer/)).toBeVisible()
+    await expect(page.getByText(/converted at a fixed rate of/)).toBeVisible()
+    await expect(page.getByText(/₦[\d,]+ to the dollar/)).toBeVisible()
     await expect(page.getByText(/VAT at 7\.5%/).first()).toBeVisible()
+  })
+
+  /**
+   * The rate is a fixed constant. There is no rate feed and no daily job, so
+   * the site must not claim either. It did once: "we convert at the mid-market
+   * rate plus a 4% buffer, updated daily at 08:00 WAT" — while charging a rate
+   * roughly 19% above mid-market and never updating it. Restore those claims
+   * only alongside a real fx_rates table.
+   */
+  test('claims no rate mechanism it does not have', async ({ page }) => {
+    await page.goto('/pricing')
+    const text = await page.locator('main').innerText()
+
+    expect(text, 'claims a daily update that does not happen').not.toMatch(/updated daily/i)
+    expect(text, 'claims to track the mid-market rate').not.toMatch(/mid-market/i)
   })
 
   test('no accessibility violations', async ({ page }) => {

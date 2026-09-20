@@ -1,4 +1,5 @@
 import { Container } from '@/components/layout/site-shell'
+import { EFFECTIVE_RATE } from '@/features/pricing/lib/fx'
 
 /**
  * The FX policy, stated plainly (PRD FR-FX-3). Publishing this is the point —
@@ -24,17 +25,17 @@ export function PricingPromise() {
 
           <dl className="space-y-6">
             <div className="border-border/70 border-b pb-5">
-              <dt className="font-semibold text-foreground">Market rate, plus a stated buffer</dt>
+              <dt className="font-semibold text-foreground">One published rate</dt>
               <dd className="mt-1.5 text-sm/6 text-muted-foreground">
-                We convert at the mid-market rate plus a 4% buffer that absorbs intraday movement
-                and settlement lag. The buffer is published, not folded into the domain price.
+                We convert at a fixed rate of ₦{EFFECTIVE_RATE.toLocaleString('en-NG')} to the
+                dollar, stated on the pricing page rather than buried in the total.
               </dd>
             </div>
             <div className="border-border/70 border-b pb-5">
-              <dt className="font-semibold text-foreground">Updated once a day</dt>
+              <dt className="font-semibold text-foreground">It does not move on you</dt>
               <dd className="mt-1.5 text-sm/6 text-muted-foreground">
-                Prices are set each morning and hold for the day. A domain you priced at breakfast
-                costs the same at close of business.
+                The rate holds between reviews, so a domain you priced at breakfast costs the same
+                at close of business. When it changes, we say so.
               </dd>
             </div>
             <div>
