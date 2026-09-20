@@ -1555,17 +1555,17 @@ Everything marked **[VERIFY]**. Do these before writing feature code — several
 
 | # | Item | How | Blocks |
 |---|---|---|---|
-| **V1** | **Is `.ng` / `.com.ng` in the catalogue?** | `GetTldList(IncludePriceDefinitions=true)`, grep for `ng`. If absent, we need a NiRA-accredited registrar relationship or a second supplier — **this changes the business case for a Nigeria-first product** | Everything |
-| **V2** | **Is egress IP allowlisting enforced?** | Call the API from an unregistered IP; see whether `API_301` fires. Register the gateway's static IP either way | Deployment topology |
-| **V3** | REST auth header shape | Test against OTE with real Reseller ID + API Key | Gateway |
-| **V4** | Rate limits per operation | Ask support; empirically probe OTE | Search design, caching TTLs |
-| **V5** | Our reseller tier and tier thresholds | Panel + `GetResellerDetails` | Pricing model |
-| **V6** | Actual wholesale prices for the launch TLD set | `GetTldList` | Pricing model |
-| **V7** | Premium domain handling — is the fee extension enabled on our account? | Check availability for a known premium name; confirm `IsFee`/`ClassKey` populate | Premium display |
+| **V1** | ✅ **RESOLVED 20 Sept 2026.** Four `.ng` SLDs available: `.ng`, `.com.ng`, `.net.ng`, `.org.ng` — all **USD 11.99 flat** for both register and renew, 30-day redemption, **no extra checkout attributes required**. `.ng` and `.com.ng` cap at 5 years; `.net.ng` and `.org.ng` at 10. `.i.ng` and `.sch.ng` are **not** in the catalogue. `.ng` transfer prices at **0.00**, which needs confirming — free, or not supported | `apps/gateway/scripts/verify-supplier.ts` | — |
+| **V2** | ✅ **RESOLVED.** No `API_301` from an unregistered IP — allowlisting is **not enforced** on this account. The gateway remains correct for credential custody, rate limiting and idempotency, but it is no longer a hard deployment constraint | `verify-supplier.ts` | — |
+| **V3** | ✅ **RESOLVED.** Two headers: `X-API-KEY: <api key>` and `__reseller: <reseller uuid>`. No bearer token, no signing | SDK source + live call | — |
+| **V4** | ⚠️ **PARTIAL.** No throttling across 8 sequential availability calls. But **each call takes ~950 ms** (range 480–2 900 ms), which alone **exceeds the p75 < 800 ms search target** in [§13.7](#137-caching-and-performance). Caching and parallel exact-match/grid calls are mandatory, not optimisations | `verify-supplier.ts` | Search architecture |
+| **V5** | ⚠️ **RESOLVED, AND IT IS A PROBLEM.** Account `CLOOP UNIVERSE TECH`, price group **`Reseller`** — the base tier. Balance **USD 0.00 / TRY 0.00**, so nothing can be registered until the float is funded. See R17 | `GetResellerDetails` | Pricing model, launch |
+| **V6** | ✅ **RESOLVED.** 723 TLDs, 701 with a 1-year register price. Base-tier USD: `.com` 11.31 reg / 11.51 renew · `.org` 8.49 / 13.99 · `.net` 13.99 / 14.01 · `.io` 44.99 / 64.90 · `.co` 19.49 / 38.99 · `.app` 23.99 flat · `.xyz` 1.99 / 14.99 · `.africa` 25.90 flat. **93 TLDs require extra checkout attributes** (`.tr`, `.uk`, `.aero`, `.name` …) — the `.ng` family does not | `verify-supplier.ts` | Pricing model |
+| **V7** | ⏳ **INCONCLUSIVE.** `IsFee` and `ClassKey` did not populate on the sampled names. Needs a known registry-premium name to distinguish "not enabled" from "none sampled" | `CheckAvailability` on a known premium | Premium display |
 | **V8** | Sponsoring registrar name(s) per TLD | Ask DNA support — required for CMP-1 | Legal pages |
 | **V9** | Data protection terms in the DNA reseller agreement | Read the agreement; request an addendum if absent | CMP-11, NDPA |
-| **V10** | OTE parity — does the sandbox support register/renew/transfer end-to-end? | Run the full saga in OTE | Test strategy |
-| **V11** | Does OTE reset? Test-domain policy? | Ask support | Test strategy |
+| **V10** | ⚠️ **BLOCKED.** Current credentials are **production only** — OTE returns `401 Unauthorized! Invalid API Key.` Separate sandbox credentials must be requested from DomainNameAPI support before any write path can be tested | Support request | **Test strategy, all write paths** |
+| **V11** | ⏳ Blocked behind V10 — ask in the same support request | Support request | Test strategy |
 | **V12** | Can DS records (DNSSEC) be set at all, by any route? | Ask support | Scope confirmation |
 | **V13** | `.ng` RDAP endpoint existence | Check IANA bootstrap; query NiRA | RDAP page |
 | **V14** | Do the supplier's default nameservers (`tr.apiname.com`, `eu.apiname.com`) serve a parking page, or does an undelegated domain simply not resolve? Can a domain be registered with *no* nameservers? | Register a test domain in OTE and query it | Undelegated empty-state copy |
@@ -1582,7 +1582,7 @@ Everything marked **[VERIFY]**. Do these before writing feature code — several
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| R1 | **`.ng` not available from the supplier** | Medium | **Critical** | V1 verification first. Contingency: integrate a second supplier or a NiRA registrar for the `.ng` family behind the same `RegistrarProvider` interface |
+| R1 | ~~`.ng` not available from the supplier~~ **RETIRED** — confirmed available 20 Sept 2026 | — | — | The `RegistrarProvider` interface stays regardless, so a second supplier remains an implementation rather than a rewrite (see R16) |
 | R2 | **Supplier float exhausted mid-order** | Medium | High | Pre-flight balance check, 21-day float, 15-min monitoring, alert at 10 days / page at 3 |
 | R3 | **Payment succeeded, registration failed, undetected** | Medium | **Critical** | The order saga's invariants, orphan sweep, auto-refund, 15-min alerting |
 | R4 | **Double registration from a blind retry** | Low | High | Invariant I1/I2 — pre-flight `GetDetails`, never retry a write on timeout |
@@ -1599,6 +1599,7 @@ Everything marked **[VERIFY]**. Do these before writing feature code — several
 | R14 | **Supplier SDK telemetry leaks metadata** | Low | Medium | `telemetry: false`, asserted by test |
 | R15 | **Search abuse burns the supplier quota** | Medium | Medium | Caching, rate limiting, bot protection |
 | R16 | **Single-supplier concentration** | — | High | Build to `RegistrarProvider` from day one so a second supplier is an implementation, not a rewrite |
+| **R17** | **Base-tier wholesale pricing may not support a competitive retail offer** — verified 20 Sept 2026 | **Confirmed** | **Critical** | At the `Reseller` tier we buy `.com` at **USD 11.31**, which is *above* Verisign's USD 10.26 wholesale, above DomainNameAPI's own advertised USD 7.99 headline, and at or above what Namecheap and Porkbun **retail** it for. `.ng` and `.com.ng` cost **USD 11.99** — roughly ₦18,600 at ₦1,550/USD before margin and VAT. **Action: establish actual Nigerian retail prices for `.com.ng`, then negotiate a higher tier (Premium / Platinum / VIP) with DomainNameAPI before committing to launch pricing.** If the gap cannot be closed, direct NiRA accreditation for the `.ng` family is the alternative |
 
 ---
 
