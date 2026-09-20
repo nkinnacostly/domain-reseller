@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { connection } from 'next/server'
 import { Suspense } from 'react'
 import { Brand } from '@/components/layout/brand'
+import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
 
 /**
@@ -87,12 +88,9 @@ export function SiteFooter() {
                 <ul className="mt-4 space-y-3">
                   {column.links.map((link) => (
                     <li key={link.href}>
-                      <Link
-                        href={link.href}
-                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      >
+                      <NavLink href={link.href} className="text-sm hover:underline">
                         {link.label}
-                      </Link>
+                      </NavLink>
                     </li>
                   ))}
                 </ul>

@@ -85,7 +85,10 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
           </thead>
           <tbody>
             {shown.map((row) => (
-              <tr key={row.tld} className="border-border/60 border-b">
+              <tr
+                key={row.tld}
+                className="border-border/60 border-b transition-colors hover:bg-muted/50 focus-within:bg-muted/50"
+              >
                 <th scope="row" className="py-3 pr-4 text-left font-medium">
                   {`.${row.tld}`}
                   {row.isCountryCode ? null : (

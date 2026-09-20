@@ -230,6 +230,32 @@
     font-synthesis-weight: none;
     text-rendering: optimizeLegibility;
   }
+
+  /* ── Interaction states ──────────────────────────────────────────────────
+     Pressed feedback. Without it a tap on a phone gives no acknowledgement
+     until the next page paints, which on a slow connection reads as "nothing
+     happened" and invites a second tap — on a checkout button that matters.
+
+     Scoped to real controls, and only when they are not disabled. The global
+     prefers-reduced-motion block above already collapses the transition. */
+  button:not(:disabled):not([aria-disabled='true']):active,
+  [role='button']:not([aria-disabled='true']):active,
+  a[data-slot='button']:not([aria-disabled='true']):active {
+    transform: scale(0.98);
+  }
+
+  button,
+  [role='button'],
+  a[data-slot='button'] {
+    transition: transform 120ms ease-out;
+  }
+
+  /* A disabled control should look unavailable, not merely faded. */
+  :disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
   /* Respect the user's motion preference everywhere — UX-10. */
   @media (prefers-reduced-motion: reduce) {
     *,

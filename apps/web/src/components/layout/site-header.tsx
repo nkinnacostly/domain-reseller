@@ -4,6 +4,7 @@ import { Menu, X } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
 import { Brand } from '@/components/layout/brand'
+import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -26,13 +27,16 @@ export function SiteHeader({ className }: { className?: string }) {
 
         <nav aria-label="Main" className="hidden items-center gap-9 md:flex">
           {NAV.map((item) => (
-            <Link
+            <NavLink
               key={item.href}
               href={item.href}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="text-sm"
+              // A 2px rule under the current link. Colour alone is not a
+              // sufficient signal (WCAG 1.4.1).
+              activeClassName="after:absolute after:-bottom-1.5 after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-accent"
             >
               {item.label}
-            </Link>
+            </NavLink>
           ))}
         </nav>
 
@@ -66,14 +70,15 @@ export function SiteHeader({ className }: { className?: string }) {
         <Container>
           <nav aria-label="Mobile" className="flex flex-col pb-4">
             {NAV.map((item) => (
-              <Link
+              <NavLink
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="py-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                className="py-3 text-sm"
+                activeClassName="before:absolute before:top-1/2 before:-left-3 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-accent"
               >
                 {item.label}
-              </Link>
+              </NavLink>
             ))}
             <Button asChild className="mt-2 rounded-full">
               <Link href="/sign-in">Login</Link>
