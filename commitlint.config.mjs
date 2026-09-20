@@ -11,6 +11,8 @@ export default {
         'db',
         'ui',
         'search',
+        'pricing',
+        'marketing',
         'cart',
         'checkout',
         'domains',

@@ -48,16 +48,19 @@ function toKobo(naira: number): number {
 
 /**
  * Round up to a price that looks deliberate rather than converted.
- * ₦17,214 → ₦17,500 · ₦17,640 → ₦17,900 (PRD FR-PRICE-4).
+ * ₦17,214 → ₦17,500 · ₦17,640 → ₦17,900 · ₦17,950 → ₦18,000 (PRD FR-PRICE-4).
  */
 export function roundToPsychological(kobo: number): number {
   const naira = Math.ceil(kobo / KOBO_PER_NAIRA)
   const thousands = Math.floor(naira / 1000)
   const remainder = naira - thousands * 1000
 
+  // The ladder of acceptable endings within a thousand, then the next thousand.
+  // Rounding must never go DOWN — the price would fall through the margin floor.
   if (remainder === 0) return toKobo(naira)
   if (remainder <= 500) return toKobo(thousands * 1000 + 500)
-  return toKobo(thousands * 1000 + 900)
+  if (remainder <= 900) return toKobo(thousands * 1000 + 900)
+  return toKobo((thousands + 1) * 1000)
 }
 
 export function effectiveFxRate(midRate: number, bufferPct: number): number {

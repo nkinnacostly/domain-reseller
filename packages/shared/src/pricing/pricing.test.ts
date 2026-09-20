@@ -34,9 +34,18 @@ describe('roundToPsychological', () => {
     expect(roundToPsychological(input)).toBe(expected)
   })
 
-  it('never rounds down — we must not sell below the computed floor', () => {
-    for (const kobo of [100_001, 555_555, 999_999, 1_234_567]) {
-      expect(roundToPsychological(kobo)).toBeGreaterThanOrEqual(kobo)
+  it('carries a remainder above 900 up to the next thousand', () => {
+    // Regression: this range used to round DOWN, dropping the price through
+    // the margin floor. ₦45,950 became ₦45,900.
+    expect(roundToPsychological(4_595_000)).toBe(4_600_000)
+    expect(roundToPsychological(4_590_100)).toBe(4_600_000)
+  })
+
+  it('never rounds down, at any remainder', () => {
+    // Sweep every remainder within a thousand rather than sampling a few.
+    for (let remainder = 0; remainder < 1000; remainder++) {
+      const kobo = (45_000 + remainder) * 100
+      expect(roundToPsychological(kobo), `remainder ${remainder}`).toBeGreaterThanOrEqual(kobo)
     }
   })
 })
