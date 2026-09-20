@@ -87,20 +87,31 @@ test.describe('health', () => {
 test.describe('home page search', () => {
   test('searching navigates to the results page with a canonical query', async ({ page }) => {
     await page.goto('/')
-    await page.locator('form[data-enhanced="true"]').waitFor()
-    await page.getByLabel('Find your domain').fill('  https://GetPaid.COM.NG/  ')
-    await page.getByRole('button', { name: /search/i }).click()
+    await page.getByRole('form', { name: 'Domain search', exact: true }).waitFor()
+    await page
+      .getByRole('form', { name: 'Domain search', exact: true })
+      .getByLabel('Find your domain')
+      .fill('  https://GetPaid.COM.NG/  ')
+    await page
+      .getByRole('form', { name: 'Domain search', exact: true })
+      .getByRole('button', { name: /search/i })
+      .click()
     await expect(page).toHaveURL(/\/search\?q=getpaid\.com\.ng$/)
   })
 
   test('an empty search explains itself instead of navigating', async ({ page }) => {
     await page.goto('/')
-    await page.locator('form[data-enhanced="true"]').waitFor()
-    await page.getByRole('button', { name: /search/i }).click()
+    await page.getByRole('form', { name: 'Domain search', exact: true }).waitFor()
+    await page
+      .getByRole('form', { name: 'Domain search', exact: true })
+      .getByRole('button', { name: /search/i })
+      .click()
 
     // Scope to the form: Next injects its own role="alert" route announcer,
     // so a bare getByRole('alert') is ambiguous.
-    const formAlert = page.locator('form').getByRole('alert')
+    const formAlert = page
+      .getByRole('form', { name: 'Domain search', exact: true })
+      .getByRole('alert')
     await expect(formAlert).toContainText(/type a name/i)
     await expect(page).toHaveURL(/\/$/)
   })
@@ -137,7 +148,10 @@ test.describe('mobile navigation', () => {
 
   test('the hero visual never overlaps the search field', async ({ page }) => {
     await page.goto('/')
-    const search = await page.getByLabel('Find your domain').boundingBox()
+    const search = await page
+      .getByRole('form', { name: 'Domain search', exact: true })
+      .getByLabel('Find your domain')
+      .boundingBox()
     const card = await page.getByText('getpaid.ng').boundingBox()
     expect(search).not.toBeNull()
     expect(card).not.toBeNull()
@@ -151,8 +165,14 @@ test.describe('progressive enhancement', () => {
 
   test('search still works with JavaScript disabled', async ({ page }) => {
     await page.goto('/')
-    await page.getByLabel('Find your domain').fill('getpaid.ng')
-    await page.getByRole('button', { name: /search/i }).click()
+    await page
+      .getByRole('form', { name: 'Domain search', exact: true })
+      .getByLabel('Find your domain')
+      .fill('getpaid.ng')
+    await page
+      .getByRole('form', { name: 'Domain search', exact: true })
+      .getByRole('button', { name: /search/i })
+      .click()
     await expect(page).toHaveURL(/\/search\?q=getpaid\.ng$/)
   })
 })

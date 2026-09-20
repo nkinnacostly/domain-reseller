@@ -12,7 +12,18 @@ import { parseSearchQuery, searchHref } from '../lib/query'
  * Validation is deliberately gentle — it only speaks up after a submit attempt,
  * so nobody is told they are wrong while still typing.
  */
-export function DomainSearch({ autoFocus = false }: { autoFocus?: boolean }) {
+export function DomainSearch({
+  autoFocus = false,
+  /**
+   * Distinguishes this form when a page carries more than one search — the
+   * hero and the closing call to action both do. Screen reader users
+   * navigating by form hear which is which.
+   */
+  formLabel = 'Domain search',
+}: {
+  autoFocus?: boolean
+  formLabel?: string
+}) {
   const router = useRouter()
   const inputId = useId()
   const errorId = useId()
@@ -58,6 +69,7 @@ export function DomainSearch({ autoFocus = false }: { autoFocus?: boolean }) {
       method="get"
       onSubmit={onSubmit}
       noValidate
+      aria-label={formLabel}
       data-enhanced={isEnhanced ? 'true' : undefined}
       className="w-full"
     >

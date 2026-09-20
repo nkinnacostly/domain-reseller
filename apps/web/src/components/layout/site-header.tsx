@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { Brand } from '@/components/layout/brand'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 const NAV = [
   { href: '/#how-it-works', label: 'How it works' },
@@ -12,11 +13,11 @@ const NAV = [
   { href: '/transfer', label: 'Transfer' },
 ] as const
 
-export function SiteHeader() {
+export function SiteHeader({ className }: { className?: string }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <header className="relative z-20">
+    <header className={cn('relative z-30', className)}>
       <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-8 sm:py-6 lg:px-12">
         <Link href="/" aria-label={`${'Naijadomains'} home`}>
           <Brand />
@@ -56,7 +57,11 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <div id="mobile-nav" hidden={!open} className="border-border/60 border-t px-5 pb-4 md:hidden">
+      <div
+        id="mobile-nav"
+        hidden={!open}
+        className="border-border/60 border-t bg-hero-from px-5 pb-4 md:hidden"
+      >
         <nav aria-label="Mobile" className="flex flex-col">
           {NAV.map((item) => (
             <Link
