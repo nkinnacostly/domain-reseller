@@ -11,7 +11,7 @@ const schema = z.object({
   DNA_ENV: z.enum(['ote', 'production']).default('ote'),
 
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  SUPABASE_SECRET_KEY: z.string().min(1),
 
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 })

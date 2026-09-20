@@ -55,14 +55,14 @@ jobs:
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: pnpm install --frozen-lockfile
 
-      # SEC-6 — the service-role key must never be reachable from the browser.
+      # SEC-6 — the secret key must never be reachable from the browser.
       - name: Service-role key is server-only
         run: |
-          if grep -rn "SUPABASE_SERVICE_ROLE_KEY" apps/web/src \
+          if grep -rn "SUPABASE_SECRET_KEY" apps/web/src \
              --include='*.ts' --include='*.tsx' \
              | grep -v "apps/web/src/lib/env.ts" \
              | grep -v "apps/web/src/lib/supabase/admin.ts"; then
-            echo "::error::SUPABASE_SERVICE_ROLE_KEY referenced outside env.ts / supabase/admin.ts"
+            echo "::error::SUPABASE_SECRET_KEY referenced outside env.ts / supabase/admin.ts"
             exit 1
           fi
 
@@ -118,7 +118,7 @@ jobs:
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           NEXT_PUBLIC_APP_NAME: Domain Reseller
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-anon-key
 
       - uses: actions/upload-artifact@v4
         if: failure()

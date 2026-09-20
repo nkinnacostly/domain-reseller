@@ -5,7 +5,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { env } from '@/lib/env'
 
 /**
- * SERVICE-ROLE CLIENT — BYPASSES RLS.
+ * SECRET-KEY CLIENT — BYPASSES RLS.
  *
  * Rules (PRD SEC-6):
  *   • Never import this from a Client Component or anything reachable by the browser.
@@ -15,9 +15,7 @@ import { env } from '@/lib/env'
  *   • Always perform your own authorisation check first. There is no safety net here.
  */
 export function createAdminClient() {
-  return createSupabaseClient<Database>(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  )
+  return createSupabaseClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 }

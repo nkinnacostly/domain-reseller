@@ -11,7 +11,7 @@ import { z } from 'zod'
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+    SUPABASE_SECRET_KEY: z.string().min(1),
     GATEWAY_URL: z.url(),
     GATEWAY_SHARED_SECRET: z.string().min(16),
     PAYSTACK_SECRET_KEY: z.string().min(1),
@@ -27,7 +27,7 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_URL: z.url(),
     NEXT_PUBLIC_APP_NAME: z.string().min(1),
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
     NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string().optional(),
     NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   },
@@ -35,7 +35,7 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
