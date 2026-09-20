@@ -4,13 +4,28 @@ import { expect, test } from '@playwright/test'
 test.describe('home page', () => {
   test('renders the search hero', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/find your domain/i)
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/priced in naira/i)
   })
 
-  test('exposes a skip link as the first focusable element', async ({ page }) => {
+  test('provides a skip link that moves focus to the main content', async ({
+    page,
+    browserName,
+  }) => {
     await page.goto('/')
-    await page.keyboard.press('Tab')
-    await expect(page.getByRole('link', { name: /skip to content/i })).toBeFocused()
+    const skip = page.getByRole('link', { name: /skip to content/i })
+
+    // WebKit does not tab to links unless the user enables "Press Tab to
+    // highlight each item on a webpage", so assert tab order only where it
+    // reflects the default experience.
+    if (browserName === 'chromium' || browserName === 'firefox') {
+      await page.keyboard.press('Tab')
+      await expect(skip).toBeFocused()
+    }
+
+    await skip.focus()
+    await expect(skip).toBeFocused()
+    await expect(skip).toHaveAttribute('href', '#main')
+    await expect(page.locator('#main')).toBeAttached()
   })
 
   test('has no detectable accessibility violations', async ({ page }) => {
@@ -66,5 +81,78 @@ test.describe('health', () => {
     const response = await request.get('/api/health')
     expect(response.ok()).toBe(true)
     expect(await response.json()).toMatchObject({ status: 'healthy' })
+  })
+})
+
+test.describe('home page search', () => {
+  test('searching navigates to the results page with a canonical query', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('form[data-enhanced="true"]').waitFor()
+    await page.getByLabel('Find your domain').fill('  https://GetPaid.COM.NG/  ')
+    await page.getByRole('button', { name: /search/i }).click()
+    await expect(page).toHaveURL(/\/search\?q=getpaid\.com\.ng$/)
+  })
+
+  test('an empty search explains itself instead of navigating', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('form[data-enhanced="true"]').waitFor()
+    await page.getByRole('button', { name: /search/i }).click()
+
+    // Scope to the form: Next injects its own role="alert" route announcer,
+    // so a bare getByRole('alert') is ambiguous.
+    const formAlert = page.locator('form').getByRole('alert')
+    await expect(formAlert).toContainText(/type a name/i)
+    await expect(page).toHaveURL(/\/$/)
+  })
+})
+
+test.describe('pricing transparency', () => {
+  /** PRD N8 — a price is never shown without its renewal price. */
+  test('every featured extension shows a renewal price', async ({ page }) => {
+    await page.goto('/')
+    const cards = page.getByRole('heading', { name: 'Popular extensions' })
+    await expect(cards).toBeVisible()
+
+    const renewals = page.getByText(/Renews at/i)
+    await expect(renewals.first()).toBeVisible()
+    expect(await renewals.count()).toBeGreaterThanOrEqual(3)
+  })
+})
+
+test.describe('mobile navigation', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('the menu button opens and closes the nav', async ({ page }) => {
+    await page.goto('/')
+    const toggle = page.getByRole('button', { name: /open menu/i })
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    await toggle.click()
+    await expect(page.getByRole('button', { name: /close menu/i })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    await expect(page.getByRole('navigation', { name: 'Mobile' })).toBeVisible()
+  })
+
+  test('the hero visual never overlaps the search field', async ({ page }) => {
+    await page.goto('/')
+    const search = await page.getByLabel('Find your domain').boundingBox()
+    const card = await page.getByText('getpaid.ng').boundingBox()
+    expect(search).not.toBeNull()
+    expect(card).not.toBeNull()
+    // The result card sits strictly below the search pill.
+    expect(card?.y ?? 0).toBeGreaterThan((search?.y ?? 0) + (search?.height ?? 0))
+  })
+})
+
+test.describe('progressive enhancement', () => {
+  test.use({ javaScriptEnabled: false })
+
+  test('search still works with JavaScript disabled', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel('Find your domain').fill('getpaid.ng')
+    await page.getByRole('button', { name: /search/i }).click()
+    await expect(page).toHaveURL(/\/search\?q=getpaid\.ng$/)
   })
 })

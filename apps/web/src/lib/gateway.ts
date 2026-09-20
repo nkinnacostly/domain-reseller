@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { GatewayError } from '@dr/shared/errors'
-import { env } from '@/lib/env'
+import { requireGatewayEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 
 /**
@@ -25,12 +25,13 @@ export async function callGateway<T>({
   idempotencyKey,
   signal,
 }: GatewayRequest): Promise<T> {
+  const { url: baseUrl, sharedSecret } = requireGatewayEnv()
   const started = performance.now()
-  const url = `${env.GATEWAY_URL}/v1/${path.replace(/^\//, '')}`
+  const url = `${baseUrl}/v1/${path.replace(/^\//, '')}`
 
   const headers: Record<string, string> = {
     'content-type': 'application/json',
-    authorization: `Bearer ${env.GATEWAY_SHARED_SECRET}`,
+    authorization: `Bearer ${sharedSecret}`,
   }
   if (idempotencyKey) headers['idempotency-key'] = idempotencyKey
 

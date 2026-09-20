@@ -11,11 +11,15 @@ import { z } from 'zod'
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-    SUPABASE_SECRET_KEY: z.string().min(1),
-    GATEWAY_URL: z.url(),
-    GATEWAY_SHARED_SECRET: z.string().min(16),
-    PAYSTACK_SECRET_KEY: z.string().min(1),
-    PAYSTACK_WEBHOOK_SECRET: z.string().min(1),
+    SUPABASE_SECRET_KEY: z.string().min(1).optional(),
+    GATEWAY_URL: z.url().default('http://localhost:8787'),
+    GATEWAY_SHARED_SECRET: z.string().min(16).optional(),
+
+    // Not yet integrated. Optional here so an unrelated page cannot be taken
+    // down by a missing payment key; the payment code asserts them at the point
+    // of use via requirePaymentEnv(). Make them required once checkout ships.
+    PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
+    PAYSTACK_WEBHOOK_SECRET: z.string().min(1).optional(),
     FX_BUFFER_PCT: z.coerce.number().min(0).max(25).default(4),
     PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
     RESEND_API_KEY: z.string().optional(),
@@ -24,8 +28,8 @@ export const env = createEnv({
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   },
   client: {
-    NEXT_PUBLIC_APP_URL: z.url(),
-    NEXT_PUBLIC_APP_NAME: z.string().min(1),
+    NEXT_PUBLIC_APP_URL: z.url().default('http://localhost:3000'),
+    NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Naijadomains'),
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
     NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string().optional(),
@@ -43,3 +47,32 @@ export const env = createEnv({
   skipValidation: process.env.SKIP_ENV_VALIDATION === 'true',
   emptyStringAsUndefined: true,
 })
+
+/**
+ * Assert the environment a feature needs, at the point it actually runs.
+ *
+ * Keeping these out of the module-level schema means a missing payment key
+ * breaks checkout with a clear message rather than taking down the storefront.
+ */
+export function requirePaymentEnv() {
+  const secretKey = env.PAYSTACK_SECRET_KEY
+  const webhookSecret = env.PAYSTACK_WEBHOOK_SECRET
+
+  if (!secretKey || !webhookSecret) {
+    throw new Error(
+      'Payments are not configured: set PAYSTACK_SECRET_KEY and PAYSTACK_WEBHOOK_SECRET.',
+    )
+  }
+
+  return { secretKey, webhookSecret }
+}
+
+export function requireGatewayEnv() {
+  const sharedSecret = env.GATEWAY_SHARED_SECRET
+
+  if (!sharedSecret) {
+    throw new Error('Registrar gateway is not configured: set GATEWAY_SHARED_SECRET.')
+  }
+
+  return { url: env.GATEWAY_URL, sharedSecret }
+}

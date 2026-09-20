@@ -1,15 +1,21 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Poppins } from 'next/font/google'
 import { ThemeProvider } from '@/components/layout/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
-const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'], display: 'swap' })
-const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'], display: 'swap' })
+// Geometric sans with the tight, heavy display weights the design leans on.
+const poppins = Poppins({
+  variable: '--font-sans',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: { default: 'Domain Reseller', template: '%s · Domain Reseller' },
-  description: 'Search, register and manage domain names. Naira pricing, no renewal surprises.',
+  description:
+    'Search, register and manage domain names. Naira pricing, renewal price shown upfront, no hidden fees.',
 }
 
 export const viewport: Viewport = {
@@ -17,24 +23,24 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
+    { media: '(prefers-color-scheme: light)', color: '#7d9ba1' },
+    { media: '(prefers-color-scheme: dark)', color: '#232f36' },
   ],
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
+      <body className={`${poppins.variable} bg-canvas font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
           <a
             href="#main"
-            className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:ring-2 focus:ring-ring"
+            className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-full focus:bg-background focus:px-4 focus:py-2 focus:ring-2 focus:ring-ring"
           >
             Skip to content
           </a>

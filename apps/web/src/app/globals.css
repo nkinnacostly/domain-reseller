@@ -11,25 +11,48 @@
 :root {
   --radius: 0.625rem;
 
+  /* Page canvas — the dusty teal the white card floats on. */
+  --canvas: oklch(0.628 0.039 216);
+
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.222 0.027 221);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.222 0.027 221);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.222 0.027 221);
+
+  /* Primary is the deep slate used for headings and the mark. */
+  --primary: oklch(0.222 0.027 221);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+
+  /* Accent is the teal CTA. */
+  --accent: oklch(0.457 0.053 203);
+  --accent-foreground: oklch(0.985 0.004 203);
+
+  --secondary: oklch(0.966 0.003 216);
+  --secondary-foreground: oklch(0.222 0.027 221);
+  --muted: oklch(0.966 0.003 216);
+  --muted-foreground: oklch(0.545 0.009 228);
+
+  /* Warm grey wash behind the hero. */
+  --hero-from: oklch(0.930 0.005 214);
+  --hero-to: oklch(0.893 0.006 218);
+
+  /* Card washes. Fixed per theme rather than derived from --primary, which
+     inverts between themes and would flip a deep navy card to near-white. */
+  --wash-1-from: oklch(0.520 0.058 203);
+  --wash-1-to: oklch(0.430 0.050 208);
+  --wash-2-from: oklch(0.300 0.032 219);
+  --wash-2-to: oklch(0.222 0.027 221);
+  --wash-3-from: oklch(0.600 0.046 205);
+  --wash-3-to: oklch(0.470 0.042 212);
+  --wash-foreground: oklch(0.985 0.004 210);
+
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.918 0.004 216);
+  --input: oklch(0.918 0.004 216);
+  --ring: oklch(0.457 0.053 203);
 
   /* Domain lifecycle — semantic, used by status pills and banners (PRD §10, UX-8) */
   --status-active: oklch(0.72 0.17 152);
@@ -62,25 +85,44 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Dark is designed, not inverted: a deep teal-black canvas with an
+     elevated near-black card, and a brighter accent to hold contrast. */
+  --canvas: oklch(0.146 0.018 221);
+
+  --background: oklch(0.205 0.019 221);
+  --foreground: oklch(0.964 0.004 216);
+  --card: oklch(0.240 0.020 221);
+  --card-foreground: oklch(0.964 0.004 216);
+  --popover: oklch(0.240 0.020 221);
+  --popover-foreground: oklch(0.964 0.004 216);
+
+  --primary: oklch(0.964 0.004 216);
+  --primary-foreground: oklch(0.205 0.019 221);
+
+  --accent: oklch(0.706 0.082 197);
+  --accent-foreground: oklch(0.168 0.020 203);
+
+  --secondary: oklch(0.262 0.018 221);
+  --secondary-foreground: oklch(0.964 0.004 216);
+  --muted: oklch(0.262 0.018 221);
+  --muted-foreground: oklch(0.724 0.011 222);
+
+  --hero-from: oklch(0.268 0.021 219);
+  --hero-to: oklch(0.223 0.019 221);
+
+  --wash-1-from: oklch(0.470 0.055 203);
+  --wash-1-to: oklch(0.360 0.045 208);
+  --wash-2-from: oklch(0.330 0.028 219);
+  --wash-2-to: oklch(0.255 0.022 221);
+  --wash-3-from: oklch(0.520 0.044 205);
+  --wash-3-to: oklch(0.400 0.038 212);
+  --wash-foreground: oklch(0.985 0.004 210);
+
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.706 0.082 197);
 
   --status-active: oklch(0.68 0.16 152);
   --status-active-foreground: oklch(0.15 0.02 152);
@@ -112,6 +154,9 @@
 }
 
 @theme inline {
+  --font-sans:
+    var(--font-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -136,6 +181,16 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-canvas: var(--canvas);
+  --color-wash-1-from: var(--wash-1-from);
+  --color-wash-1-to: var(--wash-1-to);
+  --color-wash-2-from: var(--wash-2-from);
+  --color-wash-2-to: var(--wash-2-to);
+  --color-wash-3-from: var(--wash-3-from);
+  --color-wash-3-to: var(--wash-3-to);
+  --color-wash-foreground: var(--wash-foreground);
+  --color-hero-from: var(--hero-from);
+  --color-hero-to: var(--hero-to);
 
   --color-status-active: var(--status-active);
   --color-status-active-foreground: var(--status-active-foreground);
