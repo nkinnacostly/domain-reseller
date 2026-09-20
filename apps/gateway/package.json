@@ -1,0 +1,34 @@
+{
+  "name": "@dr/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist node_modules coverage"
+  },
+  "dependencies": {
+    "@dr/db": "workspace:*",
+    "@dr/shared": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "@supabase/supabase-js": "^2.116.0",
+    "hono": "^4.7.0",
+    "nodejs-dna": "^3.0.0",
+    "pino": "^9.6.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^5.0.1",
+    "msw": "^2.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.1"
+  }
+}

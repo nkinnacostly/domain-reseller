@@ -1,0 +1,20 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalDependencies": [".env"],
+  "globalEnv": ["NODE_ENV", "VERCEL_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": { "cache": false, "persistent": true },
+    "start": { "dependsOn": ["build"], "cache": false, "persistent": true },
+    "typecheck": { "dependsOn": ["^build"] },
+    "test": { "dependsOn": ["^build"], "outputs": ["coverage/**"] },
+    "test:watch": { "cache": false, "persistent": true },
+    "test:coverage": { "dependsOn": ["^build"], "outputs": ["coverage/**"] },
+    "test:e2e": { "dependsOn": ["^build"], "cache": false },
+    "clean": { "cache": false }
+  }
+}

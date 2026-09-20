@@ -1,0 +1,103 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/dist",
+      "!**/coverage",
+      "!**/*.gen.ts",
+      "!**/database.types.ts",
+      "!apps/web/src/components/ui",
+      "!apps/web/src/components/kibo-ui",
+      "!**/playwright-report",
+      "!**/test-results",
+      "!pnpm-lock.yaml",
+      "!apps/web/src/app/globals.css"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "preset": "recommended"
+      },
+      "correctness": {
+        "preset": "recommended",
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "useExhaustiveDependencies": "warn"
+      },
+      "suspicious": {
+        "preset": "recommended",
+        "noExplicitAny": "error",
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": ["warn", "error"]
+          }
+        }
+      },
+      "style": {
+        "preset": "recommended",
+        "noNonNullAssertion": "error",
+        "useConst": "error",
+        "useImportType": "error"
+      },
+      "complexity": {
+        "preset": "recommended"
+      },
+      "performance": {
+        "preset": "recommended"
+      },
+      "nursery": {
+        "preset": "none"
+      }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/tests/**", "**/scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: 'true'
+
+jobs:
+  verify:
+    name: Lint · Typecheck · Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint and format check
+        run: pnpm biome ci .
+
+      - name: Typecheck
+        run: pnpm turbo run typecheck
+
+      - name: Unit and integration tests
+        run: pnpm turbo run test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/coverage/lcov.info'
+          retention-days: 7
+
+  guardrails:
+    name: Security guardrails
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      # SEC-6 — the service-role key must never be reachable from the browser.
+      - name: Service-role key is server-only
+        run: |
+          if grep -rn "SUPABASE_SERVICE_ROLE_KEY" apps/web/src \
+             --include='*.ts' --include='*.tsx' \
+             | grep -v "apps/web/src/lib/env.ts" \
+             | grep -v "apps/web/src/lib/supabase/admin.ts"; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY referenced outside env.ts / supabase/admin.ts"
+            exit 1
+          fi
+
+      # SEC-5 — supplier credentials belong to the gateway alone.
+      - name: Supplier credentials stay in the gateway
+        run: |
+          if grep -rn "DNA_API_KEY\|DNA_RESELLER_ID" apps/web/src --include='*.ts' --include='*.tsx'; then
+            echo "::error::DomainNameAPI credentials must not appear in apps/web"
+            exit 1
+          fi
+
+      # SEC-14 — supplier SDK telemetry stays off (NDPA).
+      - name: Supplier SDK telemetry disabled
+        run: |
+          if ! grep -q "telemetry: false" apps/gateway/src/dna/client.ts; then
+            echo "::error::nodejs-dna must be constructed with { telemetry: false }"
+            exit 1
+          fi
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @dr/web exec playwright install --with-deps chromium webkit
+
+      - name: Run Playwright
+        run: pnpm --filter @dr/web test:e2e
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_NAME: Domain Reseller
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

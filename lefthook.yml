@@ -1,0 +1,26 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,ts,jsx,tsx,json,jsonc,css}"
+      run: pnpm biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+    secrets:
+      run: |
+        if git diff --cached -U0 | grep -nE '(SUPABASE_SERVICE_ROLE_KEY|DNA_API_KEY|PAYSTACK_SECRET_KEY|sk_live_|sk_test_)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9_\-]{8,}'; then
+          echo "✖ Possible secret in staged changes. Remove it or use .env (never committed)."
+          exit 1
+        fi
+
+pre-push:
+  parallel: true
+  commands:
+    typecheck:
+      run: pnpm turbo run typecheck
+    test:
+      run: pnpm turbo run test
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm commitlint --edit {1}

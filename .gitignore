@@ -1,0 +1,51 @@
+# dependencies
+node_modules/
+.pnp.*
+.yarn/*
+
+# builds
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# test artefacts
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# env — NEVER commit
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# supabase
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# turbo / vercel
+.turbo/
+.vercel/
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# local scratch
+/tmp/
+.scratch/

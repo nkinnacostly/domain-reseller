@@ -1,0 +1,48 @@
+{
+  "name": "domain-reseller",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "test:e2e": "turbo run test:e2e",
+    "test:coverage": "turbo run test:coverage",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:types": "supabase gen types typescript --local > packages/db/src/database.types.ts",
+    "db:migrate": "supabase migration up",
+    "db:diff": "supabase db diff -f",
+    "prepare": "lefthook install",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "lefthook": "^2.1.14",
+    "supabase": "^2.0.0",
+    "turbo": "^2.11.2",
+    "typescript": "^5.9.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "esbuild",
+      "sharp",
+      "supabase",
+      "lefthook"
+    ]
+  }
+}

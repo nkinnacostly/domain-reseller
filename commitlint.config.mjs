@@ -1,0 +1,30 @@
+export default {
+  extends: ['@commitlint/config-conventional'],
+  rules: {
+    'scope-enum': [
+      2,
+      'always',
+      [
+        'web',
+        'gateway',
+        'shared',
+        'db',
+        'ui',
+        'search',
+        'cart',
+        'checkout',
+        'domains',
+        'nameservers',
+        'transfers',
+        'renewals',
+        'billing',
+        'auth',
+        'admin',
+        'ci',
+        'deps',
+        'docs',
+      ],
+    ],
+    'body-max-line-length': [0],
+  },
+}

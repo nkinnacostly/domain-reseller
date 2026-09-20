@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "paths": {
+      "@dr/shared": ["../../packages/shared/src/index.ts"],
+      "@dr/shared/*": ["../../packages/shared/src/*"],
+      "@dr/db": ["../../packages/db/src/index.ts"],
+      "@dr/db/*": ["../../packages/db/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/types/**/*.d.ts"]
+}
