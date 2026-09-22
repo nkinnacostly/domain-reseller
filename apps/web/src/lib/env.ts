@@ -23,6 +23,8 @@ export const env = createEnv({
     FLUTTERWAVE_SECRET_KEY: z.string().min(1).optional(),
     FLUTTERWAVE_ENCRYPTION_KEY: z.string().min(1).optional(),
     FLUTTERWAVE_WEBHOOK_HASH: z.string().min(1).optional(),
+    // Overridable only so e2e tests can point at a local mock (N12).
+    FLUTTERWAVE_API_URL: z.url().default('https://api.flutterwave.com/v3'),
     FX_BUFFER_PCT: z.coerce.number().min(0).max(25).default(4),
     PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
     RESEND_API_KEY: z.string().optional(),
@@ -75,7 +77,7 @@ export function requirePaymentEnv() {
     throw new Error('Refusing live Flutterwave keys outside production. Use test keys (N12).')
   }
 
-  return { secretKey, publicKey, webhookHash }
+  return { secretKey, publicKey, webhookHash, testMode: isTestKey(secretKey) }
 }
 
 export function requireGatewayEnv() {

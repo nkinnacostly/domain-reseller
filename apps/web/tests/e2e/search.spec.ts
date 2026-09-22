@@ -111,12 +111,8 @@ test.describe('search results', () => {
     await expect(page.getByText(/A lot of people are searching right now/).first()).toBeVisible()
   })
 
-  test('is honest that checkout is not open, and about what happens to searches', async ({
-    page,
-  }) => {
+  test('says what happens to searches (FR-S7)', async ({ page }) => {
     await page.goto('/search?q=getpaid')
-    await expect(page.getByText("Checkout isn't open yet.")).toBeVisible()
-    // FR-S7
     await expect(page.getByText('We never sell or share what you search for.')).toBeVisible()
   })
 

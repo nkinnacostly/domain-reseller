@@ -115,20 +115,24 @@ export async function CartContents() {
           </p>
         ) : null}
 
-        <div className="mt-6 rounded-xl bg-muted/60 p-4 text-pretty text-sm/6 text-muted-foreground">
-          <span className="font-medium text-foreground">Checkout isn't open yet.</span>{' '}
-          {user
-            ? 'Your cart is saved to your account.'
-            : 'Your cart is saved in this browser. Sign in and it moves to your account.'}
-        </div>
-        {user ? null : (
+        {totals.needsAcknowledgement || totals.unavailableCount > 0 ? (
+          <p className="mt-6 text-pretty text-sm/6 text-muted-foreground">
+            Accept the new prices, or remove what we no longer sell, to continue.
+          </p>
+        ) : (
           <Link
-            href="/sign-in?next=%2Fcart"
-            className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-full border border-border bg-background px-6 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]"
+            href={user ? '/app/checkout' : '/sign-in?next=%2Fapp%2Fcheckout'}
+            className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent px-6 text-base font-medium text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]"
           >
-            Sign in to save your cart
+            {user ? 'Continue to checkout' : 'Sign in to check out'}
+            <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
         )}
+        <p className="mt-3 text-pretty text-xs/5 text-muted-foreground">
+          {user
+            ? 'Your cart is saved to your account.'
+            : 'Your cart is saved in this browser, and moves to your account when you sign in.'}
+        </p>
       </aside>
     </div>
   )

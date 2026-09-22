@@ -306,6 +306,210 @@ export type Database = {
           },
         ]
       }
+      order_items: {
+        Row: {
+          auto_renew: boolean
+          created_at: string
+          domain: string
+          failure_code: string | null
+          id: string
+          item_type: string
+          order_id: string
+          period_years: number
+          price_kobo: number
+          privacy: boolean
+          renewal_kobo: number
+          status: Database["public"]["Enums"]["order_item_status"]
+          tld: string
+          updated_at: string
+        }
+        Insert: {
+          auto_renew: boolean
+          created_at?: string
+          domain: string
+          failure_code?: string | null
+          id?: string
+          item_type?: string
+          order_id: string
+          period_years: number
+          price_kobo: number
+          privacy: boolean
+          renewal_kobo: number
+          status?: Database["public"]["Enums"]["order_item_status"]
+          tld: string
+          updated_at?: string
+        }
+        Update: {
+          auto_renew?: boolean
+          created_at?: string
+          domain?: string
+          failure_code?: string | null
+          id?: string
+          item_type?: string
+          order_id?: string
+          period_years?: number
+          price_kobo?: number
+          privacy?: boolean
+          renewal_kobo?: number
+          status?: Database["public"]["Enums"]["order_item_status"]
+          tld?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          contact_profile_id: string | null
+          created_at: string
+          float_check: string
+          fx_rate_id: string
+          id: string
+          nameservers: string[] | null
+          order_number: string
+          paid_at: string | null
+          registrant: Json
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal_kobo: number
+          test_mode: boolean
+          total_kobo: number
+          tx_ref: string
+          updated_at: string
+          user_id: string
+          vat_kobo: number
+          vat_pct: number
+        }
+        Insert: {
+          contact_profile_id?: string | null
+          created_at?: string
+          float_check: string
+          fx_rate_id: string
+          id?: string
+          nameservers?: string[] | null
+          order_number?: string
+          paid_at?: string | null
+          registrant: Json
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_kobo: number
+          test_mode: boolean
+          total_kobo: number
+          tx_ref: string
+          updated_at?: string
+          user_id: string
+          vat_kobo: number
+          vat_pct: number
+        }
+        Update: {
+          contact_profile_id?: string | null
+          created_at?: string
+          float_check?: string
+          fx_rate_id?: string
+          id?: string
+          nameservers?: string[] | null
+          order_number?: string
+          paid_at?: string | null
+          registrant?: Json
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_kobo?: number
+          test_mode?: boolean
+          total_kobo?: number
+          tx_ref?: string
+          updated_at?: string
+          user_id?: string
+          vat_kobo?: number
+          vat_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_contact_profile_id_fkey"
+            columns: ["contact_profile_id"]
+            isOneToOne: false
+            referencedRelation: "contact_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_fx_rate_id_fkey"
+            columns: ["fx_rate_id"]
+            isOneToOne: false
+            referencedRelation: "fx_rates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_kobo: number
+          created_at: string
+          currency: string
+          id: string
+          method: string | null
+          order_id: string
+          provider: string
+          provider_reference: string
+          raw: Json
+          status: string
+          tx_ref: string
+          user_id: string
+        }
+        Insert: {
+          amount_kobo: number
+          created_at?: string
+          currency: string
+          id?: string
+          method?: string | null
+          order_id: string
+          provider: string
+          provider_reference: string
+          raw: Json
+          status: string
+          tx_ref: string
+          user_id: string
+        }
+        Update: {
+          amount_kobo?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          method?: string | null
+          order_id?: string
+          provider?: string
+          provider_reference?: string
+          raw?: Json
+          status?: string
+          tx_ref?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pricing_settings: {
         Row: {
           fx_buffer_pct: number
@@ -478,6 +682,17 @@ export type Database = {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: number
       }
+      record_order_payment: {
+        Args: {
+          p_amount_kobo: number
+          p_currency: string
+          p_method: string
+          p_order_id: string
+          p_provider_reference: string
+          p_raw: Json
+        }
+        Returns: Database["public"]["Enums"]["order_status"]
+      }
     }
     Enums: {
       account_type: "individual" | "business"
@@ -488,6 +703,20 @@ export type Database = {
         | "er-api"
         | "currency-api"
       fx_status: "active" | "pending_review" | "superseded" | "rejected"
+      order_item_status:
+        | "pending"
+        | "provisioning"
+        | "completed"
+        | "failed"
+        | "refunded"
+      order_status:
+        | "awaiting_payment"
+        | "paid"
+        | "provisioning"
+        | "completed"
+        | "partially_failed"
+        | "failed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -627,6 +856,22 @@ export const Constants = {
         "currency-api",
       ],
       fx_status: ["active", "pending_review", "superseded", "rejected"],
+      order_item_status: [
+        "pending",
+        "provisioning",
+        "completed",
+        "failed",
+        "refunded",
+      ],
+      order_status: [
+        "awaiting_payment",
+        "paid",
+        "provisioning",
+        "completed",
+        "partially_failed",
+        "failed",
+        "cancelled",
+      ],
     },
   },
 } as const

@@ -21,6 +21,9 @@ back here. Each item says why it waited and what unblocks it.
 | L9 | **Rotate the Supabase database password** | It was shared in a chat session. | Owner, Supabase dashboard |
 | L10 | **Deploy the gateway** on infrastructure with a static egress IP (PRD ADR-004) | Allowlisting is not enforced today (V2), but the gateway is where credentials and rate limits live. Locally it runs with `DNA_ENV=production` for read-only availability — that must never carry write routes. | Hosting decision |
 | L11 | **Flutterwave live keys and webhook secret hash** | Test keys only during the build. Set the secret hash in the dashboard and in `FLUTTERWAVE_WEBHOOK_HASH`. | Owner, after checkout is proven on test keys |
+| L12 | **Flutterwave: merchant bears the transaction fee** | By default Flutterwave adds its fee on top at payment, so the customer would pay more than the total we show — against FR-C5 and our no-hidden-fees promise. Switch fees to the merchant in the dashboard, or show the fee. | Owner, Flutterwave dashboard |
+| L13 | **Register the webhook URL** (`/api/webhooks/flutterwave`) in the Flutterwave dashboard | Payments are confirmed when the customer returns; the webhook covers a closed tab. It needs a public URL (the deployment, or a tunnel for local testing). | Deployment |
+| L14 | **Registration job** (PRD §13.4 step 7) | Paid orders are queued (`order_items.status = pending`) and nothing registers them yet. Needs OTE (L5), then live credentials and float (L6). | L5, L6 |
 
 ## 2. Deferred features
 
@@ -35,6 +38,14 @@ back here. Each item says why it waited and what unblocks it.
 - **Mandatory 2FA** above 10 domains or a wallet threshold (FR-A2) — needs the portfolio and wallet.
 - **Bot protection on sign-up and search** (SEC-9) — Cloudflare Turnstile keys.
 - **Contact profiles** (FR-A4) — the registrant/admin/tech/billing contacts; built with checkout, where registration needs them.
+
+### Checkout and orders (PRD E3, E4)
+- **Expire unpaid orders** — orders abandoned on Flutterwave's page stay `awaiting_payment`; cancel them after a timeout.
+- **Refunds** (FR-R3) for lines that fail to register — to the wallet, automatically; the wallet (FR-W1) is not built.
+- **Receipts and invoices** (FR-C5, CMP-17/18) — email needs L1; invoice numbering and e-invoicing are not built.
+- **Nameserver host presets** (FR-C10, N11) — checkout accepts pasted nameservers; the `nameserver_presets` catalogue is not built.
+- **More registrant countries** — the form offers Nigeria, Africa and common diaspora countries; extend when needed.
+- **Wallet and mixed payment** (FR-C9, FR-W1/W2).
 
 ### Cart (PRD E3)
 - **Contact privacy on country extensions** — offered on generic extensions only, where ICANN rules allow it. Confirm which ccTLDs the supplier can cover.

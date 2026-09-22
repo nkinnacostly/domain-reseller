@@ -55,3 +55,12 @@ export const availabilityResponseSchema = z.object({
   results: z.array(availabilityResultSchema),
 })
 export type AvailabilityResponse = z.infer<typeof availabilityResponseSchema>
+
+/**
+ * The supplier's prepaid balance, for the float pre-flight before any charge
+ * (FR-C8, PRD §13.4 step 3).
+ */
+export const accountBalanceSchema = z.object({
+  balanceUsd: z.number().nonnegative(),
+})
+export type AccountBalance = z.infer<typeof accountBalanceSchema>

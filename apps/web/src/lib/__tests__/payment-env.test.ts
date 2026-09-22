@@ -37,6 +37,7 @@ describe('requirePaymentEnv', () => {
       secretKey: TEST_KEYS.FLUTTERWAVE_SECRET_KEY,
       publicKey: TEST_KEYS.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY,
       webhookHash: TEST_KEYS.FLUTTERWAVE_WEBHOOK_HASH,
+      testMode: true,
     })
   })
 

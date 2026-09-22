@@ -2,8 +2,8 @@
 
 import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
+import { inputClass } from '@/components/common/form-parts'
 import { cn } from '@/lib/utils'
-import { inputClass } from './form-parts'
 
 /**
  * A password field with a show/hide toggle — typing a long password blind on

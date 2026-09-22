@@ -9,6 +9,7 @@ import { CartLink } from '@/features/cart/components/cart-link'
 
 const NAV = [
   { href: '/app/domains', label: 'Domains' },
+  { href: '/app/orders', label: 'Orders' },
   { href: '/app/settings', label: 'Settings' },
 ] as const
 
@@ -42,7 +43,8 @@ export async function AppHeader() {
             className="inline-flex items-center gap-1.5 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <Search className="size-4" aria-hidden="true" />
-            Search domains
+            <span className="sm:hidden">Search</span>
+            <span className="hidden sm:inline">Search domains</span>
           </Link>
         </nav>
 

@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useState } from 'react'
-import { sendMagicLink, signIn } from '../actions/session'
 import {
   describedBy,
   Field,
@@ -12,8 +11,9 @@ import {
   inputClass,
   onSubmitWith,
   SubmitButton,
-} from './form-parts'
-import { PasswordInput } from './password-input'
+} from '@/components/common/form-parts'
+import { PasswordInput } from '@/components/common/password-input'
+import { sendMagicLink, signIn } from '../actions/session'
 
 const NOTICES: Record<string, { tone: 'error' | 'success'; text: string }> = {
   confirmed: { tone: 'success', text: 'Your email is confirmed. Sign in to continue.' },

@@ -4,7 +4,6 @@ import { ShieldCheck, ShieldOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
 import { useId } from 'react'
-import { confirmTotpEnrollment, disableTwoFactor, startTotpEnrollment } from '../actions/two-factor'
 import {
   describedBy,
   Field,
@@ -13,7 +12,8 @@ import {
   inputClass,
   onSubmitWith,
   SubmitButton,
-} from './form-parts'
+} from '@/components/common/form-parts'
+import { confirmTotpEnrollment, disableTwoFactor, startTotpEnrollment } from '../actions/two-factor'
 
 /** Groups a base32 key in fours so it can be typed without losing your place. */
 function groupKey(secret: string): string {

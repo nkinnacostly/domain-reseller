@@ -2,8 +2,6 @@
 
 import { useAction } from 'next-safe-action/hooks'
 import { useId } from 'react'
-import { completePasswordReset } from '../actions/password'
-import { requestPasswordReset } from '../actions/session'
 import {
   describedBy,
   Field,
@@ -12,8 +10,10 @@ import {
   inputClass,
   onSubmitWith,
   SubmitButton,
-} from './form-parts'
-import { PasswordInput } from './password-input'
+} from '@/components/common/form-parts'
+import { PasswordInput } from '@/components/common/password-input'
+import { completePasswordReset } from '../actions/password'
+import { requestPasswordReset } from '../actions/session'
 
 const LINK_ERRORS: Record<string, string> = {
   expired: 'That reset link has expired or was already used. Ask for a new one below.',

@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { requireGatewaySecret } from './lib/auth'
 import { logger } from './lib/logger'
+import { createAccountRoute } from './routes/account'
 import { createAvailabilityRoute } from './routes/availability'
 import { health } from './routes/health'
 
@@ -8,7 +9,7 @@ import { health } from './routes/health'
  * The gateway's routes, separate from `serve()` so tests can exercise the
  * real app — auth included — without opening a port.
  */
-export function createApp(routes: { availability?: Hono } = {}) {
+export function createApp(routes: { availability?: Hono; account?: Hono } = {}) {
   const app = new Hono()
 
   app.route('/health', health)
@@ -16,7 +17,8 @@ export function createApp(routes: { availability?: Hono } = {}) {
   const v1 = new Hono()
   v1.use('*', requireGatewaySecret)
   v1.route('/availability', routes.availability ?? createAvailabilityRoute())
-  // Mounted as each epic lands: /domains, /transfers, /account
+  v1.route('/account', routes.account ?? createAccountRoute())
+  // Mounted as each epic lands: /domains, /transfers
   app.route('/v1', v1)
 
   app.notFound((c) => c.json({ ok: false, code: 'NOT_FOUND', message: 'Unknown route' }, 404))

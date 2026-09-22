@@ -48,7 +48,12 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       // Process env wins over .env, so the app can only reach the mock.
-      env: { GATEWAY_URL: MOCK_GATEWAY },
+      env: {
+        GATEWAY_URL: MOCK_GATEWAY,
+        FLUTTERWAVE_API_URL: `${MOCK_GATEWAY}/flw/v3`,
+        // Payment return addresses must point back at this server, not :3000.
+        NEXT_PUBLIC_APP_URL: baseURL,
+      },
     },
   ],
 })

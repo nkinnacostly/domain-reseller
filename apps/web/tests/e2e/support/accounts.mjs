@@ -47,7 +47,14 @@ export async function createTestUser(label, { fullName = 'Test Person' } = {}) {
   return { id: data.user.id, email, password: TEST_PASSWORD }
 }
 
+/** Orders refuse deletion while they exist (money records), so remove a test user's first. */
+async function deleteOrdersFor(client, userId) {
+  await client.from('payments').delete().eq('user_id', userId)
+  await client.from('orders').delete().eq('user_id', userId)
+}
+
 export async function deleteTestUser(id) {
+  await deleteOrdersFor(admin(), id)
   const { error } = await admin().auth.admin.deleteUser(id)
   if (error && error.status !== 404) throw error
 }
@@ -62,7 +69,10 @@ export async function deleteAllTestUsers() {
       (user) =>
         user.email?.startsWith(TEST_EMAIL_PREFIX) && user.email.endsWith(`@${TEST_EMAIL_DOMAIN}`),
     )
-    for (const user of mine) await client.auth.admin.deleteUser(user.id)
+    for (const user of mine) {
+      await deleteOrdersFor(client, user.id)
+      await client.auth.admin.deleteUser(user.id)
+    }
     if (data.users.length < 200) break
   }
 }

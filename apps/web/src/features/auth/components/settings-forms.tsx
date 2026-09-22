@@ -2,8 +2,6 @@
 
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useRef } from 'react'
-import { changePassword } from '../actions/password'
-import { updateProfile } from '../actions/profile'
 import {
   describedBy,
   Field,
@@ -12,8 +10,10 @@ import {
   inputClass,
   onSubmitWith,
   SubmitButton,
-} from './form-parts'
-import { PasswordInput } from './password-input'
+} from '@/components/common/form-parts'
+import { PasswordInput } from '@/components/common/password-input'
+import { changePassword } from '../actions/password'
+import { updateProfile } from '../actions/profile'
 
 export function ProfileForm({
   email,

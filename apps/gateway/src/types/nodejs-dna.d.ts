@@ -156,9 +156,10 @@ declare module 'nodejs-dna' {
       symbol?: string
       balances?: unknown[]
     }>
+    /** Observed live 23 Sept 2026: `Balance` arrives as a decimal string ("0.00"). */
     GetCurrentBalance(currencyId?: string): Promise<{
       OperationResult: 'SUCCESS' | 'FAILED'
-      Balance?: number
+      Balance?: number | string
       CurrencyId?: number
       CurrencyName?: string
       CurrencySymbol?: string

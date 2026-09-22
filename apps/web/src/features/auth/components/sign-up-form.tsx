@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId } from 'react'
-import { resendConfirmation, signUp } from '../actions/session'
 import {
   describedBy,
   Field,
@@ -12,8 +11,9 @@ import {
   inputClass,
   onSubmitWith,
   SubmitButton,
-} from './form-parts'
-import { PasswordInput } from './password-input'
+} from '@/components/common/form-parts'
+import { PasswordInput } from '@/components/common/password-input'
+import { resendConfirmation, signUp } from '../actions/session'
 
 const PASSWORD_HINT = 'At least 10 characters. A few unrelated words is strong and easy to type.'
 

@@ -132,10 +132,13 @@ test.describe('cart', () => {
     ).toBeAttached()
   })
 
-  test('is honest that checkout is not open yet', async ({ page }) => {
+  test('signed out, the cart asks you to sign in to check out', async ({ page }) => {
     await addFromSearch(page, uniqueName())
     await page.goto('/cart')
-    await expect(page.getByText("Checkout isn't open yet.")).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Sign in to check out' })).toHaveAttribute(
+      'href',
+      '/sign-in?next=%2Fapp%2Fcheckout',
+    )
   })
 
   test('has no accessibility violations and never scrolls sideways', async ({ page }) => {

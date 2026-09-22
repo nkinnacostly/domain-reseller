@@ -2,7 +2,6 @@
 
 import { useAction } from 'next-safe-action/hooks'
 import { useId } from 'react'
-import { verifySecondFactor } from '../actions/two-factor'
 import {
   describedBy,
   Field,
@@ -11,7 +10,8 @@ import {
   inputClass,
   onSubmitWith,
   SubmitButton,
-} from './form-parts'
+} from '@/components/common/form-parts'
+import { verifySecondFactor } from '../actions/two-factor'
 
 export function VerifyForm({ next }: { next?: string }) {
   const id = useId()

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { FormMessage } from '@/components/common/form-parts'
 import { Container } from '@/components/layout/site-shell'
-import { FormMessage } from '@/features/auth/components/form-parts'
 import { ChangePasswordForm, ProfileForm } from '@/features/auth/components/settings-forms'
 import { TwoFactorPanel } from '@/features/auth/components/two-factor-panel'
 import { describeHold, resetHoldUntil } from '@/features/auth/lib/security'
