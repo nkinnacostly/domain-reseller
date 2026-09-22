@@ -9,7 +9,7 @@ const STEPS = [
   {
     n: '02',
     title: 'Pay in naira',
-    body: 'Card, bank transfer or USSD, through Paystack. No foreign-currency conversion on your statement, no declined international payment.',
+    body: 'Card, bank transfer or USSD, through Flutterwave. No foreign-currency conversion on your statement, no declined international payment.',
   },
   {
     n: '03',

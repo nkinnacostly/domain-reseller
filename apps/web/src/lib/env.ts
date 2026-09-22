@@ -18,8 +18,11 @@ export const env = createEnv({
     // Not yet integrated. Optional here so an unrelated page cannot be taken
     // down by a missing payment key; the payment code asserts them at the point
     // of use via requirePaymentEnv(). Make them required once checkout ships.
-    PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
-    PAYSTACK_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // Flutterwave (PRD §8.4). The webhook hash is the "secret hash" set in the
+    // Flutterwave dashboard; it arrives on every webhook as `verif-hash` (SEC-7).
+    FLUTTERWAVE_SECRET_KEY: z.string().min(1).optional(),
+    FLUTTERWAVE_ENCRYPTION_KEY: z.string().min(1).optional(),
+    FLUTTERWAVE_WEBHOOK_HASH: z.string().min(1).optional(),
     FX_BUFFER_PCT: z.coerce.number().min(0).max(25).default(4),
     PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
     RESEND_API_KEY: z.string().optional(),
@@ -32,7 +35,7 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Naijadomains'),
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
-    NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string().optional(),
+    NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: z.string().optional(),
     NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   },
   experimental__runtimeEnv: {
@@ -40,7 +43,7 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+    NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
   // Lets `pnpm build` run in CI without a full secret set.
@@ -55,16 +58,24 @@ export const env = createEnv({
  * breaks checkout with a clear message rather than taking down the storefront.
  */
 export function requirePaymentEnv() {
-  const secretKey = env.PAYSTACK_SECRET_KEY
-  const webhookSecret = env.PAYSTACK_WEBHOOK_SECRET
+  const secretKey = env.FLUTTERWAVE_SECRET_KEY
+  const publicKey = env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY
+  const webhookHash = env.FLUTTERWAVE_WEBHOOK_HASH
 
-  if (!secretKey || !webhookSecret) {
+  if (!secretKey || !publicKey || !webhookHash) {
     throw new Error(
-      'Payments are not configured: set PAYSTACK_SECRET_KEY and PAYSTACK_WEBHOOK_SECRET.',
+      'Payments are not configured: set FLUTTERWAVE_SECRET_KEY, NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY and FLUTTERWAVE_WEBHOOK_HASH.',
     )
   }
 
-  return { secretKey, webhookSecret }
+  // N12 in code: anywhere but production, only test keys will do. Flutterwave
+  // marks them FLWSECK_TEST- / FLWPUBK_TEST-.
+  const isTestKey = (key: string) => key.includes('_TEST-')
+  if (env.NODE_ENV !== 'production' && (!isTestKey(secretKey) || !isTestKey(publicKey))) {
+    throw new Error('Refusing live Flutterwave keys outside production. Use test keys (N12).')
+  }
+
+  return { secretKey, publicKey, webhookHash }
 }
 
 export function requireGatewayEnv() {

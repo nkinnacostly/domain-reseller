@@ -182,7 +182,7 @@ The single most-cited complaint across reviews of every major registrar is renew
 
 1. **Naira-native pricing with a stable, published FX policy.** Every international registrar either prices in USD or applies an opaque conversion.
 2. **Renewal reminders that reach Nigerian users.** Email-only reminders fail here. WhatsApp and SMS as first-class reminder channels is a genuine differentiator for the Pastor Emeka segment.
-3. **Bank transfer as a real checkout path**, not a "contact us" fallback — with automatic reconciliation via Paystack's dedicated virtual accounts rather than a human matching receipts.
+3. **Bank transfer as a real checkout path**, not a "contact us" fallback — with automatic reconciliation via Flutterwave virtual accounts rather than a human matching receipts.
 4. **Pointing the domain, done properly.** Every registrar gives you two text fields and a shrug. We ship a searchable list of hosts that fills the nameservers for you, validation that catches typos before they cost a day, and verification that actually confirms the delegation took and is answering. It is the first-timer's hardest moment and currently nobody's product.
 
 ---
@@ -511,8 +511,8 @@ Converted at an internal rate of `CBN/market mid-rate × (1 + FX buffer)`.
 | Component | NGN | Notes |
 |---|---|---|
 | Landed cost @ ₦1,550/$ + 4% buffer | ~₦13,200–17,250 | Illustrative rate only |
-| Paystack local card fee | 1.5% + ₦100, capped ₦2,000; waived under ₦2,500 | Plus 7.5% VAT on Paystack's fee |
-| Paystack international card | 3.9% + ₦100, uncapped | Price separately or discourage |
+| Flutterwave local payment fee (card, transfer, USSD) | 2% (1.4% transaction + 0.6% platform), no cap published | Plus 7.5% VAT on Flutterwave's fee. Customer bears it by default — configurable in the dashboard |
+| Flutterwave international card | 4.8% | Price separately or discourage |
 | VAT on our supply | 7.5% | Collected and remitted, not margin |
 
 **Margin target: 18–30% gross on registration, 25–40% on renewal.** Renewal is where registrars actually earn; the first-year discount is customer acquisition cost.
@@ -556,18 +556,20 @@ with an optional **manual override** per (TLD, trade_type, period) for merchandi
 
 ### 8.4 Payment methods (v1)
 
+**Provider: Flutterwave** — the owner's decision on 22 Sept 2026, replacing Paystack. Fees verified from flutterwave.com/ng/pricing the same day.
+
 | Method | Provider | Priority | Notes |
 |---|---|---|---|
-| Local card | Paystack | P0 | 1.5% + ₦100, capped ₦2,000 |
-| Bank transfer (dedicated virtual account) | Paystack | P0 | Auto-reconciled — the differentiator for the SMB segment |
-| USSD / Pay with Bank | Paystack | P1 | |
-| Apple Pay / Google Pay | Paystack | P2 | |
-| International card | Paystack | P2 | 3.9% + ₦100, uncapped. Separate price or surcharge |
+| Local card | Flutterwave | P0 | 2% + VAT on the fee |
+| Bank transfer (virtual account) | Flutterwave | P0 | Auto-reconciled — the differentiator for the SMB segment. A dynamic account per payment expires after one hour; a permanent per-customer account needs the customer's BVN or NIN (see FR-W2) |
+| USSD | Flutterwave | P1 | 2% + VAT on the fee |
+| Apple Pay / Google Pay | Flutterwave | P2 | **[VERIFY]** availability for our merchant account |
+| International card | Flutterwave | P2 | 4.8%. Separate price or surcharge |
 | **Account wallet / credit balance** | Internal | **P0** | See below |
 
 **FR-PAY-1 — the wallet is load-bearing.** A prepaid NGN wallet per user solves: agency bulk purchasing, auto-renew without card-on-file, failed-card recovery, refunds (credit rather than reverse), and the bank-transfer path. Auto-renew charges the wallet first, card second.
 
-**FR-PAY-2 — card tokenisation for auto-renew.** Paystack returns a reusable `authorization_code` after a successful charge; store it (tokenised, never the PAN) with the user's explicit consent, and use `POST /transaction/charge_authorization` for renewals. Paystack's recurring/dunning tooling is the most mature in the market and is the reason to prefer it over Flutterwave for this build. Dunning schedule: T-30, T-21, T-14, T-7, T-3, T-1, T+1, T+7, T+14, T+25 relative to expiry.
+**FR-PAY-2 — card tokenisation for auto-renew.** A successful Flutterwave card charge returns a card token; store it (never the PAN) with the user's explicit consent, and charge it for renewals through the tokenized-charges endpoint (`POST /v3/tokenized-charges`). Flutterwave has no dunning tooling to lean on, so the schedule below is ours to run. Dunning schedule: T-30, T-21, T-14, T-7, T-3, T-1, T+1, T+7, T+14, T+25 relative to expiry.
 
 **FR-PAY-3 — idempotency.** Every charge carries a client-generated idempotency key derived from the order ID. Webhook handlers are idempotent and signature-verified.
 
@@ -592,7 +594,7 @@ Domain registration is **non-refundable once the registry has accepted it** — 
 |---|---|
 | **E1 Search** | Instant availability, TLD grid, suggestions, bulk search, premium flagging |
 | **E2 Accounts** | Email + password, magic link, Google OAuth, TOTP 2FA, profile, contact profiles |
-| **E3 Cart & checkout** | Cart, period selection, privacy toggle, auto-renew toggle, price lock, Paystack + wallet |
+| **E3 Cart & checkout** | Cart, period selection, privacy toggle, auto-renew toggle, price lock, Flutterwave + wallet |
 | **E4 Registration** | The order saga, contact handling, failure recovery, receipts |
 | **E5 Portfolio** | Domain list, labels, filters, search, bulk actions, expiry view |
 | **E6 Nameserver setup** | Host preset picker, paste/manual entry, typo validation, delegation verification, propagation check, undelegated states |
@@ -753,7 +755,7 @@ Paste up to 500 names or upload a CSV; check against a selected TLD set; results
 
 **FR-C8 — Float pre-flight.** Before charging, verify the supplier balance covers the order's wholesale cost. If not, do not charge — queue and alert ops. Per [FR-FLOAT-3](#56-supplier-funding-and-float).
 
-**FR-C9 — Payment.** Paystack inline for card/transfer/USSD; wallet debit where balance covers. Mixed payment (wallet + card for the remainder) supported.
+**FR-C9 — Payment.** Flutterwave checkout for card/transfer/USSD; wallet debit where balance covers. Mixed payment (wallet + card for the remainder) supported.
 
 **FR-C10 — Nameservers at checkout (optional).**
 An optional, collapsed-by-default "Already know where this domain is going?" section offers the same three inputs as [FR-D1](#e6--nameserver-setup) — host preset, paste, or manual. Values supplied here are applied immediately after registration, so the domain is live without a second visit.
@@ -889,9 +891,9 @@ For any domain, query its current authoritative nameservers and display what we 
 
 ### E11 — Wallet and billing
 
-**FR-W1 — Wallet.** NGN balance per user. Top up via Paystack. Ledger with running balance. Every movement is a double-entry row referencing its cause.
+**FR-W1 — Wallet.** NGN balance per user. Top up via Flutterwave. Ledger with running balance. Every movement is a double-entry row referencing its cause.
 
-**FR-W2 — Dedicated virtual account.** Each user (or each user who opts in) gets a Paystack dedicated virtual account so bank transfers auto-credit the wallet without human reconciliation.
+**FR-W2 — Dedicated virtual account.** Each user who opts in gets a permanent Flutterwave virtual account, so bank transfers auto-credit the wallet without human reconciliation. Flutterwave requires the customer's **BVN or NIN** to create one — collect it only with explicit consent, store no more than the provider needs (NDPA), and explain why. Without it, a one-off virtual account per top-up (expires after one hour) is the fallback. Payments arrive as `charge.completed` webhooks with `payment_type: bank_transfer`.
 
 **FR-W3 — Invoices.** Structured, sequentially numbered, immutable, VAT-itemised, built for the Nigerian e-invoicing regime from day one per [FR-TAX-1](#78-tax). Downloadable as PDF.
 
@@ -1078,7 +1080,7 @@ order_items(
 
 payments(
   id uuid pk, order_id uuid fk null, user_id uuid fk,
-  provider text,               -- 'paystack' | 'wallet'
+  provider text,               -- 'flutterwave' | 'wallet'
   provider_reference text unique,
   authorization_code text,     -- tokenised, for recurring
   amount_ngn numeric(12,2), fee_ngn numeric(12,2),
@@ -1223,7 +1225,7 @@ abuse_reports(
         │                        │  REST / OTE        │
         │                        └────────────────────┘
         │
-        ├──────────▶ Paystack (payments, webhooks, virtual accounts)
+        ├──────────▶ Flutterwave (payments, webhooks, virtual accounts)
         ├──────────▶ Public DNS resolvers (delegation verification, inspection)
         ├──────────▶ Email (Resend/Postmark) + SMS + WhatsApp
         └──────────▶ RDAP (IANA bootstrap → registry/registrar endpoints)
@@ -1256,7 +1258,7 @@ This is the highest-risk flow in the product. The failure mode we must never hit
 2. RE-CHECK AVAILABILITY   CheckAvailability for every line       [FR-C7]
 3. FLOAT PRE-FLIGHT        GetCurrentBalance ≥ wholesale cost     [FR-C8]
 4. PRICE RE-VALIDATION     price lock still valid, else re-quote  [FR-C4]
-5. CHARGE                  Paystack / wallet, idempotency key     [FR-PAY-3]
+5. CHARGE                  Flutterwave / wallet, idempotency key  [FR-PAY-3]
    └─ fail → order=failed, nothing provisioned, user informed
 6. MARK PAID               status=paid, payment row written
 7. ENQUEUE PROVISION JOB   one durable job PER order_item
@@ -1369,7 +1371,7 @@ Domain registrar accounts are high-value targets. A compromised account means a 
 | **SEC-4** | Email notification — not opt-out-able — on: sign-in from a new device, password change, 2FA change, contact change, nameserver change, transfer lock change, auth code reveal, transfer initiated |
 | **SEC-5** | All supplier credentials in the gateway's secret store only. Never in Vercel env vars, never in the Next.js bundle, never in Supabase table data |
 | **SEC-6** | `service_role` key restricted to Edge Functions and the gateway. Audited in CI — a test fails the build if it appears in any client-reachable bundle |
-| **SEC-7** | Webhook signature verification on every Paystack webhook; replay protection via `provider_reference` uniqueness |
+| **SEC-7** | Every Flutterwave webhook: compare the `verif-hash` header with our secret hash in constant time, then re-query the transaction (`GET /v3/transactions/{id}/verify`) and confirm `status`, `amount`, `currency` and `tx_ref` before giving value. Replay protection via `provider_reference` uniqueness. Respond `200` within 60 s — Flutterwave retries three times, 30 minutes apart |
 | **SEC-8** | Rate limiting: search (per IP and per session), auth endpoints, RDAP lookup, abuse form |
 | **SEC-9** | Bot protection on search and sign-up — Turnstile or equivalent — to protect the supplier quota and prevent scraping |
 | **SEC-10** | Fraud scoring at checkout: new account + high value + international card + mismatched geo → manual review queue. Registrars are targeted for carding because stolen-card domain registration is the dominant funding method for phishing infrastructure; chargeback volume is an existential risk to our payment processing |
@@ -1569,7 +1571,7 @@ Everything marked **[VERIFY]**. Do these before writing feature code — several
 | **V12** | Can DS records (DNSSEC) be set at all, by any route? | Ask support | Scope confirmation |
 | **V13** | `.ng` RDAP endpoint existence | Check IANA bootstrap; query NiRA | RDAP page |
 | **V14** | Do the supplier's default nameservers (`tr.apiname.com`, `eu.apiname.com`) serve a parking page, or does an undelegated domain simply not resolve? Can a domain be registered with *no* nameservers? | Register a test domain in OTE and query it | Undelegated empty-state copy |
-| **V15** | Paystack dedicated virtual account availability for our business type | Paystack account manager | Bank transfer path |
+| **V15** | Flutterwave virtual accounts for our business type, and whether collecting customer BVN/NIN for permanent accounts needs extra KYC on our side | Flutterwave account manager | Bank transfer path |
 | **V16** | Nigerian tax treatment of non-resident supplier invoices; e-invoicing onboarding | Nigerian tax adviser | CMP-17, CMP-18 |
 | **V17** | NDPC registration status and DPO appointment | Legal | CMP-9, CMP-10 |
 | **V18** | Current CBN FX Manual (4th ed., June 2026) requirements for our supplier payment pattern | Bank + adviser | Float funding |
@@ -1625,7 +1627,7 @@ Everything marked **[VERIFY]**. Do these before writing feature code — several
 
 **Nigeria**
 - [NiRA accredited registrars](https://nira.org.ng/accredited-registrars/) · [NiRA accreditation policy](https://nira.org.ng/pdf/NiRA-Registrars-Accreditation-Policy-1.pdf)
-- [Paystack transaction pricing](https://paystack.com/pricing) · [Paystack fees explained](https://support.paystack.com/en/articles/2130306)
+- [Flutterwave Nigeria pricing](https://flutterwave.com/ng/pricing) · [Webhooks](https://developer.flutterwave.com/v3.0/docs/webhooks) · [NGN virtual accounts](https://developer.flutterwave.com/v3.0/docs/ngn-virtual-accounts) · [Transaction verification](https://developer.flutterwave.com/v3.0/docs/transaction-verification) · [Tokenized charges](https://developer.flutterwave.com/v3.0/reference/charge-with-token-1)
 - [NDPA 2023 overview](https://securiti.ai/overview-of-nigeria-data-protection-act/) · [Controller/processor registration](https://www.michalsons.com/blog/nigeria-data-protection-act-ndpa-controller-and-processor-registration/77465)
 - [Nigeria VAT on non-resident digital services from 2026](https://www.vatupdate.com/2025/09/11/nigeria-to-enforce-vat-on-non-resident-digital-services-from-2026/) · [E-invoicing 2026](https://www.globalvatcompliance.com/globalvatnews/nigeria-e-invoicing-rollout-key-updates-2026/)
 - [CBN FX Manual 4th edition, June 2026](https://www.mondaq.com/nigeria/financial-services/1806166/key-regulatory-update-in-nigeria-the-cbn-foreign-exchange-manual-2026)
