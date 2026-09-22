@@ -27,6 +27,49 @@ export const handlers = [
     HttpResponse.json({ ok: true, data: { balance: 5000, currency: 'USD' } }),
   ),
 
+  // IANA RDAP bootstrap (RFC 9224). Trimmed to the registries the tests use;
+  // `.co` is deliberately absent, as it is from the real file.
+  http.get('https://data.iana.org/rdap/dns.json', () =>
+    HttpResponse.json({
+      version: '1.0',
+      publication: '2026-09-16T19:00:03Z',
+      services: [
+        [['com', 'net'], ['https://rdap.test/verisign/']],
+        [['org'], ['http://insecure.test/rdap/', 'https://rdap.test/pir/']],
+      ],
+    }),
+  ),
+
+  // A registry RDAP server: every domain exists, unlocked, registered long ago.
+  // Tests override per case for locks, recent registrations and 404s.
+  http.get('https://rdap.test/:registry/domain/:name', ({ params }) =>
+    HttpResponse.json(
+      {
+        objectClassName: 'domain',
+        ldhName: String(params.name).toUpperCase(),
+        status: ['active'],
+        events: [
+          { eventAction: 'registration', eventDate: '2015-03-01T10:00:00Z' },
+          { eventAction: 'expiration', eventDate: '2027-03-01T10:00:00Z' },
+        ],
+        entities: [
+          {
+            objectClassName: 'entity',
+            roles: ['registrar'],
+            vcardArray: [
+              'vcard',
+              [
+                ['version', {}, 'text', '4.0'],
+                ['fn', {}, 'text', 'Example Registrar Ltd'],
+              ],
+            ],
+          },
+        ],
+      },
+      { headers: { 'content-type': 'application/rdap+json' } },
+    ),
+  ),
+
   // Gateway health
   http.get('*/health', () => HttpResponse.json({ ok: true, data: { status: 'healthy' } })),
 ]

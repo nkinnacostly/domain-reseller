@@ -28,6 +28,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'server-only': fileURLToPath(new URL('./tests/setup/server-only.ts', import.meta.url)),
       '@dr/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
       '@dr/db': fileURLToPath(new URL('../../packages/db/src/index.ts', import.meta.url)),
     },

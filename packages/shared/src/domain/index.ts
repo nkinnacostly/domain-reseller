@@ -59,7 +59,15 @@ export function expiryUrgency(daysRemaining: number): ExpiryUrgency {
   return 'safe'
 }
 
-/** A transfer is blocked for 60 days after registration or a registrant change. */
+/**
+ * Registrars may refuse a transfer for 60 days after registration, after a
+ * previous transfer, or after a change of registrant (ICANN Transfer Policy,
+ * updated 21 February 2024, in force from 21 August 2025).
+ *
+ * The Transfer Policy Review recommends 720 hours (30 days) instead. That is
+ * approved but not yet in force — change this constant when it is, and every
+ * date we show moves with it.
+ */
 export const TRANSFER_LOCK_DAYS = 60
 
 export function transferEligibleAt(referenceDate: Date): Date {
