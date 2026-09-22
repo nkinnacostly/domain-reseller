@@ -1,0 +1,310 @@
+import type { AvailabilityStatus } from '@dr/shared'
+import type DomainNameApi from 'nodejs-dna'
+import type { DnaAvailability, DnaFail } from 'nodejs-dna'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createApp } from '../app'
+import { TokenBucket } from '../lib/rate-limit'
+import { Semaphore } from '../lib/semaphore'
+import { TtlCache } from '../lib/ttl-cache'
+import { createAvailabilityRoute, toBatches } from './availability'
+
+const SECRET = process.env.GATEWAY_SHARED_SECRET as string
+
+type Check = (names: string[], tlds: string[]) => Promise<DnaAvailability[] | DnaFail>
+type Results = { results: { name: string; tld: string; domain: string; status: string }[] }
+
+/** Every pair available — the supplier's shape, one row per name × extension. */
+const available = (names: string[], tlds: string[]): DnaAvailability[] =>
+  names.flatMap((DomainName) =>
+    tlds.map((TLD) => ({ DomainName, TLD, Status: 'available', IsFee: false, Reason: null })),
+  )
+
+const refused = (Code: string): DnaFail => ({ result: 'ERROR', error: { Code, Message: Code } })
+
+function supplier(check: Check = async (names, tlds) => available(names, tlds)) {
+  const spy = vi.fn<Check>(check)
+  const client = { CheckAvailability: spy } as unknown as DomainNameApi
+  return { check: spy, client: () => client }
+}
+
+const fresh = () => ({
+  bucket: new TokenBucket(100, 100),
+  cache: new TtlCache<AvailabilityStatus>(60_000, 1000),
+  slots: new Semaphore(2),
+  backoff: () => 0,
+})
+
+function appWith(deps: Parameters<typeof createAvailabilityRoute>[0]) {
+  return createApp({ availability: createAvailabilityRoute(deps) })
+}
+
+async function post(app: ReturnType<typeof createApp>, body: unknown, secret = SECRET) {
+  const response = await app.request('/v1/availability', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const json = (await response.json()) as { ok: boolean; data?: Results; code?: string }
+  return { status: response.status, json }
+}
+
+const statuses = (json: { data?: Results }) => json.data?.results.map((r) => r.status)
+
+describe('POST /v1/availability — refusals', () => {
+  let deps: ReturnType<typeof fresh>
+  beforeEach(() => {
+    deps = fresh()
+  })
+
+  it('refuses a caller without the shared secret', async () => {
+    const { check, client } = supplier()
+    const app = appWith({ ...deps, client })
+    const { status } = await post(
+      app,
+      { names: ['getpaid'], tlds: ['com'] },
+      'wrong-secret-value-xx',
+    )
+    expect(status).toBe(401)
+    expect(check).not.toHaveBeenCalled()
+  })
+
+  it('refuses a malformed request without calling the supplier', async () => {
+    const { check, client } = supplier()
+    const { status, json } = await post(appWith({ ...deps, client }), {
+      names: ['get paid'],
+      tlds: ['com'],
+    })
+    expect(status).toBe(400)
+    expect(json.code).toBe('VALIDATION_FAILED')
+    expect(check).not.toHaveBeenCalled()
+  })
+
+  it('refuses rather than queues when the rate limit is spent', async () => {
+    const { check, client } = supplier()
+    const bucket = new TokenBucket(1, 0)
+    const { status, json } = await post(appWith({ ...deps, client, bucket }), {
+      names: ['getpaid'],
+      tlds: ['com', 'net', 'org'],
+    })
+    expect(status).toBe(429)
+    expect(json).toMatchObject({ code: 'RATE_LIMITED', retryable: true })
+    expect(check).not.toHaveBeenCalled()
+  })
+
+  it('reports an outage, not a page of unknowns, when every call fails', async () => {
+    const { client } = supplier(async () => refused('CREDENTIALS'))
+    const { status, json } = await post(appWith({ ...deps, client }), {
+      names: ['getpaid'],
+      tlds: ['com', 'net'],
+    })
+    expect(status).toBe(502)
+    expect(json).toMatchObject({ ok: false, code: 'SUPPLIER_AUTH', retryable: false })
+  })
+})
+
+describe('POST /v1/availability — the supplier ceiling (PRD V4)', () => {
+  let deps: ReturnType<typeof fresh>
+  beforeEach(() => {
+    deps = fresh()
+  })
+
+  it('splits the extensions into two batches, one per supplier slot', async () => {
+    const { check, client } = supplier()
+    const { json } = await post(appWith({ ...deps, client }), {
+      names: ['getpaid', 'trygetpaid'],
+      tlds: ['com', 'africa', 'co'],
+    })
+    expect(check).toHaveBeenCalledTimes(2)
+    expect(check).toHaveBeenCalledWith(['getpaid', 'trygetpaid'], ['com', 'co'], 1)
+    expect(check).toHaveBeenCalledWith(['getpaid', 'trygetpaid'], ['africa'], 1)
+    expect(statuses(json)).toEqual(Array(6).fill('available'))
+  })
+
+  it('never has more than two supplier calls in flight, across concurrent searches', async () => {
+    let inFlight = 0
+    let peak = 0
+    const { client } = supplier(async (names, tlds) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      inFlight -= 1
+      return available(names, tlds)
+    })
+    const app = appWith({ ...deps, client })
+
+    await Promise.all([
+      post(app, { names: ['one'], tlds: ['com', 'net', 'org'] }),
+      post(app, { names: ['two'], tlds: ['com', 'net'] }),
+      post(app, { names: ['three'], tlds: ['africa'] }),
+    ])
+    expect(peak).toBe(2)
+  })
+
+  it('retries a call the supplier refused as rate limited', async () => {
+    let calls = 0
+    const { client } = supplier(async (names, tlds) => {
+      calls += 1
+      return calls === 1 ? refused('API_429') : available(names, tlds)
+    })
+    const { json } = await post(appWith({ ...deps, client }), { names: ['getpaid'], tlds: ['com'] })
+    expect(calls).toBe(2)
+    expect(statuses(json)).toEqual(['available'])
+  })
+
+  it('gives up after two retries rather than hammering the supplier', async () => {
+    const { check, client } = supplier(async () => refused('API_429'))
+    const { status, json } = await post(appWith({ ...deps, client }), {
+      names: ['getpaid'],
+      tlds: ['com'],
+    })
+    expect(check).toHaveBeenCalledTimes(3)
+    expect(status).toBe(502)
+    expect(json).toMatchObject({ code: 'SUPPLIER_UNAVAILABLE', retryable: true })
+  })
+
+  it('gives up on a call that waits too long for a slot', async () => {
+    const slots = new Semaphore(1)
+    let release: () => void = () => {}
+    const blocker = slots.run(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        }),
+    )
+    const { check, client } = supplier()
+
+    const { status } = await post(appWith({ ...deps, client, slots, queueWaitMs: 10 }), {
+      names: ['getpaid'],
+      tlds: ['com'],
+    })
+    release()
+    await blocker
+
+    expect(status).toBe(502)
+    expect(check).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /v1/availability — answers', () => {
+  let deps: ReturnType<typeof fresh>
+  beforeEach(() => {
+    deps = fresh()
+  })
+
+  it('answers every pair, in name then extension order', async () => {
+    const { client } = supplier()
+    const { json } = await post(appWith({ ...deps, client }), {
+      names: ['a1', 'b2'],
+      tlds: ['com', 'net'],
+    })
+    expect(json.data?.results.map((r) => r.domain)).toEqual([
+      'a1.com',
+      'a1.net',
+      'b2.com',
+      'b2.net',
+    ])
+  })
+
+  it('classifies taken, premium and restricted names', async () => {
+    const { client } = supplier(async (names, tlds) =>
+      names.map((DomainName) => ({
+        DomainName,
+        TLD: tlds[0] ?? '',
+        Status: DomainName === 'open' ? 'available' : 'notavailable',
+        IsFee: DomainName === 'hotel',
+        Reason:
+          DomainName === 'google'
+            ? 'Domain exists'
+            : DomainName === 'x'
+              ? 'must contain at least 3'
+              : null,
+      })),
+    )
+    const { json } = await post(appWith({ ...deps, client }), {
+      names: ['open', 'google', 'hotel', 'x'],
+      tlds: ['com'],
+    })
+    expect(statuses(json)).toEqual(['available', 'registered', 'premium', 'restricted'])
+  })
+
+  it('answers a repeat search from cache for 60 seconds (FR-S6)', async () => {
+    const { check, client } = supplier()
+    const app = appWith({ ...deps, client })
+    await post(app, { names: ['getpaid'], tlds: ['com'] })
+    await post(app, { names: ['getpaid'], tlds: ['com'] })
+    expect(check).toHaveBeenCalledOnce()
+  })
+
+  it('asks the supplier only about what the cache cannot answer', async () => {
+    const { check, client } = supplier()
+    const app = appWith({ ...deps, client })
+    await post(app, { names: ['getpaid'], tlds: ['com'] })
+    await post(app, { names: ['getpaid', 'newname'], tlds: ['com'] })
+    expect(check).toHaveBeenLastCalledWith(['newname'], ['com'], 1)
+  })
+
+  it('spends no rate limit on a search answered entirely from cache', async () => {
+    const { client } = supplier()
+    const app = appWith({ ...deps, client, bucket: new TokenBucket(1, 0) })
+    await post(app, { names: ['getpaid'], tlds: ['com'] })
+    const { status } = await post(app, { names: ['getpaid'], tlds: ['com'] })
+    expect(status).toBe(200)
+  })
+
+  it('marks one batch unknown when only its call fails, and never caches that', async () => {
+    const { check, client } = supplier(async (names, tlds) =>
+      tlds.includes('app') ? refused('SOMETHING') : available(names, tlds),
+    )
+    const app = appWith({ ...deps, client })
+    const { status, json } = await post(app, { names: ['getpaid'], tlds: ['com', 'app'] })
+
+    expect(status).toBe(200)
+    expect(statuses(json)).toEqual(['available', 'unknown'])
+
+    await post(app, { names: ['getpaid'], tlds: ['com', 'app'] })
+    expect(check).toHaveBeenLastCalledWith(['getpaid'], ['app'], 1)
+  })
+
+  it('treats a supplier that hangs as unknown after the timeout', async () => {
+    const { client } = supplier((names, tlds) =>
+      tlds.includes('app') ? new Promise(() => {}) : Promise.resolve(available(names, tlds)),
+    )
+    const { json } = await post(appWith({ ...deps, client, timeoutMs: 20 }), {
+      names: ['getpaid'],
+      tlds: ['com', 'app'],
+    })
+    expect(statuses(json)).toEqual(['available', 'unknown'])
+  })
+
+  it('treats a supplier that throws as unknown', async () => {
+    const { client } = supplier(async (names, tlds) => {
+      if (tlds.includes('app')) throw new Error('socket hang up')
+      return available(names, tlds)
+    })
+    const { json } = await post(appWith({ ...deps, client }), {
+      names: ['getpaid'],
+      tlds: ['com', 'app'],
+    })
+    expect(statuses(json)).toEqual(['available', 'unknown'])
+  })
+
+  it('ignores rows for extensions it did not ask about', async () => {
+    const { client } = supplier(async (names) => available(names, ['net']))
+    const { json } = await post(appWith({ ...deps, client }), { names: ['getpaid'], tlds: ['com'] })
+    expect(statuses(json)).toEqual(['unknown'])
+  })
+})
+
+describe('toBatches', () => {
+  it('deals extensions round-robin so the first stays in the first batch', () => {
+    expect(toBatches(['com', 'net', 'org', 'africa', 'co'], 2)).toEqual([
+      ['com', 'org', 'co'],
+      ['net', 'africa'],
+    ])
+  })
+
+  it('never makes an empty batch', () => {
+    expect(toBatches(['com'], 2)).toEqual([['com']])
+    expect(toBatches([], 2)).toEqual([])
+  })
+})

@@ -26,11 +26,28 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      'server-only': fileURLToPath(new URL('./tests/setup/server-only.ts', import.meta.url)),
-      '@dr/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
-      '@dr/db': fileURLToPath(new URL('../../packages/db/src/index.ts', import.meta.url)),
-    },
+    // Array form so order is explicit: subpath imports (`@dr/shared/errors`)
+    // must match before the bare package name swallows them.
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      {
+        find: 'server-only',
+        replacement: fileURLToPath(new URL('./tests/setup/server-only.ts', import.meta.url)),
+      },
+      {
+        find: /^@dr\/shared\/(.+)$/,
+        replacement: fileURLToPath(
+          new URL('../../packages/shared/src/$1/index.ts', import.meta.url),
+        ),
+      },
+      {
+        find: /^@dr\/shared$/,
+        replacement: fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
+      },
+      {
+        find: /^@dr\/db$/,
+        replacement: fileURLToPath(new URL('../../packages/db/src/index.ts', import.meta.url)),
+      },
+    ],
   },
 })

@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vitest'
+import { QueueTimeout, Semaphore } from './semaphore'
+
+const deferred = () => {
+  let resolve: () => void = () => {}
+  const promise = new Promise<void>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+describe('Semaphore', () => {
+  it('queues a third task and runs it in the first slot that frees', async () => {
+    const slots = new Semaphore(2)
+    const slowGate = deferred()
+    const order: string[] = []
+
+    const slow = slots.run(async () => {
+      await slowGate.promise
+      order.push('slow')
+    })
+    const quick = slots.run(async () => {
+      order.push('quick')
+    })
+    const third = slots.run(async () => {
+      order.push('third')
+    })
+
+    expect(slots.inFlight).toBe(2)
+    expect(slots.queued).toBe(1)
+
+    await Promise.all([quick, third])
+    slowGate.resolve()
+    await slow
+
+    expect(order).toEqual(['quick', 'third', 'slow'])
+    expect(slots.inFlight).toBe(0)
+  })
+
+  it('frees the slot even when the task throws', async () => {
+    const slots = new Semaphore(1)
+    await expect(slots.run(async () => Promise.reject(new Error('boom')))).rejects.toThrow('boom')
+    expect(slots.inFlight).toBe(0)
+    await expect(slots.run(async () => 'ok')).resolves.toBe('ok')
+  })
+
+  it('gives up waiting after the deadline, and leaves the queue clean', async () => {
+    const slots = new Semaphore(1)
+    const gate = deferred()
+    const holder = slots.run(() => gate.promise)
+
+    await expect(slots.run(async () => 'late', { waitMs: 10 })).rejects.toBeInstanceOf(QueueTimeout)
+    expect(slots.queued).toBe(0)
+
+    gate.resolve()
+    await holder
+    expect(slots.inFlight).toBe(0)
+  })
+})
+
+describe('Semaphore priority', () => {
+  it('lets a high-priority task overtake every normal one waiting', async () => {
+    const slots = new Semaphore(1)
+    const gate = deferred()
+    const order: string[] = []
+    const holder = slots.run(() => gate.promise)
+
+    const normalA = slots.run(async () => {
+      order.push('normal-a')
+    })
+    const normalB = slots.run(async () => {
+      order.push('normal-b')
+    })
+    const highA = slots.run(
+      async () => {
+        order.push('high-a')
+      },
+      { priority: 'high' },
+    )
+    const highB = slots.run(
+      async () => {
+        order.push('high-b')
+      },
+      { priority: 'high' },
+    )
+
+    gate.resolve()
+    await Promise.all([holder, normalA, normalB, highA, highB])
+    expect(order).toEqual(['high-a', 'high-b', 'normal-a', 'normal-b'])
+  })
+})

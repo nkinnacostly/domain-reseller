@@ -1,6 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
+/**
+ * Port 3100, not 3000: Playwright reuses whatever answers on its port, and a
+ * dev server on 3000 talks to the real gateway — which talks to the live
+ * supplier. Tests get their own server, wired to a mock gateway (N12).
+ */
+const PORT = 3100
+const MOCK_GATEWAY = 'http://127.0.0.1:8788'
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -28,10 +35,19 @@ export default defineConfig({
     { name: 'tablet', use: { ...devices['iPad Pro 11'] } },
   ],
 
-  webServer: {
-    command: 'pnpm build && pnpm start',
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
+  webServer: [
+    {
+      command: 'node tests/e2e/support/mock-gateway.mjs',
+      url: `${MOCK_GATEWAY}/health`,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: `pnpm build && pnpm start -p ${PORT}`,
+      url: baseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      // Process env wins over .env, so the app can only reach the mock.
+      env: { GATEWAY_URL: MOCK_GATEWAY },
+    },
+  ],
 })

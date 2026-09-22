@@ -37,9 +37,14 @@ export class TokenBucket {
   }
 }
 
-/** Conservative defaults until V4 is answered. Tune with evidence, not optimism. */
+/**
+ * Refill rates follow the measured supplier ceiling (PRD V4): two concurrent
+ * calls of ~1s each is ~2 calls a second. Availability admits a burst of 24
+ * calls (a handful of searches) and then refuses rather than queueing work
+ * nobody will wait for.
+ */
 export const buckets = {
-  availability: new TokenBucket(20, 10),
+  availability: new TokenBucket(24, 2),
   read: new TokenBucket(30, 15),
   write: new TokenBucket(5, 2),
 } as const

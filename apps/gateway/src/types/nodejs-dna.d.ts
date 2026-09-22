@@ -47,16 +47,18 @@ declare module 'nodejs-dna' {
     Billing: DnaContact
   }
 
+  /** Observed live 22 Sept 2026: `Price` arrives as a decimal string ("11.3100"). */
   export type DnaAvailability = {
     DomainName: string
     TLD: string
     Status: 'available' | 'notavailable' | string
-    Price?: number
+    Command?: string
+    Price?: number | string
     Currency?: string
     Period?: number
     IsFee?: boolean
     ClassKey?: string
-    Reason?: string
+    Reason?: string | null
   }
 
   export type DnaDomain = {

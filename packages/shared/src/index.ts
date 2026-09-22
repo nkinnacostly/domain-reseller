@@ -1,3 +1,4 @@
+export * from './availability/index'
 export * from './domain/index'
 export * from './errors/index'
 export * from './pricing/fx'

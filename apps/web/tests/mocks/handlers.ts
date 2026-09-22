@@ -6,19 +6,17 @@ import { HttpResponse, http } from 'msw'
  * unhandled request is a genuine signal, not noise.
  */
 export const handlers = [
-  // Registrar gateway — availability
+  // Registrar gateway — availability, in the shared contract's shape. Every
+  // pair is available unless a test overrides it.
   http.post('*/v1/availability', async ({ request }) => {
-    const body = (await request.json()) as { query: string; tlds: string[] }
+    const body = (await request.json()) as { names: string[]; tlds: string[] }
     return HttpResponse.json({
       ok: true,
-      data: body.tlds.map((tld, index) => ({
-        domainName: `${body.query}.${tld}`,
-        tld,
-        available: index % 2 === 0,
-        isPremium: false,
-        priceKobo: 1_750_000,
-        renewalPriceKobo: 1_950_000,
-      })),
+      data: {
+        results: body.names.flatMap((name) =>
+          body.tlds.map((tld) => ({ name, tld, domain: `${name}.${tld}`, status: 'available' })),
+        ),
+      },
     })
   }),
 
