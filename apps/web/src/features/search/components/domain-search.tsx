@@ -56,7 +56,7 @@ export function DomainSearch({
     if (!parsed.isValid) {
       setError(
         submitted.trim()
-          ? 'Use letters, numbers and hyphens — for example getpaid.ng'
+          ? 'Use letters, numbers and hyphens — for example getpaid.com'
           : 'Type a name to search for',
       )
       return
@@ -107,7 +107,7 @@ export function DomainSearch({
             onChange={() => {
               if (error) setError(null)
             }}
-            placeholder="yourbrand.ng"
+            placeholder="yourbrand.com"
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? errorId : undefined}
             className="w-full bg-transparent py-1 text-base text-foreground outline-none placeholder:text-muted-foreground/60"

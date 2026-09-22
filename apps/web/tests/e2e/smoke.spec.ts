@@ -106,10 +106,10 @@ test.describe('home page search', () => {
 
     const field = form.getByLabel('Find your domain')
     await field.click()
-    await field.pressSequentially('getpaid.ng')
+    await field.pressSequentially('getpaid.com')
     await field.press('Enter')
 
-    await expect(page).toHaveURL(/\/search\?q=getpaid\.ng$/)
+    await expect(page).toHaveURL(/\/search\?q=getpaid\.com$/)
   })
 
   test('a value set without a change event still submits', async ({ page }) => {
@@ -120,11 +120,11 @@ test.describe('home page search', () => {
     await form.waitFor()
 
     await form.getByLabel('Find your domain').evaluate((el) => {
-      ;(el as HTMLInputElement).value = 'autofilled.ng'
+      ;(el as HTMLInputElement).value = 'autofilled.com'
     })
     await form.getByRole('button', { name: /search/i }).click()
 
-    await expect(page).toHaveURL(/\/search\?q=autofilled\.ng$/)
+    await expect(page).toHaveURL(/\/search\?q=autofilled\.com$/)
   })
 
   test('an empty search explains itself instead of navigating', async ({ page }) => {
@@ -180,7 +180,7 @@ test.describe('mobile navigation', () => {
       .getByRole('form', { name: 'Domain search', exact: true })
       .getByLabel('Find your domain')
       .boundingBox()
-    const card = await page.getByText('getpaid.ng').boundingBox()
+    const card = await page.getByText(/^getpaid\./).boundingBox()
     expect(search).not.toBeNull()
     expect(card).not.toBeNull()
     // The result card sits strictly below the search pill.
@@ -196,11 +196,11 @@ test.describe('progressive enhancement', () => {
     await page
       .getByRole('form', { name: 'Domain search', exact: true })
       .getByLabel('Find your domain')
-      .fill('getpaid.ng')
+      .fill('getpaid.com')
     await page
       .getByRole('form', { name: 'Domain search', exact: true })
       .getByRole('button', { name: /search/i })
       .click()
-    await expect(page).toHaveURL(/\/search\?q=getpaid\.ng$/)
+    await expect(page).toHaveURL(/\/search\?q=getpaid\.com$/)
   })
 })

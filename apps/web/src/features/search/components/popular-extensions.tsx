@@ -1,7 +1,7 @@
 import { formatNaira } from '@dr/shared'
 import Link from 'next/link'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
-import { FEATURED_TLDS, getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 
 /**
  * Decorative wash per card — stands in for the reference's photography.
@@ -17,19 +17,14 @@ const WASH = [
 export async function PopularExtensions() {
   const priced = await getPricedCatalogue()
 
-  const tlds = FEATURED_TLDS.flatMap(({ tld, blurb }) => {
-    const entry = priced?.tlds.find((t) => t.tld === tld)
-    if (!entry) return []
-    return [
-      {
-        tld,
-        blurb,
-        firstYear: formatNaira(entry.registration.priceKobo),
-        renewal: formatNaira(entry.renewal.priceKobo),
-        renewalIsHigher: entry.renewalIsHigher,
-      },
-    ]
-  })
+  // The top three by `tlds.featured_rank` — what leads is a data change.
+  const tlds = (priced?.featured.slice(0, 3) ?? []).map((entry) => ({
+    tld: entry.tld,
+    blurb: entry.tagline,
+    firstYear: formatNaira(entry.registration.priceKobo),
+    renewal: formatNaira(entry.renewal.priceKobo),
+    renewalIsHigher: entry.renewalIsHigher,
+  }))
 
   return (
     <section aria-labelledby="popular-extensions">
@@ -64,7 +59,7 @@ export async function PopularExtensions() {
               <p className="mt-3 font-semibold text-foreground group-hover:underline">
                 .{item.tld}
               </p>
-              <p className="text-sm text-muted-foreground">{item.blurb}</p>
+              {item.blurb ? <p className="text-sm text-muted-foreground">{item.blurb}</p> : null}
               {/* N8 — the renewal price is never hidden. */}
               <p className="mt-1 text-sm text-muted-foreground">
                 Renews at{' '}

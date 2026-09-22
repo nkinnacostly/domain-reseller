@@ -15,17 +15,22 @@ import { HeroVisual } from '@/features/search/components/hero-visual'
 import { PopularExtensions } from '@/features/search/components/popular-extensions'
 import { TrendingDomains } from '@/features/search/components/trending-domains'
 
-export const metadata: Metadata = {
-  title: 'Domain names, priced in naira',
-  description:
-    'Search 700+ domain extensions including .ng and .com.ng. Renewal price shown upfront, pay with your Nigerian card, point it at your host in seconds.',
+export async function generateMetadata(): Promise<Metadata> {
+  const priced = await getPricedCatalogue()
+  const count = priced ? `${priced.tlds.length.toLocaleString('en-NG')} ` : ''
+  return {
+    title: 'Domain names, priced in naira',
+    description: `Search ${count}domain extensions. Renewal price shown upfront, pay with your Nigerian card, point it at your host in seconds.`,
+  }
 }
 
 export default async function HomePage() {
   // The hero card shows a real quote, so it reads the live rate like every
   // other price on the site.
   const priced = await getPricedCatalogue()
-  const ng = priced?.tlds.find((t) => t.tld === 'ng')
+  // Whatever the database ranks first leads the hero; the next four float round it.
+  const lead = priced?.featured[0]
+  const leadTld = lead?.tld ?? 'com'
 
   return (
     <>
@@ -43,8 +48,11 @@ export default async function HomePage() {
               </h1>
 
               <p className="mt-5 max-w-md text-pretty text-muted-foreground">
-                Search 700+ extensions including .ng and .com.ng. We show the renewal price next to
-                the first-year price — every time, on every screen.
+                {priced
+                  ? `Search ${priced.tlds.length.toLocaleString('en-NG')} extensions, from .com to .africa.`
+                  : 'Search hundreds of extensions.'}{' '}
+                We show the renewal price next to the first-year price — every time, on every
+                screen.
               </p>
 
               <div className="relative mt-9">
@@ -66,8 +74,10 @@ export default async function HomePage() {
 
             <HeroVisual
               className="mx-auto max-w-md lg:max-w-none"
-              firstYear={ng ? formatNaira(ng.registration.priceKobo) : null}
-              renewal={ng ? formatNaira(ng.renewal.priceKobo) : null}
+              domain={`getpaid.${leadTld}`}
+              firstYear={lead ? formatNaira(lead.registration.priceKobo) : null}
+              renewal={lead ? formatNaira(lead.renewal.priceKobo) : null}
+              chips={priced?.featured.slice(1, 5).map((t) => t.tld) ?? []}
             />
           </Container>
         </div>

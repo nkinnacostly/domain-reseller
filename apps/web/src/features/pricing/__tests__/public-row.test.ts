@@ -1,6 +1,6 @@
 import { type PricingInputs, priceCatalogue, type TldRecord } from '@dr/shared'
 import { describe, expect, it } from 'vitest'
-import { NIGERIAN_TLDS, POPULAR_TLDS, sortForDisplay, toPublicRow } from '../lib/public-row'
+import { POPULAR_TLDS, sortForDisplay, toPublicRow } from '../lib/public-row'
 
 // Fixed inputs so expectations do not move with the live rate.
 const INPUTS: PricingInputs = {
@@ -29,13 +29,12 @@ const record = (
 })
 
 const records: TldRecord[] = [
-  record('ng', 11.99),
-  record('com.ng', 11.99, 11.99, 11.99),
-  record('net.ng', 11.99, 11.99, 11.99),
-  record('org.ng', 11.99, 11.99, 11.99),
+  record('co', 24.49),
   record('com', 11.31, 11.51, 10.61),
   record('africa', 25.9),
+  record('org', 10.99, 10.99, 10.99),
   record('zzz-tail', 4.2),
+  record('aaa-tail', 7.1),
 ]
 
 const rows = priceCatalogue(records, INPUTS).map(toPublicRow)
@@ -67,33 +66,41 @@ describe('toPublicRow', () => {
   })
 
   it('formats money as naira strings, so the client does no maths', () => {
-    expect(rows.find((r) => r.tld === 'ng')?.register).toMatch(/^₦[\d,]+$/)
+    expect(rows.find((r) => r.tld === 'co')?.register).toMatch(/^₦[\d,]+$/)
   })
 
   it('returns null rather than a price where transfer is unavailable', () => {
-    expect(rows.find((r) => r.tld === 'ng')?.transfer).toBeNull()
+    expect(rows.find((r) => r.tld === 'co')?.transfer).toBeNull()
     expect(rows.find((r) => r.tld === 'com')?.transfer).not.toBeNull()
   })
 })
 
 describe('sortForDisplay', () => {
-  const sorted = sortForDisplay(rows)
+  // Featured order comes from the database; here, a ranking that disagrees
+  // with POPULAR_TLDS so the test proves the featured order wins.
+  const featured = ['africa', 'co']
+  const sorted = sortForDisplay(rows, featured)
+  const sellablePopular = POPULAR_TLDS.filter(
+    (t) => !featured.includes(t) && rows.some((r) => r.tld === t),
+  )
 
-  it('puts the Nigerian extensions first, in a fixed order', () => {
-    expect(sorted.slice(0, 4).map((r) => r.tld)).toEqual([...NIGERIAN_TLDS])
+  it('puts featured extensions first, in the order given', () => {
+    expect(sorted.slice(0, 2).map((r) => r.tld)).toEqual(featured)
   })
 
   it('follows them with extensions people recognise', () => {
-    const sellablePopular = POPULAR_TLDS.filter((t) => rows.some((r) => r.tld === t))
-    expect(sorted.slice(4, 4 + sellablePopular.length).map((r) => r.tld)).toEqual([
+    expect(sorted.slice(2, 2 + sellablePopular.length).map((r) => r.tld)).toEqual([
       ...sellablePopular,
     ])
   })
 
   it('leaves the long tail alphabetical, so a reader can find one', () => {
-    const sellablePopular = POPULAR_TLDS.filter((t) => rows.some((r) => r.tld === t))
-    const tail = sorted.slice(4 + sellablePopular.length).map((r) => r.tld)
-    expect(tail).toEqual([...tail].sort((a, b) => a.localeCompare(b)))
+    const tail = sorted.slice(2 + sellablePopular.length).map((r) => r.tld)
+    expect(tail).toEqual(['aaa-tail', 'zzz-tail'])
+  })
+
+  it('falls back to the popular order when nothing is featured', () => {
+    expect(sortForDisplay(rows)[0]?.tld).toBe('com')
   })
 
   it('does not mutate the input', () => {

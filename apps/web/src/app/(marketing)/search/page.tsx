@@ -60,7 +60,7 @@ async function SearchResults({ searchParams }: { searchParams: Promise<{ q?: str
         <p className="mx-auto mt-2 max-w-md text-pretty text-sm/6 text-muted-foreground">
           {parsed.isValid
             ? 'Live results arrive once the registrar gateway is wired up. Your search was understood correctly.'
-            : 'Search across 700+ extensions, including .ng and .com.ng.'}
+            : 'Search any extension we sell, from .com to .africa.'}
         </p>
       </div>
     </>

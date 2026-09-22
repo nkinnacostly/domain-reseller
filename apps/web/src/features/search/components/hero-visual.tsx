@@ -11,8 +11,7 @@ import { cn } from '@/lib/utils'
  * information is in the page copy and the search results.
  */
 
-type Chip = {
-  tld: string
+type ChipSlot = {
   /** Position as a percentage of the container, so it scales with the box. */
   top: string
   left: string
@@ -24,31 +23,28 @@ type Chip = {
    */
 }
 
-const CHIPS: Chip[] = [
+/** Where the extension chips sit. Which extensions fill them comes from the database. */
+const SLOTS: ChipSlot[] = [
   // Positioned clear of the centre card and inset from every edge.
   {
-    tld: '.ng',
     top: '4%',
     left: '6%',
     size: 'size-16 sm:size-[4.5rem]',
     tone: 'bg-accent text-accent-foreground',
   },
   {
-    tld: '.com',
     top: '1%',
     left: '72%',
     size: 'size-14 sm:size-16',
     tone: 'bg-primary text-primary-foreground',
   },
   {
-    tld: '.com.ng',
     top: '74%',
     left: '2%',
     size: 'size-[4.25rem] sm:size-[4.75rem]',
     tone: 'bg-background text-foreground ring-1 ring-border',
   },
   {
-    tld: '.africa',
     top: '80%',
     left: '70%',
     size: 'size-14 sm:size-16',
@@ -58,16 +54,20 @@ const CHIPS: Chip[] = [
 
 export type HeroVisualProps = {
   className?: string
+  /** The example name on the card, e.g. `getpaid.com`. */
+  domain: string
   /**
-   * The real .ng prices. The card shows an actual quote, so it must not carry
-   * a hardcoded figure — it showed ₦18,500 while .ng was ₦20,900, which is a
-   * wrong price in the first thing a visitor sees.
+   * The real prices for that extension. The card shows an actual quote, so it
+   * must not carry a hardcoded figure — it once showed ₦18,500 while the live
+   * price was ₦20,900, a wrong price in the first thing a visitor sees.
    */
   firstYear: string | null
   renewal: string | null
+  /** Extensions for the floating chips, in slot order, without the dot. */
+  chips: string[]
 }
 
-export function HeroVisual({ className, firstYear, renewal }: HeroVisualProps) {
+export function HeroVisual({ className, domain, firstYear, renewal, chips }: HeroVisualProps) {
   return (
     <div
       aria-hidden="true"
@@ -105,7 +105,7 @@ export function HeroVisual({ className, firstYear, renewal }: HeroVisualProps) {
             <Check className="size-3" strokeWidth={3} />
           </span>
           <span className="truncate text-sm font-semibold text-foreground sm:text-base">
-            getpaid.ng
+            {domain}
           </span>
           <span className="ml-auto shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[0.6875rem] font-medium text-accent">
             Available
@@ -130,17 +130,17 @@ export function HeroVisual({ className, firstYear, renewal }: HeroVisualProps) {
         <div className="mt-4 h-9 rounded-full bg-accent" />
       </div>
 
-      {CHIPS.map((chip) => (
+      {SLOTS.slice(0, chips.length).map((slot, index) => (
         <span
-          key={chip.tld}
-          style={{ top: chip.top, left: chip.left }}
+          key={chips[index]}
+          style={{ top: slot.top, left: slot.left }}
           className={cn(
             'absolute hidden place-items-center rounded-full text-xs font-semibold shadow-lg sm:grid sm:text-sm',
-            chip.size,
-            chip.tone,
+            slot.size,
+            slot.tone,
           )}
         >
-          {chip.tld}
+          .{chips[index]}
         </span>
       ))}
     </div>

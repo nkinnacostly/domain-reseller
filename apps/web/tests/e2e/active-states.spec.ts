@@ -1,17 +1,33 @@
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
+
+/**
+ * The header nav for this viewport. Below `md` the Main nav is hidden and the
+ * same links live in the menu, marked with a side rule (::before) instead of
+ * an underline (::after).
+ */
+async function headerNav(page: Page) {
+  const main = page.getByRole('banner').getByRole('navigation', { name: 'Main' })
+  if (await main.isVisible()) return { nav: main, marker: '::after' }
+
+  await page.getByRole('button', { name: 'Open menu' }).click()
+  return {
+    nav: page.getByRole('banner').getByRole('navigation', { name: 'Mobile' }),
+    marker: '::before',
+  }
+}
 
 test.describe('current page indicator', () => {
   test('marks the nav link for the page you are on', async ({ page }) => {
     await page.goto('/pricing')
 
-    const nav = page.getByRole('banner').getByRole('navigation', { name: 'Main' })
+    const { nav } = await headerNav(page)
     await expect(nav.getByRole('link', { name: 'Pricing' })).toHaveAttribute('aria-current', 'page')
   })
 
   test('leaves the other links unmarked', async ({ page }) => {
     await page.goto('/pricing')
 
-    const nav = page.getByRole('banner').getByRole('navigation', { name: 'Main' })
+    const { nav } = await headerNav(page)
     for (const label of ['How it works', 'Transfer']) {
       await expect(nav.getByRole('link', { name: label })).not.toHaveAttribute('aria-current', /.*/)
     }
@@ -39,15 +55,13 @@ test.describe('current page indicator', () => {
   test('signals the current link with more than colour', async ({ page }) => {
     await page.goto('/pricing')
 
-    const current = page
-      .getByRole('banner')
-      .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: 'Pricing' })
+    const { nav, marker } = await headerNav(page)
+    const current = nav.getByRole('link', { name: 'Pricing' })
 
-    const indicator = await current.evaluate((el) => {
-      const after = getComputedStyle(el, '::after')
-      return { content: after.content, height: after.height, background: after.backgroundColor }
-    })
+    const indicator = await current.evaluate((el, pseudo) => {
+      const rule = getComputedStyle(el, pseudo)
+      return { content: rule.content, height: rule.height, background: rule.backgroundColor }
+    }, marker)
 
     expect(indicator.content).not.toBe('none')
     expect(Number.parseFloat(indicator.height)).toBeGreaterThan(0)
@@ -55,15 +69,11 @@ test.describe('current page indicator', () => {
 
   test('updates when you navigate', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('banner').getByRole('link', { name: 'Pricing' }).click()
+    await (await headerNav(page)).nav.getByRole('link', { name: 'Pricing' }).click()
     await expect(page).toHaveURL(/\/pricing$/)
 
-    await expect(
-      page
-        .getByRole('banner')
-        .getByRole('navigation', { name: 'Main' })
-        .getByRole('link', { name: 'Pricing' }),
-    ).toHaveAttribute('aria-current', 'page')
+    const { nav } = await headerNav(page)
+    await expect(nav.getByRole('link', { name: 'Pricing' })).toHaveAttribute('aria-current', 'page')
   })
 })
 
@@ -110,7 +120,13 @@ test.describe('pressed feedback', () => {
 })
 
 test.describe('hover feedback', () => {
-  test('a pricing table row responds to the pointer', async ({ page }) => {
+  /**
+   * Touch screens have no hover: Tailwind 4 gates `hover:` behind
+   * `(hover: hover)`, so a tap never leaves a row stuck highlighted. Only
+   * pointer devices can be asserted here.
+   */
+  test('a pricing table row responds to the pointer', async ({ page, hasTouch }) => {
+    test.skip(hasTouch, 'no hover on touch screens, by design')
     await page.goto('/pricing')
     const row = page.locator('tbody tr').first()
 

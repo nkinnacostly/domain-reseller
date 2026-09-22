@@ -179,6 +179,41 @@ export type Database = {
         }
         Relationships: []
       }
+      market_references: {
+        Row: {
+          lowest_ngn: number | null
+          observed_on: string
+          source_note: string
+          tld: string
+          typical_ngn: number
+          updated_at: string
+        }
+        Insert: {
+          lowest_ngn?: number | null
+          observed_on?: string
+          source_note: string
+          tld: string
+          typical_ngn: number
+          updated_at?: string
+        }
+        Update: {
+          lowest_ngn?: number | null
+          observed_on?: string
+          source_note?: string
+          tld?: string
+          typical_ngn?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_references_tld_fkey"
+            columns: ["tld"]
+            isOneToOne: true
+            referencedRelation: "tlds"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
       pricing_settings: {
         Row: {
           fx_buffer_pct: number
@@ -253,11 +288,15 @@ export type Database = {
       }
       tlds: {
         Row: {
+          featured_rank: number | null
+          featured_tagline: string | null
           is_country_code: boolean
+          is_paused: boolean
           is_sellable: boolean
           max_period: number
           min_period: number
           name: string
+          paused_reason: string | null
           redemption_days: number
           register_usd: number
           renew_usd: number
@@ -267,11 +306,15 @@ export type Database = {
           transfer_usd: number | null
         }
         Insert: {
+          featured_rank?: number | null
+          featured_tagline?: string | null
           is_country_code?: boolean
+          is_paused?: boolean
           is_sellable?: boolean
           max_period?: number
           min_period?: number
           name: string
+          paused_reason?: string | null
           redemption_days?: number
           register_usd: number
           renew_usd: number
@@ -281,11 +324,15 @@ export type Database = {
           transfer_usd?: number | null
         }
         Update: {
+          featured_rank?: number | null
+          featured_tagline?: string | null
           is_country_code?: boolean
+          is_paused?: boolean
           is_sellable?: boolean
           max_period?: number
           min_period?: number
           name?: string
+          paused_reason?: string | null
           redemption_days?: number
           register_usd?: number
           renew_usd?: number

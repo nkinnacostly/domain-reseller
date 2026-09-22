@@ -2,7 +2,7 @@
 
 import { ArrowUpRight, Search } from 'lucide-react'
 import Link from 'next/link'
-import { useDeferredValue, useId, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useId, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { PublicPriceRow } from '../lib/public-row'
 
@@ -12,6 +12,13 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
   const inputId = useId()
   const [query, setQuery] = useState('')
   const [visible, setVisible] = useState(PAGE_SIZE)
+
+  /**
+   * The filter is a controlled input, so anything typed before hydration is
+   * reset when React takes over. Tests wait on this marker instead of racing.
+   */
+  const [isEnhanced, setIsEnhanced] = useState(false)
+  useEffect(() => setIsEnhanced(true), [])
 
   // Keeps typing responsive while filtering 700 rows.
   const deferredQuery = useDeferredValue(query)
@@ -25,7 +32,7 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
   const shown = filtered.slice(0, visible)
 
   return (
-    <div>
+    <div data-enhanced={isEnhanced ? 'true' : undefined}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="w-full sm:max-w-xs">
           <label htmlFor={inputId} className="block text-sm font-medium text-foreground">
@@ -44,7 +51,7 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
                 setQuery(event.target.value)
                 setVisible(PAGE_SIZE)
               }}
-              placeholder="ng, com, africa…"
+              placeholder="com, africa, io…"
               className="h-11 w-full rounded-full border border-border bg-background pr-4 pl-9 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
           </div>
@@ -92,7 +99,7 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
                 <th scope="row" className="py-3 pr-4 text-left font-medium">
                   {`.${row.tld}`}
                   {row.isCountryCode ? null : (
-                    <span className="ml-2 text-muted-foreground text-xs">+ ICANN fee</span>
+                    <span className="ml-2 text-muted-foreground text-xs">incl. ICANN fee</span>
                   )}
                   {row.requiresExtraFields ? (
                     <span className="mt-0.5 block text-muted-foreground text-xs font-normal">

@@ -11,7 +11,7 @@ test.describe('homepage structure', () => {
     const main = page.locator('main')
     for (const heading of [
       'Popular extensions',
-      'Trending this week',
+      'Also worth a look',
       'Three steps, no tutorial',
       'Built for how domains are actually bought in Nigeria',
       'How we work out your price',
@@ -243,11 +243,11 @@ test.describe('horizontal alignment', () => {
     await page.goto('/')
 
     const login = await page.getByRole('banner').getByRole('link', { name: 'Login' }).boundingBox()
-    const trending = await page.getByRole('heading', { name: 'Trending this week' }).boundingBox()
+    const trending = await page.getByRole('heading', { name: 'Also worth a look' }).boundingBox()
 
     // Trending's section is the rightmost content column on the page.
     const section = await page
-      .locator('section', { has: page.getByRole('heading', { name: 'Trending this week' }) })
+      .locator('section', { has: page.getByRole('heading', { name: 'Also worth a look' }) })
       .boundingBox()
 
     expect(Math.round((login?.x ?? 0) + (login?.width ?? 0))).toBe(

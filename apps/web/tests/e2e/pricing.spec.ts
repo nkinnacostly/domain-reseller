@@ -2,17 +2,42 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
 test.describe('pricing page', () => {
-  test('leads with the Nigerian extensions at a flat price', async ({ page }) => {
+  test('leads with the featured extensions, each with its renewal price', async ({ page }) => {
     await page.goto('/pricing')
 
-    const featured = page.getByRole('heading', { name: 'The Nigerian extensions' })
-    await expect(featured).toBeVisible()
+    const heading = page.getByRole('heading', { name: 'The popular extensions' })
+    await expect(heading).toBeVisible()
 
-    // All four, and all advertised as flat.
-    for (const tld of ['.ng', '.com.ng', '.net.ng', '.org.ng']) {
-      await expect(page.getByRole('listitem').filter({ hasText: tld }).first()).toBeVisible()
+    // Ranked in the database (tlds.featured_rank): .com, .net, .org, .africa.
+    const cards = page
+      .getByRole('list', { name: 'Popular extensions', exact: true })
+      .getByRole('listitem')
+    await expect(cards).toHaveCount(4)
+    await expect(cards.first()).toContainText('.com')
+    for (const card of await cards.all()) {
+      await expect(card).toContainText(/Renews at/)
     }
-    expect(await page.getByText('Same price every year').count()).toBe(4)
+  })
+
+  /**
+   * The .ng family is paused (tlds.is_paused) until we have a NiRA-accredited
+   * source — the supplier charges USD 11.99 flat, far above market (PRD R17).
+   */
+  test('does not sell the paused .ng family', async ({ page }) => {
+    await page.goto('/pricing')
+    const listed = await page
+      .locator('tbody th')
+      .evaluateAll((els) => els.map((el) => el.childNodes[0]?.textContent?.trim() ?? ''))
+    for (const tld of ['.ng', '.com.ng', '.net.ng', '.org.ng']) {
+      expect(listed, `${tld} is paused but listed`).not.toContain(tld)
+    }
+
+    await page.locator('[data-enhanced="true"]').waitFor()
+    await page.getByLabel('Find an extension').fill('ng')
+    const matches = await page
+      .locator('tbody th')
+      .evaluateAll((els) => els.map((el) => el.childNodes[0]?.textContent?.trim() ?? ''))
+    expect(matches.filter((t) => t === '.ng' || t.endsWith('.ng'))).toEqual([])
   })
 
   /** PRD N8 — a price is never shown without its renewal price. */
@@ -40,22 +65,25 @@ test.describe('pricing page', () => {
 
   test('filtering narrows the table and reports the count', async ({ page }) => {
     await page.goto('/pricing')
+    await page.locator('[data-enhanced="true"]').waitFor()
     const field = page.getByLabel('Find an extension')
 
     await field.fill('africa')
-    await expect(page.getByText(/of 701 extensions/)).toBeVisible()
+    await expect(page.getByText(/of [\d,]+ extensions/)).toBeVisible()
     await expect(page.locator('tbody tr')).toHaveCount(1)
     await expect(page.locator('tbody th').first()).toContainText('.africa')
   })
 
   test('a leading dot in the filter is tolerated', async ({ page }) => {
     await page.goto('/pricing')
+    await page.locator('[data-enhanced="true"]').waitFor()
     await page.getByLabel('Find an extension').fill('.africa')
     await expect(page.locator('tbody th').first()).toContainText('.africa')
   })
 
   test('an unmatched filter explains itself', async ({ page }) => {
     await page.goto('/pricing')
+    await page.locator('[data-enhanced="true"]').waitFor()
     await page.getByLabel('Find an extension').fill('zzzznotatld')
     await expect(page.getByText(/no extension matches/i)).toBeVisible()
   })
@@ -82,7 +110,7 @@ test.describe('pricing page', () => {
     await page.goto('/pricing')
     await expect(page.getByText(/USD 0\.20 per year/)).toBeVisible()
 
-    // Match the extension exactly — `hasText: '.com'` also matches `.com.ng`.
+    // Match the extension exactly — `hasText: '.co'` also matches `.com`.
     const marks = await page.locator('tbody tr').evaluateAll((rows) =>
       rows.map((row) => ({
         tld: row.querySelector('th')?.childNodes[0]?.textContent?.trim() ?? '',
@@ -92,8 +120,9 @@ test.describe('pricing page', () => {
 
     const find = (tld: string) => marks.find((m) => m.tld === tld)
     expect(find('.com')?.hasIcannMark, 'gTLD .com should carry the fee').toBe(true)
-    expect(find('.ng')?.hasIcannMark, 'ccTLD .ng should not').toBe(false)
-    expect(find('.com.ng')?.hasIcannMark, 'ccTLD .com.ng should not').toBe(false)
+    expect(find('.org')?.hasIcannMark, 'gTLD .org should carry the fee').toBe(true)
+    expect(find('.co')?.hasIcannMark, 'ccTLD .co should not').toBe(false)
+    expect(find('.io')?.hasIcannMark, 'ccTLD .io should not').toBe(false)
   })
 
   test('states the exchange rate customers are charged at', async ({ page }) => {
@@ -163,7 +192,7 @@ test.describe('one price everywhere', () => {
       Object.fromEntries(
         rows.map((row) => [
           // The th holds the TLD as its first text node, then an
-          // "+ ICANN fee" span — textContent would merge the two.
+          // "incl. ICANN fee" span — textContent would merge the two.
           row.querySelector('th')?.childNodes[0]?.textContent?.trim() ?? '',
           row.querySelector('td')?.textContent?.trim() ?? '',
         ]),
@@ -171,8 +200,8 @@ test.describe('one price everywhere', () => {
     )
 
     await page.goto('/')
-    // Scope to the Popular extensions section — the sibling "Trending this
-    // week" list also renders <li> elements.
+    // Scope to the Popular extensions section — the sibling "Also worth a
+    // look" list also renders <li> elements.
     const cards = await page
       .locator('section', { has: page.getByRole('heading', { name: 'Popular extensions' }) })
       .locator('li')
@@ -183,14 +212,19 @@ test.describe('one price everywhere', () => {
         })),
       )
 
-    // The hero card quotes a real .ng price and must agree too — it carried a
-    // hardcoded ₦18,500 while .ng was ₦20,900.
-    const heroPrice = await page
-      .locator('div', { hasText: /^getpaid\.ng/ })
+    // The hero card quotes a real price and must agree too — it once carried
+    // a hardcoded ₦18,500 while the live price was ₦20,900.
+    const hero = await page
+      .locator('div', { hasText: /^getpaid\./ })
       .first()
-      .evaluate((el) => (el.textContent?.match(/₦[\d,]+/) ?? [])[0] ?? '')
-    expect(heroPrice, 'hero card shows no price').toBeTruthy()
-    expect(heroPrice, 'hero price disagrees with the pricing table').toBe(fromTable['.ng'])
+      .evaluate((el) => ({
+        domain: el.querySelector('span.truncate')?.textContent?.trim() ?? '',
+        price: (el.textContent?.match(/₦[\d,]+/) ?? [])[0] ?? '',
+      }))
+    const heroTld = `.${hero.domain.split('.').slice(1).join('.')}`
+    expect(heroTld, 'hero should lead with the top-ranked extension').toBe('.com')
+    expect(hero.price, 'hero card shows no price').toBeTruthy()
+    expect(hero.price, 'hero price disagrees with the pricing table').toBe(fromTable[heroTld])
 
     expect(cards.length).toBeGreaterThan(0)
     for (const card of cards) {

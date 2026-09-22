@@ -37,13 +37,11 @@ export function toPublicRow(pricing: TldPricing): PublicPriceRow {
   }
 }
 
-export const NIGERIAN_TLDS = ['ng', 'com.ng', 'net.ng', 'org.ng'] as const
-
 /**
- * Extensions people in this market actually consider, in the order they
- * consider them. Sorting the full catalogue by price instead surfaces a wall
- * of restricted Turkish second-levels (.gov.tr, .edu.tr, .k12.tr) that nobody
- * here can register — cheap, and useless.
+ * Extensions people in this market actually consider. Sorting the long tail by
+ * price instead surfaces a wall of restricted Turkish second-levels (.gov.tr,
+ * .edu.tr, .k12.tr) that nobody here can register — cheap, and useless.
+ * Any TLD here that the catalogue does not sell is simply skipped.
  */
 export const POPULAR_TLDS = [
   'com',
@@ -69,14 +67,17 @@ export const POPULAR_TLDS = [
 ] as const
 
 /**
- * Nigerian range first, then the extensions people recognise, then everything
- * else alphabetically. Alphabetical beats price for the long tail: it is
- * predictable, and a reader scanning for one extension can find it.
+ * Featured extensions first (in the order the database ranks them), then the
+ * ones people recognise, then everything else alphabetically — predictable, so
+ * a reader scanning for one extension can find it.
  */
-export function sortForDisplay(rows: PublicPriceRow[]): PublicPriceRow[] {
+export function sortForDisplay(
+  rows: PublicPriceRow[],
+  leading: readonly string[] = [],
+): PublicPriceRow[] {
   const tier = (tld: string) => {
-    const ng = (NIGERIAN_TLDS as readonly string[]).indexOf(tld)
-    if (ng !== -1) return { band: 0, index: ng }
+    const lead = leading.indexOf(tld)
+    if (lead !== -1) return { band: 0, index: lead }
     const popular = (POPULAR_TLDS as readonly string[]).indexOf(tld)
     if (popular !== -1) return { band: 1, index: popular }
     return { band: 2, index: 0 }

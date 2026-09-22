@@ -5,7 +5,7 @@ import { Container } from '@/components/layout/site-shell'
 import { FeaturedPricing } from '@/features/pricing/components/featured-pricing'
 import { PricingTable } from '@/features/pricing/components/pricing-table'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
-import { NIGERIAN_TLDS, sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
+import { sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 
 export const metadata: Metadata = {
@@ -37,10 +37,11 @@ export default async function PricingPage() {
   const effectiveRate = priced.effectiveRate
 
   // Cost and margin never leave the server — see toPublicRow.
-  const rows = sortForDisplay(priced.tlds.map(toPublicRow))
-  const featured = (NIGERIAN_TLDS as readonly string[])
-    .map((tld) => rows.find((row) => row.tld === tld))
-    .filter((row): row is (typeof rows)[number] => Boolean(row))
+  const featured = priced.featured.slice(0, 4).map(toPublicRow)
+  const rows = sortForDisplay(
+    priced.tlds.map(toPublicRow),
+    priced.featured.map((t) => t.tld),
+  )
 
   return (
     <>
@@ -63,19 +64,19 @@ export default async function PricingPage() {
           </Container>
         </div>
 
-        {/* ── Nigerian range ─────────────────────────────────────────── */}
+        {/* ── Featured ───────────────────────────────────────────────── */}
         <Container className="py-14 sm:py-20">
           <div className="max-w-2xl">
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              The Nigerian extensions
+              The popular extensions
             </h2>
             <p className="mt-4 text-pretty text-muted-foreground">
-              One price every year. These cost the same to register and to renew, and we price them
-              the same way — no first-year discount that turns into a bill later.
+              The names most people start with. Each card shows what the second year costs, not just
+              the first.
             </p>
           </div>
           <div className="mt-8">
-            <FeaturedPricing rows={featured} />
+            <FeaturedPricing rows={featured} label="Popular extensions" />
           </div>
         </Container>
 
@@ -96,22 +97,22 @@ export default async function PricingPage() {
               <div>
                 <dt className="font-semibold text-foreground">The registry fee</dt>
                 <dd className="mt-2 text-sm/6 text-muted-foreground">
-                  What the registry charges to hold the name — NiRA for .ng, Verisign for .com, and
-                  so on. It is the bulk of what you pay.
+                  What the registry charges to hold the name — Verisign for .com, Public Interest
+                  Registry for .org, and so on. It is the bulk of what you pay.
                 </dd>
               </div>
               <div>
                 <dt className="font-semibold text-foreground">Our margin</dt>
                 <dd className="mt-2 text-sm/6 text-muted-foreground">
-                  How we stay in business and keep support answering. Thinner on registration than
-                  on renewal, and thinnest of all on transfers.
+                  How we stay in business and keep support answering. The same flat amount on every
+                  extension, whether you register, renew or transfer.
                 </dd>
               </div>
               <div>
                 <dt className="font-semibold text-foreground">The ICANN fee</dt>
                 <dd className="mt-2 text-sm/6 text-muted-foreground">
-                  USD 0.20 per year on generic extensions such as .com and .org. Country extensions
-                  including .ng and .com.ng do not carry it. Rows above show which.
+                  USD 0.20 per year on generic extensions such as .com and .org, already included in
+                  the prices shown. Country extensions such as .co do not carry it.
                 </dd>
               </div>
               <div>

@@ -15,7 +15,7 @@ const POINTS = [
   {
     icon: Wallet,
     title: 'Naira, and a published FX policy',
-    body: 'We convert at the market rate plus a stated buffer, updated once a day. Your price does not move while you are deciding, and we tell you exactly how we arrived at it.',
+    body: 'We convert at a live market rate, cross-checked against two independent sources and published on our pricing page. Your price does not move while you are deciding, and we tell you exactly how we arrived at it.',
   },
   {
     icon: BellRing,

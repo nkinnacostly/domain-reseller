@@ -20,6 +20,8 @@ import { createServiceClient } from '@/lib/supabase/service'
  */
 export type PricedCatalogue = {
   tlds: TldPricing[]
+  /** Merchandised extensions in display order, from `tlds.featured_rank`. */
+  featured: (TldPricing & { tagline: string | null })[]
   /** The rate customers are charged at, after any buffer. */
   effectiveRate: number
   rateSource: string
@@ -46,9 +48,12 @@ export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
     supabase
       .from('tlds')
       .select(
-        'name, register_usd, renew_usd, transfer_usd, restore_usd, min_period, max_period, redemption_days, requires_extra_fields, is_country_code',
+        'name, register_usd, renew_usd, transfer_usd, restore_usd, min_period, max_period, redemption_days, requires_extra_fields, is_country_code, featured_rank, featured_tagline',
       )
       .eq('is_sellable', true)
+      // Paused extensions are ours to switch off without a deploy — the .ng
+      // family is paused while we find a competitive source (PRD R17).
+      .eq('is_paused', false)
       .order('name'),
   ])
 
@@ -85,17 +90,29 @@ export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
     requiresExtraFields: Boolean(row.requires_extra_fields),
   }))
 
+  const tlds = priceCatalogue(records, inputs)
+
+  const merch = new Map(
+    tldResult.data
+      .filter((row) => row.featured_rank !== null)
+      .map((row) => [
+        row.name as string,
+        {
+          rank: Number(row.featured_rank),
+          tagline: (row.featured_tagline as string | null) ?? null,
+        },
+      ]),
+  )
+  const featured = tlds
+    .filter((t) => merch.has(t.tld))
+    .map((t) => ({ ...t, tagline: merch.get(t.tld)?.tagline ?? null }))
+    .sort((a, b) => (merch.get(a.tld)?.rank ?? 0) - (merch.get(b.tld)?.rank ?? 0))
+
   return {
-    tlds: priceCatalogue(records, inputs),
+    tlds,
+    featured,
     effectiveRate: Math.round(effectiveFxRate(inputs.fxRate, inputs.fxBufferPct)),
     rateSource: rateResult.data.source as string,
     rateUpdatedAt: new Date(rateResult.data.effective_from as string),
   }
 }
-
-/** The handful of extensions merchandised on the home page. */
-export const FEATURED_TLDS = [
-  { tld: 'ng', blurb: 'Nigeria, short and unmistakable' },
-  { tld: 'com.ng', blurb: 'The trusted Nigerian business address' },
-  { tld: 'com', blurb: 'The one everybody types first' },
-] as const

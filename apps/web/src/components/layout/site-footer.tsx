@@ -28,9 +28,9 @@ const COLUMNS = [
   {
     heading: 'Extensions',
     links: [
-      { href: '/domains/ng', label: '.ng' },
-      { href: '/domains/com.ng', label: '.com.ng' },
       { href: '/domains/com', label: '.com' },
+      { href: '/domains/net', label: '.net' },
+      { href: '/domains/org', label: '.org' },
       { href: '/domains/africa', label: '.africa' },
     ],
   },
