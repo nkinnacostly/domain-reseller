@@ -5,6 +5,7 @@ import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
 import { SignOutButton } from '@/features/auth/components/sign-out-button'
 import { getAccount } from '@/features/auth/queries/account'
+import { CartLink } from '@/features/cart/components/cart-link'
 
 const NAV = [
   { href: '/app/domains', label: 'Domains' },
@@ -45,7 +46,8 @@ export async function AppHeader() {
           </Link>
         </nav>
 
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <CartLink />
           {account ? (
             <span className="hidden max-w-[16rem] truncate text-sm text-muted-foreground md:inline">
               {account.email}

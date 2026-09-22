@@ -26,6 +26,10 @@ export type PricedCatalogue = {
   effectiveRate: number
   rateSource: string
   rateUpdatedAt: Date
+  /** The active rate row — what a cart quote records it was priced at (FR-C4). */
+  rateId: string
+  /** VAT on our supply, from pricing settings (N5b). Added at checkout, never in list prices. */
+  vatPct: number
 }
 
 export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
@@ -41,10 +45,10 @@ export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
   const [rateResult, settingsResult, tldResult] = await Promise.all([
     supabase
       .from('fx_rates')
-      .select('costing_rate, buffer_pct, source, effective_from')
+      .select('id, costing_rate, buffer_pct, source, effective_from')
       .eq('status', 'active')
       .maybeSingle(),
-    supabase.from('pricing_settings').select('margin_ngn, icann_fee_usd').maybeSingle(),
+    supabase.from('pricing_settings').select('margin_ngn, icann_fee_usd, vat_pct').maybeSingle(),
     supabase
       .from('tlds')
       .select(
@@ -114,5 +118,7 @@ export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
     effectiveRate: Math.round(effectiveFxRate(inputs.fxRate, inputs.fxBufferPct)),
     rateSource: rateResult.data.source as string,
     rateUpdatedAt: new Date(rateResult.data.effective_from as string),
+    rateId: rateResult.data.id as string,
+    vatPct: Number(settingsResult.data.vat_pct),
   }
 }

@@ -1,3 +1,4 @@
+import { AddToCartButton } from '@/features/cart/components/add-to-cart-button'
 import type { SearchRow } from '../lib/rows'
 import { ResultStatus } from './result-status'
 
@@ -31,19 +32,24 @@ export function ResultList({ rows, label }: { rows: SearchRow[]; label: string }
           </div>
 
           {row.status === 'available' && row.price ? (
-            <p className="flex flex-wrap items-baseline gap-x-2 text-sm sm:justify-end sm:text-right">
-              <span className="text-base font-semibold text-foreground tabular-nums">
-                {row.price.register}
-              </span>
-              <span className="text-muted-foreground">
-                then{' '}
-                <span
-                  className={row.price.renewalIsHigher ? 'font-medium text-foreground' : undefined}
-                >
-                  {row.price.renew}/yr
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+              <p className="flex flex-wrap items-baseline gap-x-2 text-sm sm:text-right">
+                <span className="text-base font-semibold text-foreground tabular-nums">
+                  {row.price.register}
                 </span>
-              </span>
-            </p>
+                <span className="text-muted-foreground">
+                  then{' '}
+                  <span
+                    className={
+                      row.price.renewalIsHigher ? 'font-medium text-foreground' : undefined
+                    }
+                  >
+                    {row.price.renew}/yr
+                  </span>
+                </span>
+              </p>
+              <AddToCartButton domain={row.domain} />
+            </div>
           ) : null}
         </li>
       ))}

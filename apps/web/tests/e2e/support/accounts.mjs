@@ -94,3 +94,33 @@ export async function freshTotpCode(secret) {
   if (left < 5) await new Promise((resolve) => setTimeout(resolve, (left + 1) * 1000))
   return totpCode(secret)
 }
+
+/** Test domains all start with this, so their carts can be found and removed. */
+export const TEST_DOMAIN_PREFIX = 'e2ecart'
+
+/**
+ * Removes carts the tests created: any cart holding a test domain, and empty
+ * anonymous carts from the last few hours (a test that removes its only line
+ * leaves one). User carts go with their test users (on delete cascade).
+ */
+export async function deleteTestCarts() {
+  const client = admin()
+  const { data: items, error } = await client
+    .from('cart_items')
+    .select('cart_id')
+    .like('domain', `${TEST_DOMAIN_PREFIX}%`)
+  if (error) throw error
+  const ids = [...new Set((items ?? []).map((item) => item.cart_id))]
+  if (ids.length) await client.from('carts').delete().in('id', ids)
+
+  const since = new Date(Date.now() - 3 * 3_600_000).toISOString()
+  const { data: recent } = await client
+    .from('carts')
+    .select('id, cart_items(count)')
+    .is('user_id', null)
+    .gte('created_at', since)
+  const empty = (recent ?? [])
+    .filter((cart) => (cart.cart_items?.[0]?.count ?? 0) === 0)
+    .map((cart) => cart.id)
+  if (empty.length) await client.from('carts').delete().in('id', empty)
+}

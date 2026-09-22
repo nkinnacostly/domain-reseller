@@ -8,6 +8,7 @@ import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
 import { Button } from '@/components/ui/button'
 import { useSignedIn } from '@/features/auth/lib/use-signed-in'
+import { CartLink } from '@/features/cart/components/cart-link'
 import { cn } from '@/lib/utils'
 
 const NAV = [
@@ -45,6 +46,7 @@ export function SiteHeader({ className }: { className?: string }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          <CartLink />
           <Button
             asChild
             variant="secondary"

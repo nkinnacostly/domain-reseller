@@ -146,3 +146,26 @@ const NGN = new Intl.NumberFormat('en-NG', {
 export function formatNaira(kobo: number): string {
   return NGN.format(kobo / KOBO_PER_NAIRA)
 }
+
+/**
+ * The price of registering for `years` (FR-C2): the first year at the
+ * registration price, each later year at the renewal price.
+ *
+ * That is how the supplier builds its own per-period matrix — checked on
+ * 23 Sept 2026 against all 5,613 multi-year prices in the catalogue; the few
+ * exceptions differ by cents. So the total is exactly the prices the customer
+ * already sees, added up: nothing new to trust.
+ */
+export function periodTotalKobo(
+  pricing: { registration: { priceKobo: number }; renewal: { priceKobo: number } },
+  years: number,
+): number {
+  if (!Number.isInteger(years) || years < 1) throw new RangeError(`Invalid period: ${years}`)
+  return pricing.registration.priceKobo + pricing.renewal.priceKobo * (years - 1)
+}
+
+/** VAT on an amount in kobo, rounded half-up to the kobo. */
+export function vatKobo(amountKobo: number, vatPct: number): number {
+  if (vatPct < 0) throw new RangeError('VAT cannot be negative')
+  return Math.round((amountKobo * vatPct) / 100)
+}

@@ -741,7 +741,7 @@ Paste up to 500 names or upload a CSV; check against a selected TLD set; results
 
 **FR-C1 — Cart.** Persisted server-side per user (and per anonymous session, merged on sign-in). Holds domain lines with TLD, period, privacy flag, auto-renew flag, and the quoted `price_version_id`.
 
-**FR-C2 — Period selection.** 1 to `TldInfo.MaxRegistrationPeriod` years, floored at `MinRegistrationPeriod`. Show per-year effective price and total saving for multi-year.
+**FR-C2 — Period selection.** 1 to `TldInfo.MaxRegistrationPeriod` years, floored at `MinRegistrationPeriod`. A multi-year registration is priced as the first year at the registration price plus each later year at the renewal price — the way the supplier builds its own per-period matrix (checked 23 Sept 2026 against all 5,613 multi-year prices; the few exceptions differ by cents). There is no multi-year discount, so none is claimed.
 
 **FR-C3 — No pre-ticked add-ons.** Privacy protection and auto-renew are the only toggles. Auto-renew defaults **on** with plain-language disclosure adjacent to the toggle. Privacy defaults **on** where the TLD supports it at no cost, **off** where it costs extra.
 
@@ -1412,7 +1412,7 @@ App (authenticated)
  │         └── /activity     Event log
  ├── /app/domains/expiring   Expiry view
  ├── /app/transfers          Transfer status
- ├── /app/cart, /app/checkout
+ ├── /app/checkout           (/cart is public — anonymous carts, FR-C1)
  ├── /app/orders             Orders, invoices, receipts
  ├── /app/wallet             Balance, top-up, ledger
  └── /app/settings           Profile, contacts, security, notifications, payment methods

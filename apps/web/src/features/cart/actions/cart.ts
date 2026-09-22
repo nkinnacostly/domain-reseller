@@ -1,0 +1,216 @@
+'use server'
+
+import { cookies } from 'next/headers'
+import { z } from 'zod'
+import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { parseSearchQuery } from '@/features/search/lib/query'
+import { checkAvailability } from '@/features/search/queries/availability'
+import { env } from '@/lib/env'
+import { logger } from '@/lib/logger'
+import { actionClient } from '@/lib/safe-action'
+import { clampPeriod, MAX_CART_ITEMS, quoteFor } from '../lib/lines'
+import {
+  CART_COOKIE,
+  CART_COOKIE_MAX_AGE,
+  CART_COUNT_COOKIE,
+  hashCartToken,
+  newCartToken,
+} from '../lib/token'
+import {
+  countLines,
+  currentOwner,
+  deleteLine,
+  findCartId,
+  findOrCreateCartId,
+  insertLine,
+  loadLines,
+  mergeAnonymousCart,
+  type Owner,
+  updateLine,
+} from '../queries/store'
+
+/**
+ * Cart mutations (FR-C1 – FR-C4). Public: anyone may fill a cart; signing in
+ * is asked for at checkout. Every price is set here, from the catalogue —
+ * nothing the browser sends carries a price.
+ */
+
+type Failure = { error: string }
+const FAILED = 'Something went wrong updating your cart. Please try again.'
+
+async function setCountCookie(count: number) {
+  ;(await cookies()).set(CART_COUNT_COOKIE, String(count), {
+    path: '/',
+    sameSite: 'lax',
+    secure: env.NODE_ENV === 'production',
+    maxAge: CART_COOKIE_MAX_AGE,
+  })
+}
+
+/** The shopper's cart owner, minting an anonymous cart cookie if there is none. */
+async function ownerForWrite(): Promise<Owner> {
+  const { owner, anonToken } = await currentOwner()
+  if (owner?.kind === 'user') {
+    if (anonToken) {
+      await mergeAnonymousCart(anonToken, owner.userId)
+      ;(await cookies()).delete(CART_COOKIE)
+    }
+    return owner
+  }
+  if (owner) return owner
+
+  const token = newCartToken()
+  ;(await cookies()).set(CART_COOKIE, token, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: env.NODE_ENV === 'production',
+    maxAge: CART_COOKIE_MAX_AGE,
+  })
+  return { kind: 'anon', tokenHash: hashCartToken(token) }
+}
+
+/** The cart the shopper already has — lines can only be changed in your own. */
+async function existingCartId(): Promise<string | null> {
+  const { owner } = await currentOwner()
+  return owner ? findCartId(owner) : null
+}
+
+export const addToCart = actionClient
+  .inputSchema(z.object({ domain: z.string().min(3).max(253) }))
+  .action(async ({ parsedInput }): Promise<Failure | { count: number }> => {
+    const { stem, tld, isValid } = parseSearchQuery(parsedInput.domain)
+    if (!isValid || !tld) return { error: 'That is not a domain we can add.' }
+    const domain = `${stem}.${tld}`
+
+    const priced = await getPricedCatalogue()
+    if (!priced) return { error: 'Prices are unavailable right now, so nothing can be added.' }
+    const pricing = priced.tlds.find((candidate) => candidate.tld === tld)
+    if (!pricing) return { error: `We don't sell .${tld}.` }
+
+    // The search may be minutes old. Never put a name in a cart that cannot
+    // be bought (checkout checks again, FR-C7).
+    const availability = await checkAvailability([stem], [tld], 'high')
+    if (!availability.ok)
+      return { error: "We couldn't confirm it's still free. Try again in a moment." }
+    if (availability.results[0]?.status !== 'available') {
+      return { error: `${domain} was taken while you were looking.` }
+    }
+
+    try {
+      const cartId = await findOrCreateCartId(await ownerForWrite())
+      const count = await countLines(cartId)
+      if (count >= MAX_CART_ITEMS) {
+        return { error: `A cart holds up to ${MAX_CART_ITEMS} domains. Check out these first.` }
+      }
+
+      const years = clampPeriod(pricing.minPeriod, pricing)
+      const quote = quoteFor(pricing, years)
+      await insertLine(cartId, {
+        domain,
+        tld,
+        periodYears: years,
+        quotedTotalKobo: quote.totalKobo,
+        quotedRenewalKobo: quote.renewalKobo,
+        quotedFxRateId: priced.rateId,
+      })
+
+      const after = await countLines(cartId)
+      await setCountCookie(after)
+      return { count: after }
+    } catch (err) {
+      logger.error({ err }, 'add to cart failed')
+      return { error: FAILED }
+    }
+  })
+
+export const updateCartLine = actionClient
+  .inputSchema(
+    z.object({
+      lineId: z.uuid(),
+      periodYears: z.number().int().min(1).max(10).optional(),
+      privacy: z.boolean().optional(),
+      autoRenew: z.boolean().optional(),
+    }),
+  )
+  .action(async ({ parsedInput }): Promise<Failure | { ok: true }> => {
+    try {
+      const cartId = await existingCartId()
+      if (!cartId) return { error: FAILED }
+      const line = (await loadLines(cartId)).find(
+        (candidate) => candidate.id === parsedInput.lineId,
+      )
+      if (!line) return { error: 'That domain is no longer in your cart.' }
+
+      const patch: Parameters<typeof updateLine>[2] = {}
+      if (parsedInput.privacy !== undefined) patch.privacy = parsedInput.privacy
+      if (parsedInput.autoRenew !== undefined) patch.auto_renew = parsedInput.autoRenew
+
+      if (parsedInput.periodYears !== undefined && parsedInput.periodYears !== line.periodYears) {
+        const priced = await getPricedCatalogue()
+        const pricing = priced?.tlds.find((candidate) => candidate.tld === line.tld)
+        if (!priced || !pricing) return { error: `We no longer sell .${line.tld}.` }
+        // A new period is a new quote, at today's price, with a fresh lock.
+        const years = clampPeriod(parsedInput.periodYears, pricing)
+        const quote = quoteFor(pricing, years)
+        Object.assign(patch, {
+          period_years: years,
+          quoted_total_kobo: quote.totalKobo,
+          quoted_renewal_kobo: quote.renewalKobo,
+          quoted_fx_rate_id: priced.rateId,
+          quoted_at: new Date().toISOString(),
+        })
+      }
+
+      await updateLine(cartId, line.id, patch)
+      return { ok: true }
+    } catch (err) {
+      logger.error({ err }, 'cart update failed')
+      return { error: FAILED }
+    }
+  })
+
+export const removeCartLine = actionClient
+  .inputSchema(z.object({ lineId: z.uuid() }))
+  .action(async ({ parsedInput }): Promise<Failure | { count: number }> => {
+    try {
+      const cartId = await existingCartId()
+      if (!cartId) return { count: 0 }
+      await deleteLine(cartId, parsedInput.lineId)
+      const count = await countLines(cartId)
+      await setCountCookie(count)
+      return { count }
+    } catch (err) {
+      logger.error({ err }, 'cart remove failed')
+      return { error: FAILED }
+    }
+  })
+
+/** FR-C4 — the customer has seen the new prices and accepts them. */
+export const acceptCurrentPrices = actionClient.action(
+  async (): Promise<Failure | { ok: true }> => {
+    try {
+      const cartId = await existingCartId()
+      const priced = await getPricedCatalogue()
+      if (!cartId || !priced) return { error: FAILED }
+
+      const byTld = new Map(priced.tlds.map((tld) => [tld.tld, tld]))
+      const now = new Date().toISOString()
+      for (const line of await loadLines(cartId)) {
+        const pricing = byTld.get(line.tld)
+        if (!pricing) continue
+        const quote = quoteFor(pricing, line.periodYears)
+        await updateLine(cartId, line.id, {
+          quoted_total_kobo: quote.totalKobo,
+          quoted_renewal_kobo: quote.renewalKobo,
+          quoted_fx_rate_id: priced.rateId,
+          quoted_at: now,
+        })
+      }
+      return { ok: true }
+    } catch (err) {
+      logger.error({ err }, 'accept prices failed')
+      return { error: FAILED }
+    }
+  },
+)

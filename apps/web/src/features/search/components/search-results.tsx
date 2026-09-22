@@ -93,8 +93,8 @@ export async function SearchResults({
       {heading}
 
       <p className="mt-6 max-w-2xl rounded-xl bg-muted/60 px-4 py-3 text-pretty text-sm/6 text-muted-foreground">
-        <span className="font-medium text-foreground">Checkout isn't open yet.</span> Availability
-        and prices below are live.
+        <span className="font-medium text-foreground">Checkout isn't open yet.</span> You can
+        already fill your cart — availability and prices here are live.
       </p>
 
       {/* Three requests, three boundaries: whichever answers first shows first. */}

@@ -36,6 +36,11 @@ back here. Each item says why it waited and what unblocks it.
 - **Bot protection on sign-up and search** (SEC-9) — Cloudflare Turnstile keys.
 - **Contact profiles** (FR-A4) — the registrant/admin/tech/billing contacts; built with checkout, where registration needs them.
 
+### Cart (PRD E3)
+- **Contact privacy on country extensions** — offered on generic extensions only, where ICANN rules allow it. Confirm which ccTLDs the supplier can cover.
+- **Clear out stale anonymous carts** — nothing removes an abandoned anonymous cart yet. Add a scheduled clean-up (e.g. older than the 60-day cookie).
+- **Velocity limits** (SEC-11) — carts are capped at 50 domains; per-account daily limits come with checkout.
+
 ### Search (PRD E1)
 - **Bulk search** (FR-S5), **IDN / Punycode** (FR-S8).
 - **Per-extension length rules** (FR-S9) — the catalogue sync does not store min/max characters yet; the supplier's refusal is shown as "Not available" meanwhile.

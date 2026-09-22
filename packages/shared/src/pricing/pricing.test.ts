@@ -4,11 +4,13 @@ import {
   formatNaira,
   KOBO_PER_NAIRA,
   type PricingInputs,
+  periodTotalKobo,
   priceCatalogue,
   priceFor,
   roundUpToHundred,
   type TldCost,
   type TldRecord,
+  vatKobo,
 } from './index'
 
 const INPUTS: PricingInputs = {
@@ -200,5 +202,34 @@ describe('formatNaira', () => {
 
   it('never shows kobo', () => {
     expect(formatNaira(1_800_049)).not.toMatch(/\./)
+  })
+})
+
+describe('periodTotalKobo (FR-C2)', () => {
+  const pricing = { registration: { priceKobo: 1_840_000 }, renewal: { priceKobo: 1_870_000 } }
+
+  it('charges the registration price for the first year only', () => {
+    expect(periodTotalKobo(pricing, 1)).toBe(1_840_000)
+  })
+
+  it('charges the renewal price for every later year', () => {
+    expect(periodTotalKobo(pricing, 3)).toBe(1_840_000 + 2 * 1_870_000)
+  })
+
+  it('refuses a period that is not a whole number of years', () => {
+    expect(() => periodTotalKobo(pricing, 0)).toThrow(RangeError)
+    expect(() => periodTotalKobo(pricing, 1.5)).toThrow(RangeError)
+  })
+})
+
+describe('vatKobo', () => {
+  it('takes 7.5% and rounds to the nearest kobo', () => {
+    expect(vatKobo(1_840_000, 7.5)).toBe(138_000)
+    expect(vatKobo(3, 7.5)).toBe(0)
+    expect(vatKobo(7, 7.5)).toBe(1)
+  })
+
+  it('refuses a negative rate', () => {
+    expect(() => vatKobo(100, -1)).toThrow(RangeError)
   })
 })

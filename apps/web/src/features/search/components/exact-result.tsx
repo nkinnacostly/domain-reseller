@@ -1,5 +1,6 @@
 import { ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
+import { AddToCartButton } from '@/features/cart/components/add-to-cart-button'
 import { transferCheckHref } from '@/features/transfers/lib/href'
 import type { SearchRow } from '../lib/rows'
 import { ResultStatus } from './result-status'
@@ -61,6 +62,7 @@ export function ExactResult({ row }: { row: SearchRow }) {
             {row.price.includesIcannFee ? ' · includes the ICANN fee' : ''} · register for up to{' '}
             {row.price.maxPeriod} years
           </p>
+          <AddToCartButton domain={row.domain} size="large" className="mt-6" />
         </div>
       ) : null}
 
