@@ -3,7 +3,7 @@ project_id = "domain-reseller"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "storage", "graphql_public"]
+schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
@@ -14,8 +14,8 @@ major_version = 17
 
 [db.pooler]
 enabled = true
-default_pool_size = 20
-max_client_conn = 100
+default_pool_size = 15
+max_client_conn = 200
 
 [studio]
 enabled = true
@@ -28,7 +28,10 @@ port = 54324
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/callback"]
+additional_redirect_urls = [
+  "http://localhost:3000/**",
+  "http://localhost:3100/**",
+]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
@@ -39,7 +42,29 @@ enable_anonymous_sign_ins = false
 enable_signup = true
 enable_confirmations = true
 double_confirm_changes = true
-secure_password_change = true
+# Off: we verify the current password ourselves before a change, which
+# avoids an extra email round-trip (see features/auth/actions).
+secure_password_change = false
+
+# Custom templates link to /auth/confirm with a token hash, which works when the
+# email is opened on another device. The hosted free tier refuses template
+# changes on Supabase's built-in email sender — enable these once custom SMTP
+# is configured (see CLAUDE.md §15).
+# [auth.email.template.confirmation]
+# subject = "Confirm your email"
+# content_path = "./supabase/templates/confirmation.html"
+
+# [auth.email.template.recovery]
+# subject = "Reset your password"
+# content_path = "./supabase/templates/recovery.html"
+
+# [auth.email.template.magic_link]
+# subject = "Your sign-in link"
+# content_path = "./supabase/templates/magic_link.html"
+
+# [auth.email.template.email_change]
+# subject = "Confirm your new email"
+# content_path = "./supabase/templates/email_change.html"
 
 [auth.mfa]
 max_enrolled_factors = 10
@@ -50,7 +75,7 @@ verify_enabled = true
 
 [storage]
 enabled = true
-file_size_limit = "10MiB"
+file_size_limit = "50MiB"
 
 [edge_runtime]
 enabled = true

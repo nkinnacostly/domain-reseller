@@ -253,6 +253,7 @@ export type Database = {
           full_name: string | null
           id: string
           kyc_status: string
+          password_reset_at: string | null
           phone: string | null
           risk_score: number
           tax_id: string | null
@@ -266,6 +267,7 @@ export type Database = {
           full_name?: string | null
           id: string
           kyc_status?: string
+          password_reset_at?: string | null
           phone?: string | null
           risk_score?: number
           tax_id?: string | null
@@ -279,6 +281,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           kyc_status?: string
+          password_reset_at?: string | null
           phone?: string | null
           risk_score?: number
           tax_id?: string | null

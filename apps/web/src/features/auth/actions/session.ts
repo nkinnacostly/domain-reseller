@@ -1,0 +1,97 @@
+'use server'
+
+import { redirect } from 'next/navigation'
+import { env } from '@/lib/env'
+import { actionClient, authAction } from '@/lib/safe-action'
+import { createClient } from '@/lib/supabase/server'
+import { callbackUrl } from '../lib/links'
+import { authMessage } from '../lib/messages'
+import { safeNext } from '../lib/redirect'
+import { emailOnlySchema, signInSchema, signUpSchema } from '../schemas'
+
+/** Expected failures come back as `{ error }` for the form to show; nothing throws. */
+type Failure = { error: string }
+
+export const signIn = actionClient
+  .inputSchema(signInSchema)
+  .action(async ({ parsedInput }): Promise<Failure | undefined> => {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.signInWithPassword({
+      email: parsedInput.email,
+      password: parsedInput.password,
+    })
+    if (error) return { error: authMessage(error.code) }
+
+    const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
+    // An account with two-factor on is not signed in until the second step.
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+      redirect(`/verify?next=${encodeURIComponent(next)}`)
+    }
+    redirect(next)
+  })
+
+export const signUp = actionClient
+  .inputSchema(signUpSchema)
+  .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const supabase = await createClient()
+    const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
+    const { error } = await supabase.auth.signUp({
+      email: parsedInput.email,
+      password: parsedInput.password,
+      options: {
+        emailRedirectTo: callbackUrl('signup', next),
+        data: { full_name: parsedInput.fullName },
+      },
+    })
+    // An address that already has an account gets the same answer as a new
+    // one, so the form cannot be used to find out who is a customer.
+    if (error) return { error: authMessage(error.code) }
+    return { sentTo: parsedInput.email }
+  })
+
+export const resendConfirmation = actionClient
+  .inputSchema(emailOnlySchema)
+  .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const supabase = await createClient()
+    const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: parsedInput.email,
+      options: { emailRedirectTo: callbackUrl('signup', next) },
+    })
+    if (error) return { error: authMessage(error.code) }
+    return { sentTo: parsedInput.email }
+  })
+
+export const sendMagicLink = actionClient
+  .inputSchema(emailOnlySchema)
+  .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const supabase = await createClient()
+    const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
+    const { error } = await supabase.auth.signInWithOtp({
+      email: parsedInput.email,
+      options: { shouldCreateUser: false, emailRedirectTo: callbackUrl('magiclink', next) },
+    })
+    // Only a rate limit is worth reporting. "No such account" must look like
+    // success, or the form becomes a way to test addresses.
+    if (error?.code?.startsWith('over_')) return { error: authMessage(error.code) }
+    return { sentTo: parsedInput.email }
+  })
+
+export const requestPasswordReset = actionClient
+  .inputSchema(emailOnlySchema)
+  .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.resetPasswordForEmail(parsedInput.email, {
+      redirectTo: callbackUrl('recovery', '/reset-password'),
+    })
+    if (error?.code?.startsWith('over_')) return { error: authMessage(error.code) }
+    return { sentTo: parsedInput.email }
+  })
+
+export const signOut = authAction.action(async ({ ctx }) => {
+  // This device only — signing out everywhere is a separate, deliberate choice.
+  await ctx.supabase.auth.signOut({ scope: 'local' })
+  redirect('/')
+})

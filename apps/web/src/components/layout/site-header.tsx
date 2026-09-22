@@ -7,6 +7,7 @@ import { Brand } from '@/components/layout/brand'
 import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
 import { Button } from '@/components/ui/button'
+import { useSignedIn } from '@/features/auth/lib/use-signed-in'
 import { cn } from '@/lib/utils'
 
 const NAV = [
@@ -17,6 +18,9 @@ const NAV = [
 
 export function SiteHeader({ className }: { className?: string }) {
   const [open, setOpen] = useState(false)
+  const account = useSignedIn()
+    ? { href: '/app/domains', label: 'Your domains' }
+    : { href: '/sign-in', label: 'Login' }
 
   return (
     <header className={cn('relative z-30', className)}>
@@ -46,7 +50,7 @@ export function SiteHeader({ className }: { className?: string }) {
             variant="secondary"
             className="hidden rounded-full bg-background px-7 font-medium shadow-sm hover:bg-background/90 sm:inline-flex"
           >
-            <Link href="/sign-in">Login</Link>
+            <Link href={account.href}>{account.label}</Link>
           </Button>
 
           <button
@@ -81,7 +85,7 @@ export function SiteHeader({ className }: { className?: string }) {
               </NavLink>
             ))}
             <Button asChild className="mt-2 rounded-full">
-              <Link href="/sign-in">Login</Link>
+              <Link href={account.href}>{account.label}</Link>
             </Button>
           </nav>
         </Container>

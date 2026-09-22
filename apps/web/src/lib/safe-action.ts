@@ -1,6 +1,7 @@
 import { AppError } from '@dr/shared/errors'
 import { headers } from 'next/headers'
 import { createSafeActionClient } from 'next-safe-action'
+import { describeHold, hasFreshSecondFactor, resetHoldUntil } from '@/features/auth/lib/security'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
 
@@ -35,15 +36,30 @@ export const authAction = actionClient.use(async ({ next }) => {
   return next({ ctx: { user, supabase } })
 })
 
+/**
+ * Sensitive operations (PRD FR-A3, FR-A6, SEC-2, SEC-3): registrant change,
+ * transfer-lock off, auth-code reveal, nameserver change, wallet withdrawal.
+ * Needs a second factor verified in the last 15 minutes, and no post-reset hold.
+ */
 export const elevatedAction = authAction.use(async ({ next, ctx }) => {
-  const { data } = await ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  const [{ data: aal }, { data: profile }] = await Promise.all([
+    ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+    ctx.supabase.from('profiles').select('password_reset_at').eq('id', ctx.user.id).single(),
+  ])
 
-  if (data?.currentLevel !== 'aal2') {
+  const now = new Date()
+  if (
+    aal?.currentLevel !== 'aal2' ||
+    !hasFreshSecondFactor(aal.currentAuthenticationMethods ?? [], now)
+  ) {
     throw new AppError(
       'MFA_REQUIRED',
-      'Confirm your identity with two-factor authentication to continue.',
+      "Confirm it's you with the code from your authenticator app to continue.",
     )
   }
+
+  const hold = resetHoldUntil(profile?.password_reset_at ?? null, now)
+  if (hold) throw new AppError('FORBIDDEN', describeHold(hold))
 
   return next({ ctx })
 })
