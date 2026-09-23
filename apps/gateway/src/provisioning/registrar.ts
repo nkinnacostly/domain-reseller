@@ -107,7 +107,15 @@ export function judgeExchange(exchange: Exchange | undefined): Verdict {
   if (status === 401 || status === 301 || status === 302) {
     return { outcome: 'blocked', code: 'SUPPLIER_AUTH', message }
   }
-  if (status === 403) return { outcome: 'blocked', code: 'SUPPLIER_IP_BLOCKED', message }
+  // The supplier answers ordinary refusals with 403 too — seen in the sandbox
+  // on 23 Sept 2026 for a registry EPP error — so only an address or
+  // allowlist complaint, or a bare 403, is an operations problem.
+  if (
+    status === 403 &&
+    (!supplierMessage(exchange.body) || /\bip\b|allow ?list|white ?list/i.test(message))
+  ) {
+    return { outcome: 'blocked', code: 'SUPPLIER_IP_BLOCKED', message }
+  }
   if (status === 404) return { outcome: 'not_found', message }
   // A timeout, throttle or server error: the write may or may not have landed.
   if (status === 408 || status === 425 || status === 429 || status >= 500) {
@@ -117,17 +125,22 @@ export function judgeExchange(exchange: Exchange | undefined): Verdict {
 }
 
 const ZONE = /(?:Z|[+-]\d{2}:?\d{2})$/i
+/**
+ * The supplier's clock. Its dates carry no zone: a sandbox registration made
+ * at 08:44 UTC on 23 Sept 2026 came back as starting "11:44:10" — Istanbul
+ * time, UTC+3 all year since 2016.
+ */
+const SUPPLIER_OFFSET = '+03:00'
 
 /**
  * A supplier date as an ISO instant. The raw body is preferred: the SDK
- * re-formats dates in the gateway's local time and drops the zone. A zoneless
- * value is read as UTC so the answer never depends on where the gateway runs.
+ * re-formats dates in the gateway's local time and drops the zone.
  */
 export function supplierDate(raw: unknown, fallback?: string): string | null {
   for (const value of [raw, fallback]) {
     if (typeof value !== 'string' || value.trim() === '') continue
     const text = value.trim()
-    const parsed = new Date(ZONE.test(text) ? text : `${text}Z`)
+    const parsed = new Date(ZONE.test(text) ? text : `${text}${SUPPLIER_OFFSET}`)
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString()
   }
   return null

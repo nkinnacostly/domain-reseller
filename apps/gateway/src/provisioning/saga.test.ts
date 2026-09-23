@@ -54,16 +54,36 @@ const task = (over: Partial<RegistrationTask> = {}): RegistrationTask => ({
 const timedOut = { kind: 'unknown', code: 'TIMEOUT', message: 'No answer' } as const
 
 describe('runRegistration', () => {
-  it('always looks before registering (I1)', async () => {
+  it('always looks before registering (I1), and reads the record back after', async () => {
     const { registrar, log } = scripted({
-      lookups: [{ kind: 'not_found' }],
+      lookups: [{ kind: 'not_found' }, { kind: 'found', domain: DOMAIN }],
       register: { kind: 'ok', data: DOMAIN },
     })
     await expect(runRegistration(registrar, task())).resolves.toMatchObject({
       kind: 'registered',
       recovered: false,
     })
-    expect(log).toEqual(['lookup', 'register'])
+    expect(log).toEqual(['lookup', 'register', 'lookup'])
+  })
+
+  it('records the registry’s full record, not the sparse register answer', async () => {
+    const sparse = { ...DOMAIN, registeredAt: null, nameservers: [], transferLock: false }
+    const { registrar } = scripted({
+      lookups: [{ kind: 'not_found' }, { kind: 'found', domain: DOMAIN }],
+      register: { kind: 'ok', data: sparse },
+    })
+    await expect(runRegistration(registrar, task())).resolves.toMatchObject({ domain: DOMAIN })
+  })
+
+  it('keeps the register answer when the read-back fails — it is still registered', async () => {
+    const { registrar } = scripted({
+      lookups: [{ kind: 'not_found' }, timedOut],
+      register: { kind: 'ok', data: DOMAIN },
+    })
+    await expect(runRegistration(registrar, task())).resolves.toMatchObject({
+      kind: 'registered',
+      domain: DOMAIN,
+    })
   })
 
   it('treats a name already registered to us as done, and registers nothing', async () => {
@@ -138,7 +158,7 @@ describe('runRegistration', () => {
   describe('nameservers from checkout (FR-R5)', () => {
     it('applies them after registering', async () => {
       const { registrar, log } = scripted({
-        lookups: [{ kind: 'not_found' }],
+        lookups: [{ kind: 'not_found' }, { kind: 'found', domain: DOMAIN }],
         register: { kind: 'ok', data: DOMAIN },
         setNameservers: { kind: 'ok', data: VERCEL },
       })
@@ -148,12 +168,12 @@ describe('runRegistration', () => {
         domain: { nameservers: VERCEL },
         nameservers: { result: 'applied' },
       })
-      expect(log).toEqual(['lookup', 'register', 'setNameservers'])
+      expect(log).toEqual(['lookup', 'register', 'lookup', 'setNameservers'])
     })
 
     it('never fails the registration when they are refused', async () => {
       const { registrar } = scripted({
-        lookups: [{ kind: 'not_found' }],
+        lookups: [{ kind: 'not_found' }, { kind: 'found', domain: DOMAIN }],
         register: { kind: 'ok', data: DOMAIN },
         setNameservers: { kind: 'rejected', code: 'NAMESERVER_INVALID', message: 'bad host' },
       })

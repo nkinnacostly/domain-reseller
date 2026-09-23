@@ -243,7 +243,8 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
         'job_id',
         jobs.map((job) => job.id),
       )
-    expect(count).toBe(2)
+    // A pre-flight read for each line, plus the read-back after the one that registered.
+    expect(count).toBe(3)
   })
 
   it('logs what happened on each domain', async () => {

@@ -277,6 +277,61 @@ describe('audit (I7)', () => {
   })
 })
 
+/**
+ * Contract: the sandbox's GetDetails record for a domain registered on
+ * 23 Sept 2026 at 08:44 UTC, contacts removed.
+ */
+const SANDBOX_RECORD = {
+  domainName: 'e2ecartsandboxmuduw599.com',
+  startDate: '2026-09-23T11:44:10.0584644',
+  expirationDate: '2027-09-23T11:44:10.0584644',
+  transferDate: '0001-01-01T00:00:00',
+  renewalMode: 'AutoRenew',
+  lockStatus: true,
+  privacyProtectionStatus: true,
+  remainingDay: 365,
+  statusCode: 'clientTransferProhibited',
+  status: 'Active',
+  nameservers: ['ns1.domainnameapi.com', 'ns2.domainnameapi.com'],
+  hosts: [],
+  contacts: [],
+  additionalAttributes: {},
+}
+
+describe('the sandbox’s real answers', () => {
+  it('reads a registered domain’s record', async () => {
+    const { registrar } = setup(() => json(200, SANDBOX_RECORD))
+    await expect(registrar.lookup(SANDBOX_RECORD.domainName)).resolves.toEqual({
+      kind: 'found',
+      domain: {
+        registeredAt: '2026-09-23T08:44:10.058Z',
+        expiresAt: '2027-09-23T08:44:10.058Z',
+        nameservers: ['ns1.domainnameapi.com', 'ns2.domainnameapi.com'],
+        transferLock: true,
+        privacy: true,
+      },
+    })
+  })
+
+  it('reads a registry refusal sent as 403 as refused nameservers, not a blocked address', async () => {
+    const { registrar } = setup(() =>
+      json(403, {
+        error: {
+          message: 'An error occurred in the EPP integration.',
+          details:
+            "Failed to modify name server. The registry reported the issue as: 'Object association prohibits operation. Reason: 'NS1.VERCEL-DNS.COM' ns not found'",
+        },
+      }),
+    )
+    await expect(
+      registrar.setNameservers(SANDBOX_RECORD.domainName, [
+        'ns1.vercel-dns.com',
+        'ns2.vercel-dns.com',
+      ]),
+    ).resolves.toMatchObject({ kind: 'rejected', code: 'NAMESERVER_INVALID' })
+  })
+})
+
 describe('judgeExchange', () => {
   const exchange = (status: number | null, body: unknown = {}) => ({
     method: 'POST',
@@ -299,11 +354,14 @@ describe('judgeExchange', () => {
     expect(judgeExchange(undefined).outcome).toBe('unknown')
   })
 
-  it('reads a blocked address as an operations problem', () => {
+  it('reads a bare 403, or one about our address, as an operations problem', () => {
     expect(judgeExchange(exchange(403))).toMatchObject({
       outcome: 'blocked',
       code: 'SUPPLIER_IP_BLOCKED',
     })
+    expect(
+      judgeExchange(exchange(403, { error: { message: 'Your IP address is not allowed' } })),
+    ).toMatchObject({ outcome: 'blocked' })
   })
 })
 
@@ -326,12 +384,12 @@ describe('supplierDate', () => {
     expect(supplierDate('2026-09-23T10:00:00+01:00')).toBe('2026-09-23T09:00:00.000Z')
   })
 
-  it('reads a zoneless date as UTC, wherever the gateway runs', () => {
-    expect(supplierDate('2026-09-23T10:00:00')).toBe('2026-09-23T10:00:00.000Z')
+  it('reads a zoneless date on the supplier’s clock, UTC+3, wherever the gateway runs', () => {
+    expect(supplierDate('2026-09-23T11:44:10.0584644')).toBe('2026-09-23T08:44:10.058Z')
   })
 
   it('falls back to the SDK’s value, then to nothing', () => {
-    expect(supplierDate(undefined, '2027-01-01T00:00:00')).toBe('2027-01-01T00:00:00.000Z')
+    expect(supplierDate(undefined, '2027-01-01T03:00:00')).toBe('2027-01-01T00:00:00.000Z')
     expect(supplierDate('', 'not a date')).toBeNull()
   })
 })

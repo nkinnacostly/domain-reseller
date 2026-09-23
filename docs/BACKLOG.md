@@ -23,10 +23,11 @@ back here. Each item says why it waited and what unblocks it.
 | L11 | **Flutterwave live keys and webhook secret hash** | Test keys only during the build. Set the secret hash in the dashboard and in `FLUTTERWAVE_WEBHOOK_HASH`. | Owner, after checkout is proven on test keys |
 | L12 | **Flutterwave: merchant bears the transaction fee** | By default Flutterwave adds its fee on top at payment, so the customer would pay more than the total we show — against FR-C5 and our no-hidden-fees promise. Switch fees to the merchant in the dashboard, or show the fee. | Owner, Flutterwave dashboard |
 | L13 | **Register the webhook URL** (`/api/webhooks/flutterwave`) in the Flutterwave dashboard | Payments are confirmed when the customer returns; the webhook covers a closed tab. It needs a public URL (the deployment, or a tunnel for local testing). | Deployment |
-| L14 | **First sandbox registrations** | The registration job is built (migration 13, `apps/gateway/src/provisioning`) and tested against the real SDK over a fake network, but no registration has yet been sent to the sandbox: the automated permission check stopped the first attempt. Set `DNA_WRITE_ENV=ote`, buy a domain with Flutterwave test keys, and confirm the register and nameserver responses match what `registrar.ts` expects (their shapes are read from the SDK source, not observed). | Owner |
+| L14 | ~~First sandbox registrations~~ | Done 23 Sept 2026: two sandbox registrations end to end (orders ND-001024, ND-001025). They showed the register answer is sparse (now read back), the supplier's dates are UTC+3, and 403 is an ordinary refusal — all fixed. **Still to confirm on live:** the sandbox refuses real hosts as nameservers ("'NS1.VERCEL-DNS.COM' ns not found" — its registry has no such host), so pointing a domain at a real host is first tested with a live registration. | Done |
 | L15 | **Automatic refunds for failed lines** (FR-R3, I6) | The panel tells a live customer "We'll refund what you paid" for a failed line; today that refund is manual. Needs the wallet (FR-W1) or a Flutterwave refund call. Must exist before `DNA_WRITE_ENV=production`. | Wallet or refund API |
 | L16 | **Alerts for stuck jobs** (I5, §13.5 orphan sweep) | A job in `needs_attention`, or an order in `provisioning` for over 15 minutes, is only logged at error level. Someone has to be told. `retry_job()` puts a job back once the registry has been checked. | Alerting channel |
-| L17 | **Live registrations** | `DNA_WRITE_ENV=production` on the deployed gateway, after L6, L10, L14, L15 and L16. | Those |
+| L17 | **Live registrations** | `DNA_WRITE_ENV=production` on the deployed gateway, after L6, L10, L15, L16 and L18. | Those |
+| L18 | **Switch off the supplier's own auto-renew** (FR-R6) | The supplier registers with `renewalMode: "AutoRenew"` (seen in the sandbox, 23 Sept 2026) and the SDK has no `ModifyRenewalMode`, so it could renew a domain from our float after the customer turned auto-renew off. Find the REST call, or ask DomainNameAPI, and set every registration to manual so our renewal engine is the only thing that renews. | DomainNameAPI docs or support |
 
 ## 2. Deferred features
 
@@ -52,7 +53,7 @@ back here. Each item says why it waited and what unblocks it.
 
 ### Domain management (PRD E5 – E8, E10)
 - **Registry-side controls** — nameserver changes now reach the registry (an `apply_nameservers` job per domain). Transfer lock, auth code reveal, contacts and privacy are still read-only.
-- **Registrar renewal mode** (FR-R6) — the SDK has no `ModifyRenewalMode`, so the supplier's own auto-renew is left at its default. Check what that default is before live registrations: our renewal engine must be the only thing that renews.
+- **Privacy default** — the sandbox turned contact privacy on for a line bought without it. We record what the registry reports; confirm on live whether the flag we send is honoured.
 - **Portfolio reconcile and deep sync** (§13.5) — nothing yet compares our `domains` rows with the registry after registration.
 - **`supplier_calls` retention** — rows accumulate; decide how long to keep them.
 - **Delegation verification job** (FR-D5) and the one-time undelegated nudge (FR-D8, needs L1).

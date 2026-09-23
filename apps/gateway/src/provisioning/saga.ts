@@ -6,7 +6,7 @@ import type { Registrar, RegistryDomain } from './registrar'
  *
  * a. Pre-flight read: already ours? Then it is done (I1) — this is what makes
  *    a crashed or timed-out attempt safe to run again.
- * b. Register.
+ * b. Register, then read the full record back.
  * c. No clear answer: read again, never re-send (I2).
  * d. A refusal: this line fails, classified, no retry.
  * e. Registered: apply the checkout's nameservers. A delegation problem never
@@ -105,7 +105,11 @@ export async function runRegistration(
       return { kind: 'blocked', code: written.code, message: written.message }
     }
     if (written.kind === 'ok') {
-      domain = written.data
+      // The register answer leaves out the lock, the nameservers and the start
+      // date (seen in the sandbox, 23 Sept 2026): read the full record, and
+      // fall back to the answer only if the read fails.
+      const record = await registrar.lookup(task.domainName)
+      domain = record.kind === 'found' ? record.domain : written.data
     } else {
       // c. I2: the write may have landed. Ask; never send it again from here.
       const after = await registrar.lookup(task.domainName)
