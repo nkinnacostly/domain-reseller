@@ -19,15 +19,17 @@ back here. Each item says why it waited and what unblocks it.
 | L7 | ~~GitHub Actions secrets for `.github/workflows/pricing.yml`~~ | Done 23 Sept 2026: four secrets set; the first run activated ₦1,326.64 (both feeds within 0.26%). Daily FX at 08:00 WAT, catalogue Mondays 07:00 WAT. A real failure now fails the run; only a rate held for review (exit 3) passes. | Done |
 | L8 | **Revalidate prices after the jobs run** | Pricing is cached with `cacheTag('pricing')` and `cacheLife('hours')`, so a new rate reaches the site within about an hour. An immediate `revalidateTag('pricing')` after the jobs would close that gap. | Deployment |
 | L9 | **Rotate the Supabase database password** | It was shared in a chat session. | Owner, Supabase dashboard |
-| L10 | **Deploy the gateway** on infrastructure with a static egress IP (PRD ADR-004) — ready: `fly.toml`, Dockerfile and runbook in `docs/DEPLOY.md`; a Fly static egress IP can be added when the supplier enforces its allowlist | Allowlisting is not enforced today (V2), but the gateway is where credentials and rate limits live. Locally it reads from production (`DNA_ENV=production`) for real availability; writes follow `DNA_WRITE_ENV`, which refuses production outside a production deployment. | Hosting decision |
-| L11 | **Flutterwave live keys and webhook secret hash** | Test keys only during the build. Set the secret hash in the dashboard and in `FLUTTERWAVE_WEBHOOK_HASH`. | Owner, after checkout is proven on test keys |
+| L10 | ~~Deploy the gateway~~ | Done 23 Sept 2026: `mydomainshub-gateway` on Fly.io, one machine in London (`docs/DEPLOY.md`). **Still open:** a static egress IP once the supplier enforces its allowlist (V2, PRD ADR-004), and a payment card on the Fly account — see L19. | Done |
+| L11 | ~~Flutterwave live keys and webhook secret hash~~ | Done 23 Sept 2026: live keys and `FLUTTERWAVE_WEBHOOK_HASH` are set on Vercel; the owner's live purchase went through them. | Done |
 | L12 | **Flutterwave: merchant bears the transaction fee** | By default Flutterwave adds its fee on top at payment, so the customer would pay more than the total we show — against FR-C5 and our no-hidden-fees promise. Switch fees to the merchant in the dashboard, or show the fee. | Owner, Flutterwave dashboard |
-| L13 | ~~Register the webhook URL~~ — the account's webhook is Paidly's, which forwards `MDH-` notices here (solostack branch `feat/forward-mydomainshub-webhooks`, live once merged) | Payments are confirmed when the customer returns; the webhook covers a closed tab. It needs a public URL (the deployment, or a tunnel for local testing). | Deployment |
+| L13 | ~~Register the webhook URL~~ | Done 23 Sept 2026: the account's webhook is Paidly's, which forwards `MDH-` notices here (solostack `feat/forward-mydomainshub-webhooks`, merged). | Done |
 | L14 | ~~First sandbox registrations~~ | Done 23 Sept 2026: two sandbox registrations end to end (orders ND-001024, ND-001025). They showed the register answer is sparse (now read back), the supplier's dates are UTC+3, and 403 is an ordinary refusal — all fixed. **Still to confirm on live:** the sandbox refuses real hosts as nameservers ("'NS1.VERCEL-DNS.COM' ns not found" — its registry has no such host), so pointing a domain at a real host was first tested live — and worked: `mydomainshub.com` moved to Cloudflare's nameservers on 23 Sept 2026. | Done |
 | L15 | **Automatic refunds for failed lines** (FR-R3, I6) | The panel tells a live customer "We'll refund what you paid" for a failed line; today that refund is manual. Needs the wallet (FR-W1) or a Flutterwave refund call. Must exist before `DNA_WRITE_ENV=production`. | Wallet or refund API |
 | L16 | **Alerts for stuck jobs and registry drift** (I5, §13.5) | A job in `needs_attention`, an order in `provisioning` for over 15 minutes, and open `registry_drift` rows (a supplier renewal, a domain missing at the registry) are only logged at error level and kept in the database. Someone has to be told. `retry_job()` puts a job back once the registry has been checked. | Alerting channel |
 | L17 | **Live registrations for customers** — first live registration done 23 Sept 2026: `mydomainshub.com`, order ND-001036, confirmed at Verisign (sponsoring registrar **Atak Domain Bilgi Teknolojileri A.S.** — the name CMP-1 needs on the registration agreement for .com). | `DNA_WRITE_ENV=production` on the deployed gateway and `CHECKOUT_ALLOWLIST` removed, after L6, L10, L15, L16, L18 and the legal pages. The owner's own purchase runs earlier behind the allowlist (`docs/DEPLOY.md`). | Those |
 | L18 | **Switch off the supplier's own auto-renew** (FR-R6) | The supplier registers with `renewalMode: "AutoRenew"` (seen in the sandbox, 23 Sept 2026) and the SDK has no `ModifyRenewalMode`, so it could renew a domain from our float after the customer turned auto-renew off. The REST API has no call for it (checked against their OpenAPI spec); SOAP `ModifyRenewalMode` may. A support message is drafted (23 Sept 2026). **Safety net in place:** reconciliation flags `supplier_may_renew` 45 days ahead and `supplier_renewed` after the fact — it detects, it does not prevent. | DomainNameAPI support |
+| L19 | **A payment card on the Fly account** | Without one, the trial stops the gateway machine after five minutes, so paid orders wait in the queue until someone wakes it. It stalled a nameserver change on 23 Sept 2026. | Owner, https://fly.io/trial |
+| L20 | **Receive mail at `hello@mydomainshub.com`** (e.g. Cloudflare Email Routing) | The legal pages publish it as the contact, abuse (CMP-4), privacy and refund address. Mail sent to it must reach someone. | Owner, Cloudflare dashboard |
 
 ## 2. Deferred features
 
@@ -74,8 +76,8 @@ back here. Each item says why it waited and what unblocks it.
 ### Transfers (PRD E9)
 - **Starting a transfer** — auth code → `CheckTransfer` → payment → `Transfer`. The eligibility check is live; the rest needs the gateway write routes (L5) and checkout.
 
-### Pages linked but not built
-- `/domains/{tld}` (FR-PUB1) — the footer's Extensions links (.com, .net, .org, .africa) still 404. `/whois` (FR-PUB2) and `/status` were unlinked on 23 Sept 2026 until they exist.
+### Pages not built
+- `/domains/{tld}` (FR-PUB1) — per-extension pages. Until they exist, the home page's extension cards and the footer's Extensions links open that extension's row on the pricing page (`/pricing#tld-com`). `/whois` (FR-PUB2) and `/status` were unlinked on 23 Sept 2026 until they exist.
 - Legal, help, contact and abuse pages are built (23 Sept 2026). Facts they state live in `apps/web/src/lib/business.ts`.
 
 ### Legal follow-ups
@@ -83,10 +85,12 @@ back here. Each item says why it waited and what unblocks it.
 - **Data protection officer and NDPC registration** (CMP-9, CMP-10) — name a DPO and register with the NDPC once the 200-data-subject threshold approaches.
 - **Keep the agreement in step with the product (N9b)** — it says renewals, contact changes and transfer codes are handled by email. Update the registration agreement, help centre and refund policy when renewals (E8), contact editing (FR-DS1) or auth-code reveal (FR-DS5) ship, and when expiry reminders (ERRP, §7.4) are sent.
 - **Sponsoring registrar for other extensions** — verified for .com only (RDAP, IANA ID 1601). Confirm per TLD before the legal pages name it for others.
+- **Lawyer review** of the registration agreement, privacy notice and refund policy before launch.
 
 ## 3. Quality debt
 
 - **Web unit coverage** is below its 80% threshold (~56% lines): marketing and pricing components are covered only end to end. A task is queued.
 - **CI never runs**: `.github/workflows/ci.yml` triggers on `main`, but the branch is `master`. Switching it on also needs the web coverage gap closed and e2e given a database, or it goes red at once.
 - **Coverage `PARSE_ERROR`** from the V8 provider on an uncovered file in `apps/web`.
-- **Live dependencies in e2e**: transfer checks hit real registry RDAP servers, and pricing and account tests use the hosted Supabase project. Consider a local Supabase (needs Docker) for isolation.
+- **Live dependencies in e2e**: transfer checks hit real registry RDAP servers, and pricing and account tests use the hosted Supabase project. Consider a local Supabase (needs Docker) for isolation. Seen 23 Sept 2026: Verisign's RDAP sometimes takes over 10 s, past our 6 s timeout, so a transfer check shows "couldn't check everything" and one of those tests fails at random.
+- **Node version**: run the dev server and Playwright on Node 22 (`.nvmrc`) or 24. Node 26.8's `fetch` fails parallel TLS requests to Supabase (CLAUDE.md §15).
