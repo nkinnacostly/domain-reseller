@@ -1,0 +1,132 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
+vi.mock('@/lib/supabase/service', () => ({ createServiceClient: vi.fn() }))
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
+
+const { createServiceClient } = await import('@/lib/supabase/service')
+const { logger } = await import('@/lib/logger')
+const { getPricedCatalogue, loadPricedCatalogue, PricingReadError } = await import(
+  '../queries/pricing'
+)
+
+type Result = { data: unknown; error: { message: string } | null }
+
+const RATE = {
+  id: 'rate-1',
+  costing_rate: 1500,
+  buffer_pct: 0,
+  source: 'test',
+  effective_from: '2026-09-01T00:00:00Z',
+}
+const SETTINGS = { margin_ngn: 3000, icann_fee_usd: 0.2, vat_pct: 7.5 }
+const TLDS = [
+  {
+    name: 'com',
+    register_usd: 10,
+    renew_usd: 11,
+    transfer_usd: 10,
+    restore_usd: 80,
+    min_period: 1,
+    max_period: 10,
+    redemption_days: 30,
+    requires_extra_fields: false,
+    is_country_code: false,
+    featured_rank: 1,
+    featured_tagline: 'The one everybody types first',
+  },
+]
+
+const ok = (data: unknown): Result => ({ data, error: null })
+const dropped: Result = { data: null, error: { message: 'TypeError: fetch failed' } }
+
+/**
+ * A stand-in for the Supabase query builder: every chained call returns the
+ * same promise, which resolves to the table's result.
+ */
+function client(results: Record<'fx_rates' | 'pricing_settings' | 'tlds', Result>) {
+  const from = vi.fn((table: keyof typeof results) => {
+    const query = Object.assign(Promise.resolve(results[table]), {
+      select: () => query,
+      eq: () => query,
+      order: () => query,
+      maybeSingle: () => query,
+    })
+    return query
+  })
+  return { from }
+}
+
+const healthy = () => client({ fx_rates: ok(RATE), pricing_settings: ok(SETTINGS), tlds: ok(TLDS) })
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('loadPricedCatalogue (the cached read)', () => {
+  it('prices the catalogue when every query answers', async () => {
+    vi.mocked(createServiceClient).mockReturnValue(healthy() as never)
+    const priced = await loadPricedCatalogue()
+    expect(priced?.tlds.map((t) => t.tld)).toEqual(['com'])
+    expect(priced?.featured[0]?.tagline).toBe('The one everybody types first')
+  })
+
+  /**
+   * The point of the split: a throw is never cached, a `null` is. A dropped
+   * connection must not become an hour of "prices unavailable".
+   */
+  it.each(['fx_rates', 'pricing_settings', 'tlds'] as const)(
+    'throws, rather than returning a cacheable null, when %s fails in transit',
+    async (table) => {
+      vi.mocked(createServiceClient).mockReturnValue(
+        client({
+          fx_rates: ok(RATE),
+          pricing_settings: ok(SETTINGS),
+          tlds: ok(TLDS),
+          [table]: dropped,
+        }) as never,
+      )
+      await expect(loadPricedCatalogue()).rejects.toBeInstanceOf(PricingReadError)
+    },
+  )
+
+  it.each([
+    ['no active rate', { fx_rates: ok(null) }],
+    ['no pricing settings', { pricing_settings: ok(null) }],
+    ['an empty catalogue', { tlds: ok([]) }],
+  ] as const)('returns null for genuinely missing data: %s', async (_, missing) => {
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({
+        fx_rates: ok(RATE),
+        pricing_settings: ok(SETTINGS),
+        tlds: ok(TLDS),
+        ...missing,
+      }) as never,
+    )
+    await expect(loadPricedCatalogue()).resolves.toBeNull()
+  })
+})
+
+describe('getPricedCatalogue (what pages call)', () => {
+  it('withholds prices for the request when a read fails, and logs no data', async () => {
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({ fx_rates: dropped, pricing_settings: ok(SETTINGS), tlds: ok(TLDS) }) as never,
+    )
+    expect(await getPricedCatalogue()).toBeNull()
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: 'fx_rates: TypeError: fetch failed' },
+      'pricing read failed — withholding prices for this request',
+    )
+  })
+
+  it('tries again on the next request once the connection is back', async () => {
+    vi.mocked(createServiceClient)
+      .mockReturnValueOnce(
+        client({ fx_rates: dropped, pricing_settings: ok(SETTINGS), tlds: ok(TLDS) }) as never,
+      )
+      .mockReturnValueOnce(healthy() as never)
+
+    expect(await getPricedCatalogue()).toBeNull()
+    const priced = await getPricedCatalogue()
+    expect(priced?.tlds).toHaveLength(1)
+    expect(createServiceClient).toHaveBeenCalledTimes(2)
+  })
+})

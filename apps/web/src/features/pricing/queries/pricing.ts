@@ -18,6 +18,14 @@ import { createServiceClient } from '@/lib/supabase/service'
  * fees from pricing settings. No pricing input is hardcoded anywhere: if any
  * of the three is missing, prices are withheld rather than guessed.
  */
+/** A pricing query that failed in transit, as opposed to returning no data. */
+export class PricingReadError extends Error {
+  constructor(table: string, message: string) {
+    super(`${table}: ${message}`)
+    this.name = 'PricingReadError'
+  }
+}
+
 export type PricedCatalogue = {
   tlds: TldPricing[]
   /** Merchandised extensions in display order, from `tlds.featured_rank`. */
@@ -32,7 +40,37 @@ export type PricedCatalogue = {
   vatPct: number
 }
 
+/**
+ * The priced catalogue, or `null` when prices must be withheld (N5b).
+ *
+ * A read that fails in transit (Supabase unreachable, a dropped connection)
+ * withholds prices for this request only. Missing data — no active rate, no
+ * pricing settings, an empty catalogue — withholds them until the cache
+ * refreshes, which is fine: it takes a job writing new data to fix, and that
+ * job revalidates the `pricing` tag.
+ */
 export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
+  try {
+    return await loadPricedCatalogue()
+  } catch (err) {
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      'pricing read failed — withholding prices for this request',
+    )
+    return null
+  }
+}
+
+/**
+ * The cached read behind getPricedCatalogue. Exported for tests; call
+ * getPricedCatalogue instead.
+ *
+ * A failed query throws rather than returning `null`, because a throw is never
+ * cached: a single dropped connection used to cache "no prices" for an hour,
+ * across every page that shows one. A `null` return is cached, so it is kept
+ * for data that is genuinely missing.
+ */
+export async function loadPricedCatalogue(): Promise<PricedCatalogue | null> {
   'use cache'
   // Rate and catalogue both change at most daily and are identical for every
   // visitor. Revalidate these tags when a job writes new data.
@@ -61,16 +99,27 @@ export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
       .order('name'),
   ])
 
-  if (rateResult.error || !rateResult.data) {
-    logger.error({ err: rateResult.error?.message }, 'no active FX rate — cannot price')
+  // The error message only: it names the table or the network fault, never a
+  // person (N13).
+  const failed = [
+    ['fx_rates', rateResult.error],
+    ['pricing_settings', settingsResult.error],
+    ['tlds', tldResult.error],
+  ] as const
+  for (const [table, error] of failed) {
+    if (error) throw new PricingReadError(table, error.message)
+  }
+
+  if (!rateResult.data) {
+    logger.error('no active FX rate — cannot price')
     return null
   }
-  if (settingsResult.error || !settingsResult.data) {
-    logger.error({ err: settingsResult.error?.message }, 'no pricing settings — cannot price')
+  if (!settingsResult.data) {
+    logger.error('no pricing settings — cannot price')
     return null
   }
-  if (tldResult.error || !tldResult.data?.length) {
-    logger.error({ err: tldResult.error?.message }, 'catalogue is empty — cannot price')
+  if (!tldResult.data?.length) {
+    logger.error('catalogue is empty — cannot price')
     return null
   }
 
