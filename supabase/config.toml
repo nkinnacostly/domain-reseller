@@ -28,8 +28,10 @@ port = 54324
 [auth]
 enabled = true
 # Production first; the app also passes its own redirect on every auth email.
-site_url = "https://mydomainshub.vercel.app"
+site_url = "https://www.mydomainshub.com"
 additional_redirect_urls = [
+  "https://www.mydomainshub.com/**",
+  "https://mydomainshub.com/**",
   "https://mydomainshub.vercel.app/**",
   "http://localhost:3000/**",
   "http://localhost:3100/**",

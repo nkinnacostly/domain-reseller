@@ -12,7 +12,7 @@ back here. Each item says why it waited and what unblocks it.
 |---|---|---|---|
 | L1 | **Custom SMTP for Supabase Auth** (e.g. Resend with a verified sending domain) | The built-in sender delivers only to members of the Supabase organisation, a few emails an hour. Sign-up confirmations, reset and sign-in links fail for everyone else. | A sending domain + SMTP credentials |
 | L2 | **Enable the any-device email templates** in `supabase/config.toml` (`[auth.email.template.*]`, currently commented out) | Until then, email links only work in the browser that asked for them. The free tier refuses template changes on the built-in sender. | L1 |
-| L3 | **Production `site_url` and redirect URLs** in `supabase/config.toml` | Both still point at `localhost`. | The production domain |
+| L3 | ~~Production `site_url` and redirect URLs~~ | Done 23 Sept 2026: the site runs on `https://www.mydomainshub.com` (the apex redirects there); Supabase Auth and `NEXT_PUBLIC_APP_URL` point at it. `mydomainshub.vercel.app` still serves, so Paidly's forward keeps working. | Done |
 | L4 | **Ask DomainNameAPI to raise the concurrency limit** | They refuse a third concurrent request (PRD V4). A search is ~4 calls, so capacity is about one uncached search every 2 s across all users. | DomainNameAPI support |
 | L5 | ~~DomainNameAPI OTE (sandbox) credentials~~ | Received 23 Sept 2026 (`DNA_API_TEST_KEY`); verified read-only: same reseller account, USD 1,000 sandbox balance. | Done |
 | L6 | **Top up the DomainNameAPI balance** | Topped up USD 15 on 23 Sept 2026 for the owner's purchase; USD 3.69 left, so live checkout refuses orders again (the float check works). Plan the real float per PRD FR-FLOAT-4. | Owner |
