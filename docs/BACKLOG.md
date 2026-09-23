@@ -16,8 +16,8 @@ back here. Each item says why it waited and what unblocks it.
 | L4 | **Ask DomainNameAPI to raise the concurrency limit** | They refuse a third concurrent request (PRD V4). A search is ~4 calls, so capacity is about one uncached search every 2 s across all users. | DomainNameAPI support |
 | L5 | ~~DomainNameAPI OTE (sandbox) credentials~~ | Received 23 Sept 2026 (`DNA_API_TEST_KEY`); verified read-only: same reseller account, USD 1,000 sandbox balance. | Done |
 | L6 | **Top up the DomainNameAPI balance** | Topped up USD 15 on 23 Sept 2026 for the owner's purchase; USD 3.69 left, so live checkout refuses orders again (the float check works). Plan the real float per PRD FR-FLOAT-4. | Owner |
-| L7 | **GitHub Actions secrets for `.github/workflows/pricing.yml`** | Without them the daily FX update and weekly catalogue sync never run, and prices freeze. Needs `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DNA_RESELLER_ID`, `DNA_API_KEY` (optionally `FX_PARALLEL_API_KEY`). | Owner, repo settings |
-| L8 | **Revalidate prices after the jobs run** | Pricing is cached with `cacheTag('pricing')`; the jobs update the database but nothing tells the deployed site to refresh. Add a revalidation call once deployed. | Deployment |
+| L7 | ~~GitHub Actions secrets for `.github/workflows/pricing.yml`~~ | Done 23 Sept 2026: four secrets set; the first run activated ₦1,326.64 (both feeds within 0.26%). Daily FX at 08:00 WAT, catalogue Mondays 07:00 WAT. A real failure now fails the run; only a rate held for review (exit 3) passes. | Done |
+| L8 | **Revalidate prices after the jobs run** | Pricing is cached with `cacheTag('pricing')` and `cacheLife('hours')`, so a new rate reaches the site within about an hour. An immediate `revalidateTag('pricing')` after the jobs would close that gap. | Deployment |
 | L9 | **Rotate the Supabase database password** | It was shared in a chat session. | Owner, Supabase dashboard |
 | L10 | **Deploy the gateway** on infrastructure with a static egress IP (PRD ADR-004) — ready: `fly.toml`, Dockerfile and runbook in `docs/DEPLOY.md`; a Fly static egress IP can be added when the supplier enforces its allowlist | Allowlisting is not enforced today (V2), but the gateway is where credentials and rate limits live. Locally it reads from production (`DNA_ENV=production`) for real availability; writes follow `DNA_WRITE_ENV`, which refuses production outside a production deployment. | Hosting decision |
 | L11 | **Flutterwave live keys and webhook secret hash** | Test keys only during the build. Set the secret hash in the dashboard and in `FLUTTERWAVE_WEBHOOK_HASH`. | Owner, after checkout is proven on test keys |
@@ -80,5 +80,6 @@ back here. Each item says why it waited and what unblocks it.
 ## 3. Quality debt
 
 - **Web unit coverage** is below its 80% threshold (~56% lines): marketing and pricing components are covered only end to end. A task is queued.
+- **CI never runs**: `.github/workflows/ci.yml` triggers on `main`, but the branch is `master`. Switching it on also needs the web coverage gap closed and e2e given a database, or it goes red at once.
 - **Coverage `PARSE_ERROR`** from the V8 provider on an uncovered file in `apps/web`.
 - **Live dependencies in e2e**: transfer checks hit real registry RDAP servers, and pricing and account tests use the hosted Supabase project. Consider a local Supabase (needs Docker) for isolation.
