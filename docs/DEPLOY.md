@@ -18,6 +18,9 @@ provider's own CLI or dashboard — never into a chat, a commit or an issue.
 
 ## 1. Gateway on Fly.io
 
+0. **You:** add a payment card to the Fly account (https://fly.io/trial). A trial
+   account stops every machine after 5 minutes; the proxy restarts it only when
+   a request arrives, so queued registrations wait for the next visitor.
 1. **You:** install the CLI and sign in (creates the account if needed):
    ```bash
    brew install flyctl
