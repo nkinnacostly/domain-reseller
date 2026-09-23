@@ -97,7 +97,8 @@ test.describe('cart', () => {
       .evaluateAll((cells) =>
         cells.map((cell) => Number((cell.textContent ?? '').replace(/[₦,]/g, ''))),
       )
-    expect(vat).toBeCloseTo((subtotal ?? 0) * 0.075, 0)
+    // Shown in whole naira: exact VAT can be x.50, displayed rounded (e.g. ₦1,372.50 → ₦1,373).
+    expect(Math.abs((vat ?? 0) - (subtotal ?? 0) * 0.075)).toBeLessThanOrEqual(0.5)
     expect(total).toBe((subtotal ?? 0) + (vat ?? 0))
   })
 

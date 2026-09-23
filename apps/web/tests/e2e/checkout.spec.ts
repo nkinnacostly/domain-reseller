@@ -89,6 +89,15 @@ test.describe('checkout', () => {
     await expect(review).toContainText(/then ₦[\d,]+\/yr/)
     await expect(page.getByRole('form', { name: 'Checkout' })).toContainText('VAT (7.5%)')
     await expect(page.getByText('Test mode.')).toBeVisible()
+    // CMP-1 / CMP-2: the agreement and the registrant's rights at the point of purchase.
+    const form = page.getByRole('form', { name: 'Checkout' })
+    await expect(form.getByRole('link', { name: 'registration agreement' })).toHaveAttribute(
+      'href',
+      '/legal/registration-agreement',
+    )
+    await expect(
+      form.getByRole('link', { name: /Registrants.? Benefits and Responsibilities/ }),
+    ).toHaveAttribute('href', '/legal/registrant-rights')
 
     // Pre-filled from the account.
     await expect(page.getByLabel('First name')).toHaveValue('Ada')

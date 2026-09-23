@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 
-export const BRAND_NAME = 'Naijadomains'
+export const BRAND_NAME = 'MyDomainsHub'
 
 /**
  * Wordmark. The mark is a globe reduced to a meridian and an orbit dot —

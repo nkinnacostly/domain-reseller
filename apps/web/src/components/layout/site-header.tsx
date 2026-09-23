@@ -3,7 +3,7 @@
 import { Menu, X } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
-import { Brand } from '@/components/layout/brand'
+import { BRAND_NAME, Brand } from '@/components/layout/brand'
 import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
 import { Button } from '@/components/ui/button'
@@ -26,7 +26,7 @@ export function SiteHeader({ className }: { className?: string }) {
   return (
     <header className={cn('relative z-30', className)}>
       <Container className="flex items-center justify-between gap-4 py-5 sm:py-6">
-        <Link href="/" aria-label={`${'Naijadomains'} home`}>
+        <Link href="/" aria-label={`${BRAND_NAME} home`}>
           <Brand />
         </Link>
 

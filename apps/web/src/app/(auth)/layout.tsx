@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-import { Brand } from '@/components/layout/brand'
+import { BRAND_NAME, Brand } from '@/components/layout/brand'
 import { Container, SiteShell } from '@/components/layout/site-shell'
 
 /** Auth pages: the brand, a way back, and the form. Nothing to wander off into. */
@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="flex min-h-[calc(100dvh-4rem)] flex-col bg-gradient-to-br from-hero-from to-hero-to">
         <header>
           <Container className="flex items-center justify-between gap-4 py-5 sm:py-6">
-            <Link href="/" aria-label="Naijadomains home">
+            <Link href="/" aria-label={`${BRAND_NAME} home`}>
               <Brand />
             </Link>
             <Link

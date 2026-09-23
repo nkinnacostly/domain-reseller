@@ -80,7 +80,8 @@ test.describe('footer compliance', () => {
     const text = (await page.getByRole('contentinfo').innerText()).toLowerCase()
     expect(text).toContain('authorised reseller')
     expect(text).not.toMatch(/we are icann[- ]accredited/)
-    expect(text).not.toMatch(/icann[- ]accredited registrar\b(?!\.)/)
+    // The registrar is accredited; we say plainly that we are not.
+    expect(text).toContain('not itself icann-accredited')
   })
 })
 

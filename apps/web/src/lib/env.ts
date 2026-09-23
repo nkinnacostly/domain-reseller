@@ -36,7 +36,7 @@ export const env = createEnv({
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.url().default('http://localhost:3000'),
-    NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Naijadomains'),
+    NEXT_PUBLIC_APP_NAME: z.string().min(1).default('MyDomainsHub'),
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
     NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: z.string().optional(),

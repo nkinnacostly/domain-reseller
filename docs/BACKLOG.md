@@ -75,7 +75,14 @@ back here. Each item says why it waited and what unblocks it.
 - **Starting a transfer** — auth code → `CheckTransfer` → payment → `Transfer`. The eligibility check is live; the rest needs the gateway write routes (L5) and checkout.
 
 ### Pages linked but not built
-- `/domains/{tld}` (FR-PUB1), `/whois`, `/help`, `/contact`, `/abuse`, `/status`, `/legal/*` — footer and form links currently 404.
+- `/domains/{tld}` (FR-PUB1) — the footer's Extensions links (.com, .net, .org, .africa) still 404. `/whois` (FR-PUB2) and `/status` were unlinked on 23 Sept 2026 until they exist.
+- Legal, help, contact and abuse pages are built (23 Sept 2026). Facts they state live in `apps/web/src/lib/business.ts`.
+
+### Legal follow-ups
+- **Business identity on the legal pages** — add the CAC registration number and a business address when the owner provides them.
+- **Data protection officer and NDPC registration** (CMP-9, CMP-10) — name a DPO and register with the NDPC once the 200-data-subject threshold approaches.
+- **Keep the agreement in step with the product (N9b)** — it says renewals, contact changes and transfer codes are handled by email. Update the registration agreement, help centre and refund policy when renewals (E8), contact editing (FR-DS1) or auth-code reveal (FR-DS5) ship, and when expiry reminders (ERRP, §7.4) are sent.
+- **Sponsoring registrar for other extensions** — verified for .com only (RDAP, IANA ID 1601). Confirm per TLD before the legal pages name it for others.
 
 ## 3. Quality debt
 

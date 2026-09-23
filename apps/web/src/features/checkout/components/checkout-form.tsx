@@ -1,6 +1,7 @@
 'use client'
 
 import { Lock } from 'lucide-react'
+import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useMemo, useState } from 'react'
 import {
@@ -338,6 +339,22 @@ export function CheckoutForm({
         <p className="text-pretty text-xs/5 text-muted-foreground">
           You pay on Flutterwave's secure page — card, bank transfer or USSD. Before you are charged
           we check every name is still free.
+        </p>
+        {/* CMP-1 / CMP-2 — the agreement and the registrant's rights, at the point of purchase. */}
+        <p className="text-pretty text-xs/5 text-muted-foreground">
+          By paying you agree to the{' '}
+          <Link href="/legal/registration-agreement" className="underline hover:text-foreground">
+            registration agreement
+          </Link>{' '}
+          and{' '}
+          <Link href="/legal/refunds" className="underline hover:text-foreground">
+            refund policy
+          </Link>
+          . Your rights as a registrant are in the{' '}
+          <Link href="/legal/registrant-rights" className="underline hover:text-foreground">
+            Registrants&apos; Benefits and Responsibilities
+          </Link>
+          .
         </p>
       </aside>
     </form>

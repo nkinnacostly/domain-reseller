@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react'
 import Link from 'next/link'
-import { Brand } from '@/components/layout/brand'
+import { BRAND_NAME, Brand } from '@/components/layout/brand'
 import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
 import { SignOutButton } from '@/features/auth/components/sign-out-button'
@@ -20,7 +20,7 @@ export async function AppHeader() {
   return (
     <header className="border-border/60 border-b">
       <Container className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-4 sm:py-5">
-        <Link href="/app/domains" aria-label="Naijadomains — your domains">
+        <Link href="/app/domains" aria-label={`${BRAND_NAME} — your domains`}>
           <Brand />
         </Link>
 

@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { connection } from 'next/server'
 import { Suspense } from 'react'
-import { Brand } from '@/components/layout/brand'
+import { BRAND_NAME, Brand } from '@/components/layout/brand'
 import { NavLink } from '@/components/layout/nav-link'
 import { Container } from '@/components/layout/site-shell'
+import { BUSINESS, SPONSORING_REGISTRAR } from '@/lib/business'
 
 /**
  * The footer is a compliance surface, not decoration (PRD §7.1).
@@ -22,7 +23,6 @@ const COLUMNS = [
       { href: '/search', label: 'Search' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/transfer', label: 'Transfer in' },
-      { href: '/whois', label: 'WHOIS lookup' },
     ],
   },
   {
@@ -40,7 +40,6 @@ const COLUMNS = [
       { href: '/help', label: 'Help centre' },
       { href: '/contact', label: 'Contact us' },
       { href: '/abuse', label: 'Report abuse' },
-      { href: '/status', label: 'Service status' },
     ],
   },
   {
@@ -50,6 +49,7 @@ const COLUMNS = [
       { href: '/legal/registrant-rights', label: "Registrants' rights" },
       { href: '/legal/privacy', label: 'Privacy notice' },
       { href: '/legal/refunds', label: 'Refund policy' },
+      { href: '/legal', label: 'All legal documents' },
     ],
   },
 ] as const
@@ -101,12 +101,12 @@ export function SiteFooter() {
 
         <div className="border-border/70 mt-12 border-t pt-8">
           <p className="max-w-3xl text-pretty text-xs/5 text-muted-foreground">
-            {/* CMP-1 / CMP-3 — name the sponsoring registrar; never claim accreditation ourselves.
-                TODO(V8): confirm the sponsoring registrar per TLD with DomainNameAPI support. */}
-            Naijadomains is an authorised reseller of an ICANN-accredited registrar. Registrations
-            are sponsored by our upstream registrar, whose name appears on your registration
-            agreement and in the public registration record for your domain. Your rights and
-            responsibilities as a registrant are set out in the{' '}
+            {/* CMP-1 / CMP-3 — name the sponsoring registrar; never claim accreditation
+                ourselves. The registrar is verified for .com only (lib/business.ts). */}
+            {BRAND_NAME} is operated by {BUSINESS.operator}, an authorised reseller — not itself
+            ICANN-accredited. .com registrations are sponsored by {SPONSORING_REGISTRAR.name}, an
+            ICANN-accredited registrar; every domain&apos;s registrar is named in its public
+            registration record. Your rights and responsibilities as a registrant are set out in the{' '}
             <Link href="/legal/registrant-rights" className="underline hover:text-foreground">
               Registrants&apos; Benefits and Responsibilities Specification
             </Link>
@@ -127,12 +127,12 @@ export function SiteFooter() {
               <Suspense fallback={LAUNCH_YEAR}>
                 <CopyrightYear />
               </Suspense>{' '}
-              Naijadomains. All rights reserved.
+              {BUSINESS.operator}, trading as {BRAND_NAME}. All rights reserved.
             </p>
             <p>
               Abuse reports:{' '}
-              <a href="mailto:abuse@example.com" className="underline hover:text-foreground">
-                abuse@example.com
+              <a href={`mailto:${BUSINESS.email}`} className="underline hover:text-foreground">
+                {BUSINESS.email}
               </a>
             </p>
           </div>
