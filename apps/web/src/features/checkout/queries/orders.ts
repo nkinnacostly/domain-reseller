@@ -20,7 +20,7 @@ export async function getOrder(id: string) {
   const { data } = await supabase
     .from('orders')
     .select(
-      'id, order_number, status, subtotal_kobo, vat_pct, vat_kobo, total_kobo, registrant, nameservers, test_mode, float_check, paid_at, created_at, order_items(id, domain, period_years, privacy, auto_renew, price_kobo, renewal_kobo, status), payments(provider_reference, amount_kobo, method, created_at)',
+      'id, order_number, status, subtotal_kobo, vat_pct, vat_kobo, total_kobo, registrant, nameservers, test_mode, float_check, paid_at, created_at, order_items(id, domain, period_years, privacy, auto_renew, price_kobo, renewal_kobo, status, failure_code), payments(provider_reference, amount_kobo, method, created_at)',
     )
     .eq('id', id)
     .maybeSingle()

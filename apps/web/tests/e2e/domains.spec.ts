@@ -158,7 +158,7 @@ test.describe('domain detail', () => {
       'aria-current',
       /.*/,
     )
-    await expect(page.getByText('Not connected to the registry yet.')).toBeVisible()
+    await expect(page.getByText('Not editable here yet.')).toBeVisible()
     expect((await axe(page)).violations).toEqual([])
   })
 
@@ -246,12 +246,16 @@ test.describe('nameserver change', () => {
       'ns1.vercel-dns.com\nns2.vercel-dns.com',
     )
     await form.getByRole('button', { name: 'Save nameservers' }).click()
-    await expect(form.getByRole('status')).toContainText('Saved.', { timeout: 20_000 })
+    // A demo domain never reaches a registry, and the panel says so.
+    await expect(form.getByRole('status')).toContainText(
+      'Saved. This is a demo domain, so nothing is sent to a registry.',
+      { timeout: 20_000 },
+    )
 
     await page.reload()
     await expect(
       page.getByText(
-        /Waiting to be applied at the registry: ns1\.vercel-dns\.com, ns2\.vercel-dns\.com/,
+        /Requested: ns1\.vercel-dns\.com, ns2\.vercel-dns\.com\. Nothing is sent to a registry\./,
       ),
     ).toBeVisible()
     await page

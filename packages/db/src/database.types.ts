@@ -403,6 +403,78 @@ export type Database = {
         }
         Relationships: []
       }
+      jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          domain_id: string
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          kind: Database["public"]["Enums"]["job_kind"]
+          last_error: string | null
+          last_error_code: string | null
+          locked_at: string | null
+          locked_by: string | null
+          order_item_id: string | null
+          run_after: string
+          status: Database["public"]["Enums"]["job_status"]
+          test_mode: boolean
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          domain_id: string
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          kind: Database["public"]["Enums"]["job_kind"]
+          last_error?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          order_item_id?: string | null
+          run_after?: string
+          status?: Database["public"]["Enums"]["job_status"]
+          test_mode: boolean
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          domain_id?: string
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          kind?: Database["public"]["Enums"]["job_kind"]
+          last_error?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          order_item_id?: string | null
+          run_after?: string
+          status?: Database["public"]["Enums"]["job_status"]
+          test_mode?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobs_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       market_references: {
         Row: {
           lowest_ngn: number | null
@@ -759,6 +831,56 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_calls: {
+        Row: {
+          created_at: string
+          domain_name: string | null
+          duration_ms: number
+          environment: string
+          error_code: string | null
+          http_status: number | null
+          id: number
+          job_id: string | null
+          message: string | null
+          operation: string
+          outcome: string
+        }
+        Insert: {
+          created_at?: string
+          domain_name?: string | null
+          duration_ms: number
+          environment: string
+          error_code?: string | null
+          http_status?: number | null
+          id?: number
+          job_id?: string | null
+          message?: string | null
+          operation: string
+          outcome: string
+        }
+        Update: {
+          created_at?: string
+          domain_name?: string | null
+          duration_ms?: number
+          environment?: string
+          error_code?: string | null
+          http_status?: number | null
+          id?: number
+          job_id?: string | null
+          message?: string | null
+          operation?: string
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_calls_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tlds: {
         Row: {
           featured_rank: number | null
@@ -849,9 +971,54 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_job: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_test_mode: boolean
+          p_worker: string
+        }
+        Returns: Json
+      }
+      complete_registration: {
+        Args: {
+          p_expires_at: string
+          p_job_id: string
+          p_nameserver_code?: string
+          p_nameserver_result: string
+          p_nameservers: string[]
+          p_privacy: boolean
+          p_recovered: boolean
+          p_registered_at: string
+          p_transfer_lock: boolean
+        }
+        Returns: Database["public"]["Enums"]["domain_status"]
+      }
+      enqueue_nameserver_change: {
+        Args: { p_domain_id: string }
+        Returns: undefined
+      }
+      fail_job: {
+        Args: {
+          p_code: string
+          p_job_id: string
+          p_message: string
+          p_needs_attention?: boolean
+        }
+        Returns: undefined
+      }
       merge_anonymous_cart: {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: number
+      }
+      record_nameserver_change: {
+        Args: {
+          p_applied: string[]
+          p_attempted: string[]
+          p_code?: string
+          p_job_id: string
+        }
+        Returns: undefined
       }
       record_order_payment: {
         Args: {
@@ -864,6 +1031,17 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["order_status"]
       }
+      reschedule_job: {
+        Args: {
+          p_code: string
+          p_delay_seconds: number
+          p_job_id: string
+          p_message: string
+        }
+        Returns: undefined
+      }
+      retry_job: { Args: { p_job_id: string }; Returns: undefined }
+      settle_order: { Args: { p_order_id: string }; Returns: undefined }
     }
     Enums: {
       account_type: "individual" | "business"
@@ -890,6 +1068,13 @@ export type Database = {
         | "er-api"
         | "currency-api"
       fx_status: "active" | "pending_review" | "superseded" | "rejected"
+      job_kind: "register_domain" | "apply_nameservers"
+      job_status:
+        | "queued"
+        | "running"
+        | "succeeded"
+        | "failed"
+        | "needs_attention"
       order_item_status:
         | "pending"
         | "provisioning"
@@ -1060,6 +1245,14 @@ export const Constants = {
         "currency-api",
       ],
       fx_status: ["active", "pending_review", "superseded", "rejected"],
+      job_kind: ["register_domain", "apply_nameservers"],
+      job_status: [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "needs_attention",
+      ],
       order_item_status: [
         "pending",
         "provisioning",

@@ -14,14 +14,21 @@ const { requestNameservers, setAutoRenew } = await import('../actions/domains')
 const DOMAIN_ID = '00000000-0000-4000-8000-000000000001'
 const now = () => Math.floor(Date.now() / 1000)
 
-function userClient({ owns = true, freshCode = true, status = 'active' } = {}) {
+function userClient({
+  owns = true,
+  freshCode = true,
+  status = 'active',
+  source = 'registration',
+  pending = null as string[] | null,
+} = {}) {
   const domain = owns
     ? {
         id: DOMAIN_ID,
         domain_name: 'getpaid.com',
+        source,
         local_status: status,
         nameservers: null,
-        pending_nameservers: null,
+        pending_nameservers: pending,
       }
     : null
   const client = {
@@ -52,10 +59,16 @@ function userClient({ owns = true, freshCode = true, status = 'active' } = {}) {
 }
 
 let writes: { table: string; op: string; row: unknown }[]
+let queueError: { message: string } | null
 beforeEach(() => {
   vi.clearAllMocks()
   writes = []
+  queueError = null
   vi.mocked(createServiceClient).mockReturnValue({
+    rpc: async (fn: string, args: unknown) => {
+      writes.push({ table: fn, op: 'rpc', row: args })
+      return { error: queueError }
+    },
     from: (table: string) => ({
       update: (row: unknown) => ({
         eq: async () => {
@@ -115,7 +128,7 @@ describe('requestNameservers (FR-D1, FR-D4, SEC-2)', () => {
       domainId: DOMAIN_ID,
       nameservers: 'NS1.Vercel-DNS.com ns2.vercel-dns.com',
     })
-    expect(result?.data).toEqual({ ok: true, warnings: [] })
+    expect(result?.data).toEqual({ ok: true, warnings: [], delivery: 'queued' })
     expect(writes).toEqual([
       {
         table: 'domains',
@@ -133,6 +146,49 @@ describe('requestNameservers (FR-D1, FR-D4, SEC-2)', () => {
           payload: { before: null, after: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'] },
         }),
       },
+      { table: 'enqueue_nameserver_change', op: 'rpc', row: { p_domain_id: DOMAIN_ID } },
+    ])
+  })
+
+  it('sends nothing to a registry for a demo domain', async () => {
+    userClient({ source: 'demo' })
+    const result = await requestNameservers({
+      domainId: DOMAIN_ID,
+      nameservers: 'ns1.vercel-dns.com ns2.vercel-dns.com',
+    })
+    expect(result?.data).toMatchObject({ ok: true, delivery: 'demo' })
+    expect(writes.map((write) => write.op)).not.toContain('rpc')
+  })
+
+  it('holds a change for a domain still registering until registration applies it (FR-R5)', async () => {
+    userClient({ status: 'pending' })
+    const result = await requestNameservers({
+      domainId: DOMAIN_ID,
+      nameservers: 'ns1.vercel-dns.com ns2.vercel-dns.com',
+    })
+    expect(result?.data).toMatchObject({ ok: true, delivery: 'after_registration' })
+    expect(writes.map((write) => write.op)).not.toContain('rpc')
+  })
+
+  it('says so when the change could not be queued', async () => {
+    userClient()
+    queueError = { message: 'down' }
+    const result = await requestNameservers({
+      domainId: DOMAIN_ID,
+      nameservers: 'ns1.vercel-dns.com ns2.vercel-dns.com',
+    })
+    expect(result?.data).toEqual({ error: 'That change could not be saved. Please try again.' })
+  })
+
+  it('queues again when the same change is asked for twice', async () => {
+    userClient({ pending: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'] })
+    const result = await requestNameservers({
+      domainId: DOMAIN_ID,
+      nameservers: 'ns1.vercel-dns.com ns2.vercel-dns.com',
+    })
+    expect(result?.data).toMatchObject({ ok: true, unchanged: true })
+    expect(writes).toEqual([
+      { table: 'enqueue_nameserver_change', op: 'rpc', row: { p_domain_id: DOMAIN_ID } },
     ])
   })
 

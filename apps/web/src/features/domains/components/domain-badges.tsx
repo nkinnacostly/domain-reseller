@@ -23,12 +23,12 @@ export function DomainBadges({
   )
 }
 
-/** The one note every registry-side control carries until the connection is on. */
-export function NotConnectedNote({ children }: { children?: React.ReactNode }) {
+/** A quiet note in the panel: a lead that says what is true, then the detail. */
+export function PanelNote({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
     <p className="rounded-xl bg-muted/60 px-4 py-3 text-pretty text-sm/6 text-muted-foreground">
-      <span className="font-medium text-foreground">Not connected to the registry yet.</span>{' '}
-      {children ?? 'This will work once domain registration is switched on.'}
+      <span className="font-medium text-foreground">{title}</span>
+      {children ? <> {children}</> : null}
     </p>
   )
 }

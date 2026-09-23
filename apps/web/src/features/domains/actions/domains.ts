@@ -22,7 +22,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>
 async function ownedDomain(supabase: Supabase, domainId: string) {
   const { data } = await supabase
     .from('domains')
-    .select('id, domain_name, local_status, nameservers, pending_nameservers')
+    .select('id, domain_name, source, local_status, nameservers, pending_nameservers')
     .eq('id', domainId)
     .maybeSingle()
   return data
@@ -56,12 +56,16 @@ export const setAutoRenew = authAction
     return { ok: true }
   })
 
+/** What became of a saved nameserver change — the form says exactly this. */
+export type NameserverDelivery = 'queued' | 'after_registration' | 'demo'
+
 /**
  * A nameserver change (FR-D1, FR-D4, SEC-2). A sensitive operation: it needs
  * a second factor from the last 15 minutes and no post-reset hold
  * (elevatedAction). Validated against live DNS before it is accepted, then
- * recorded as the requested set — applied at the registry once the registrar
- * connection is switched on.
+ * recorded as the requested set and queued for the registry (FR-N1). A domain
+ * still registering gets it straight after registration (FR-R5); a demo
+ * domain never reaches a registry.
  */
 export const requestNameservers = elevatedAction
   .inputSchema(
@@ -76,7 +80,8 @@ export const requestNameservers = elevatedAction
       parsedInput,
       ctx,
     }): Promise<
-      { error: string; details?: string[] } | { ok: true; warnings: string[]; unchanged?: boolean }
+      | { error: string; details?: string[] }
+      | { ok: true; warnings: string[]; delivery: NameserverDelivery; unchanged?: boolean }
     > => {
       const domain = await ownedDomain(ctx.supabase, parsedInput.domainId)
       if (!domain) return { error: 'That domain is not on your account.' }
@@ -88,9 +93,26 @@ export const requestNameservers = elevatedAction
       if (!parsed.ok) return { error: parsed.error }
       if (!parsed.nameservers) return { error: 'Enter at least two nameservers.' }
       const next = parsed.nameservers
+      const service = createServiceClient()
+      const delivery: NameserverDelivery =
+        domain.source === 'demo'
+          ? 'demo'
+          : domain.local_status === 'pending'
+            ? 'after_registration'
+            : 'queued'
+
+      /** Idempotent: a change already open is left to finish (migration 13). */
+      const sendToRegistry = async () => {
+        if (delivery !== 'queued') return true
+        const { error } = await service.rpc('enqueue_nameserver_change', { p_domain_id: domain.id })
+        if (error) logger.error({ err: error }, 'nameserver change not queued')
+        return !error
+      }
 
       if (sameNameservers(next, domain.pending_nameservers ?? domain.nameservers)) {
-        return { ok: true, warnings: [], unchanged: true }
+        // Asking again re-queues a change whose earlier queueing failed.
+        if (domain.pending_nameservers && !(await sendToRegistry())) return { error: FAILED }
+        return { ok: true, warnings: [], delivery, unchanged: true }
       }
 
       const lookups = new Map(
@@ -104,7 +126,6 @@ export const requestNameservers = elevatedAction
         }
       }
 
-      const service = createServiceClient()
       const { error } = await service
         .from('domains')
         .update({ pending_nameservers: next, nameserver_preset_id: parsedInput.presetId ?? null })
@@ -121,7 +142,9 @@ export const requestNameservers = elevatedAction
         actor_id: ctx.user.id,
         payload: { before: domain.pending_nameservers ?? domain.nameservers, after: next },
       })
+      const queued = await sendToRegistry()
       revalidatePath(`/app/domains/${domain.domain_name}`, 'layout')
-      return { ok: true, warnings: verdict.warnings }
+      if (!queued) return { error: FAILED }
+      return { ok: true, warnings: verdict.warnings, delivery }
     },
   )

@@ -61,7 +61,7 @@ export function parseExpiryWindow(value: string | undefined): ExpiryWindow | nul
 }
 
 export const DELEGATION_LABEL: Record<DelegationStatus, string> = {
-  undelegated: 'Not pointed anywhere yet',
+  undelegated: 'Not pointed at your host yet',
   pending: 'Waiting to take effect',
   verified: 'Pointed and working',
   failed: 'Not working',

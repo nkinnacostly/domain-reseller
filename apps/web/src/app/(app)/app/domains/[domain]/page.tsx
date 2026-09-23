@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { AutoRenewToggle } from '@/features/domains/components/auto-renew-toggle'
-import { NotConnectedNote } from '@/features/domains/components/domain-badges'
+import { PanelNote } from '@/features/domains/components/domain-badges'
 import { DELEGATION_LABEL, daysUntilExpiry } from '@/features/domains/lib/portfolio'
+import { registrationNote } from '@/features/domains/lib/registration'
 import { getDomain } from '@/features/domains/queries/domains'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 
@@ -22,16 +23,13 @@ async function Overview({ params }: { params: Params }) {
   const days = daysUntilExpiry(domain.expiresAt, new Date())
   const pricing = priced?.tlds.find((tld) => tld.tld === domain.tld)
   const renewal = pricing ? formatNaira(pricing.renewal.priceKobo) : null
+  const note = registrationNote(domain)
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      {domain.status === 'pending' ? (
+      {note ? (
         <div className="lg:col-span-2">
-          <NotConnectedNote>
-            {domain.testMode
-              ? 'This came from a test payment, so it will not be registered.'
-              : 'Your payment is in and this domain is queued. It is registered as soon as the registrar connection is switched on.'}
-          </NotConnectedNote>
+          <PanelNote title={note.title}>{note.body}</PanelNote>
         </div>
       ) : null}
 
@@ -92,7 +90,7 @@ async function Overview({ params }: { params: Params }) {
         ) : (
           // FR-D7 — never a blank: say what to do next.
           <p className="mt-3 text-sm text-foreground">
-            Not pointed anywhere yet — where is your site hosted?
+            Not pointed at your host yet — where is your site hosted?
           </p>
         )}
         <Link

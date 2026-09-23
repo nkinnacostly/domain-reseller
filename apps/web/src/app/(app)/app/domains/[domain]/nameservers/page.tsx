@@ -8,8 +8,9 @@ import {
   DnsSkeleton,
   ResolverViews,
 } from '@/features/domains/components/dns-sections'
-import { NotConnectedNote } from '@/features/domains/components/domain-badges'
+import { PanelNote } from '@/features/domains/components/domain-badges'
 import { NameserverForm } from '@/features/domains/components/nameserver-form'
+import { nameserverNote } from '@/features/domains/lib/registration'
 import { getDomain, getNameserverPresets } from '@/features/domains/queries/domains'
 
 export const metadata: Metadata = { title: 'Nameservers' }
@@ -24,6 +25,7 @@ async function Nameservers({ params }: { params: Params }) {
   ])
   if (!domain) notFound()
   const requested = domain.pendingNameservers ?? domain.nameservers
+  const note = nameserverNote(domain)
 
   return (
     <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:gap-14">
@@ -35,11 +37,9 @@ async function Nameservers({ params }: { params: Params }) {
           Your host gives you two or more nameservers. Put them here and your host takes over the
           website and email for {domain.domainName}.
         </p>
-        {domain.pendingNameservers ? (
+        {note ? (
           <div className="mt-4">
-            <NotConnectedNote>
-              Waiting to be applied at the registry: {domain.pendingNameservers.join(', ')}.
-            </NotConnectedNote>
+            <PanelNote title={note.title}>{note.body}</PanelNote>
           </div>
         ) : null}
         <div className="mt-6">

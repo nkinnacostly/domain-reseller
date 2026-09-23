@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
-import { NotConnectedNote } from '@/features/domains/components/domain-badges'
+import { PanelNote } from '@/features/domains/components/domain-badges'
 import { getDomain } from '@/features/domains/queries/domains'
 
 export const metadata: Metadata = { title: 'Contacts' }
@@ -38,10 +38,9 @@ async function Contacts({ params }: { params: Params }) {
           The same details are used for the admin, technical and billing contacts.
         </p>
       </section>
-      <NotConnectedNote>
-        Editing contacts reaches the registry once registration is switched on. Changing the owner
-        will explain the 60-day transfer lock it starts before anything is saved.
-      </NotConnectedNote>
+      <PanelNote title="Not editable here yet.">
+        Changing contacts from here is not built yet.
+      </PanelNote>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
+import { describeEvent } from '@/features/domains/lib/activity'
 import { getDomain, getDomainEvents } from '@/features/domains/queries/domains'
 
 export const metadata: Metadata = { title: 'Activity' }
@@ -11,23 +12,6 @@ const timeFormat = new Intl.DateTimeFormat('en-NG', {
   timeStyle: 'short',
   timeZone: 'Africa/Lagos',
 })
-
-function describe(type: string, payload: Record<string, unknown>): string {
-  switch (type) {
-    case 'order_paid':
-      return `Paid for in order ${payload.order_number ?? ''}`.trim()
-    case 'nameservers_requested':
-      return `Nameserver change requested: ${((payload.after as string[] | undefined) ?? []).join(', ')}`
-    case 'auto_renew_on':
-      return 'Auto-renew turned on'
-    case 'auto_renew_off':
-      return 'Auto-renew turned off'
-    case 'demo_created':
-      return 'Added as a demo domain'
-    default:
-      return type.replaceAll('_', ' ')
-  }
-}
 
 async function Activity({ params }: { params: Params }) {
   const { domain: name } = await params
@@ -49,7 +33,7 @@ async function Activity({ params }: { params: Params }) {
           className="flex flex-col gap-1 px-5 py-3.5 text-sm sm:flex-row sm:justify-between sm:gap-4"
         >
           <span className="text-foreground">
-            {describe(event.event_type, (event.payload ?? {}) as Record<string, unknown>)}
+            {describeEvent(event.event_type, (event.payload ?? {}) as Record<string, unknown>)}
             <span className="ml-2 text-xs text-muted-foreground">
               {event.actor_type === 'user' ? 'by you' : 'by us'}
             </span>

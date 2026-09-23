@@ -61,24 +61,45 @@ declare module 'nodejs-dna' {
     Reason?: string | null
   }
 
+  /**
+   * What the REST client's `parseDomainInfo` returns (read from the SDK
+   * source, 23 Sept 2026). Booleans arrive as the strings 'true'/'false', and
+   * dates as `YYYY-MM-DDTHH:mm:ss` in the gateway's LOCAL time, no zone.
+   */
   export type DnaDomain = {
+    ID: number
     DomainName: string
     Status: string
-    Dates: { Start?: string; Expiration?: string; Transfer?: string; Updated?: string }
-    NameServers?: string[]
-    LockStatus?: boolean
-    PrivacyProtectionStatus?: boolean
-    IsPremiumName?: boolean
-    RenewalMode?: string
-    Auth?: string
-    RemainingDay?: number
-    Contacts?: Partial<DnaContactSet>
+    AuthCode?: string
+    LockStatus: 'true' | 'false'
+    PrivacyProtectionStatus: 'true' | 'false'
+    IsChildNameServer: 'true' | 'false'
+    Dates: { Start: string; Expiration: string; RemainingDays: number }
+    NameServers: string[]
     [key: string]: unknown
   }
+
+  /** The axios-shaped request the REST client hands its transport. */
+  export type DnaHttpRequest = {
+    method: string
+    url: string
+    headers: Record<string, string>
+    timeout?: number
+    params?: Record<string, unknown>
+    data?: unknown
+  }
+  export type DnaHttpResponse = { status: number; data: unknown; headers: Record<string, string> }
 
   export default class DomainNameApi {
     static readonly VERSION: string
     constructor(userName: string, password: string, options?: DnaOptions | boolean)
+
+    /**
+     * The transport-specific client. Not public API: we replace the REST
+     * client's `_axios` so TLS is verified and outcomes are recorded
+     * (see src/dna/transport.ts). Absent fields mean the SOAP client.
+     */
+    readonly client: { _axios?: (config: DnaHttpRequest) => Promise<DnaHttpResponse> }
 
     getActiveTransport(): 'REST' | 'SOAP'
     setErrorReportingEnabled(enabled: boolean): void

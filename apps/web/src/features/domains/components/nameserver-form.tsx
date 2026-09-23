@@ -12,8 +12,14 @@ import {
   onSubmitWith,
   SubmitButton,
 } from '@/components/common/form-parts'
-import { requestNameservers } from '../actions/domains'
+import { type NameserverDelivery, requestNameservers } from '../actions/domains'
 import type { NameserverPreset } from '../queries/domains'
+
+const DELIVERY_MESSAGE: Record<NameserverDelivery, string> = {
+  queued: 'Saved and sent to the registry. Activity shows when it is applied.',
+  after_registration: 'Saved. They are applied as soon as the registration completes.',
+  demo: 'Saved. This is a demo domain, so nothing is sent to a registry.',
+}
 
 /**
  * FR-D1 — one panel, three ways in: pick your host, paste what they sent, or
@@ -157,7 +163,7 @@ export function NameserverForm({
         <FormMessage tone="success">
           {data.unchanged
             ? 'Those are already the nameservers on file — nothing to change.'
-            : `Saved. We will apply them at the registry as soon as it is connected.`}
+            : DELIVERY_MESSAGE[data.delivery]}
           {data.warnings.length ? (
             <ul className="mt-1 list-disc pl-5">
               {data.warnings.map((warning) => (

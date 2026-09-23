@@ -205,3 +205,49 @@ export async function enableTotp(user) {
   await client.auth.signOut({ scope: 'local' })
   return data.totp.secret
 }
+
+/**
+ * What the gateway worker records once the registry has answered, through
+ * the same database functions (migration 13). The registry itself is not
+ * involved — `outcome` is 'registered' or a failure code such as
+ * 'DOMAIN_TAKEN'. Claims only this order's jobs: the queue is shared.
+ *
+ * @param {string} orderId
+ * @param {string} outcome
+ */
+export async function settleRegistration(orderId, outcome) {
+  const client = admin()
+  const { data: jobs, error } = await client
+    .from('jobs')
+    .select('id, test_mode, order_items!inner(order_id)')
+    .eq('order_items.order_id', orderId)
+  if (error) throw error
+  if (!jobs?.length) throw new Error(`No registration jobs for order ${orderId}`)
+  for (const job of jobs) {
+    const claim = await client.rpc('claim_job', {
+      p_worker: 'e2e',
+      p_test_mode: job.test_mode,
+      p_job_id: job.id,
+    })
+    if (claim.error) throw claim.error
+    const result =
+      outcome === 'registered'
+        ? await client.rpc('complete_registration', {
+            p_job_id: job.id,
+            p_registered_at: new Date().toISOString(),
+            p_expires_at: new Date(Date.now() + 365 * DAY_MS).toISOString(),
+            p_nameservers: ['ns1.domainnameapi.com', 'ns2.domainnameapi.com'],
+            p_transfer_lock: true,
+            p_privacy: false,
+            p_recovered: false,
+            p_nameserver_result: 'none',
+          })
+        : await client.rpc('fail_job', {
+            p_job_id: job.id,
+            p_code: outcome,
+            p_message: 'e2e',
+            p_needs_attention: false,
+          })
+    if (result.error) throw result.error
+  }
+}

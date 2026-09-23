@@ -1,6 +1,11 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page, test } from '@playwright/test'
-import { createTestUser, deleteTestUser, TEST_DOMAIN_PREFIX } from './support/accounts.mjs'
+import {
+  createTestUser,
+  deleteTestUser,
+  settleRegistration,
+  TEST_DOMAIN_PREFIX,
+} from './support/accounts.mjs'
 
 /**
  * Checkout (PRD E3, FR-C5 – FR-C9, §13.4 steps 1–6) end to end, against the
@@ -29,6 +34,11 @@ async function signInWithDomainInCart(page: Page, user: TestUser, name: string) 
   await page.getByRole('link', { name: 'Continue to checkout' }).click()
   await expect(page).toHaveURL(/\/app\/checkout$/)
 }
+
+const axe = (page: Page) =>
+  new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze()
 
 async function fillRegistrant(page: Page) {
   const form = page.getByRole('form', { name: 'Checkout' })
@@ -101,6 +111,57 @@ test.describe('checkout', () => {
     await expect(form.getByText('Enter a city')).toBeVisible()
     await expect(form.getByText('Tick the box to confirm the spelling')).toBeVisible()
     await expect(page).toHaveURL(/\/app\/checkout$/)
+  })
+
+  async function payFor(page: Page, name: string) {
+    await signInWithDomainInCart(page, user as TestUser, name)
+    const form = await fillRegistrant(page)
+    await form.getByRole('checkbox').check()
+    await form.getByRole('button', { name: /^Pay / }).click()
+    await expect(page.getByRole('heading', { name: 'Mock Flutterwave' })).toBeVisible({
+      timeout: 30_000,
+    })
+    await page.getByRole('link', { name: 'Pay (test)' }).click()
+    await expect(page).toHaveURL(/\/app\/orders\/[0-9a-f-]+\?payment=paid$/)
+    return new URL(page.url()).pathname.split('/').at(-1) as string
+  }
+
+  test('the order follows its registration without a reload (§13.4 steps 7–8)', async ({
+    page,
+  }) => {
+    const name = uniqueName()
+    const orderId = await payFor(page, name)
+    const line = page.getByRole('main').locator('[data-line-status]')
+    await expect(line).toHaveText('Queued')
+
+    await settleRegistration(orderId, 'registered')
+
+    // The page refreshes itself while the order is open.
+    await expect(line).toHaveText('Registered', { timeout: 15_000 })
+    await expect(page.getByText('Every domain in this order is registered.')).toBeVisible()
+    await page.getByRole('link', { name: `${name}.com` }).click()
+
+    await expect(page.getByRole('heading', { name: `${name}.com` })).toBeVisible()
+    await expect(page.getByText('Sandbox registration.')).toBeVisible()
+    await expect(page.getByText('Active', { exact: true }).first()).toBeVisible()
+  })
+
+  test('a line the registry refuses says why, and a test order owes nothing', async ({ page }) => {
+    const name = uniqueName()
+    const orderId = await payFor(page, name)
+
+    await settleRegistration(orderId, 'DOMAIN_TAKEN')
+
+    const main = page.getByRole('main')
+    await expect(main.locator('[data-line-status]')).toHaveText('Failed', { timeout: 15_000 })
+    await expect(main).toContainText('Someone else registered this name before we could.')
+    await expect(page.getByRole('alert').filter({ hasText: 'could not register' })).toContainText(
+      'No money moved.',
+    )
+    expect((await axe(page)).violations).toEqual([])
+
+    await page.goto(`/app/domains/${name}.com`)
+    await expect(page.getByText('Registration failed.')).toBeVisible()
   })
 
   test('paying takes you to Flutterwave and back to a paid, queued order', async ({ page }) => {

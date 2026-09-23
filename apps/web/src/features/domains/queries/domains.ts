@@ -55,7 +55,7 @@ export const getDomain = cache(async (domainName: string) => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('domains')
-    .select(COLUMNS)
+    .select(`${COLUMNS}, order_items(failure_code)`)
     .eq('domain_name', decodeURIComponent(domainName).toLowerCase())
     .order('created_at', { ascending: false })
     .limit(1)
@@ -67,6 +67,8 @@ export const getDomain = cache(async (domainName: string) => {
     transferLock: data.transfer_lock as boolean,
     presetId: data.nameserver_preset_id as string | null,
     registrant: data.registrant as Record<string, string> | null,
+    /** Why registration failed, when it did (PRD §13.8 code). */
+    failureCode: data.order_items?.failure_code ?? null,
   }
 })
 export type DomainDetail = NonNullable<Awaited<ReturnType<typeof getDomain>>>

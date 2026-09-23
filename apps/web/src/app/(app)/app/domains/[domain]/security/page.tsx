@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
-import { NotConnectedNote } from '@/features/domains/components/domain-badges'
+import { PanelNote } from '@/features/domains/components/domain-badges'
 import { getDomain } from '@/features/domains/queries/domains'
 
 export const metadata: Metadata = { title: 'Security' }
@@ -16,12 +16,12 @@ async function Security({ params }: { params: Params }) {
     {
       title: 'Transfer lock',
       state: domain.transferLock ? 'On' : 'Off',
-      body: 'Stops anyone moving this domain to another registrar. Turning it off needs a two-factor code and is for when you are transferring away.',
+      body: 'Stops anyone moving this domain to another registrar. It is on from registration.',
     },
     {
       title: 'Transfer code',
       state: 'Hidden',
-      body: 'The code another registrar asks for. Revealing it needs a two-factor code, is logged, and emails you — we release it within five days of asking, always.',
+      body: 'The code another registrar asks for when you move a domain away. ICANN rules require us to give it to you within five days of asking.',
     },
     {
       title: 'Contact privacy',
@@ -48,9 +48,9 @@ async function Security({ params }: { params: Params }) {
           </li>
         ))}
       </ul>
-      <NotConnectedNote>
-        Changing these reaches the registry once registration is switched on.
-      </NotConnectedNote>
+      <PanelNote title="Not editable here yet.">
+        Changing the lock, privacy or transfer code from here is not built yet.
+      </PanelNote>
     </div>
   )
 }

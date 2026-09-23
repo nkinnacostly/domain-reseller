@@ -14,16 +14,19 @@ back here. Each item says why it waited and what unblocks it.
 | L2 | **Enable the any-device email templates** in `supabase/config.toml` (`[auth.email.template.*]`, currently commented out) | Until then, email links only work in the browser that asked for them. The free tier refuses template changes on the built-in sender. | L1 |
 | L3 | **Production `site_url` and redirect URLs** in `supabase/config.toml` | Both still point at `localhost`. | The production domain |
 | L4 | **Ask DomainNameAPI to raise the concurrency limit** | They refuse a third concurrent request (PRD V4). A search is ~4 calls, so capacity is about one uncached search every 2 s across all users. | DomainNameAPI support |
-| L5 | **DomainNameAPI OTE (sandbox) credentials** | Our keys are production-only. Registration, renewal and transfer are real-money writes and must be built and tested against the sandbox (N12). | DomainNameAPI support |
+| L5 | ~~DomainNameAPI OTE (sandbox) credentials~~ | Received 23 Sept 2026 (`DNA_API_TEST_KEY`); verified read-only: same reseller account, USD 1,000 sandbox balance. | Done |
 | L6 | **Top up the DomainNameAPI balance** | It is USD 0 — every registration would fail with `API_350`. Plan the float per PRD FR-FLOAT-4. | Owner |
 | L7 | **GitHub Actions secrets for `.github/workflows/pricing.yml`** | Without them the daily FX update and weekly catalogue sync never run, and prices freeze. Needs `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `DNA_RESELLER_ID`, `DNA_API_KEY` (optionally `FX_PARALLEL_API_KEY`). | Owner, repo settings |
 | L8 | **Revalidate prices after the jobs run** | Pricing is cached with `cacheTag('pricing')`; the jobs update the database but nothing tells the deployed site to refresh. Add a revalidation call once deployed. | Deployment |
 | L9 | **Rotate the Supabase database password** | It was shared in a chat session. | Owner, Supabase dashboard |
-| L10 | **Deploy the gateway** on infrastructure with a static egress IP (PRD ADR-004) | Allowlisting is not enforced today (V2), but the gateway is where credentials and rate limits live. Locally it runs with `DNA_ENV=production` for read-only availability — that must never carry write routes. | Hosting decision |
+| L10 | **Deploy the gateway** on infrastructure with a static egress IP (PRD ADR-004) | Allowlisting is not enforced today (V2), but the gateway is where credentials and rate limits live. Locally it reads from production (`DNA_ENV=production`) for real availability; writes follow `DNA_WRITE_ENV`, which refuses production outside a production deployment. | Hosting decision |
 | L11 | **Flutterwave live keys and webhook secret hash** | Test keys only during the build. Set the secret hash in the dashboard and in `FLUTTERWAVE_WEBHOOK_HASH`. | Owner, after checkout is proven on test keys |
 | L12 | **Flutterwave: merchant bears the transaction fee** | By default Flutterwave adds its fee on top at payment, so the customer would pay more than the total we show — against FR-C5 and our no-hidden-fees promise. Switch fees to the merchant in the dashboard, or show the fee. | Owner, Flutterwave dashboard |
 | L13 | **Register the webhook URL** (`/api/webhooks/flutterwave`) in the Flutterwave dashboard | Payments are confirmed when the customer returns; the webhook covers a closed tab. It needs a public URL (the deployment, or a tunnel for local testing). | Deployment |
-| L14 | **Registration job** (PRD §13.4 step 7) | Paid orders are queued (`order_items.status = pending`) and nothing registers them yet. Needs OTE (L5), then live credentials and float (L6). | L5, L6 |
+| L14 | **First sandbox registrations** | The registration job is built (migration 13, `apps/gateway/src/provisioning`) and tested against the real SDK over a fake network, but no registration has yet been sent to the sandbox: the automated permission check stopped the first attempt. Set `DNA_WRITE_ENV=ote`, buy a domain with Flutterwave test keys, and confirm the register and nameserver responses match what `registrar.ts` expects (their shapes are read from the SDK source, not observed). | Owner |
+| L15 | **Automatic refunds for failed lines** (FR-R3, I6) | The panel tells a live customer "We'll refund what you paid" for a failed line; today that refund is manual. Needs the wallet (FR-W1) or a Flutterwave refund call. Must exist before `DNA_WRITE_ENV=production`. | Wallet or refund API |
+| L16 | **Alerts for stuck jobs** (I5, §13.5 orphan sweep) | A job in `needs_attention`, or an order in `provisioning` for over 15 minutes, is only logged at error level. Someone has to be told. `retry_job()` puts a job back once the registry has been checked. | Alerting channel |
+| L17 | **Live registrations** | `DNA_WRITE_ENV=production` on the deployed gateway, after L6, L10, L14, L15 and L16. | Those |
 
 ## 2. Deferred features
 
@@ -48,7 +51,10 @@ back here. Each item says why it waited and what unblocks it.
 - **Wallet and mixed payment** (FR-C9, FR-W1/W2).
 
 ### Domain management (PRD E5 – E8, E10)
-- **Apply queued changes at the registry** — nameserver requests are validated and stored (`pending_nameservers`); applying them needs `ModifyNameServer` through the gateway (L5). The same goes for transfer lock, auth code reveal, contacts and privacy, which are shown read-only.
+- **Registry-side controls** — nameserver changes now reach the registry (an `apply_nameservers` job per domain). Transfer lock, auth code reveal, contacts and privacy are still read-only.
+- **Registrar renewal mode** (FR-R6) — the SDK has no `ModifyRenewalMode`, so the supplier's own auto-renew is left at its default. Check what that default is before live registrations: our renewal engine must be the only thing that renews.
+- **Portfolio reconcile and deep sync** (§13.5) — nothing yet compares our `domains` rows with the registry after registration.
+- **`supplier_calls` retention** — rows accumulate; decide how long to keep them.
 - **Delegation verification job** (FR-D5) and the one-time undelegated nudge (FR-D8, needs L1).
 - **Renew now and restore** (FR-RN1, FR-RN5, FR-RN6) — a renewal checkout like registration's; the renewal engine and dunning (FR-RN2, FR-RN3).
 - **Labels and bulk actions** (FR-P3, FR-P4, FR-N2), **glue records** (FR-N3), **revert to previous nameservers** (FR-N5).

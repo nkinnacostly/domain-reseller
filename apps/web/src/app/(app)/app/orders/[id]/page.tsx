@@ -6,7 +6,11 @@ import { Suspense } from 'react'
 import { FormMessage } from '@/components/common/form-parts'
 import { Container } from '@/components/layout/site-shell'
 import { OrderStatus } from '@/features/checkout/components/order-status'
+import { RefreshWhile } from '@/features/checkout/components/refresh-while'
+import { isSettling, LINE_STATUS, orderNotice } from '@/features/checkout/lib/progress'
 import { getOrder } from '@/features/checkout/queries/orders'
+import { failureReason } from '@/features/domains/lib/registration'
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Order' }
 
@@ -40,6 +44,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
 
   const registrant = order.registrant as Contact
   const notice = payment ? PAYMENT_NOTICES[payment] : undefined
+  const progress = orderNotice(order.status, order.test_mode)
 
   return (
     <>
@@ -52,15 +57,9 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
 
       <div className="mt-6 max-w-2xl space-y-3">
         {notice ? <FormMessage tone={notice.tone}>{notice.text}</FormMessage> : null}
-        {order.status === 'paid' ? (
-          <FormMessage tone="success">
-            Your order is paid and queued for registration.{' '}
-            {order.test_mode
-              ? 'This was a test payment — no money moved, and nothing will be registered.'
-              : 'Registration is not switched on yet; your domains will be registered as soon as it is, and you will not be charged again.'}
-          </FormMessage>
-        ) : null}
+        {progress ? <FormMessage tone={progress.tone}>{progress.text}</FormMessage> : null}
       </div>
+      <RefreshWhile active={isSettling(order.status)} />
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
         <section aria-labelledby="items-heading">
@@ -74,13 +73,40 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                 className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="font-semibold break-all text-foreground">{item.domain}</p>
+                  <p className="flex flex-wrap items-center gap-2">
+                    {item.status === 'completed' ? (
+                      <Link
+                        href={`/app/domains/${item.domain}`}
+                        className="font-semibold break-all text-foreground underline-offset-4 hover:underline"
+                      >
+                        {item.domain}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold break-all text-foreground">{item.domain}</span>
+                    )}
+                    {order.status !== 'awaiting_payment' && order.status !== 'cancelled' ? (
+                      <span
+                        data-line-status={item.status}
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-xs font-medium text-foreground',
+                          item.status === 'failed' ? 'bg-destructive/10' : 'bg-muted',
+                        )}
+                      >
+                        {LINE_STATUS[item.status] ?? item.status}
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {item.period_years} {item.period_years === 1 ? 'year' : 'years'} · renews at{' '}
                     {formatNaira(Number(item.renewal_kobo))}/yr
                     {item.auto_renew ? ' · auto-renew on' : ''}
                     {item.privacy ? ' · privacy on' : ''}
                   </p>
+                  {item.status === 'failed' ? (
+                    <p className="mt-1 text-sm text-foreground">
+                      {failureReason(item.failure_code)}
+                    </p>
+                  ) : null}
                 </div>
                 <p className="font-medium text-foreground tabular-nums">
                   {formatNaira(Number(item.price_kobo))}
