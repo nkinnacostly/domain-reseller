@@ -50,15 +50,22 @@ jobs:
 
       - name: Update exchange rate
         if: github.event.schedule == '0 7 * * *' || inputs.job != 'catalogue'
-        run: pnpm --filter @dr/gateway fx:update -- --apply
-        # Exit 3 means the rate moved too far and is waiting for review —
-        # that is a working outcome, not a failed job.
-        continue-on-error: true
+        # Exit 3 means the rate moved too far and is waiting for review — a
+        # working outcome, not a failure. Anything else fails the run, so a
+        # broken feed or key shows up red instead of hiding behind green.
+        run: |
+          set +e
+          pnpm --filter @dr/gateway fx:update -- --apply
+          code=$?
+          if [ "$code" -eq 3 ]; then
+            echo "::warning::Rate held for review (fx_rates.status = pending_review)"
+            exit 0
+          fi
+          exit $code
 
       - name: Sync supplier catalogue
         if: github.event.schedule == '0 6 * * 1' || inputs.job != 'fx'
         run: pnpm --filter @dr/gateway sync:catalogue -- --apply
-        continue-on-error: true
 
       - name: Report held rates
         run: |
