@@ -172,7 +172,9 @@ export const placeOrder = authAction
     if (saved.error) logger.warn({ err: saved.error }, 'could not save default contact')
 
     // ── Create the order (step 1) ────────────────────────────────────────
-    const txRef = `ord_${randomUUID()}`
+    // The Flutterwave account is shared with other apps; Paidly's webhook
+    // routes notices by this prefix (solostack: app/api/webhooks/flutterwave).
+    const txRef = `MDH-${randomUUID()}`
     const { data: order, error: orderError } = await service
       .from('orders')
       .insert({

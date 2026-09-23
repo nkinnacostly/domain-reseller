@@ -79,8 +79,11 @@ provider's own CLI or dashboard — never into a chat, a commit or an issue.
 1. **You:** top up the DomainNameAPI balance — USD 15 covers a .com (L6).
 2. **You:** in Flutterwave (the account must be approved for live payments):
    - copy the **live** keys into Vercel's four Flutterwave variables;
-   - set the webhook URL to `https://<project>.vercel.app/api/webhooks/flutterwave`
-     and its secret hash to `FLUTTERWAVE_WEBHOOK_HASH` (L11, L13);
+   - leave the webhook URL alone: the account is shared, and Paidly's webhook
+     (repo `solostack`) forwards every notice whose `tx_ref` starts with `MDH-`
+     to `https://mydomainshub.vercel.app/api/webhooks/flutterwave`. Our
+     `FLUTTERWAVE_WEBHOOK_HASH` must equal the account's secret hash (Paidly's
+     `FLW_WEBHOOK_SECRET`) — checked equal on 23 Sept 2026 (L11, L13);
    - redeploy on Vercel.
 3. **You:** switch the gateway to live registrations:
    ```bash

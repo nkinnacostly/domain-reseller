@@ -225,7 +225,12 @@ describe('placeOrder — the order', () => {
       registrant: expect.objectContaining({ phone: '8031234567', phoneCountryCode: '234' }),
     })
     expect(createPaymentLink).toHaveBeenCalledWith(
-      expect.objectContaining({ amountKobo: 1_978_000, orderNumber: 'ND-001001' }),
+      expect.objectContaining({
+        amountKobo: 1_978_000,
+        orderNumber: 'ND-001001',
+        // Paidly's shared webhook forwards notices to us by this prefix.
+        txRef: expect.stringMatching(/^MDH-[0-9a-f-]{36}$/),
+      }),
     )
   })
 
