@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
@@ -14,15 +15,17 @@ export const metadata: Metadata = { title: 'Your cart', robots: { index: false }
 export default function CartPage() {
   return (
     <>
-      <SiteHeader className="border-border/60 border-b" />
+      <SiteHeader />
       <main id="main">
-        <Container className="py-10 sm:py-14">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Your cart</h1>
-          <div className="mt-8">
-            <Suspense fallback={<CartSkeleton />}>
-              <CartContents />
-            </Suspense>
-          </div>
+        <PageHero
+          title="Your cart"
+          intro="Every domain shows what it costs now and what it renews at. VAT is added as its own line."
+          icons={['🛒', '🧾', '✅']}
+        />
+        <Container className="py-12 sm:py-16">
+          <Suspense fallback={<CartSkeleton />}>
+            <CartContents />
+          </Suspense>
         </Container>
       </main>
       <SiteFooter />

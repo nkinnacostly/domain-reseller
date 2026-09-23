@@ -131,7 +131,7 @@ export function Portfolio({
             })}
           </ul>
 
-          <div className="mt-6 hidden overflow-x-auto rounded-2xl border border-border md:block">
+          <div className="relative mt-6 hidden overflow-x-auto rounded-2xl border border-border md:block">
             <table className="w-full min-w-[44rem] border-collapse text-sm">
               <caption className="sr-only">
                 Your domains, soonest expiry first, with status, auto-renew and where each is

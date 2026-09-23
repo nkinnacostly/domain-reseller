@@ -65,7 +65,9 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
       </div>
 
       {/* Tables get their own scroll container so the page never scrolls sideways. */}
-      <div className="mt-6 overflow-x-auto">
+      {/* Relative, so the absolutely positioned sr-only labels inside are
+          clipped by this scroll box instead of widening the page. */}
+      <div className="relative mt-6 overflow-x-auto">
         <table className="w-full min-w-[42rem] border-collapse text-sm">
           <caption className="sr-only">
             Domain prices by extension, showing first-year, renewal and transfer prices in naira
@@ -94,7 +96,10 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
             {shown.map((row) => (
               <tr
                 key={row.tld}
-                className="border-border/60 border-b transition-colors hover:bg-muted/50 focus-within:bg-muted/50"
+                // Linked from the home page and the footer (/pricing#tld-com);
+                // the row lights up when it is the link's target.
+                id={`tld-${row.tld}`}
+                className="scroll-mt-8 border-border/60 border-b transition-colors hover:bg-muted/50 focus-within:bg-muted/50 target:bg-brand-subtle"
               >
                 <th scope="row" className="py-3 pr-4 text-left font-medium">
                   {`.${row.tld}`}

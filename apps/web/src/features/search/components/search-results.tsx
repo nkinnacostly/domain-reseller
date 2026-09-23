@@ -15,68 +15,85 @@ import {
 } from './availability-sections'
 import { DomainSearch } from './domain-search'
 
-/**
- * Search results (PRD E1). Reads `?q=`, so it sits inside the page's Suspense
- * boundary. The exact match and the suggestions each stream in behind their
- * own boundary, keyed on the query, so a new search shows fresh skeletons
- * rather than the last search's answers.
- */
-export async function SearchResults({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string | string[] }>
-}) {
+type SearchParams = Promise<{ q?: string | string[] }>
+
+async function readQuery(searchParams: SearchParams) {
   const { q: raw } = await searchParams
   const q = (Array.isArray(raw) ? raw[0] : raw) ?? ''
   const parsed = parseSearchQuery(q)
+  const shown = parsed.isValid ? (parsed.tld ? `${parsed.stem}.${parsed.tld}` : parsed.stem) : ''
+  return { q, parsed, shown }
+}
 
-  if (!parsed.isValid) {
-    return (
-      <>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Search for a domain</h1>
-        <div className="mt-6 max-w-2xl">
-          <DomainSearch autoFocus />
-        </div>
-        <div className="mt-10 rounded-2xl border border-border border-dashed p-8 text-center sm:p-12">
-          <span className="mx-auto grid size-12 place-items-center rounded-full bg-muted text-muted-foreground">
-            <SearchIcon className="size-5" aria-hidden="true" />
-          </span>
-          <p className="mt-4 font-semibold text-foreground">
-            {q.trim() ? "That doesn't look like a domain" : 'Type a name above to get started'}
-          </p>
-          <p className="mx-auto mt-2 max-w-md text-pretty text-sm/6 text-muted-foreground">
-            {q.trim()
-              ? 'Use letters, numbers and hyphens — for example getpaid or getpaid.com.'
-              : 'Search any extension we sell, from .com to .africa.'}
-          </p>
-        </div>
-      </>
-    )
-  }
+/**
+ * The page heading and the search box, on the blue hero. Reads `?q=` too, so
+ * it has its own Suspense boundary on the page.
+ */
+export async function SearchHeading({ searchParams }: { searchParams: SearchParams }) {
+  const { parsed, shown } = await readQuery(searchParams)
 
-  const shown = parsed.tld ? `${parsed.stem}.${parsed.tld}` : parsed.stem
-  const priced = await getPricedCatalogue()
-
-  const heading = (
+  return (
     <>
-      <h1 className="text-2xl font-bold tracking-tight break-all sm:text-3xl">
-        Results for <span className="text-accent">{shown}</span>
+      <h1 className="text-[2.25rem] leading-[1.08] font-bold tracking-[-0.02em] break-all sm:text-5xl">
+        {parsed.isValid ? (
+          <>
+            <span className="text-brand-muted-foreground">Results for</span> {shown}
+          </>
+        ) : (
+          'Search for a domain'
+        )}
       </h1>
-      <div className="mt-6 max-w-2xl">
-        <DomainSearch />
+      <div className="mt-8 max-w-2xl">
+        <DomainSearch autoFocus={!parsed.isValid} />
       </div>
     </>
   )
+}
+
+export function SearchHeadingSkeleton() {
+  return (
+    <div aria-hidden="true" className="animate-pulse">
+      <div className="h-12 w-80 max-w-full rounded-xl bg-brand-foreground/20" />
+      <div className="mt-8 h-16 max-w-2xl rounded-full bg-brand-foreground/20" />
+    </div>
+  )
+}
+
+/**
+ * Search results (PRD E1), below the hero. Reads `?q=`, so it sits inside the
+ * page's Suspense boundary. The exact match and the suggestions each stream in
+ * behind their own boundary, keyed on the query, so a new search shows fresh
+ * skeletons rather than the last search's answers.
+ */
+export async function SearchResults({ searchParams }: { searchParams: SearchParams }) {
+  const { q, parsed, shown } = await readQuery(searchParams)
+
+  if (!parsed.isValid) {
+    return (
+      <div className="rounded-[2rem] border border-brand-subtle-border bg-brand-subtle p-8 text-center sm:p-12">
+        <span className="mx-auto grid size-12 place-items-center rounded-full bg-background text-brand-ink">
+          <SearchIcon className="size-5" aria-hidden="true" />
+        </span>
+        <p className="mt-4 font-semibold text-foreground">
+          {q.trim() ? "That doesn't look like a domain" : 'Type a name above to get started'}
+        </p>
+        <p className="mx-auto mt-2 max-w-md text-pretty text-sm/6 text-muted-foreground">
+          {q.trim()
+            ? 'Use letters, numbers and hyphens — for example getpaid or getpaid.com.'
+            : 'Search any extension we sell, from .com to .africa.'}
+        </p>
+      </div>
+    )
+  }
+
+  const priced = await getPricedCatalogue()
 
   // No catalogue, no prices — and a result without a price breaks N8.
   if (!priced) {
     return (
-      <>
-        {heading}
-        <div className="mt-10 max-w-2xl">
-          <PricingUnavailable />
-        </div>
-      </>
+      <div className="max-w-2xl">
+        <PricingUnavailable />
+      </div>
     )
   }
 
@@ -90,12 +107,12 @@ export async function SearchResults({
 
   return (
     <>
-      {heading}
-
       {/* Three requests, three boundaries: whichever answers first shows first. */}
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.15fr_1fr] lg:gap-10">
+      {/* minmax(0, …) so a long name wraps inside its column instead of
+          widening the grid past the screen. */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-10">
         {plan.unsoldTld ? (
-          <div className="rounded-3xl border border-border bg-background p-6 sm:p-8">
+          <div className="rounded-[2rem] border border-border bg-background p-6 sm:p-8">
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
               We don't sell .{plan.unsoldTld}
             </h2>

@@ -13,6 +13,7 @@ export default function ContactPage() {
     <LegalPage
       title="Contact us"
       nav="none"
+      icons={['✉️', '💬', '🤝']}
       intro={
         <p>
           Email is the way to reach us: <EmailLink />. The <Link href="/help">help centre</Link> may

@@ -27,15 +27,18 @@ export async function StatsStrip() {
   ].filter((stat): stat is { value: string; label: string } => Boolean(stat))
 
   return (
-    <section aria-label="At a glance" className="border-border/70 border-y bg-muted/40">
-      <Container className="py-8 sm:py-10">
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-8 lg:grid-cols-4">
+    <section aria-label="At a glance">
+      <Container className="py-12 sm:py-16">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-10 lg:grid-cols-4 lg:divide-x lg:divide-border">
           {stats.map((stat) => (
             // flex-col-reverse puts the value above its label visually while
             // keeping dt before dd in the DOM, so the label is stated once.
-            <div key={stat.label} className="flex flex-col-reverse gap-1">
-              <dt className="text-sm text-muted-foreground">{stat.label}</dt>
-              <dd className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            <div
+              key={stat.label}
+              className="flex flex-col-reverse justify-end gap-1.5 text-center lg:px-6"
+            >
+              <dt className="text-pretty text-sm text-muted-foreground">{stat.label}</dt>
+              <dd className="text-3xl font-bold tracking-tight text-brand-ink sm:text-4xl lg:text-5xl">
                 {stat.value}
               </dd>
             </div>

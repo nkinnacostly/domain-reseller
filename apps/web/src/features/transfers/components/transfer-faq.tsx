@@ -32,19 +32,23 @@ const FAQS = [
 
 export function TransferFaq() {
   return (
-    <section aria-labelledby="transfer-faq-heading" className="bg-muted/40">
-      <Container className="py-14 sm:py-20">
+    <section aria-labelledby="transfer-faq-heading">
+      <Container className="py-16 sm:py-24">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr] lg:gap-16">
           <h2
             id="transfer-faq-heading"
-            className="text-2xl font-bold tracking-tight text-balance sm:text-3xl lg:text-4xl"
+            className="text-3xl font-bold tracking-tight text-balance sm:text-4xl lg:text-5xl"
           >
             Transfer questions
           </h2>
 
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion
+            type="single"
+            collapsible
+            className="w-full rounded-[2rem] border border-brand-subtle-border bg-brand-subtle px-6 py-2 sm:px-8"
+          >
             {FAQS.map((faq) => (
-              <AccordionItem key={faq.q} value={faq.q}>
+              <AccordionItem key={faq.q} value={faq.q} className="border-brand-subtle-border">
                 <AccordionTrigger className="text-left text-base font-medium">
                   {faq.q}
                 </AccordionTrigger>

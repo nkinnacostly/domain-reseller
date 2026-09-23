@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
-import { Container } from '@/components/layout/site-shell'
 import { TransferCheckForm } from '@/features/transfers/components/transfer-check-form'
 import { TransferFaq } from '@/features/transfers/components/transfer-faq'
 import { TransferGuide } from '@/features/transfers/components/transfer-guide'
@@ -12,7 +12,7 @@ import { TransferResult } from '@/features/transfers/components/transfer-result'
 export const metadata: Metadata = {
   title: 'Transfer a domain',
   description:
-    'Check whether your domain can move before you pay anything. We look it up at the registry and tell you exactly what, if anything, is in the way.',
+    'Check whether your domain can move. We look it up at the registry and tell you exactly what, if anything, is in the way.',
 }
 
 /**
@@ -29,25 +29,17 @@ export default function TransferPage({
 }) {
   return (
     <>
-      <SiteHeader className="border-border/60 border-b" />
+      <SiteHeader />
 
       <main id="main">
-        <div className="bg-gradient-to-br from-hero-from to-hero-to">
-          <Container className="py-14 sm:py-20">
-            <div className="max-w-2xl">
-              <h1 className="text-[2.25rem] leading-[1.08] font-bold tracking-[-0.02em] text-balance sm:text-5xl">
-                Bring your domain here
-              </h1>
-              <p className="mt-5 text-pretty text-muted-foreground">
-                Check whether it can move before you pay anything. We look it up at the registry and
-                tell you exactly what, if anything, is in the way.
-              </p>
-              <div className="mt-8">
-                <TransferCheckForm />
-              </div>
-            </div>
-          </Container>
-        </div>
+        <PageHero
+          eyebrow="Transfer"
+          title="Bring your domain here"
+          intro="Check whether it can move. We look it up at the registry and tell you exactly what, if anything, is in the way."
+          icons={['🔁', '🔓', '✅']}
+        >
+          <TransferCheckForm />
+        </PageHero>
 
         <Suspense fallback={null}>
           <TransferResult searchParams={searchParams} />

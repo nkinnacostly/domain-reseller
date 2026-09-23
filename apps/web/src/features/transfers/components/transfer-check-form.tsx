@@ -101,7 +101,8 @@ export function TransferCheckForm() {
         id={errorId}
         role={error ? 'alert' : undefined}
         hidden={!error}
-        className="mt-2 pl-2 text-sm text-destructive sm:pl-7"
+        // It sits on the blue hero: red straight on blue would fail contrast.
+        className="mt-2 w-fit rounded-full bg-background px-4 py-1.5 text-sm font-medium text-destructive"
       >
         {error}
       </p>

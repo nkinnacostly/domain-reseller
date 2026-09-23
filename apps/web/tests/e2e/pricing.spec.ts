@@ -200,31 +200,29 @@ test.describe('one price everywhere', () => {
     )
 
     await page.goto('/')
-    // Scope to the Popular extensions section — the sibling "Also worth a
-    // look" list also renders <li> elements.
     const cards = await page
       .locator('section', { has: page.getByRole('heading', { name: 'Popular extensions' }) })
-      .locator('li')
+      .getByRole('listitem')
       .evaluateAll((items) =>
         items.map((li) => ({
-          tld: li.querySelector('p')?.textContent?.trim() ?? '',
-          badge: li.querySelector('span[class*="rounded-full"]')?.textContent?.trim() ?? '',
+          tld: li.querySelector('h3')?.textContent?.trim() ?? '',
+          // The first naira figure on a card is its first-year price.
+          badge: (li.textContent?.match(/₦[\d,]+/) ?? [])[0] ?? '',
         })),
       )
 
-    // The hero card quotes a real price and must agree too — it once carried
-    // a hardcoded ₦18,500 while the live price was ₦20,900.
-    const hero = await page
-      .locator('div', { hasText: /^getpaid\./ })
-      .first()
-      .evaluate((el) => ({
-        domain: el.querySelector('span.truncate')?.textContent?.trim() ?? '',
-        price: (el.textContent?.match(/₦[\d,]+/) ?? [])[0] ?? '',
-      }))
-    const heroTld = `.${hero.domain.split('.').slice(1).join('.')}`
-    expect(heroTld, 'hero should lead with the top-ranked extension').toBe('.com')
-    expect(hero.price, 'hero card shows no price').toBeTruthy()
-    expect(hero.price, 'hero price disagrees with the pricing table').toBe(fromTable[heroTld])
+    // The search mockup quotes a real price and must agree too — the hero
+    // once carried a hardcoded ₦18,500 while the live price was ₦20,900.
+    const quote = page.getByTestId('search-quote')
+    const quoted = await quote.evaluate((el) => ({
+      tld: (el.textContent?.match(/getpaid(\.[a-z.]+?)(?=Available)/) ?? [])[1] ?? '',
+      price: (el.textContent?.match(/₦[\d,]+/) ?? [])[0] ?? '',
+    }))
+    expect(quoted.tld, 'the mockup should lead with the top-ranked extension').toBe('.com')
+    expect(quoted.price, 'the mockup shows no price').toBeTruthy()
+    expect(quoted.price, 'mockup price disagrees with the pricing table').toBe(
+      fromTable[quoted.tld],
+    )
 
     expect(cards.length).toBeGreaterThan(0)
     for (const card of cards) {

@@ -18,6 +18,7 @@ export default function AbusePage() {
     <LegalPage
       title="Report abuse"
       nav="none"
+      icons={['🚩', '🛡️', '✉️']}
       intro={
         <p>
           If a domain registered through {BUSINESS.brand} is being used for phishing, malware, spam,

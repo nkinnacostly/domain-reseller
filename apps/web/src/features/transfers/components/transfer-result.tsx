@@ -19,8 +19,8 @@ type Offer = { transfer: string; renewal: string }
 /** Its own band between the hero and the guide, ruled off so it reads as the answer. */
 function ResultBand({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-border/60 border-b">
-      <Container className="py-12 sm:py-16">{children}</Container>
+    <div>
+      <Container className="pt-12 sm:pt-16">{children}</Container>
     </div>
   )
 }

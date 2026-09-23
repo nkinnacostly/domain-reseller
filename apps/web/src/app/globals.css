@@ -11,9 +11,6 @@
 :root {
   --radius: 0.625rem;
 
-  /* Page canvas — the dusty teal the white card floats on. */
-  --canvas: oklch(0.628 0.039 216);
-
   --background: oklch(1 0 0);
   --foreground: oklch(0.222 0.027 221);
   --card: oklch(1 0 0);
@@ -21,38 +18,46 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.222 0.027 221);
 
-  /* Primary is the deep slate used for headings and the mark. */
-  --primary: oklch(0.222 0.027 221);
-  --primary-foreground: oklch(0.985 0 0);
-
-  /* Accent is the teal CTA. */
-  --accent: oklch(0.457 0.053 203);
-  --accent-foreground: oklch(0.985 0.004 203);
+  /* Primary and accent are the action blue: buttons, links and the mark on
+     every page. A step deeper than the hero's --brand, so white on it keeps
+     4.5:1 even at the 90% opacity hover states use (6.8:1 plain). */
+  --primary: oklch(0.488 0.243 264.376);
+  --primary-foreground: oklch(1 0 0);
+  --accent: oklch(0.488 0.243 264.376);
+  --accent-foreground: oklch(1 0 0);
 
   --secondary: oklch(0.966 0.003 216);
   --secondary-foreground: oklch(0.222 0.027 221);
   --muted: oklch(0.966 0.003 216);
   --muted-foreground: oklch(0.545 0.009 228);
 
-  /* Warm grey wash behind the hero. */
-  --hero-from: oklch(0.930 0.005 214);
-  --hero-to: oklch(0.893 0.006 218);
 
-  /* Card washes. Fixed per theme rather than derived from --primary, which
-     inverts between themes and would flip a deep navy card to near-white. */
-  --wash-1-from: oklch(0.520 0.058 203);
-  --wash-1-to: oklch(0.430 0.050 208);
-  --wash-2-from: oklch(0.300 0.032 219);
-  --wash-2-to: oklch(0.222 0.027 221);
-  --wash-3-from: oklch(0.600 0.046 205);
-  --wash-3-to: oklch(0.470 0.042 212);
-  --wash-foreground: oklch(0.985 0.004 210);
+  /* ── Brand blue: the hero panel on every page, banners and highlights. ──
+     White on --brand is 5.2:1 (light) and 6.7:1 (dark). --brand-ink is the
+     same blue used as text on the page background, lifted in dark mode so it
+     keeps 4.5:1 there. --brand-arc is decorative only; never put text on it. */
+  --brand: oklch(0.546 0.245 262.881);
+  --brand-foreground: oklch(1 0 0);
+  --brand-muted-foreground: oklch(0.97 0.014 254.604);
+  --brand-arc: oklch(0.623 0.214 259.815);
+  --brand-ink: oklch(0.546 0.245 262.881);
+  --brand-subtle: oklch(0.975 0.012 254.604);
+  --brand-subtle-border: oklch(0.932 0.032 255.585);
+
+  /* Phone mockup bezel. */
+  --device: oklch(0.21 0.034 264.665);
+
+  /* Dark footer. Deep navy in both themes, a step darker than the page in dark. */
+  --footer: oklch(0.208 0.042 265.755);
+  --footer-foreground: oklch(0.984 0.003 247.858);
+  --footer-muted-foreground: oklch(0.792 0.024 256.8);
+  --footer-border: oklch(1 0 0 / 12%);
 
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(0.918 0.004 216);
   --input: oklch(0.918 0.004 216);
-  --ring: oklch(0.457 0.053 203);
+  --ring: oklch(0.488 0.243 264.376);
 
   /* Domain lifecycle — semantic, used by status pills and banners (PRD §10, UX-8) */
   --status-active: oklch(0.72 0.17 152);
@@ -85,10 +90,9 @@
 }
 
 .dark {
-  /* Dark is designed, not inverted: a deep teal-black canvas with an
-     elevated near-black card, and a brighter accent to hold contrast. */
-  --canvas: oklch(0.146 0.018 221);
-
+  /* Dark is designed, not inverted: a deep teal-black page, and a lighter
+     blue for actions and links so they hold contrast on it. Text on that
+     lighter blue is navy, not white. */
   --background: oklch(0.205 0.019 221);
   --foreground: oklch(0.964 0.004 216);
   --card: oklch(0.240 0.020 221);
@@ -96,33 +100,37 @@
   --popover: oklch(0.240 0.020 221);
   --popover-foreground: oklch(0.964 0.004 216);
 
-  --primary: oklch(0.964 0.004 216);
-  --primary-foreground: oklch(0.205 0.019 221);
+  --primary: oklch(0.707 0.165 254.624);
+  --primary-foreground: oklch(0.208 0.042 265.755);
 
-  --accent: oklch(0.706 0.082 197);
-  --accent-foreground: oklch(0.168 0.020 203);
+  --accent: oklch(0.707 0.165 254.624);
+  --accent-foreground: oklch(0.208 0.042 265.755);
 
   --secondary: oklch(0.262 0.018 221);
   --secondary-foreground: oklch(0.964 0.004 216);
   --muted: oklch(0.262 0.018 221);
   --muted-foreground: oklch(0.724 0.011 222);
 
-  --hero-from: oklch(0.268 0.021 219);
-  --hero-to: oklch(0.223 0.019 221);
+  --brand: oklch(0.488 0.243 264.376);
+  --brand-foreground: oklch(1 0 0);
+  --brand-muted-foreground: oklch(0.97 0.014 254.604);
+  --brand-arc: oklch(0.546 0.245 262.881);
+  --brand-ink: oklch(0.707 0.165 254.624);
+  --brand-subtle: oklch(0.255 0.035 258);
+  --brand-subtle-border: oklch(1 0 0 / 10%);
 
-  --wash-1-from: oklch(0.470 0.055 203);
-  --wash-1-to: oklch(0.360 0.045 208);
-  --wash-2-from: oklch(0.330 0.028 219);
-  --wash-2-to: oklch(0.255 0.022 221);
-  --wash-3-from: oklch(0.520 0.044 205);
-  --wash-3-to: oklch(0.400 0.038 212);
-  --wash-foreground: oklch(0.985 0.004 210);
+  --device: oklch(0.35 0.03 262);
+
+  --footer: oklch(0.165 0.02 250);
+  --footer-foreground: oklch(0.964 0.004 216);
+  --footer-muted-foreground: oklch(0.76 0.018 250);
+  --footer-border: oklch(1 0 0 / 10%);
 
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.706 0.082 197);
+  --ring: oklch(0.707 0.165 254.624);
 
   --status-active: oklch(0.68 0.16 152);
   --status-active-foreground: oklch(0.15 0.02 152);
@@ -181,16 +189,18 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-canvas: var(--canvas);
-  --color-wash-1-from: var(--wash-1-from);
-  --color-wash-1-to: var(--wash-1-to);
-  --color-wash-2-from: var(--wash-2-from);
-  --color-wash-2-to: var(--wash-2-to);
-  --color-wash-3-from: var(--wash-3-from);
-  --color-wash-3-to: var(--wash-3-to);
-  --color-wash-foreground: var(--wash-foreground);
-  --color-hero-from: var(--hero-from);
-  --color-hero-to: var(--hero-to);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted-foreground: var(--brand-muted-foreground);
+  --color-brand-arc: var(--brand-arc);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-subtle-border: var(--brand-subtle-border);
+  --color-device: var(--device);
+  --color-footer: var(--footer);
+  --color-footer-foreground: var(--footer-foreground);
+  --color-footer-muted-foreground: var(--footer-muted-foreground);
+  --color-footer-border: var(--footer-border);
 
   --color-status-active: var(--status-active);
   --color-status-active-foreground: var(--status-active-foreground);
@@ -265,6 +275,22 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Slow bob for the home page's floating icons. The reduced-motion block above
+   collapses it to a standstill. */
+@theme {
+  --animate-float: float 7s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
     }
   }
 }

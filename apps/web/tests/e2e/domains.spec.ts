@@ -146,8 +146,11 @@ test.describe('domain detail', () => {
       'aria-current',
       'page',
     )
-    await expect(page.getByText(/Renews at/)).toBeVisible()
-    await expect(page.getByText(/₦[\d,]+\/yr/).first()).toBeVisible()
+    // Scoped to main: after signing in, Next keeps the sign-in page hidden in
+    // the DOM, and its phone mockup says "Renews at" too.
+    const main = page.getByRole('main')
+    await expect(main.getByText(/Renews at/)).toBeVisible()
+    await expect(main.getByText(/₦[\d,]+\/yr/).first()).toBeVisible()
 
     await tabs.getByRole('link', { name: 'Security' }).click()
     await expect(tabs.getByRole('link', { name: 'Security' })).toHaveAttribute(

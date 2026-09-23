@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
@@ -7,6 +8,7 @@ import { PricingTable } from '@/features/pricing/components/pricing-table'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
 import { sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { env } from '@/lib/env'
 
 export const metadata: Metadata = {
   title: 'Domain pricing',
@@ -14,17 +16,40 @@ export const metadata: Metadata = {
     'Every extension we sell, with the first-year price and the renewal price side by side. Naira, VAT and ICANN fees explained in full.',
 }
 
+const PARTS = [
+  {
+    emoji: '🏛️',
+    title: 'The registry fee',
+    body: 'What the registry charges to hold the name — Verisign for .com, Public Interest Registry for .org, and so on. It is the bulk of what you pay.',
+  },
+  {
+    emoji: '🤝',
+    title: 'Our margin',
+    body: 'How we stay in business and keep support answering. The same flat amount on every extension, whether you register, renew or transfer.',
+  },
+  {
+    emoji: '🌐',
+    title: 'The ICANN fee',
+    body: 'USD 0.20 per year on generic extensions such as .com and .org, already included in the prices shown. Country extensions such as .co do not carry it.',
+  },
+  {
+    emoji: '🧾',
+    title: 'VAT at 7.5%',
+    body: 'Added at checkout as its own line, as Nigerian law requires. Prices on this page are shown before VAT.',
+  },
+] as const
+
 export default async function PricingPage() {
   const priced = await getPricedCatalogue()
 
   if (!priced) {
     return (
       <>
-        <SiteHeader className="border-border/60 border-b" />
+        <SiteHeader />
         <main id="main">
-          <Container className="py-20">
-            <h1 className="text-3xl font-bold tracking-tight">Domain pricing</h1>
-            <div className="mt-8 max-w-2xl">
+          <PageHero eyebrow="Pricing" title="Domain pricing" />
+          <Container className="py-16">
+            <div className="max-w-2xl">
               <PricingUnavailable />
             </div>
           </Container>
@@ -45,29 +70,20 @@ export default async function PricingPage() {
 
   return (
     <>
-      <SiteHeader className="border-border/60 border-b" />
+      <SiteHeader />
 
       <main id="main">
-        {/* ── Intro ──────────────────────────────────────────────────── */}
-        <div className="bg-gradient-to-br from-hero-from to-hero-to">
-          <Container className="py-14 sm:py-20">
-            <div className="max-w-2xl">
-              <h1 className="text-[2.25rem] leading-[1.08] font-bold tracking-[-0.02em] text-balance sm:text-5xl">
-                Every price, including the one most registrars hide
-              </h1>
-              <p className="mt-5 text-pretty text-muted-foreground">
-                The renewal price sits next to the first-year price on every row. Where an extension
-                renews higher than it registers, we say so rather than letting you find out in
-                twelve months.
-              </p>
-            </div>
-          </Container>
-        </div>
+        <PageHero
+          eyebrow="Pricing"
+          title="Every price, including the one most registrars hide"
+          intro="The renewal price sits next to the first-year price on every row. Where an extension renews higher than it registers, we say so rather than letting you find out in twelve months."
+          icons={['🧾', '💵', '🌍']}
+        />
 
         {/* ── Featured ───────────────────────────────────────────────── */}
-        <Container className="py-14 sm:py-20">
+        <Container className="py-16 sm:py-24">
           <div className="max-w-2xl">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            <h2 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl">
               The popular extensions
             </h2>
             <p className="mt-4 text-pretty text-muted-foreground">
@@ -75,16 +91,16 @@ export default async function PricingPage() {
               the first.
             </p>
           </div>
-          <div className="mt-8">
+          <div className="mt-10">
             <FeaturedPricing rows={featured} label="Popular extensions" />
           </div>
         </Container>
 
         {/* ── What is in the price ───────────────────────────────────── */}
-        <div className="bg-muted/40">
-          <Container className="py-14 sm:py-20">
+        <Container>
+          <div className="rounded-[2rem] border border-brand-subtle-border bg-brand-subtle p-7 sm:p-10 lg:p-14">
             <div className="max-w-2xl">
-              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              <h2 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl">
                 What makes up the price
               </h2>
               <p className="mt-4 text-pretty text-muted-foreground">
@@ -93,35 +109,19 @@ export default async function PricingPage() {
               </p>
             </div>
 
-            <dl className="mt-10 grid gap-x-10 gap-y-8 md:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <dt className="font-semibold text-foreground">The registry fee</dt>
-                <dd className="mt-2 text-sm/6 text-muted-foreground">
-                  What the registry charges to hold the name — Verisign for .com, Public Interest
-                  Registry for .org, and so on. It is the bulk of what you pay.
-                </dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-foreground">Our margin</dt>
-                <dd className="mt-2 text-sm/6 text-muted-foreground">
-                  How we stay in business and keep support answering. The same flat amount on every
-                  extension, whether you register, renew or transfer.
-                </dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-foreground">The ICANN fee</dt>
-                <dd className="mt-2 text-sm/6 text-muted-foreground">
-                  USD 0.20 per year on generic extensions such as .com and .org, already included in
-                  the prices shown. Country extensions such as .co do not carry it.
-                </dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-foreground">VAT at 7.5%</dt>
-                <dd className="mt-2 text-sm/6 text-muted-foreground">
-                  Added at checkout as its own line, as Nigerian law requires. Prices on this page
-                  are shown before VAT.
-                </dd>
-              </div>
+            <dl className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+              {PARTS.map((part) => (
+                <div key={part.title} className="rounded-3xl bg-background p-6">
+                  <span
+                    aria-hidden="true"
+                    className="grid size-12 place-items-center rounded-2xl bg-brand-subtle text-2xl"
+                  >
+                    {part.emoji}
+                  </span>
+                  <dt className="mt-4 font-semibold text-foreground">{part.title}</dt>
+                  <dd className="mt-2 text-sm/6 text-muted-foreground">{part.body}</dd>
+                </div>
+              ))}
             </dl>
 
             <p className="mt-10 max-w-2xl text-pretty text-sm/6 text-muted-foreground">
@@ -132,16 +132,16 @@ export default async function PricingPage() {
                 ₦{effectiveRate.toLocaleString('en-NG')} to the dollar
               </strong>
               . It does not move with the market during the day, so a price you see in the morning
-              is the price you pay in the evening, and a domain in your cart holds its price for 30
-              minutes.
+              is the price you pay in the evening, and a domain in your cart holds its price for{' '}
+              {env.PRICE_LOCK_MINUTES} minutes.
             </p>
-          </Container>
-        </div>
+          </div>
+        </Container>
 
         {/* ── Full catalogue ─────────────────────────────────────────── */}
-        <Container className="py-14 sm:py-20">
+        <Container className="py-16 sm:py-24">
           <div className="max-w-2xl">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">All extensions</h2>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">All extensions</h2>
             <p className="mt-4 text-pretty text-muted-foreground">
               Prices in naira, excluding VAT. Transfers include an extra year where the registry
               allows it; a dash means we cannot currently transfer that extension in.

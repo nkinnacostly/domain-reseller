@@ -1,44 +1,48 @@
-import { BellRing, Receipt, ShieldCheck, Wallet } from 'lucide-react'
+import { BRAND_NAME } from '@/components/layout/brand'
 import { Container } from '@/components/layout/site-shell'
 
 /**
- * The four differentiators from the PRD's competitive analysis (§4.5).
- * Each one is a promise the product has to keep — do not add a fifth here
- * unless the product actually delivers it.
+ * The differentiators from the PRD's competitive analysis (§4.5), each one a
+ * promise the product keeps today. Do not add a card unless the product
+ * actually delivers it (N9b) — renewal reminders by SMS and WhatsApp were
+ * listed here before they existed, and are not built yet.
  */
-const POINTS = [
-  {
-    icon: Receipt,
-    title: 'The renewal price, upfront',
-    body: 'Renewal shock is the single most common complaint about every registrar. We show what a domain renews at next to what it costs today — on the search results, in the cart, on the receipt.',
-  },
-  {
-    icon: Wallet,
-    title: 'Naira, and a published FX policy',
-    body: 'We convert at a live market rate, cross-checked against two independent sources and published on our pricing page. Your price does not move while you are deciding, and we tell you exactly how we arrived at it.',
-  },
-  {
-    icon: BellRing,
-    title: 'Reminders that actually reach you',
-    body: 'Email alone does not work here. Renewal reminders go out by WhatsApp and SMS too, starting a month before expiry, so a domain never lapses because a message went to spam.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Your domain stays yours',
-    body: 'Transfer lock on by default, two-factor authentication on your account, and an authorisation code released within five days whenever you ask — never held over a billing dispute.',
-  },
-] as const
+export function WhyUs({ rate }: { rate: number | null }) {
+  const points = [
+    {
+      emoji: '🧾',
+      title: 'The renewal price, upfront',
+      body: 'What a domain renews at sits next to what it costs today — in search results, in your cart and at checkout. The second year is never a surprise.',
+    },
+    {
+      emoji: '💵',
+      title: 'Naira at a published rate',
+      body:
+        rate === null
+          ? 'Registries bill in US dollars. We convert at one rate and publish it on our pricing page, rather than burying it in the total.'
+          : `Registries bill in US dollars. We convert at one rate — ₦${rate.toLocaleString('en-NG')} to the dollar today — and publish it on our pricing page.`,
+    },
+    {
+      emoji: '🛡️',
+      title: 'Contact privacy at no charge',
+      body: 'Where the extension allows it, your name, address and phone number stay out of the public registration record, at no extra cost.',
+    },
+    {
+      emoji: '🔐',
+      title: 'Your domain stays yours',
+      body: 'Transfer lock on by default, two-factor authentication for sensitive changes, and your transfer code within five days of asking — never held over a bill.',
+    },
+  ] as const
 
-export function WhyUs() {
   return (
-    <section aria-labelledby="why-us-heading" className="bg-muted/40">
-      <Container className="py-14 sm:py-20">
-        <div className="max-w-2xl">
+    <section aria-labelledby="why-us-heading">
+      <Container className="py-16 sm:py-24">
+        <div className="mx-auto max-w-2xl text-center">
           <h2
             id="why-us-heading"
-            className="text-2xl font-bold tracking-tight text-balance sm:text-3xl lg:text-4xl"
+            className="text-3xl font-bold tracking-tight text-balance sm:text-4xl lg:text-5xl"
           >
-            Built for how domains are actually bought in Nigeria
+            Why choose {BRAND_NAME}?
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
             International registrars price in dollars and decline local cards. Local resellers bury
@@ -46,16 +50,20 @@ export function WhyUs() {
           </p>
         </div>
 
-        <ul className="mt-10 grid gap-x-10 gap-y-10 md:grid-cols-2">
-          {POINTS.map((point) => (
-            <li key={point.title} className="flex gap-4">
-              <span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent/10 text-accent">
-                <point.icon className="size-5" aria-hidden="true" />
+        <ul className="mt-12 grid gap-5 sm:mt-16 md:grid-cols-2 lg:gap-6">
+          {points.map((point) => (
+            <li
+              key={point.title}
+              className="rounded-[2rem] border border-brand-subtle-border bg-brand-subtle p-7 sm:p-9"
+            >
+              <span
+                aria-hidden="true"
+                className="grid size-[4.5rem] place-items-center rounded-2xl bg-brand-foreground text-[2.5rem] shadow-[0_12px_24px_-14px_rgb(0_0_0/0.3)]"
+              >
+                {point.emoji}
               </span>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-foreground">{point.title}</h3>
-                <p className="mt-2 text-pretty text-sm/6 text-muted-foreground">{point.body}</p>
-              </div>
+              <h3 className="mt-6 text-xl font-semibold text-foreground">{point.title}</h3>
+              <p className="mt-2 text-pretty text-sm/6 text-muted-foreground">{point.body}</p>
             </li>
           ))}
         </ul>

@@ -13,7 +13,7 @@ export function DomainTabs({ domain }: { domain: string }) {
     { href: `${base}/activity`, label: 'Activity' },
   ]
   return (
-    <nav aria-label="Domain" className="-mx-1 overflow-x-auto border-border border-b">
+    <nav aria-label="Domain" className="relative -mx-1 overflow-x-auto border-border border-b">
       <ul className="flex min-w-max gap-6 px-1">
         {tabs.map((tab) => (
           <li key={tab.href}>

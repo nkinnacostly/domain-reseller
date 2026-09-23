@@ -1,6 +1,9 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect } from 'react'
+import { PageHero } from '@/components/layout/page-hero'
+import { SiteHeader } from '@/components/layout/site-header'
 import { Button } from '@/components/ui/button'
 
 export default function GlobalError({
@@ -16,13 +19,27 @@ export default function GlobalError({
   }, [error])
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
-      <h1 className="text-2xl font-semibold tracking-tight">Something went wrong</h1>
-      <p className="text-muted-foreground">
-        We hit an unexpected error. Nothing has been charged. Try again, or contact support if it
-        keeps happening.
-      </p>
-      <Button onClick={reset}>Try again</Button>
-    </div>
+    <>
+      <SiteHeader />
+      <main id="main">
+        <PageHero
+          title="Something went wrong"
+          intro={
+            <p>
+              We hit an unexpected error. Nothing has been charged. Try again, or{' '}
+              <Link href="/contact">contact us</Link> if it keeps happening.
+            </p>
+          }
+        >
+          <Button
+            onClick={reset}
+            size="lg"
+            className="h-12 rounded-full bg-brand-foreground px-6 text-brand hover:bg-brand-muted-foreground focus-visible:ring-brand-foreground/60"
+          >
+            Try again
+          </Button>
+        </PageHero>
+      </main>
+    </>
   )
 }

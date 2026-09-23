@@ -1,4 +1,5 @@
 import { NavLink } from '@/components/layout/nav-link'
+import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
@@ -7,16 +8,17 @@ import { cn } from '@/lib/utils'
 import { LEGAL_DOCUMENTS } from '../lib/documents'
 
 /**
- * The frame every legal and help page shares: one heading, a plain reading
- * column, and the other documents beside it. Legal text is read slowly and
- * quoted back, so it gets full-contrast body text and generous spacing.
+ * The frame every legal and help page shares: the heading on the blue hero, a
+ * plain reading column, and the other documents beside it. Legal text is read
+ * slowly and quoted back, so it gets full-contrast body text and generous
+ * spacing.
  */
 
 const PROSE = cn(
   'text-pretty text-[0.95rem]/7 text-foreground',
   '[&_p]:mt-3 [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5',
   '[&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5',
-  '[&_a]:font-medium [&_a]:underline [&_a]:underline-offset-4 [&_a:hover]:text-foreground/80',
+  '[&_a]:font-medium [&_a]:text-brand-ink [&_a]:underline [&_a]:underline-offset-4 [&_a:hover]:text-foreground',
   '[&_strong]:font-semibold',
 )
 
@@ -25,37 +27,40 @@ export function LegalPage({
   intro,
   children,
   nav = 'legal',
+  icons = ['📜', '⚖️', '🔒'],
 }: {
   title: string
   intro?: React.ReactNode
   children: React.ReactNode
   /** Legal documents list the others beside them; help pages do not. */
   nav?: 'legal' | 'none'
+  /** Emoji floating beside the heading on wide screens. */
+  icons?: string[]
 }) {
   return (
     <>
-      <SiteHeader className="border-border/60 border-b" />
+      <SiteHeader />
       <main id="main">
+        <PageHero
+          eyebrow={`Last updated ${BUSINESS.lastUpdated}`}
+          title={title}
+          intro={intro}
+          icons={icons}
+        />
         <Container className="py-12 sm:py-16">
           <div
             className={cn(
               'grid gap-12',
-              nav === 'legal' && 'lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-16',
+              nav === 'legal' && 'lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-16',
             )}
           >
-            <article className="max-w-3xl min-w-0">
-              <p className="text-sm text-muted-foreground">Last updated {BUSINESS.lastUpdated}</p>
-              <h1 className="mt-2 text-[2rem] leading-[1.1] font-bold tracking-[-0.02em] text-balance sm:text-4xl">
-                {title}
-              </h1>
-              {intro ? (
-                <div className="mt-5 text-pretty text-lg/8 text-muted-foreground">{intro}</div>
-              ) : null}
-              <div className={cn('mt-10 space-y-10', PROSE)}>{children}</div>
-            </article>
+            <article className={cn('max-w-3xl min-w-0 space-y-10', PROSE)}>{children}</article>
 
             {nav === 'legal' ? (
-              <nav aria-label="Legal documents" className="lg:pt-10">
+              <nav
+                aria-label="Legal documents"
+                className="h-fit rounded-[2rem] border border-brand-subtle-border bg-brand-subtle p-6 lg:sticky lg:top-8"
+              >
                 <h2 className="text-sm font-semibold text-foreground">Legal documents</h2>
                 <ul className="mt-3 space-y-1 text-sm">
                   {LEGAL_DOCUMENTS.map((document) => (
@@ -64,7 +69,7 @@ export function LegalPage({
                         href={document.href}
                         exact
                         className="block rounded-md py-2 text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-                        activeClassName="font-semibold text-foreground underline"
+                        activeClassName="font-semibold text-brand-ink underline"
                       >
                         {document.title}
                       </NavLink>

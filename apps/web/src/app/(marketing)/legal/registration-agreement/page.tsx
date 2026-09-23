@@ -132,7 +132,7 @@ export default function RegistrationAgreementPage() {
 
       <LegalSection id="prices" title="Prices and payment">
         <p>
-          Prices are in naira and include 7.5% VAT, shown separately at checkout. Every price is
+          Prices are in naira. VAT at 7.5% is added at checkout as its own line. Every price is
           shown with its renewal price. You pay once, at checkout, through Flutterwave.
         </p>
         <p>

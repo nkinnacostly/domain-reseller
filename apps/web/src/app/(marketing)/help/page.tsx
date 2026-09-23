@@ -39,10 +39,11 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         q: 'What does it cost?',
         a: (
           <p>
-            Every price is in naira, includes 7.5% VAT, and is shown next to its renewal price, so
-            you know what next year costs. Prices follow the supplier’s dollar price and the day’s
-            exchange rate. If a price changes after you add a domain to your cart, the cart tells
-            you before you pay. See all prices on the <Link href="/pricing">pricing page</Link>.
+            Every price is in naira and shown next to its renewal price, so you know what next year
+            costs. VAT at 7.5% is added at checkout as its own line. Prices follow the supplier’s
+            dollar price and the day’s exchange rate. If a price changes after you add a domain to
+            your cart, the cart tells you before you pay. See all prices on the{' '}
+            <Link href="/pricing">pricing page</Link>.
           </p>
         ),
       },
@@ -234,6 +235,7 @@ export default function HelpPage() {
     <LegalPage
       title="Help centre"
       nav="none"
+      icons={['💬', '📘', '✅']}
       intro={
         <p>
           Answers to common questions. Cannot find yours? <Link href="/contact">Contact us</Link>.

@@ -8,6 +8,8 @@ import { parseSearchQuery, searchHref } from '../lib/query'
 
 /**
  * Hero search (PRD FR-S1). One pill: a quiet label, the input, and the CTA.
+ * It always sits on the blue hero or banner, so the error gets a white chip —
+ * red text straight on blue would fail contrast.
  *
  * Validation is deliberately gentle — it only speaks up after a submit attempt,
  * so nobody is told they are wrong while still typing.
@@ -128,7 +130,7 @@ export function DomainSearch({
         id={errorId}
         role={error ? 'alert' : undefined}
         hidden={!error}
-        className="mt-2 pl-2 text-sm text-destructive sm:pl-7"
+        className="mt-2 w-fit rounded-full bg-background px-4 py-1.5 text-sm font-medium text-destructive"
       >
         {error}
       </p>

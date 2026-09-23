@@ -61,8 +61,8 @@ export async function GridSection({ plan, prices, query }: SectionProps) {
   const outcome = await checkAvailability([plan.stem], tlds)
 
   return (
-    <section aria-labelledby="other-extensions">
-      <h2 id="other-extensions" className="text-lg font-semibold text-foreground">
+    <section aria-labelledby="other-extensions" className="min-w-0">
+      <h2 id="other-extensions" className="text-lg font-semibold break-all text-foreground">
         {plan.stem} on other extensions
       </h2>
       <div className="mt-4">
@@ -125,9 +125,11 @@ function SuggestionLists({ rows }: { rows: ReturnType<typeof pickSuggestions> })
   }
 
   // Two columns on wide screens; one continuous list in reading order below.
+  // grid-cols-1 is minmax(0, 1fr): an implicit column would grow to fit a
+  // long name that truncation should have cut.
   const half = Math.ceil(rows.length / 2)
   return (
-    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+    <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
       <ResultList rows={rows.slice(0, half)} label="Available alternatives" />
       {rows.length > half ? (
         <ResultList rows={rows.slice(half)} label="More available alternatives" />

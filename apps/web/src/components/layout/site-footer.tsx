@@ -27,11 +27,12 @@ const COLUMNS = [
   },
   {
     heading: 'Extensions',
+    // Rows on the pricing page. There are no per-extension pages yet.
     links: [
-      { href: '/domains/com', label: '.com' },
-      { href: '/domains/net', label: '.net' },
-      { href: '/domains/org', label: '.org' },
-      { href: '/domains/africa', label: '.africa' },
+      { href: '/pricing#tld-com', label: '.com' },
+      { href: '/pricing#tld-net', label: '.net' },
+      { href: '/pricing#tld-org', label: '.org' },
+      { href: '/pricing#tld-africa', label: '.africa' },
     ],
   },
   {
@@ -68,14 +69,23 @@ async function CopyrightYear() {
   return <>{year > LAUNCH_YEAR ? `${LAUNCH_YEAR}–${year}` : LAUNCH_YEAR}</>
 }
 
+/**
+ * Link colours are set rather than inherited because NavLink brings its own
+ * muted and hover colours; focus outlines are light so they show on the navy.
+ */
+const LINK =
+  'rounded-sm text-sm text-footer-muted-foreground hover:text-footer-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-footer-foreground data-[current=true]:text-footer-foreground'
+const INLINE =
+  'rounded-sm underline hover:text-footer-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-footer-foreground'
+
 export function SiteFooter() {
   return (
-    <footer className="border-border border-t bg-muted/40">
+    <footer className="bg-footer text-footer-foreground">
       <Container className="py-12 sm:py-16">
         <div className="grid gap-10 lg:grid-cols-[1.4fr_3fr] lg:gap-16">
           <div className="max-w-xs">
-            <Brand />
-            <p className="mt-4 text-pretty text-sm/6 text-muted-foreground">
+            <Brand tone="onFooter" />
+            <p className="mt-4 text-pretty text-sm/6 text-footer-muted-foreground">
               Domain registration for Nigeria. Naira pricing, renewal costs shown upfront, and a
               domain that stays yours.
             </p>
@@ -84,11 +94,11 @@ export function SiteFooter() {
           <nav aria-label="Footer" className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {COLUMNS.map((column) => (
               <div key={column.heading}>
-                <h2 className="text-sm font-semibold text-foreground">{column.heading}</h2>
+                <h2 className="text-sm font-semibold text-footer-foreground">{column.heading}</h2>
                 <ul className="mt-4 space-y-3">
                   {column.links.map((link) => (
                     <li key={link.href}>
-                      <NavLink href={link.href} className="text-sm hover:underline">
+                      <NavLink href={link.href} className={LINK}>
                         {link.label}
                       </NavLink>
                     </li>
@@ -99,29 +109,29 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        <div className="border-border/70 mt-12 border-t pt-8">
-          <p className="max-w-3xl text-pretty text-xs/5 text-muted-foreground">
+        <div className="mt-12 border-footer-border border-t pt-8">
+          <p className="max-w-3xl text-pretty text-xs/5 text-footer-muted-foreground">
             {/* CMP-1 / CMP-3 — name the sponsoring registrar; never claim accreditation
                 ourselves. The registrar is verified for .com only (lib/business.ts). */}
             {BRAND_NAME} is operated by {BUSINESS.operator}, an authorised reseller — not itself
             ICANN-accredited. .com registrations are sponsored by {SPONSORING_REGISTRAR.name}, an
             ICANN-accredited registrar; every domain&apos;s registrar is named in its public
             registration record. Your rights and responsibilities as a registrant are set out in the{' '}
-            <Link href="/legal/registrant-rights" className="underline hover:text-foreground">
+            <Link href="/legal/registrant-rights" className={INLINE}>
               Registrants&apos; Benefits and Responsibilities Specification
             </Link>
             . Disputes are handled under the{' '}
-            <Link href="/legal/udrp" className="underline hover:text-foreground">
+            <Link href="/legal/udrp" className={INLINE}>
               Uniform Domain-Name Dispute-Resolution Policy
             </Link>{' '}
             and the{' '}
-            <Link href="/legal/transfer-disputes" className="underline hover:text-foreground">
+            <Link href="/legal/transfer-disputes" className={INLINE}>
               Transfer Dispute Resolution Policy
             </Link>
             .
           </p>
 
-          <div className="mt-6 flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-6 flex flex-col gap-3 text-xs text-footer-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <p>
               ©{' '}
               <Suspense fallback={LAUNCH_YEAR}>
@@ -131,7 +141,7 @@ export function SiteFooter() {
             </p>
             <p>
               Abuse reports:{' '}
-              <a href={`mailto:${BUSINESS.email}`} className="underline hover:text-foreground">
+              <a href={`mailto:${BUSINESS.email}`} className={INLINE}>
                 {BUSINESS.email}
               </a>
             </p>

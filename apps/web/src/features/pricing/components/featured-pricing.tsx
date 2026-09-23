@@ -8,10 +8,13 @@ export function FeaturedPricing({ rows, label }: { rows: PublicPriceRow[]; label
   if (rows.length === 0) return null
 
   return (
-    <ul aria-label={label} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <ul aria-label={label} className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
       {rows.map((row) => (
-        <li key={row.tld} className="rounded-2xl border border-border bg-background p-5 sm:p-6">
-          <p className="text-xl font-bold tracking-tight text-foreground">{`.${row.tld}`}</p>
+        <li
+          key={row.tld}
+          className="rounded-[2rem] border border-border bg-card p-6 shadow-[0_18px_40px_-28px_rgb(0_0_0/0.35)] sm:p-7"
+        >
+          <p className="text-3xl font-bold tracking-tight text-foreground">{`.${row.tld}`}</p>
 
           <p className="mt-4 text-2xl font-bold tracking-tight text-foreground tabular-nums">
             {row.register}

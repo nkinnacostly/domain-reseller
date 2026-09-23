@@ -1,41 +1,22 @@
 import { cn } from '@/lib/utils'
 
 /**
- * The floating card the whole site sits inside.
- *
- * It tracks the viewport rather than sitting at a fixed width — on a wide
- * display a 1200px card looks marooned. The cap only engages on ultra-wide
- * monitors, where an unbounded card would stretch past any comfortable
- * reading width. Individual sections constrain their own content.
+ * How far the blue hero panel at the top of each page sits in from the
+ * viewport edge — as margins, and as offsets for an absolutely positioned
+ * layer. Shared so the header's mobile menu, which drops over the panel, lines
+ * up with it. Always smaller than Container's gutter, so content on the panel
+ * keeps clear of its edge.
  */
-export function SiteShell({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <div className="min-h-dvh bg-canvas px-3 py-3 sm:px-6 sm:py-6 lg:px-8 lg:py-8 2xl:px-12 2xl:py-12">
-      <div
-        className={cn(
-          'relative mx-auto w-full max-w-[1800px] overflow-hidden rounded-2xl bg-background shadow-2xl sm:rounded-3xl',
-          className,
-        )}
-      >
-        {children}
-      </div>
-    </div>
-  )
-}
+export const PAGE_INSET = 'mx-2 sm:mx-4 lg:mx-5'
+export const PAGE_INSET_POSITION = 'inset-x-2 sm:inset-x-4 lg:inset-x-5'
 
 /**
- * Horizontal rhythm for everything inside the shell. One component so the
- * gutter and max width can never drift between sections.
+ * Horizontal rhythm for every section on every page. One component so the
+ * gutter and max width can never drift between sections (S4).
  *
- * It tracks the card's width rather than sitting in a narrow column inside it.
- * Long-form text is kept readable by the individual blocks (`max-w-xl` on a
- * paragraph, for instance), not by squeezing the whole page.
+ * The site is a plain page, not a card on a canvas, so content sits in a
+ * centred column; long-form text is narrowed further by its own block
+ * (`max-w-xl` on a paragraph, for instance).
  */
 export function Container({
   children,
@@ -45,7 +26,7 @@ export function Container({
   className?: string
 }) {
   return (
-    <div className={cn('mx-auto w-full max-w-[1760px] px-5 sm:px-8 lg:px-14 2xl:px-20', className)}>
+    <div className={cn('mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10', className)}>
       {children}
     </div>
   )

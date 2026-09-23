@@ -26,12 +26,12 @@ export async function TransferPrices() {
 
   return (
     <section aria-labelledby="transfer-prices-heading">
-      <Container className="py-14 sm:py-20">
+      <Container className="py-16 sm:py-24">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
             <h2
               id="transfer-prices-heading"
-              className="text-2xl font-bold tracking-tight text-balance sm:text-3xl"
+              className="text-3xl font-bold tracking-tight text-balance sm:text-4xl"
             >
               What a transfer costs
             </h2>
@@ -42,7 +42,7 @@ export async function TransferPrices() {
           </div>
           <Link
             href="/pricing"
-            className="inline-flex items-center gap-1 text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-ink underline-offset-4 hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             Every extension
             <ArrowUpRight className="size-4" aria-hidden="true" />
@@ -56,12 +56,12 @@ export async function TransferPrices() {
         ) : (
           <ul
             aria-label="Transfer prices"
-            className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6"
+            className="mt-10 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3 xl:grid-cols-6"
           >
             {rows.map((row) => (
               <li
                 key={row.tld}
-                className="min-w-0 rounded-2xl border border-border bg-background p-4 sm:p-5"
+                className="min-w-0 rounded-3xl border border-border bg-card p-4 shadow-[0_18px_40px_-28px_rgb(0_0_0/0.35)] sm:p-6"
               >
                 <p className="text-lg font-bold tracking-tight text-foreground">.{row.tld}</p>
                 <p className="mt-3 text-xl font-bold tracking-tight text-foreground tabular-nums">

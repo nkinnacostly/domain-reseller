@@ -1,3 +1,5 @@
+import { TRANSFER_LOCK_DAYS } from '@dr/shared'
+import Link from 'next/link'
 import { Container } from '@/components/layout/site-shell'
 import {
   Accordion,
@@ -5,6 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
+import { BUSINESS } from '@/lib/business'
 
 const FAQS = [
   {
@@ -21,11 +24,11 @@ const FAQS = [
   },
   {
     q: 'What happens if I forget to renew?',
-    a: 'There is a grace period after expiry — typically 30 days — where you can still renew at the normal price. After that the domain enters redemption, where recovery is possible but the registry charges a substantial fee. We send reminders by email, SMS and WhatsApp well before either point.',
+    a: 'Most extensions give you a grace period after expiry — often 30 days — when you can still renew at the normal price. After that the domain enters redemption, where it can be recovered only by paying the registry’s restore fee as well. Your account shows every domain’s expiry date; online renewal is not available yet, so email us before that date and we renew it at the renewal price shown.',
   },
   {
     q: 'Can I transfer a domain I already own?',
-    a: 'Yes, provided it is at least 60 days old, unlocked at your current registrar, and you have the authorisation code. Our transfer checker tells you which of those are true before you pay anything.',
+    a: `Not yet — starting a transfer is not available. You can already check whether a domain could move: it must be at least ${TRANSFER_LOCK_DAYS} days old, unlocked at your current registrar, and you need its authorisation code. Our transfer checker looks it up and tells you what, if anything, is in the way.`,
   },
   {
     q: 'Can I move my domain away later?',
@@ -35,24 +38,43 @@ const FAQS = [
 
 export function Faq() {
   return (
-    <section aria-labelledby="faq-heading" className="bg-muted/40">
-      <Container className="py-14 sm:py-20">
+    <section aria-labelledby="faq-heading">
+      <Container className="py-16 sm:py-24">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr] lg:gap-16">
           <div>
+            <p className="text-sm font-semibold text-brand-ink">FAQ</p>
             <h2
               id="faq-heading"
-              className="text-2xl font-bold tracking-tight text-balance sm:text-3xl lg:text-4xl"
+              className="mt-2 text-3xl font-bold tracking-tight text-balance sm:text-4xl lg:text-5xl"
             >
               Questions people actually ask
             </h2>
             <p className="mt-4 text-pretty text-muted-foreground">
-              Still stuck? Our support team answers in English and replies to every message.
+              Still stuck? The{' '}
+              <Link
+                href="/help"
+                className="rounded-sm font-medium text-brand-ink underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                help centre
+              </Link>{' '}
+              goes further, or email{' '}
+              <a
+                href={`mailto:${BUSINESS.email}`}
+                className="rounded-sm font-medium text-brand-ink underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                {BUSINESS.email}
+              </a>
+              .
             </p>
           </div>
 
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion
+            type="single"
+            collapsible
+            className="w-full rounded-[2rem] border border-brand-subtle-border bg-brand-subtle px-6 py-2 sm:px-8"
+          >
             {FAQS.map((faq) => (
-              <AccordionItem key={faq.q} value={faq.q}>
+              <AccordionItem key={faq.q} value={faq.q} className="border-brand-subtle-border">
                 <AccordionTrigger className="text-left text-base font-medium">
                   {faq.q}
                 </AccordionTrigger>

@@ -149,12 +149,13 @@ test.describe('pricing transparency', () => {
   /** PRD N8 — a price is never shown without its renewal price. */
   test('every featured extension shows a renewal price', async ({ page }) => {
     await page.goto('/')
-    const cards = page.getByRole('heading', { name: 'Popular extensions' })
-    await expect(cards).toBeVisible()
-
-    const renewals = page.getByText(/Renews at/i)
-    await expect(renewals.first()).toBeVisible()
-    expect(await renewals.count()).toBeGreaterThanOrEqual(3)
+    const cards = page
+      .locator('section', { has: page.getByRole('heading', { name: 'Popular extensions' }) })
+      .getByRole('listitem')
+    expect(await cards.count()).toBeGreaterThanOrEqual(3)
+    for (const card of await cards.all()) {
+      await expect(card).toContainText(/Renews at ₦[\d,]+\/yr/)
+    }
   })
 })
 
@@ -180,11 +181,11 @@ test.describe('mobile navigation', () => {
       .getByRole('form', { name: 'Domain search', exact: true })
       .getByLabel('Find your domain')
       .boundingBox()
-    const card = await page.getByText(/^getpaid\./).boundingBox()
+    const phone = await page.getByTestId('hero-phone').boundingBox()
     expect(search).not.toBeNull()
-    expect(card).not.toBeNull()
-    // The result card sits strictly below the search pill.
-    expect(card?.y ?? 0).toBeGreaterThan((search?.y ?? 0) + (search?.height ?? 0))
+    expect(phone).not.toBeNull()
+    // The phone mockup sits strictly below the search pill.
+    expect(phone?.y ?? 0).toBeGreaterThan((search?.y ?? 0) + (search?.height ?? 0))
   })
 })
 

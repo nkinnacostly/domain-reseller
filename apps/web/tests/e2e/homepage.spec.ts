@@ -10,11 +10,12 @@ test.describe('homepage structure', () => {
     // Scoped to main: the footer has its own headings.
     const main = page.locator('main')
     for (const heading of [
-      'Popular extensions',
-      'Also worth a look',
       'Three steps, no tutorial',
-      'Built for how domains are actually bought in Nigeria',
-      'How we work out your price',
+      'Search once, see both prices',
+      'Pay in naira, your way',
+      'Point it at your host',
+      'Why choose MyDomainsHub?',
+      'Popular extensions',
       'Questions people actually ask',
       'Find the name before someone else does',
     ]) {
@@ -110,8 +111,10 @@ test.describe('full page accessibility', () => {
   })
 
   test('no violations in dark mode', async ({ page }) => {
-    await page.emulateMedia({ colorScheme: 'dark' })
+    // The theme follows the stored choice, not the OS, so set it directly.
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
     await page.goto('/')
+    await expect(page.locator('html')).toHaveClass(/dark/)
     const results = await new AxeBuilder({ page }).withTags(['wcag2aa']).analyze()
     expect(results.violations).toEqual([])
   })
@@ -133,74 +136,81 @@ test.describe('long-page responsiveness', () => {
     }
   })
 
-  test('the shell fills a wide viewport instead of floating in a void', async ({ page }) => {
-    await page.setViewportSize({ width: 1920, height: 1000 })
+  /**
+   * The site has no floating card: it is a plain page, and the grey-teal
+   * canvas it used to sit on must not come back round the edges.
+   */
+  test('the page is plain background edge to edge, with no card canvas', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
 
-    const card = await page.locator('main').first().boundingBox()
-    expect(card).not.toBeNull()
-    // The card should use most of the viewport, not sit at a fixed narrow width.
-    expect(card?.width ?? 0).toBeGreaterThan(1600)
+    const [corner, background] = await page.evaluate(() => {
+      const probe = document.createElement('div')
+      probe.style.background = 'var(--background)'
+      document.body.append(probe)
+      const expected = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      // Inside the margin between the viewport edge and the blue hero.
+      const el = document.elementFromPoint(3, 3)
+      let node: Element | null = el
+      while (node && getComputedStyle(node).backgroundColor === 'rgba(0, 0, 0, 0)') {
+        node = node.parentElement
+      }
+      return [node ? getComputedStyle(node).backgroundColor : '', expected]
+    })
+    expect(corner).toBe(background)
   })
 })
 
-test.describe('shell containment', () => {
+test.describe('hero panel', () => {
   /**
-   * Regression: the header is absolutely positioned so the hero can sit inside
-   * <main>. When the shell card was not itself a containing block, the header
-   * resolved against the viewport and the logo and Login button spilled onto
-   * the canvas either side of the card.
+   * Regression guard for the floated header: it sits outside <main> so it
+   * stays a banner landmark, and is positioned over the blue hero. If the
+   * page wrapper stops being its containing block, the logo and Login button
+   * land on the white page instead of the panel.
    */
-  for (const width of [1280, 1440, 1680, 1920, 2560]) {
-    test(`the header stays inside the card at ${width}px`, async ({ page }) => {
+  for (const width of [375, 768, 1280, 1440, 1920, 2560]) {
+    test(`the header sits on the blue panel at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/')
 
-      const card = await page.locator('main').first().boundingBox()
-      const header = await page.getByRole('banner').boundingBox()
-      expect(card).not.toBeNull()
-      expect(header).not.toBeNull()
+      const panel = await page.getByTestId('hero-panel').boundingBox()
+      const logo = await page.getByRole('banner').getByRole('link').first().boundingBox()
+      expect(panel).not.toBeNull()
+      expect(logo).not.toBeNull()
 
-      expect(Math.round(header?.x ?? -1)).toBe(Math.round(card?.x ?? -2))
-      expect(Math.round(header?.width ?? -1)).toBe(Math.round(card?.width ?? -2))
+      const inside = (box: typeof logo) =>
+        (box?.x ?? -1) > (panel?.x ?? 0) &&
+        (box?.y ?? -1) > (panel?.y ?? 0) &&
+        (box?.x ?? 0) + (box?.width ?? 0) < (panel?.x ?? 0) + (panel?.width ?? 0)
+      expect(inside(logo), 'logo is off the panel').toBe(true)
+
+      if (width >= 640) {
+        const login = await page
+          .getByRole('banner')
+          .getByRole('link', { name: 'Login' })
+          .boundingBox()
+        expect(inside(login), 'Login is off the panel').toBe(true)
+      }
     })
   }
 
-  test('the logo and the Login button sit within the card, not on the canvas', async ({ page }) => {
-    await page.setViewportSize({ width: 1920, height: 900 })
+  test('the phone mockup is clipped by the panel, not spilling onto the page', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
-
-    const card = await page.locator('main').first().boundingBox()
-    const logo = await page.getByRole('banner').getByRole('link').first().boundingBox()
-    const login = await page.getByRole('banner').getByRole('link', { name: 'Login' }).boundingBox()
-
-    expect(logo?.x ?? 0).toBeGreaterThan(card?.x ?? 0)
-    expect((login?.x ?? 0) + (login?.width ?? 0)).toBeLessThan((card?.x ?? 0) + (card?.width ?? 0))
-  })
-
-  test('content uses the card width rather than a narrow inner column', async ({ page }) => {
-    await page.setViewportSize({ width: 1920, height: 900 })
-    await page.goto('/')
-
-    const card = await page.locator('main').first().boundingBox()
-    const stats = await page.getByText('Extensions available').boundingBox()
-    const lastStat = await page.getByText('Hidden fees at checkout').boundingBox()
-
-    // The stats row should span most of the card, not huddle in the middle.
-    const spanned = (lastStat?.x ?? 0) + (lastStat?.width ?? 0) - (stats?.x ?? 0)
-    expect(spanned).toBeGreaterThan((card?.width ?? 0) * 0.8)
+    const panel = await page.getByTestId('hero-panel').boundingBox()
+    const stats = await page.getByRole('region', { name: 'At a glance' }).boundingBox()
+    // Nothing from the hero overlaps the stats row below it.
+    expect((stats?.y ?? 0) + 1).toBeGreaterThanOrEqual((panel?.y ?? 0) + (panel?.height ?? 0))
   })
 })
 
 test.describe('horizontal alignment', () => {
   /**
-   * Every section shares one gutter. This caught the header carrying its own
-   * padding (lg:px-12) while the rest of the page used Container
-   * (lg:px-14 2xl:px-20) — a 52px drift that put the logo and Login button out
-   * of line with everything below them.
-   *
-   * Anything that sets its own horizontal padding instead of using Container
-   * will fail here.
+   * Every section shares one gutter (S4). The blue hero is wider than the
+   * content, so what must line up is what sits on it — the header — with
+   * everything below. Anything that sets its own horizontal padding instead
+   * of using Container will fail here.
    */
   const leftEdge = (
     label: string,
@@ -209,20 +219,22 @@ test.describe('horizontal alignment', () => {
     ) => ReturnType<import('@playwright/test').Page['locator']>,
   ) => ({ label, locate })
 
+  const section = (p: import('@playwright/test').Page, heading: string) =>
+    p.locator('section', { has: p.getByRole('heading', { name: heading, exact: true }) })
+
   const ANCHORS = [
     leftEdge('header logo', (p) => p.getByRole('banner').getByRole('link').first()),
-    leftEdge('hero heading', (p) => p.getByRole('heading', { level: 1 })),
-    leftEdge('stats', (p) => p.getByText('Extensions available')),
-    leftEdge('popular extensions', (p) => p.getByRole('heading', { name: 'Popular extensions' })),
-    leftEdge('how it works', (p) => p.getByRole('heading', { name: 'Three steps, no tutorial' })),
-    leftEdge('why us', (p) =>
-      p.getByRole('heading', { name: 'Built for how domains are actually bought in Nigeria' }),
+    leftEdge('stats', (p) => p.getByRole('region', { name: 'At a glance' }).locator('dl')),
+    leftEdge('step 1', (p) => p.getByRole('heading', { name: 'Search once, see both prices' })),
+    leftEdge('why us cards', (p) => section(p, 'Why choose MyDomainsHub?').getByRole('list')),
+    leftEdge('popular extensions', (p) =>
+      section(p, 'Popular extensions').getByRole('list').first(),
     ),
     leftEdge('faq', (p) => p.getByRole('heading', { name: 'Questions people actually ask' })),
     leftEdge('footer tagline', (p) => p.getByText('Domain registration for Nigeria.')),
   ]
 
-  for (const width of [1280, 1440, 1920, 2560]) {
+  for (const width of [390, 768, 1280, 1440, 1920, 2560]) {
     test(`every section shares the same left gutter at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/')
@@ -244,16 +256,10 @@ test.describe('horizontal alignment', () => {
     await page.goto('/')
 
     const login = await page.getByRole('banner').getByRole('link', { name: 'Login' }).boundingBox()
-    const trending = await page.getByRole('heading', { name: 'Also worth a look' }).boundingBox()
-
-    // Trending's section is the rightmost content column on the page.
-    const section = await page
-      .locator('section', { has: page.getByRole('heading', { name: 'Also worth a look' }) })
-      .boundingBox()
+    const cards = await section(page, 'Popular extensions').getByRole('list').first().boundingBox()
 
     expect(Math.round((login?.x ?? 0) + (login?.width ?? 0))).toBe(
-      Math.round((section?.x ?? 0) + (section?.width ?? 0)),
+      Math.round((cards?.x ?? 0) + (cards?.width ?? 0)),
     )
-    expect(trending).not.toBeNull()
   })
 })
