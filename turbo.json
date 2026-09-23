@@ -6,15 +6,52 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "NEXT_PUBLIC_*",
+        "SUPABASE_SECRET_KEY",
+        "GATEWAY_URL",
+        "GATEWAY_SHARED_SECRET",
+        "FLUTTERWAVE_*",
+        "CHECKOUT_ALLOWLIST",
+        "FX_BUFFER_PCT",
+        "PRICE_LOCK_MINUTES",
+        "RESEND_API_KEY",
+        "EMAIL_FROM",
+        "SENTRY_DSN",
+        "LOG_LEVEL"
+      ]
     },
-    "dev": { "cache": false, "persistent": true },
-    "start": { "dependsOn": ["build"], "cache": false, "persistent": true },
-    "typecheck": { "dependsOn": ["^build"] },
-    "test": { "dependsOn": ["^build"], "outputs": ["coverage/**"] },
-    "test:watch": { "cache": false, "persistent": true },
-    "test:coverage": { "dependsOn": ["^build"], "outputs": ["coverage/**"] },
-    "test:e2e": { "dependsOn": ["^build"], "cache": false },
-    "clean": { "cache": false }
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "clean": {
+      "cache": false
+    }
   }
 }
