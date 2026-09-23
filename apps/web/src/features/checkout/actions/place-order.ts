@@ -12,6 +12,7 @@ import { callGateway } from '@/lib/gateway'
 import { logger } from '@/lib/logger'
 import { authAction } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
+import { checkoutOpenTo } from '../lib/access'
 import { registrantFormSchema, toContact } from '../lib/contact'
 import { type SupplierCost, wholesaleCostUsd } from '../lib/cost'
 import { parseNameservers } from '../lib/nameservers'
@@ -39,6 +40,9 @@ export const placeOrder = authAction
     }),
   )
   .action(async ({ parsedInput, ctx }): Promise<Result> => {
+    if (!checkoutOpenTo(ctx.user.email, env.CHECKOUT_ALLOWLIST)) {
+      return { error: `Checkout isn't open yet. ${NOT_CHARGED}` }
+    }
     const payment = requirePaymentEnv()
     const nameservers = parseNameservers(parsedInput.nameservers)
     if (!nameservers.ok) return { error: nameservers.error, field: 'nameservers' }

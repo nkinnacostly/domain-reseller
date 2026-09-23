@@ -14,6 +14,8 @@ export const env = createEnv({
     SUPABASE_SECRET_KEY: z.string().min(1).optional(),
     GATEWAY_URL: z.url().default('http://localhost:8787'),
     GATEWAY_SHARED_SECRET: z.string().min(16).optional(),
+    /** Pre-launch: only these accounts (comma-separated emails) may pay. Unset = open. */
+    CHECKOUT_ALLOWLIST: z.string().optional(),
 
     // Not yet integrated. Optional here so an unrelated page cannot be taken
     // down by a missing payment key; the payment code asserts them at the point

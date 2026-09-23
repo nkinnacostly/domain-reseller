@@ -1,0 +1,35 @@
+# Registrar gateway on Fly.io (PRD §6.4). Deploy from the repository root:
+#   fly deploy --ha=false
+# One machine only: the supplier allows two requests in flight per account,
+# and every gateway assumes it has both (apps/gateway/src/lib/semaphore.ts).
+# Secrets (keys, DNA_WRITE_ENV) are set with `fly secrets set` — see docs/DEPLOY.md.
+app = "mydomainshub-gateway"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "apps/gateway/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8787"
+  DNA_ENV = "production"
+  LOG_LEVEL = "info"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # The provisioning worker and the hourly reconcile run inside this process.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

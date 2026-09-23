@@ -30,6 +30,11 @@ async function Checkout() {
       'Prices are unavailable right now, so checkout is paused. Nothing has been charged.',
     )
   if (!view.paymentsConfigured) return back('Payments are not set up yet, so checkout is paused.')
+  if (!view.open) {
+    return back(
+      "Checkout isn't open yet. Your domains stay in your cart, and nothing has been charged.",
+    )
+  }
   const { lines, totals } = view.cart
   if (totals.needsAcknowledgement || totals.unavailableCount > 0) {
     return back(

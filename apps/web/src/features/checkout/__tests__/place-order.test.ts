@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getCartView } from '@/features/cart/queries/cart'
 import { deleteLine, findCartId } from '@/features/cart/queries/store'
 import { checkAvailability } from '@/features/search/queries/availability'
-import { requirePaymentEnv } from '@/lib/env'
+import { env, requirePaymentEnv } from '@/lib/env'
 import { createPaymentLink } from '@/lib/flutterwave'
 import { callGateway } from '@/lib/gateway'
 import { createClient } from '@/lib/supabase/server'
@@ -135,6 +135,21 @@ beforeEach(() => {
 })
 
 describe('placeOrder — nothing is created or charged when a check fails', () => {
+  it('refuses an account not on the pre-launch allowlist', async () => {
+    // env is read-only by type; the gate reads it at call time.
+    const settings = env as { CHECKOUT_ALLOWLIST?: string }
+    const before = settings.CHECKOUT_ALLOWLIST
+    settings.CHECKOUT_ALLOWLIST = 'owner@example.com'
+    try {
+      const result = await placeOrder(INPUT)
+      expect(result?.data).toEqual({ error: "Checkout isn't open yet. You haven't been charged." })
+      expect(inserted.orders).toEqual([])
+      expect(createPaymentLink).not.toHaveBeenCalled()
+    } finally {
+      settings.CHECKOUT_ALLOWLIST = before
+    }
+  })
+
   it('refuses when the total moved since the page loaded (FR-C4)', async () => {
     const result = await placeOrder({ ...INPUT, expectedTotalKobo: 1 })
     expect(result?.data).toEqual({ error: expect.stringMatching(/total has changed/) })

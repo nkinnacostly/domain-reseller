@@ -3,6 +3,7 @@ import 'server-only'
 import { getCartView } from '@/features/cart/queries/cart'
 import { env } from '@/lib/env'
 import { createClient } from '@/lib/supabase/server'
+import { checkoutOpenTo } from '../lib/access'
 import type { RegistrantForm } from '../lib/contact'
 
 /**
@@ -65,6 +66,7 @@ export async function getCheckoutView() {
   return {
     cart,
     registrant,
+    open: checkoutOpenTo(user.email, env.CHECKOUT_ALLOWLIST),
     paymentsConfigured: Boolean(secretKey && env.FLUTTERWAVE_WEBHOOK_HASH),
     testMode: !secretKey || secretKey.includes('_TEST-'),
   }

@@ -1,0 +1,15 @@
+# Never send secrets or local state to an image build.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+.git
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/test-results
+**/playwright-report
+**/.turbo
+.claude
