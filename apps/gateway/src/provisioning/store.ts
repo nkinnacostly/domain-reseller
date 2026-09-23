@@ -40,7 +40,8 @@ export interface JobStore {
     leaseSeconds: number,
     jobId?: string,
   ): Promise<ClaimedJob | null>
-  recordCall(jobId: string, environment: WriteTarget, call: CallRecord): Promise<void>
+  /** `jobId` is null for calls that belong to no job, such as a portfolio read. */
+  recordCall(jobId: string | null, environment: WriteTarget, call: CallRecord): Promise<void>
   completeRegistration(jobId: string, completion: Completion): Promise<void>
   /** `applied` null means the registry refused `attempted`. */
   recordNameserverChange(

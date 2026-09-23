@@ -406,3 +406,51 @@ describe('toDnaContact', () => {
     })
   })
 })
+
+describe('listPage (PRD §13.5)', () => {
+  it('reads the portfolio from the raw body, where the SDK loses the nameservers', async () => {
+    const { registrar, calls, sent } = setup(() =>
+      json(200, { totalCount: 1, items: [{ ...SANDBOX_RECORD, status: 0 }] }),
+    )
+    await expect(registrar.listPage(0, 100)).resolves.toEqual({
+      kind: 'ok',
+      data: {
+        total: 1,
+        items: [
+          {
+            domainName: SANDBOX_RECORD.domainName,
+            status: 'Active',
+            expiresAt: '2027-09-23T08:44:10.058Z',
+            nameservers: ['ns1.domainnameapi.com', 'ns2.domainnameapi.com'],
+            transferLock: true,
+            privacy: true,
+            renewalMode: 'AutoRenew',
+          },
+        ],
+      },
+    })
+    expect(sent[0]).toMatchObject({ method: 'GET', path: '/api/v1/domains' })
+    expect(calls[0]).toMatchObject({ operation: 'GetList', domainName: null, outcome: 'ok' })
+  })
+
+  it('reads a page it cannot understand as unknown', async () => {
+    const { registrar } = setup(() => json(200, {}))
+    await expect(registrar.listPage(0, 100)).resolves.toMatchObject({
+      kind: 'unknown',
+      code: 'UNPARSEABLE',
+    })
+  })
+
+  it('reads a timeout as unknown', async () => {
+    const { registrar } = setup(timeout)
+    await expect(registrar.listPage(0, 100)).resolves.toMatchObject({ kind: 'unknown' })
+  })
+
+  it('skips rows without a name', async () => {
+    const { registrar } = setup(() => json(200, { totalCount: 2, items: [{}, SANDBOX_RECORD] }))
+    const page = await registrar.listPage(0, 100)
+    expect(page.kind === 'ok' && page.data.items.map((item) => item.domainName)).toEqual([
+      SANDBOX_RECORD.domainName,
+    ])
+  })
+})

@@ -38,6 +38,22 @@ export type RegisterInput = {
   privacy: boolean
 }
 
+/** One domain as the supplier's portfolio listing shows it (PRD §13.5). */
+export type RegistryListing = {
+  domainName: string
+  status: string
+  expiresAt: string | null
+  nameservers: string[]
+  transferLock: boolean
+  privacy: boolean
+  /** The supplier's own setting — "AutoRenew" by default (backlog L18). */
+  renewalMode: string | null
+}
+
+export interface PortfolioReader {
+  listPage(skip: number, take: number): Promise<Write<{ items: RegistryListing[]; total: number }>>
+}
+
 export interface Registrar {
   lookup(domainName: string): Promise<Lookup>
   register(input: RegisterInput): Promise<Write<RegistryDomain>>
@@ -46,7 +62,8 @@ export interface Registrar {
 
 export type CallRecord = {
   operation: string
-  domainName: string
+  /** Null for calls about the whole portfolio. */
+  domainName: string | null
   outcome: 'ok' | 'not_found' | 'rejected' | 'blocked' | 'unknown'
   httpStatus: number | null
   errorCode: string | null
@@ -160,6 +177,40 @@ export function toRegistryDomain(sdk: DnaDomain, body: unknown): RegistryDomain 
   }
 }
 
+/** The REST list sends a numeric status where info sends a word (SDK DOMAIN_STATUS_MAP). */
+const STATUS_WORDS: Record<string, string> = {
+  0: 'Active',
+  1: 'WaitingForRegistration',
+  2: 'WaitingForDocument',
+  3: 'WaitingForIncomingTransfer',
+  4: 'TransferredOut',
+  7: 'PendingDelete',
+  8: 'Deleted',
+  9: 'ConfirmationEmailSend',
+  11: 'WaitingForOutgoingTransfer',
+}
+
+export function toListing(item: unknown): RegistryListing | null {
+  if (!item || typeof item !== 'object') return null
+  const raw = item as Record<string, unknown>
+  if (typeof raw.domainName !== 'string' || raw.domainName === '') return null
+  const status = raw.status ?? raw.statusCode
+  return {
+    domainName: raw.domainName.toLowerCase(),
+    status:
+      typeof status === 'number' || /^\d+$/.test(String(status ?? ''))
+        ? (STATUS_WORDS[String(status)] ?? String(status))
+        : String(status ?? ''),
+    expiresAt: supplierDate(raw.expirationDate),
+    nameservers: Array.isArray(raw.nameservers)
+      ? raw.nameservers.map((host) => String(host).toLowerCase())
+      : [],
+    transferLock: raw.lockStatus === true,
+    privacy: raw.privacyProtectionStatus === true,
+    renewalMode: typeof raw.renewalMode === 'string' ? raw.renewalMode : null,
+  }
+}
+
 /** Our contact → the supplier's ContactInfo (PRD FR-A4). */
 export function toDnaContact(contact: Contact): DnaContact {
   return {
@@ -202,12 +253,12 @@ export function createDnaRegistrar(deps: {
   environment: WriteTarget
   audit: AuditSink
   slots?: Semaphore
-}): Registrar {
+}): Registrar & PortfolioReader {
   const slots = deps.slots ?? supplierSlots
 
   async function call<T>(
     operation: string,
-    domainName: string,
+    domainName: string | null,
     run: () => Promise<T>,
   ): Promise<{ result: T | null; verdict: Verdict; body: unknown }> {
     const started = Date.now()
@@ -310,6 +361,36 @@ export function createDnaRegistrar(deps: {
         return { kind: 'rejected', code: 'DOMAIN_NOT_FOUND', message: verdict.message }
       }
       return unsettled(verdict) as Unsettled
+    },
+
+    async listPage(skip, take) {
+      // Read from the raw body: the SDK's GetList looks for `nameServers`
+      // where the API sends `nameservers`, so it always reports none.
+      const { verdict, body } = await call('GetList', null, () =>
+        deps.client.GetList({ SkipCount: skip, MaxResultCount: take }),
+      )
+      if (verdict.outcome === 'ok') {
+        const page = body as { items?: unknown; totalCount?: unknown } | undefined
+        const total = Number(page?.totalCount)
+        if (!Array.isArray(page?.items) || !Number.isFinite(total)) {
+          return {
+            kind: 'unknown',
+            code: 'UNPARSEABLE',
+            message: 'Portfolio page could not be read',
+          }
+        }
+        const items = page.items
+          .map(toListing)
+          .filter((listing): listing is RegistryListing => listing !== null)
+        return { kind: 'ok', data: { items, total } }
+      }
+      return (
+        unsettled(verdict) ?? {
+          kind: 'unknown',
+          code: 'LIST_REFUSED',
+          message: 'message' in verdict ? verdict.message : 'Listing refused',
+        }
+      )
     },
   }
 }

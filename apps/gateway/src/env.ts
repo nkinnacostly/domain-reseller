@@ -21,6 +21,8 @@ const schema = z
      */
     DNA_WRITE_ENV: z.enum(['off', 'ote', 'production']).default('off'),
     PROVISION_POLL_MS: z.coerce.number().int().min(500).default(5_000),
+    /** How often the portfolio is compared with the registry (PRD §13.5: hourly). */
+    RECONCILE_EVERY_MINUTES: z.coerce.number().int().min(5).default(60),
 
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     SUPABASE_SECRET_KEY: z.string().min(1),

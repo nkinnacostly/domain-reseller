@@ -266,6 +266,9 @@ export type Database = {
           privacy_enabled: boolean
           registered_at: string | null
           registrant: Json | null
+          registry_checked_at: string | null
+          registry_renewal_mode: string | null
+          registry_status: string | null
           source: string
           test_mode: boolean
           tld: string
@@ -289,6 +292,9 @@ export type Database = {
           privacy_enabled?: boolean
           registered_at?: string | null
           registrant?: Json | null
+          registry_checked_at?: string | null
+          registry_renewal_mode?: string | null
+          registry_status?: string | null
           source: string
           test_mode?: boolean
           tld: string
@@ -312,6 +318,9 @@ export type Database = {
           privacy_enabled?: boolean
           registered_at?: string | null
           registrant?: Json | null
+          registry_checked_at?: string | null
+          registry_renewal_mode?: string | null
+          registry_status?: string | null
           source?: string
           test_mode?: boolean
           tld?: string
@@ -831,6 +840,90 @@ export type Database = {
         }
         Relationships: []
       }
+      reconcile_runs: {
+        Row: {
+          domains_seen: number | null
+          error: string | null
+          findings: number | null
+          finished_at: string | null
+          id: string
+          started_at: string
+          test_mode: boolean
+        }
+        Insert: {
+          domains_seen?: number | null
+          error?: string | null
+          findings?: number | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          test_mode: boolean
+        }
+        Update: {
+          domains_seen?: number | null
+          error?: string | null
+          findings?: number | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          test_mode?: boolean
+        }
+        Relationships: []
+      }
+      registry_drift: {
+        Row: {
+          detail: Json
+          domain_id: string | null
+          domain_name: string
+          first_seen_at: string
+          id: number
+          kind: string
+          last_run_id: string | null
+          last_seen_at: string
+          resolved_at: string | null
+          test_mode: boolean
+        }
+        Insert: {
+          detail?: Json
+          domain_id?: string | null
+          domain_name: string
+          first_seen_at?: string
+          id?: number
+          kind: string
+          last_run_id?: string | null
+          last_seen_at?: string
+          resolved_at?: string | null
+          test_mode: boolean
+        }
+        Update: {
+          detail?: Json
+          domain_id?: string | null
+          domain_name?: string
+          first_seen_at?: string
+          id?: number
+          kind?: string
+          last_run_id?: string | null
+          last_seen_at?: string
+          resolved_at?: string | null
+          test_mode?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_drift_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_drift_last_run_id_fkey"
+            columns: ["last_run_id"]
+            isOneToOne: false
+            referencedRelation: "reconcile_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_calls: {
         Row: {
           created_at: string
@@ -971,6 +1064,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      begin_reconcile: {
+        Args: { p_min_interval_seconds: number; p_test_mode: boolean }
+        Returns: string
+      }
       claim_job: {
         Args: {
           p_job_id?: string
@@ -1007,6 +1104,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      fail_reconcile: {
+        Args: { p_error: string; p_run_id: string }
+        Returns: undefined
+      }
       merge_anonymous_cart: {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: number
@@ -1030,6 +1131,16 @@ export type Database = {
           p_raw: Json
         }
         Returns: Database["public"]["Enums"]["order_status"]
+      }
+      record_reconciliation: {
+        Args: {
+          p_complete: boolean
+          p_domains_seen: number
+          p_findings: Json
+          p_run_id: string
+          p_updates: Json
+        }
+        Returns: number
       }
       reschedule_job: {
         Args: {

@@ -7,6 +7,8 @@ import { logger } from './lib/logger'
 import { createDnaRegistrar } from './provisioning/registrar'
 import { createSupabaseStore } from './provisioning/store'
 import { createWorker } from './provisioning/worker'
+import { createReconciler } from './reconcile/reconciler'
+import { createReconcileStore } from './reconcile/store'
 
 /**
  * Registrar gateway — PRD §6.4 (ADR-004).
@@ -47,6 +49,23 @@ const worker =
       })
     : null
 
+// §13.5: the registry is read on a schedule, against the same side the
+// worker writes to. Read-only at the supplier.
+const reconciler =
+  target && store
+    ? createReconciler({
+        store: createReconcileStore(),
+        reader: createDnaRegistrar({
+          client: getDnaWriteClient(target),
+          environment: target,
+          audit: (call) => store.recordCall(null, target, call),
+        }),
+        testMode: target === 'ote',
+        everyMs: env.RECONCILE_EVERY_MINUTES * 60_000,
+        log: logger,
+      })
+    : null
+
 if (worker) {
   worker.start()
   logger.info(
@@ -54,10 +73,11 @@ if (worker) {
     'provisioning worker started',
   )
 }
+reconciler?.start()
 
 async function shutdown(signal: string) {
   logger.info({ signal }, 'shutting down')
-  await worker?.stop()
+  await Promise.all([worker?.stop(), reconciler?.stop()])
   server.close()
   process.exit(0)
 }

@@ -25,9 +25,9 @@ back here. Each item says why it waited and what unblocks it.
 | L13 | **Register the webhook URL** (`/api/webhooks/flutterwave`) in the Flutterwave dashboard | Payments are confirmed when the customer returns; the webhook covers a closed tab. It needs a public URL (the deployment, or a tunnel for local testing). | Deployment |
 | L14 | ~~First sandbox registrations~~ | Done 23 Sept 2026: two sandbox registrations end to end (orders ND-001024, ND-001025). They showed the register answer is sparse (now read back), the supplier's dates are UTC+3, and 403 is an ordinary refusal — all fixed. **Still to confirm on live:** the sandbox refuses real hosts as nameservers ("'NS1.VERCEL-DNS.COM' ns not found" — its registry has no such host), so pointing a domain at a real host is first tested with a live registration. | Done |
 | L15 | **Automatic refunds for failed lines** (FR-R3, I6) | The panel tells a live customer "We'll refund what you paid" for a failed line; today that refund is manual. Needs the wallet (FR-W1) or a Flutterwave refund call. Must exist before `DNA_WRITE_ENV=production`. | Wallet or refund API |
-| L16 | **Alerts for stuck jobs** (I5, §13.5 orphan sweep) | A job in `needs_attention`, or an order in `provisioning` for over 15 minutes, is only logged at error level. Someone has to be told. `retry_job()` puts a job back once the registry has been checked. | Alerting channel |
+| L16 | **Alerts for stuck jobs and registry drift** (I5, §13.5) | A job in `needs_attention`, an order in `provisioning` for over 15 minutes, and open `registry_drift` rows (a supplier renewal, a domain missing at the registry) are only logged at error level and kept in the database. Someone has to be told. `retry_job()` puts a job back once the registry has been checked. | Alerting channel |
 | L17 | **Live registrations** | `DNA_WRITE_ENV=production` on the deployed gateway, after L6, L10, L15, L16 and L18. | Those |
-| L18 | **Switch off the supplier's own auto-renew** (FR-R6) | The supplier registers with `renewalMode: "AutoRenew"` (seen in the sandbox, 23 Sept 2026) and the SDK has no `ModifyRenewalMode`, so it could renew a domain from our float after the customer turned auto-renew off. Find the REST call, or ask DomainNameAPI, and set every registration to manual so our renewal engine is the only thing that renews. | DomainNameAPI docs or support |
+| L18 | **Switch off the supplier's own auto-renew** (FR-R6) | The supplier registers with `renewalMode: "AutoRenew"` (seen in the sandbox, 23 Sept 2026) and the SDK has no `ModifyRenewalMode`, so it could renew a domain from our float after the customer turned auto-renew off. The REST API has no call for it (checked against their OpenAPI spec); SOAP `ModifyRenewalMode` may. A support message is drafted (23 Sept 2026). **Safety net in place:** reconciliation flags `supplier_may_renew` 45 days ahead and `supplier_renewed` after the fact — it detects, it does not prevent. | DomainNameAPI support |
 
 ## 2. Deferred features
 
@@ -54,7 +54,7 @@ back here. Each item says why it waited and what unblocks it.
 ### Domain management (PRD E5 – E8, E10)
 - **Registry-side controls** — nameserver changes now reach the registry (an `apply_nameservers` job per domain). Transfer lock, auth code reveal, contacts and privacy are still read-only.
 - **Privacy default** — the sandbox turned contact privacy on for a line bought without it. We record what the registry reports; confirm on live whether the flag we send is honoured.
-- **Portfolio reconcile and deep sync** (§13.5) — nothing yet compares our `domains` rows with the registry after registration.
+- **Domain deep sync and drift review** (§13.5) — the hourly portfolio reconcile is built; a per-domain `GetDetails` deep sync, and a screen to review and close `registry_drift`, are not. The sandbox holds two test domains we no longer track, so it reports two `unknown_domain` rows by design.
 - **`supplier_calls` retention** — rows accumulate; decide how long to keep them.
 - **Delegation verification job** (FR-D5) and the one-time undelegated nudge (FR-D8, needs L1).
 - **Renew now and restore** (FR-RN1, FR-RN5, FR-RN6) — a renewal checkout like registration's; the renewal engine and dunning (FR-RN2, FR-RN3).
@@ -80,6 +80,5 @@ back here. Each item says why it waited and what unblocks it.
 ## 3. Quality debt
 
 - **Web unit coverage** is below its 80% threshold (~56% lines): marketing and pricing components are covered only end to end. A task is queued.
-- **Gateway unit coverage** is below its 85% threshold: the pricing-script helpers (`fx-provider`, `http`, `db`, `env-file`) have no tests. A task is queued.
 - **Coverage `PARSE_ERROR`** from the V8 provider on an uncovered file in `apps/web`.
 - **Live dependencies in e2e**: transfer checks hit real registry RDAP servers, and pricing and account tests use the hosted Supabase project. Consider a local Supabase (needs Docker) for isolation.

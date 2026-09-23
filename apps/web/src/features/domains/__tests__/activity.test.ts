@@ -27,6 +27,15 @@ describe('describeEvent', () => {
     )
   })
 
+  it('says when the registry changed something (§13.5)', () => {
+    expect(
+      describeEvent('expiry_updated_from_registry', { after: '2027-09-23T08:44:10.000Z' }),
+    ).toBe('Expiry date updated from the registry: 23 September 2027')
+    expect(describeEvent('nameservers_synced', { after: ['a.test', 'b.test'] })).toBe(
+      'Nameservers updated from the registry: a.test, b.test',
+    )
+  })
+
   it('falls back to readable words for anything new', () => {
     expect(describeEvent('something_new', {})).toBe('something new')
   })

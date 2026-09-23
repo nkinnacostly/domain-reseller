@@ -3,6 +3,7 @@ import { failureReason } from './registration'
 /** One activity line per domain_events row (FR-N5, FR-P6), in words. */
 
 const list = (value: unknown) => (Array.isArray(value) ? value.join(', ') : '')
+const dateFormat = new Intl.DateTimeFormat('en-NG', { dateStyle: 'long', timeZone: 'Africa/Lagos' })
 
 export function describeEvent(type: string, payload: Record<string, unknown>): string {
   switch (type) {
@@ -24,6 +25,12 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return 'Nameserver change delayed — waiting on the registry'
     case 'nameservers_not_applied':
       return 'Nameserver change not applied'
+    case 'nameservers_synced':
+      return `Nameservers updated from the registry: ${list(payload.after)}`
+    case 'expiry_updated_from_registry':
+      return typeof payload.after === 'string'
+        ? `Expiry date updated from the registry: ${dateFormat.format(new Date(payload.after))}`
+        : 'Expiry date updated from the registry'
     case 'auto_renew_on':
       return 'Auto-renew turned on'
     case 'auto_renew_off':
