@@ -5,7 +5,9 @@ import { cn } from '@/lib/utils'
 /**
  * Lifecycle status, rendered so urgency is visible at a glance (PRD UX-8).
  * Colour is never the only signal — the label carries the meaning for
- * screen readers and for anyone who cannot distinguish the hues.
+ * screen readers and for anyone who cannot distinguish the hues. The label is
+ * in the foreground colour: the status hues are too light for 12px text
+ * (2:1 against their own tint), so they colour the dot, tint and border.
  */
 const STATUS_LABEL: Record<LocalStatus, string> = {
   pending: 'Registering',
@@ -25,20 +27,34 @@ const STATUS_LABEL: Record<LocalStatus, string> = {
 }
 
 const STATUS_TONE: Record<LocalStatus, string> = {
-  pending: 'bg-status-pending/15 text-status-pending border-status-pending/30',
-  active: 'bg-status-active/15 text-status-active border-status-active/30',
-  expired_grace: 'bg-status-expired/15 text-status-expired border-status-expired/30',
-  redemption: 'bg-status-redemption/15 text-status-redemption border-status-redemption/30',
-  pending_delete: 'bg-status-redemption/15 text-status-redemption border-status-redemption/30',
-  released: 'bg-status-neutral/15 text-muted-foreground border-status-neutral/30',
-  transferred_away: 'bg-status-neutral/15 text-muted-foreground border-status-neutral/30',
-  pending_verification: 'bg-status-expiring/15 text-status-expiring border-status-expiring/30',
-  transfer_requested: 'bg-status-pending/15 text-status-pending border-status-pending/30',
-  transfer_pending: 'bg-status-pending/15 text-status-pending border-status-pending/30',
-  transfer_rejected: 'bg-status-expired/15 text-status-expired border-status-expired/30',
-  transfer_cancelled: 'bg-status-neutral/15 text-muted-foreground border-status-neutral/30',
-  registration_failed: 'bg-status-expired/15 text-status-expired border-status-expired/30',
-  closed: 'bg-status-neutral/15 text-muted-foreground border-status-neutral/30',
+  pending:
+    'bg-status-pending/15 text-foreground border-status-pending/30 [--dot:var(--status-pending)]',
+  active:
+    'bg-status-active/15 text-foreground border-status-active/30 [--dot:var(--status-active)]',
+  expired_grace:
+    'bg-status-expired/15 text-foreground border-status-expired/30 [--dot:var(--status-expired)]',
+  redemption:
+    'bg-status-redemption/15 text-foreground border-status-redemption/30 [--dot:var(--status-redemption)]',
+  pending_delete:
+    'bg-status-redemption/15 text-foreground border-status-redemption/30 [--dot:var(--status-redemption)]',
+  released:
+    'bg-status-neutral/15 text-foreground border-status-neutral/30 [--dot:var(--status-neutral)]',
+  transferred_away:
+    'bg-status-neutral/15 text-foreground border-status-neutral/30 [--dot:var(--status-neutral)]',
+  pending_verification:
+    'bg-status-expiring/15 text-foreground border-status-expiring/30 [--dot:var(--status-expiring)]',
+  transfer_requested:
+    'bg-status-pending/15 text-foreground border-status-pending/30 [--dot:var(--status-pending)]',
+  transfer_pending:
+    'bg-status-pending/15 text-foreground border-status-pending/30 [--dot:var(--status-pending)]',
+  transfer_rejected:
+    'bg-status-expired/15 text-foreground border-status-expired/30 [--dot:var(--status-expired)]',
+  transfer_cancelled:
+    'bg-status-neutral/15 text-foreground border-status-neutral/30 [--dot:var(--status-neutral)]',
+  registration_failed:
+    'bg-status-expired/15 text-foreground border-status-expired/30 [--dot:var(--status-expired)]',
+  closed:
+    'bg-status-neutral/15 text-foreground border-status-neutral/30 [--dot:var(--status-neutral)]',
 }
 
 export type DomainStatusPillProps = {
@@ -56,8 +72,8 @@ export function DomainStatusPill({ status, daysUntilExpiry, className }: DomainS
 
   const tone = showsUrgency
     ? urgency === 'soon'
-      ? 'bg-status-expiring/15 text-status-expiring border-status-expiring/30'
-      : 'bg-status-expired/15 text-status-expired border-status-expired/30'
+      ? 'bg-status-expiring/15 text-foreground border-status-expiring/30 [--dot:var(--status-expiring)]'
+      : 'bg-status-expired/15 text-foreground border-status-expired/30 [--dot:var(--status-expired)]'
     : STATUS_TONE[status]
 
   return (
@@ -72,7 +88,7 @@ export function DomainStatusPill({ status, daysUntilExpiry, className }: DomainS
         className,
       )}
     >
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-[var(--dot)]" />
       {label}
     </span>
   )

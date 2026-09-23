@@ -14,7 +14,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "ui:add": "shadcn add",
-    "clean": "rm -rf .next node_modules coverage playwright-report test-results"
+    "clean": "rm -rf .next node_modules coverage playwright-report test-results",
+    "demo:domains": "node scripts/demo-domains.mjs"
   },
   "dependencies": {
     "@dr/db": "workspace:*",

@@ -211,6 +211,138 @@ export type Database = {
           },
         ]
       }
+      domain_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          domain_id: string
+          event_type: string
+          id: number
+          payload: Json
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          created_at?: string
+          domain_id: string
+          event_type: string
+          id?: number
+          payload?: Json
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          domain_id?: string
+          event_type?: string
+          id?: number
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_events_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      domains: {
+        Row: {
+          auto_renew: boolean
+          created_at: string
+          delegation_checked_at: string | null
+          delegation_status: Database["public"]["Enums"]["delegation_status"]
+          domain_name: string
+          expires_at: string | null
+          id: string
+          local_status: Database["public"]["Enums"]["domain_status"]
+          nameserver_preset_id: string | null
+          nameservers: string[] | null
+          order_item_id: string | null
+          pending_nameservers: string[] | null
+          privacy_enabled: boolean
+          registered_at: string | null
+          registrant: Json | null
+          source: string
+          test_mode: boolean
+          tld: string
+          transfer_lock: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_renew?: boolean
+          created_at?: string
+          delegation_checked_at?: string | null
+          delegation_status?: Database["public"]["Enums"]["delegation_status"]
+          domain_name: string
+          expires_at?: string | null
+          id?: string
+          local_status?: Database["public"]["Enums"]["domain_status"]
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
+          order_item_id?: string | null
+          pending_nameservers?: string[] | null
+          privacy_enabled?: boolean
+          registered_at?: string | null
+          registrant?: Json | null
+          source: string
+          test_mode?: boolean
+          tld: string
+          transfer_lock?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_renew?: boolean
+          created_at?: string
+          delegation_checked_at?: string | null
+          delegation_status?: Database["public"]["Enums"]["delegation_status"]
+          domain_name?: string
+          expires_at?: string | null
+          id?: string
+          local_status?: Database["public"]["Enums"]["domain_status"]
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
+          order_item_id?: string | null
+          pending_nameservers?: string[] | null
+          privacy_enabled?: boolean
+          registered_at?: string | null
+          registrant?: Json | null
+          source?: string
+          test_mode?: boolean
+          tld?: string
+          transfer_lock?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domains_nameserver_preset_id_fkey"
+            columns: ["nameserver_preset_id"]
+            isOneToOne: false
+            referencedRelation: "nameserver_presets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domains_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domains_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fx_rates: {
         Row: {
           base: string
@@ -305,6 +437,45 @@ export type Database = {
             referencedColumns: ["name"]
           },
         ]
+      }
+      nameserver_presets: {
+        Row: {
+          assigns_per_zone: boolean
+          created_at: string
+          id: string
+          is_hidden: boolean
+          nameservers: string[]
+          notes: string | null
+          provider: string
+          source_url: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          assigns_per_zone?: boolean
+          created_at?: string
+          id?: string
+          is_hidden?: boolean
+          nameservers?: string[]
+          notes?: string | null
+          provider: string
+          source_url: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          assigns_per_zone?: boolean
+          created_at?: string
+          id?: string
+          is_hidden?: boolean
+          nameservers?: string[]
+          notes?: string | null
+          provider?: string
+          source_url?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: []
       }
       order_items: {
         Row: {
@@ -696,6 +867,22 @@ export type Database = {
     }
     Enums: {
       account_type: "individual" | "business"
+      delegation_status: "undelegated" | "pending" | "verified" | "failed"
+      domain_status:
+        | "pending"
+        | "active"
+        | "expired_grace"
+        | "redemption"
+        | "pending_delete"
+        | "released"
+        | "transferred_away"
+        | "pending_verification"
+        | "transfer_requested"
+        | "transfer_pending"
+        | "transfer_rejected"
+        | "transfer_cancelled"
+        | "registration_failed"
+        | "closed"
       fx_source:
         | "aboki-parallel"
         | "manual"
@@ -848,6 +1035,23 @@ export const Constants = {
   public: {
     Enums: {
       account_type: ["individual", "business"],
+      delegation_status: ["undelegated", "pending", "verified", "failed"],
+      domain_status: [
+        "pending",
+        "active",
+        "expired_grace",
+        "redemption",
+        "pending_delete",
+        "released",
+        "transferred_away",
+        "pending_verification",
+        "transfer_requested",
+        "transfer_pending",
+        "transfer_rejected",
+        "transfer_cancelled",
+        "registration_failed",
+        "closed",
+      ],
       fx_source: [
         "aboki-parallel",
         "manual",

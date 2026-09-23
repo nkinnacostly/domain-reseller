@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
  * The visual treatment pairs colour with an underline, because colour alone
  * is not an acceptable signal (WCAG 1.4.1).
  */
-export function isCurrentPath(href: string, pathname: string): boolean {
+export function isCurrentPath(href: string, pathname: string, exact = false): boolean {
   const [path = '/', hash] = href.split('#')
 
   /**
@@ -24,7 +24,7 @@ export function isCurrentPath(href: string, pathname: string): boolean {
    */
   if (hash !== undefined && (path === '' || path === pathname)) return false
 
-  if (path === '/') return pathname === '/'
+  if (path === '/' || exact) return pathname === path
   return pathname === path || pathname.startsWith(`${path}/`)
 }
 
@@ -34,11 +34,20 @@ type NavLinkProps = {
   className?: string
   activeClassName?: string
   onClick?: () => void
+  /** Current only on this exact path, not its children — for an index tab. */
+  exact?: boolean
 }
 
-export function NavLink({ href, children, className, activeClassName, onClick }: NavLinkProps) {
+export function NavLink({
+  href,
+  children,
+  className,
+  activeClassName,
+  onClick,
+  exact,
+}: NavLinkProps) {
   const pathname = usePathname()
-  const isCurrent = isCurrentPath(href, pathname)
+  const isCurrent = isCurrentPath(href, pathname, exact)
 
   return (
     <Link

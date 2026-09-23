@@ -4,16 +4,20 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { Container } from '@/components/layout/site-shell'
 import { getAccount } from '@/features/auth/queries/account'
+import { Portfolio } from '@/features/domains/components/portfolio'
+import { parseExpiryWindow } from '@/features/domains/lib/portfolio'
+import { getPortfolio } from '@/features/domains/queries/domains'
 
 export const metadata: Metadata = { title: 'Your domains' }
 
 /**
- * Portfolio — the authenticated landing page (PRD FR-P1). There is nothing to
- * list until registration ships, so the empty state says what will be here
- * and how to get something into it.
+ * Portfolio — the authenticated landing page (PRD FR-P1): every domain on the
+ * account, soonest expiry first, with the expiry view as a filter (FR-P5).
  */
-async function Portfolio() {
-  const account = await getAccount()
+type Search = Promise<{ q?: string; within?: string }>
+
+async function PortfolioPage({ searchParams }: { searchParams: Search }) {
+  const [account, domains, params] = await Promise.all([getAccount(), getPortfolio(), searchParams])
   const firstName = account?.fullName.split(' ')[0]
 
   return (
@@ -42,44 +46,52 @@ async function Portfolio() {
         </div>
       ) : null}
 
-      <section
-        aria-labelledby="portfolio-heading"
-        className="mt-8 rounded-3xl border border-border border-dashed px-6 py-12 text-center sm:py-16"
-      >
-        <h2 id="portfolio-heading" className="text-lg font-semibold text-foreground">
-          No domains yet
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-pretty text-sm/6 text-muted-foreground">
-          Domains you register or transfer in will appear here, each with its renewal date and
-          price.
-        </p>
-        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
-            href="/search"
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-6 text-sm font-medium text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]"
-          >
-            Search for a domain
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </Link>
-          <Link
-            href="/transfer"
-            className="inline-flex h-11 items-center rounded-full border border-border bg-background px-6 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]"
-          >
-            Transfer one in
-          </Link>
-        </div>
-      </section>
+      {domains.length > 0 ? (
+        <Portfolio
+          domains={domains}
+          query={params.q ?? ''}
+          within={parseExpiryWindow(params.within)}
+        />
+      ) : (
+        <section
+          aria-labelledby="portfolio-heading"
+          className="mt-8 rounded-3xl border border-border border-dashed px-6 py-12 text-center sm:py-16"
+        >
+          <h2 id="portfolio-heading" className="text-lg font-semibold text-foreground">
+            No domains yet
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-pretty text-sm/6 text-muted-foreground">
+            Domains you register or transfer in will appear here, each with its renewal date and
+            price.
+          </p>
+          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/search"
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-accent px-6 text-sm font-medium text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]"
+            >
+              Search for a domain
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/transfer"
+              className="inline-flex h-11 items-center rounded-full border border-border bg-background px-6 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]"
+            >
+              Transfer one in
+            </Link>
+          </div>
+        </section>
+      )}
     </>
   )
 }
 
-export default function DomainsPage() {
+export default function DomainsPage({ searchParams }: { searchParams: Search }) {
   return (
     <Container className="py-10 sm:py-14">
       <Suspense
         fallback={<div aria-hidden="true" className="h-80 animate-pulse rounded-3xl bg-muted" />}
       >
-        <Portfolio />
+        <PortfolioPage searchParams={searchParams} />
       </Suspense>
     </Container>
   )

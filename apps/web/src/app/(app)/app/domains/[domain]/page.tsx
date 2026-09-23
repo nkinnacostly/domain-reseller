@@ -1,0 +1,117 @@
+import { formatNaira } from '@dr/shared'
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
+import { AutoRenewToggle } from '@/features/domains/components/auto-renew-toggle'
+import { NotConnectedNote } from '@/features/domains/components/domain-badges'
+import { DELEGATION_LABEL, daysUntilExpiry } from '@/features/domains/lib/portfolio'
+import { getDomain } from '@/features/domains/queries/domains'
+import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+
+export const metadata: Metadata = { title: 'Domain' }
+
+type Params = Promise<{ domain: string }>
+const dateFormat = new Intl.DateTimeFormat('en-NG', { dateStyle: 'long', timeZone: 'Africa/Lagos' })
+
+async function Overview({ params }: { params: Params }) {
+  const { domain: name } = await params
+  const [domain, priced] = await Promise.all([getDomain(name), getPricedCatalogue()])
+  if (!domain) notFound()
+
+  const days = daysUntilExpiry(domain.expiresAt, new Date())
+  const pricing = priced?.tlds.find((tld) => tld.tld === domain.tld)
+  const renewal = pricing ? formatNaira(pricing.renewal.priceKobo) : null
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      {domain.status === 'pending' ? (
+        <div className="lg:col-span-2">
+          <NotConnectedNote>
+            {domain.testMode
+              ? 'This came from a test payment, so it will not be registered.'
+              : 'Your payment is in and this domain is queued. It is registered as soon as the registrar connection is switched on.'}
+          </NotConnectedNote>
+        </div>
+      ) : null}
+
+      <section aria-labelledby="dates-heading" className="rounded-2xl border border-border p-5">
+        <h2 id="dates-heading" className="font-semibold text-foreground">
+          Registration
+        </h2>
+        <dl className="mt-4 space-y-3 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Registered</dt>
+            <dd className="text-right">
+              {domain.registeredAt ? dateFormat.format(new Date(domain.registeredAt)) : 'Not yet'}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Expires</dt>
+            <dd className="text-right">
+              {domain.expiresAt ? (
+                <>
+                  {dateFormat.format(new Date(domain.expiresAt))}
+                  <span className="block text-xs text-muted-foreground">
+                    {days !== null && days < 0 ? `${-days} days ago` : `in ${days} days`}
+                  </span>
+                </>
+              ) : (
+                'A year after registration'
+              )}
+            </dd>
+          </div>
+          {/* N8 — the renewal price, always. */}
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Renews at</dt>
+            <dd className="text-right font-medium">
+              {renewal ? `${renewal}/yr` : 'Price unavailable'}
+            </dd>
+          </div>
+        </dl>
+        <div className="mt-5 border-border border-t pt-5">
+          <AutoRenewToggle domainId={domain.id} autoRenew={domain.autoRenew} renewal={renewal} />
+        </div>
+      </section>
+
+      <section aria-labelledby="pointing-heading" className="rounded-2xl border border-border p-5">
+        <h2 id="pointing-heading" className="font-semibold text-foreground">
+          Where it points
+        </h2>
+        {(domain.pendingNameservers ?? domain.nameservers)?.length ? (
+          <>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {domain.pendingNameservers
+                ? 'A change is waiting to be applied.'
+                : DELEGATION_LABEL[domain.delegationStatus]}
+            </p>
+            <p className="mt-2 font-mono text-xs break-all text-foreground">
+              {(domain.pendingNameservers ?? domain.nameservers ?? []).join(', ')}
+            </p>
+          </>
+        ) : (
+          // FR-D7 — never a blank: say what to do next.
+          <p className="mt-3 text-sm text-foreground">
+            Not pointed anywhere yet — where is your site hosted?
+          </p>
+        )}
+        <Link
+          href={`/app/domains/${domain.domainName}/nameservers`}
+          className="mt-5 inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          Manage nameservers
+        </Link>
+      </section>
+    </div>
+  )
+}
+
+export default function DomainOverviewPage({ params }: { params: Params }) {
+  return (
+    <Suspense
+      fallback={<div aria-hidden="true" className="h-64 animate-pulse rounded-2xl bg-muted" />}
+    >
+      <Overview params={params} />
+    </Suspense>
+  )
+}

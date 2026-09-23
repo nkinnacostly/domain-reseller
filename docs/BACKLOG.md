@@ -43,9 +43,16 @@ back here. Each item says why it waited and what unblocks it.
 - **Expire unpaid orders** — orders abandoned on Flutterwave's page stay `awaiting_payment`; cancel them after a timeout.
 - **Refunds** (FR-R3) for lines that fail to register — to the wallet, automatically; the wallet (FR-W1) is not built.
 - **Receipts and invoices** (FR-C5, CMP-17/18) — email needs L1; invoice numbering and e-invoicing are not built.
-- **Nameserver host presets** (FR-C10, N11) — checkout accepts pasted nameservers; the `nameserver_presets` catalogue is not built.
+- **Nameserver host presets at checkout** (FR-C10, N11) — the `nameserver_presets` catalogue exists (migration 12) and the domain Nameservers tab uses it; checkout still takes pasted nameservers only.
 - **More registrant countries** — the form offers Nigeria, Africa and common diaspora countries; extend when needed.
 - **Wallet and mixed payment** (FR-C9, FR-W1/W2).
+
+### Domain management (PRD E5 – E8, E10)
+- **Apply queued changes at the registry** — nameserver requests are validated and stored (`pending_nameservers`); applying them needs `ModifyNameServer` through the gateway (L5). The same goes for transfer lock, auth code reveal, contacts and privacy, which are shown read-only.
+- **Delegation verification job** (FR-D5) and the one-time undelegated nudge (FR-D8, needs L1).
+- **Renew now and restore** (FR-RN1, FR-RN5, FR-RN6) — a renewal checkout like registration's; the renewal engine and dunning (FR-RN2, FR-RN3).
+- **Labels and bulk actions** (FR-P3, FR-P4, FR-N2), **glue records** (FR-N3), **revert to previous nameservers** (FR-N5).
+- **More nameserver presets** — Go54 (WhoGoHost) and QServers once their own documentation confirms the values; quarterly re-verification and auto-hiding presets that stop resolving (FR-D2).
 
 ### Cart (PRD E3)
 - **Contact privacy on country extensions** — offered on generic extensions only, where ICANN rules allow it. Confirm which ccTLDs the supplier can cover.

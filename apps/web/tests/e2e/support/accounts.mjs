@@ -49,6 +49,7 @@ export async function createTestUser(label, { fullName = 'Test Person' } = {}) {
 
 /** Orders refuse deletion while they exist (money records), so remove a test user's first. */
 async function deleteOrdersFor(client, userId) {
+  await client.from('domains').delete().eq('user_id', userId)
   await client.from('payments').delete().eq('user_id', userId)
   await client.from('orders').delete().eq('user_id', userId)
 }
@@ -133,4 +134,74 @@ export async function deleteTestCarts() {
     .filter((cart) => (cart.cart_items?.[0]?.count ?? 0) === 0)
     .map((cart) => cart.id)
   if (empty.length) await client.from('carts').delete().in('id', empty)
+}
+
+const DAY_MS = 86_400_000
+
+/**
+ * A demo domain row — `source = 'demo'`, labelled "Demo" wherever it shows.
+ * Registration is not wired yet, so this is how the management screens get
+ * something to manage in tests and demos. Never touches the registrar.
+ *
+ * @param {string} userId
+ * @param {{ name?: string, status?: string, expiresInDays?: number, autoRenew?: boolean }} [options]
+ */
+export async function createDemoDomain(userId, options = {}) {
+  const { name, status = 'active', expiresInDays = 200, autoRenew = true } = options
+  const client = admin()
+  const domainName =
+    name ??
+    `${TEST_DOMAIN_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}.com`
+  const registered =
+    status === 'pending' ? null : new Date(Date.now() - (365 - expiresInDays) * DAY_MS)
+  const { data, error } = await client
+    .from('domains')
+    .insert({
+      user_id: userId,
+      domain_name: domainName,
+      tld: domainName.split('.').slice(1).join('.'),
+      source: 'demo',
+      local_status: status,
+      registered_at: registered?.toISOString() ?? null,
+      expires_at:
+        status === 'pending' ? null : new Date(Date.now() + expiresInDays * DAY_MS).toISOString(),
+      auto_renew: autoRenew,
+      privacy_enabled: true,
+    })
+    .select('id, domain_name')
+    .single()
+  if (error) throw error
+  await client
+    .from('domain_events')
+    .insert({ domain_id: data.id, event_type: 'demo_created', actor_type: 'system' })
+  return { id: data.id, name: data.domain_name }
+}
+
+/** Turns on TOTP for a test user through the API and returns its secret. */
+export async function enableTotp(user) {
+  loadEnv()
+  const client = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    },
+  )
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email: user.email,
+    password: user.password,
+  })
+  if (signInError) throw signInError
+  const { data, error } = await client.auth.mfa.enroll({
+    factorType: 'totp',
+    friendlyName: 'Test authenticator',
+  })
+  if (error) throw error
+  const { error: verifyError } = await client.auth.mfa.challengeAndVerify({
+    factorId: data.id,
+    code: await freshTotpCode(data.totp.secret),
+  })
+  if (verifyError) throw verifyError
+  await client.auth.signOut({ scope: 'local' })
+  return data.totp.secret
 }
