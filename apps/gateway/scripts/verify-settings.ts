@@ -4,19 +4,23 @@
  * each write shows up when the record is read back.
  *
  *   pnpm --filter @dr/gateway exec tsx --env-file-if-exists=../../.env \
- *     scripts/verify-settings.ts [e2ecart…-sandbox-domain.com]
+ *     scripts/verify-settings.ts [e2ecart…-sandbox-domain.com] [--contacts]
  *
  * Without a name it lists the sandbox portfolio's names and stops. With one
  * — a test domain of ours, so its name starts with e2ecart — it turns the
  * transfer lock off and on, flips privacy and flips it back, reads the
- * transfer code (printing only its length), and saves the registrant's own
- * details again. Nothing here uses the production key, and nothing prints a
- * contact detail or a code (N13): field names, flags and lengths only.
+ * transfer code (printing only its length), saves four different made-up
+ * people in the four contact roles, reads them back, and puts the originals
+ * back. Nothing here uses the production key, and nothing prints a contact
+ * detail or a code (N13): role and field names, flags and lengths only.
  */
+import type { Contact } from '@dr/shared'
 import { getDnaWriteClient } from '../src/dna/client'
 import { withExchanges } from '../src/dna/transport'
 import { env } from '../src/env'
+import type { ContactRoles } from '../src/provisioning/contacts'
 import {
+  asRegistryContact,
   type CallRecord,
   createDnaRegistrar,
   type RegistryContact,
@@ -44,6 +48,7 @@ const registrar = createDnaRegistrar({
 })
 
 const name = process.argv[2]?.toLowerCase()
+const contactsOnly = process.argv.includes('--contacts')
 
 if (!name) {
   const page = await registrar.listPage(0, 50)
@@ -87,63 +92,119 @@ async function flag(field: 'transferLock' | 'privacy') {
   return read.kind === 'found' ? read.domain[field] : `unreadable (${read.kind})`
 }
 
-// ── Transfer lock ───────────────────────────────────────────────────────────
-console.log('\n2. Transfer lock')
-const lockBefore = await flag('transferLock')
-console.log(`    before: ${lockBefore}`)
-for (const locked of [false, true]) {
-  console.log(`    set ${locked ? 'on' : 'off'}:`)
-  await registrar.setTransferLock(name, locked)
-  console.log(`    read back: ${await flag('transferLock')}`)
-}
-
-// ── Privacy ─────────────────────────────────────────────────────────────────
-console.log('\n3. Privacy')
-const privacyBefore = await flag('privacy')
-console.log(`    before: ${privacyBefore}`)
-if (typeof privacyBefore === 'boolean') {
-  for (const enabled of [!privacyBefore, privacyBefore]) {
-    console.log(`    set ${enabled ? 'on' : 'off'}:`)
-    await registrar.setPrivacy(name, enabled)
-    console.log(`    read back: ${await flag('privacy')}`)
+// `--contacts` skips the lock, privacy and code: only the contact roles are exercised.
+if (!contactsOnly) {
+  // ── Transfer lock ───────────────────────────────────────────────────────────
+  console.log('\n2. Transfer lock')
+  const lockBefore = await flag('transferLock')
+  console.log(`    before: ${lockBefore}`)
+  for (const locked of [false, true]) {
+    console.log(`    set ${locked ? 'on' : 'off'}:`)
+    await registrar.setTransferLock(name, locked)
+    console.log(`    read back: ${await flag('transferLock')}`)
   }
+
+  // ── Privacy ─────────────────────────────────────────────────────────────────
+  console.log('\n3. Privacy')
+  const privacyBefore = await flag('privacy')
+  console.log(`    before: ${privacyBefore}`)
+  if (typeof privacyBefore === 'boolean') {
+    for (const enabled of [!privacyBefore, privacyBefore]) {
+      console.log(`    set ${enabled ? 'on' : 'off'}:`)
+      await registrar.setPrivacy(name, enabled)
+      console.log(`    read back: ${await flag('privacy')}`)
+    }
+  }
+
+  // ── Transfer code ───────────────────────────────────────────────────────────
+  console.log('\n4. Transfer code')
+  const auth = await registrar.authCode(name)
+  console.log(auth.kind === 'found' ? `    ${auth.data.length} characters` : `    ${auth.kind}`)
 }
 
-// ── Transfer code ───────────────────────────────────────────────────────────
-console.log('\n4. Transfer code')
-const auth = await registrar.authCode(name)
-console.log(auth.kind === 'found' ? `    ${auth.data.length} characters` : `    ${auth.kind}`)
+// ── Contacts: four different people, then the originals put back ───────────
+// Seen 24 Sept 2026 on e2ecartsandboxmuduzzlx.com: GetContacts showed all four
+// roles (one handle, its email verification pending), and SaveContacts
+// answered 204 but the record kept the old contacts — at once and 15 minutes
+// later. A contacts job there ends NOT_YET_VISIBLE, then with a person.
+const ROLES = ['registrant', 'administrative', 'technical', 'billing'] as const
 
-// ── Contacts: the same details, saved again ────────────────────────────────
+/** A held contact as ours, to save it back: the registry keeps one address line. */
+const asContact = (held: RegistryContact): Contact => ({
+  firstName: held.firstName,
+  lastName: held.lastName,
+  ...(held.company ? { company: held.company } : {}),
+  email: held.email,
+  phoneCountryCode: held.phoneCountryCode,
+  phone: held.phone,
+  addressLine1: held.address,
+  city: held.city,
+  state: held.state,
+  zipCode: held.zipCode,
+  country: held.country,
+})
+
+/** A made-up person per role, every field different; example.com takes no mail. */
+const person = (role: string, index: number): Contact => ({
+  firstName: `E2e${role}`,
+  lastName: `Check${index}`,
+  email: `e2e-${role.toLowerCase()}@example.com`,
+  phoneCountryCode: '234',
+  phone: `80312345${index}${index}`,
+  addressLine1: `${index} Marina Road`,
+  city: ['Lagos', 'Abuja', 'Ibadan', 'Enugu'][index] ?? 'Lagos',
+  state: ['Lagos', 'FCT', 'Oyo', 'Enugu'][index] ?? 'Lagos',
+  zipCode: `10000${index}`,
+  country: 'NG',
+})
+
+/** Per role: whether the registry shows it, and whether it matches what was sent. */
+async function readBack(label: string, sent: ContactRoles) {
+  const read = await registrar.contacts(name as string)
+  if (read.kind !== 'found') {
+    console.log(`    ${label}: could not read them back (${read.kind})`)
+    return
+  }
+  for (const role of ROLES) {
+    const held = read.data[role]
+    if (!held) {
+      console.log(`    ${label} ${role}: not shown`)
+      continue
+    }
+    const wanted = asRegistryContact(sent[role])
+    const differ = (Object.keys(wanted) as (keyof RegistryContact)[]).filter(
+      (field) => wanted[field] !== held[field],
+    )
+    const note = differ.length ? ` (written differently: ${differ.join(', ')})` : ''
+    console.log(`    ${label} ${role}: matches what was sent: ${sameContact(wanted, held)}${note}`)
+  }
+  const shown = ROLES.flatMap((role) => (read.data[role] ? [read.data[role]] : []))
+  const distinct = shown.filter(
+    (contact, index) => shown.findIndex((other) => sameContact(other, contact)) === index,
+  )
+  console.log(`    ${label}: ${distinct.length} different people in ${shown.length} roles`)
+}
+
 console.log('\n5. Contacts')
 const before = await registrar.contacts(name)
-if (before.kind !== 'found' || !before.data.registrant) {
-  console.log(`    could not read the registrant (${before.kind})`)
+const held = before.kind === 'found' ? before.data : {}
+const missing = ROLES.filter((role) => !held[role])
+if (before.kind !== 'found' || missing.length) {
+  console.log(`    could not read every role (${before.kind}; missing: ${missing.join(', ')})`)
 } else {
-  const held: RegistryContact = before.data.registrant
-  console.log(`    roles: ${Object.keys(before.data).join(', ')}`)
-  await registrar.updateContacts(name, {
-    firstName: held.firstName,
-    lastName: held.lastName,
-    ...(held.company ? { company: held.company } : {}),
-    email: held.email,
-    phoneCountryCode: held.phoneCountryCode,
-    phone: held.phone,
-    addressLine1: held.address,
-    city: held.city,
-    state: held.state,
-    zipCode: held.zipCode,
-    country: held.country,
-  })
-  const after = await registrar.contacts(name)
-  if (after.kind !== 'found' || !after.data.registrant) {
-    console.log(`    could not read them back (${after.kind})`)
-  } else {
-    const same = sameContact(held, after.data.registrant)
-    const changed = (Object.keys(held) as (keyof RegistryContact)[]).filter(
-      (field) => held[field] !== after.data.registrant?.[field],
-    )
-    console.log(`    read back the same: ${same}`)
-    if (changed.length) console.log(`    fields formatted differently: ${changed.join(', ')}`)
-  }
+  console.log(`    roles: ${ROLES.filter((role) => held[role]).join(', ')}`)
+  const originals = Object.fromEntries(
+    ROLES.map((role) => [role, asContact(held[role] as RegistryContact)]),
+  ) as ContactRoles
+  const four = Object.fromEntries(
+    ROLES.map((role, index) => [role, person(role.slice(0, 3), index)]),
+  ) as ContactRoles
+
+  console.log('    four different people:')
+  await registrar.updateContacts(name, four)
+  await readBack('four', four)
+
+  console.log('    the originals put back:')
+  await registrar.updateContacts(name, originals)
+  await readBack('restored', originals)
 }

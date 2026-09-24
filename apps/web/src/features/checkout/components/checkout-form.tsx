@@ -14,7 +14,8 @@ import type { NameserverPreset } from '@/features/domains/queries/domains'
 import { cn } from '@/lib/utils'
 import { placeOrder } from '../actions/place-order'
 import { type RegistrantForm, registrantFromForm } from '../lib/contact'
-import { nameserverRequest } from '../lib/nameservers'
+import { type HostProblem, hostFailure, hostRequest, isHostFailure } from '../lib/line-hosts'
+import { HostWarnings } from './host-warnings'
 import { NameserverChoice } from './nameserver-choice'
 import { RegistrantFields } from './registrant-fields'
 
@@ -58,7 +59,7 @@ export function CheckoutForm({
 }) {
   const id = useId()
   /** A nameserver choice that cannot work, caught before the order is tried. */
-  const [nameserverProblem, setNameserverProblem] = useState<string | null>(null)
+  const [hostProblem, setHostProblem] = useState<HostProblem | null>(null)
   const place = useAction(placeOrder, {
     onSuccess: ({ data }) => {
       if (data && 'redirectTo' in data) window.location.assign(data.redirectTo)
@@ -68,6 +69,8 @@ export function CheckoutForm({
   const data = place.result.data
   const failure = data && 'error' in data ? data : null
   const redirecting = Boolean(data && 'redirectTo' in data)
+  // FR-D4 — seen once before paying; a changed choice is checked afresh.
+  const hostWarnings = data && 'warnings' in data ? data.warnings : null
 
   return (
     <form
@@ -76,22 +79,21 @@ export function CheckoutForm({
       className="grid gap-4 xl:grid-cols-[1.6fr_1fr]"
       onSubmit={onSubmitWith((form) => {
         const value = (name: string) => String(form.get(name) ?? '')
-        const delegation = nameserverRequest(
-          value('nameserverMode'),
-          value('presetId'),
-          value('nameservers'),
+        const hosts = hostRequest(
+          value,
+          lines.map((line) => line.domain),
           presets,
         )
-        if (!delegation.ok) {
-          setNameserverProblem(delegation.error)
+        if (!hosts.ok) {
+          setHostProblem(hosts.problem)
           return
         }
-        setNameserverProblem(null)
+        setHostProblem(null)
         const contacts = contactRolesFromForm(form)
         place.execute({
           registrant: registrantFromForm(form),
-          nameservers: delegation.nameservers,
-          ...(delegation.presetId ? { presetId: delegation.presetId } : {}),
+          ...hosts.input,
+          ...(hostWarnings ? { hostWarningsSeen: true } : {}),
           confirmed: form.get('confirmed') === 'on' ? true : (false as unknown as true),
           expectedTotalKobo: summary.totalKobo,
           ...(contacts ? { contacts } : {}),
@@ -129,16 +131,12 @@ export function CheckoutForm({
 
         <NameserverChoice
           presets={presets}
-          nameserverError={
-            topError(errors, 'nameservers') ??
-            (failure?.field === 'nameservers' ? failure.error : undefined)
-          }
-          presetError={
-            nameserverProblem ??
-            topError(errors, 'presetId') ??
-            (failure?.field === 'presetId' ? failure.error : undefined)
-          }
-          onChange={() => setNameserverProblem(null)}
+          domains={lines.map((line) => line.domain)}
+          problem={hostProblem ?? hostFailure(failure, errors)}
+          onChange={() => {
+            setHostProblem(null)
+            if (hostWarnings) place.reset()
+          }}
         />
       </div>
 
@@ -200,7 +198,8 @@ export function CheckoutForm({
           </p>
         ) : null}
 
-        {failure && failure.field !== 'nameservers' && failure.field !== 'presetId' ? (
+        {hostWarnings ? <HostWarnings warnings={hostWarnings} /> : null}
+        {failure && !isHostFailure(failure) ? (
           <FormMessage tone="error">{failure.error}</FormMessage>
         ) : null}
         {place.result.serverError ? (

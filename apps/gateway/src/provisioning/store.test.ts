@@ -209,6 +209,41 @@ describe('Supabase job store — registry-side settings (migration 26)', () => {
       pendingTransferLock: null,
       pendingPrivacy: null,
       pendingRegistrant: null,
+      contacts: null,
+      pendingContacts: null,
+    })
+  })
+
+  it('reads the other three contacts, held and asked for, from the claim (migration 29)', () => {
+    const technical = { firstName: 'Tunde' }
+    expect(
+      toClaimedJob({
+        ...ROW,
+        kind: 'update_contacts',
+        contacts: { technical },
+        pending_contacts: {},
+      }),
+    ).toMatchObject({ contacts: { technical }, pendingContacts: {} })
+  })
+
+  it('records all four contacts as the registry holds them', async () => {
+    const { client, calls } = fakeClient()
+    const registrant = { firstName: 'Ada' }
+    const contacts = { technical: { firstName: 'Tunde' } }
+    await createSupabaseStore(client).recordDomainChange(
+      'j1',
+      { registrant: null, contacts },
+      { registrant, contacts },
+      null,
+    )
+    expect(calls[0]).toEqual({
+      fn: 'record_domain_change',
+      args: {
+        p_job_id: 'j1',
+        p_attempted: { registrant: null, contacts },
+        p_applied: { registrant, contacts },
+        p_code: null,
+      },
     })
   })
 

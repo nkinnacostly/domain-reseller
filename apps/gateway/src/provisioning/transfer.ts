@@ -1,4 +1,5 @@
 import type { Contact } from '@dr/shared'
+import type { OtherContacts } from './contacts'
 import { type RegistryDomain, type TransferRegistrar, transferState } from './registrar'
 
 /**
@@ -37,6 +38,8 @@ export type TransferTask = {
   periodYears: number
   /** Sent with the request. The worker holds a job without a valid one for a person. */
   contact: Contact | null
+  /** The other three roles, sent with it; one left out is the registrant (FR-A4). */
+  contacts?: OtherContacts
   /** When the registry took the request; null before. */
   submittedAt: string | null
   now: Date
@@ -149,6 +152,7 @@ export async function runTransfer(
     authCode: task.authCode,
     periodYears: task.periodYears,
     contact: task.contact,
+    ...(task.contacts ? { contacts: task.contacts } : {}),
   })
   if (written.kind === 'ok') return { kind: 'submitted' }
   if (written.kind === 'rejected' || written.kind === 'blocked') {

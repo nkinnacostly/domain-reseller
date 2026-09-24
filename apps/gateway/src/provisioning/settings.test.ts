@@ -1,5 +1,6 @@
 import type { Contact } from '@dr/shared'
 import { describe, expect, it, vi } from 'vitest'
+import { type ContactRoles, contactRoles } from './contacts'
 import {
   asRegistryContact,
   type Lookup,
@@ -9,7 +10,7 @@ import {
   type SettingsRegistrar,
   type SettingWrite,
 } from './registrar'
-import { runSettingChange, sameContacts } from './settings'
+import { heldContacts, runSettingChange, sameContacts } from './settings'
 
 const DOMAIN: RegistryDomain = {
   registeredAt: '2026-09-23T10:00:00.000Z',
@@ -135,6 +136,7 @@ describe('a setting change — the registry decides (I1, I2)', () => {
     await expect(runSettingChange(registrar, unlock)).resolves.toEqual({
       kind: 'applied',
       recovered: true,
+      held: { transfer_lock: false },
     })
   })
 
@@ -153,6 +155,7 @@ describe('transfer lock (FR-DS4)', () => {
     await expect(runSettingChange(registrar, unlock)).resolves.toEqual({
       kind: 'applied',
       recovered: true,
+      held: { transfer_lock: false },
     })
     expect(write).not.toHaveBeenCalled()
   })
@@ -164,6 +167,7 @@ describe('transfer lock (FR-DS4)', () => {
     await expect(runSettingChange(registrar, unlock)).resolves.toEqual({
       kind: 'applied',
       recovered: false,
+      held: { transfer_lock: false },
     })
     expect(write).toHaveBeenCalledWith('example.com', false)
   })
@@ -178,80 +182,142 @@ describe('privacy (FR-DS3)', () => {
         domainName: 'example.com',
         requested: true,
       }),
-    ).resolves.toEqual({ kind: 'applied', recovered: false })
+    ).resolves.toEqual({ kind: 'applied', recovered: false, held: { privacy: true } })
     expect(write).toHaveBeenCalledWith('example.com', true)
   })
 })
 
-describe('contacts (FR-DS1)', () => {
-  const change = { kind: 'update_contacts', domainName: 'example.com', requested: BAYO } as const
-  const held = (contacts: RegistryContacts): Reading<RegistryContacts> => ({
+describe('contacts (FR-DS1): all four roles', () => {
+  const TUNDE: Contact = { ...ADA, firstName: 'Tunde', email: 'tunde@example.com' }
+  const CHIOMA: Contact = { ...ADA, firstName: 'Chioma', email: 'chioma@example.com' }
+
+  /** What the registry shows for these four roles. */
+  const shown = (roles: ContactRoles): Reading<RegistryContacts> => ({
     kind: 'found',
-    data: contacts,
+    data: {
+      registrant: asRegistryContact(roles.registrant),
+      administrative: asRegistryContact(roles.administrative),
+      technical: asRegistryContact(roles.technical),
+      billing: asRegistryContact(roles.billing),
+    },
+  })
+  const change = (requested: ContactRoles) =>
+    ({ kind: 'update_contacts', domainName: 'example.com', requested }) as const
+
+  const today = contactRoles(ADA)
+  const four = contactRoles(ADA, { administrative: BAYO, technical: TUNDE, billing: CHIOMA })
+
+  it('refuses a domain the registry does not list, and passes other failed reads on', async () => {
+    await expect(
+      runSettingChange(registry({ contacts: [{ kind: 'not_found' }] }).registrar, change(four)),
+    ).resolves.toMatchObject({ kind: 'rejected', code: 'DOMAIN_NOT_FOUND' })
+    await expect(
+      runSettingChange(registry({ contacts: [timedOut] }).registrar, change(four)),
+    ).resolves.toEqual(timedOut)
   })
 
-  it('writes nothing when the registry already holds the new details', async () => {
-    const { registrar, write } = registry({ contacts: [held(all(BAYO))] })
-    await expect(runSettingChange(registrar, change)).resolves.toEqual({
-      kind: 'applied',
-      recovered: true,
-    })
-    expect(write).not.toHaveBeenCalled()
-  })
-
-  it('saves the new registrant, and calls it applied only when the read shows it', async () => {
-    const { registrar, write } = registry({ contacts: [held(all(ADA)), held(all(BAYO))] })
-    await expect(runSettingChange(registrar, change)).resolves.toEqual({
-      kind: 'applied',
-      recovered: false,
-    })
-    expect(write).toHaveBeenCalledWith('example.com', BAYO)
-  })
-
-  it('does not call it applied while any role the registry shows still differs', async () => {
+  it('does not call it applied while any role still differs', async () => {
     const { registrar } = registry({
-      contacts: [held(all(ADA)), held({ ...all(BAYO), technical: asRegistryContact(ADA) })],
+      contacts: [shown(today), shown({ ...four, technical: ADA })],
     })
-    await expect(runSettingChange(registrar, change)).resolves.toMatchObject({
+    await expect(runSettingChange(registrar, change(four))).resolves.toMatchObject({
       kind: 'unknown',
       code: 'NOT_YET_VISIBLE',
     })
   })
 
-  it('settles a timeout by reading: the old details mean it did not land', async () => {
-    const { registrar } = registry({
-      contacts: [held(all(ADA)), held(all(ADA))],
+  it('does not call it applied while the registry does not show a role', async () => {
+    const { billing: _billing, ...three } = (shown(four) as { data: RegistryContacts }).data
+    const { registrar } = registry({ contacts: [shown(today), { kind: 'found', data: three }] })
+    await expect(runSettingChange(registrar, change(four))).resolves.toMatchObject({
+      kind: 'unknown',
+      code: 'NOT_YET_VISIBLE',
+    })
+  })
+
+  it('settles a timeout by reading: the old details mean it did not land (N3)', async () => {
+    const { registrar, write } = registry({
+      contacts: [shown(today), shown(today)],
       write: timedOut,
     })
-    await expect(runSettingChange(registrar, change)).resolves.toMatchObject({
+    await expect(runSettingChange(registrar, change(four))).resolves.toMatchObject({
       kind: 'not_applied',
     })
+    expect(write).toHaveBeenCalledTimes(1)
   })
 
   it('leaves a timeout unknown when the read shows neither the old details nor the new', async () => {
     const { registrar } = registry({
-      contacts: [held(all(ADA)), held(all({ ...ADA, city: 'Abuja' }))],
+      contacts: [shown(today), shown({ ...four, billing: ADA })],
       write: timedOut,
     })
-    await expect(runSettingChange(registrar, change)).resolves.toMatchObject({ kind: 'unknown' })
+    await expect(runSettingChange(registrar, change(four))).resolves.toMatchObject({
+      kind: 'unknown',
+    })
   })
 
-  it('refuses a domain the registry does not list, and passes other failed reads on', async () => {
-    await expect(
-      runSettingChange(registry({ contacts: [{ kind: 'not_found' }] }).registrar, change),
-    ).resolves.toMatchObject({ kind: 'rejected', code: 'DOMAIN_NOT_FOUND' })
-    await expect(
-      runSettingChange(registry({ contacts: [timedOut] }).registrar, change),
-    ).resolves.toEqual(timedOut)
+  it('settles a timeout by reading: all four new contacts mean it landed', async () => {
+    const { registrar } = registry({ contacts: [shown(today), shown(four)], write: timedOut })
+    await expect(runSettingChange(registrar, change(four))).resolves.toMatchObject({
+      kind: 'applied',
+      recovered: true,
+    })
+  })
+
+  it('writes nothing when the registry already holds all four, and records them (I1)', async () => {
+    const wanted = contactRoles(ADA, { technical: TUNDE })
+    const { registrar, write } = registry({ contacts: [shown(wanted)] })
+    await expect(runSettingChange(registrar, change(wanted))).resolves.toEqual({
+      kind: 'applied',
+      recovered: true,
+      held: { registrant: ADA, contacts: { technical: TUNDE } },
+    })
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('saves four different people, and records each role the registrant does not hold', async () => {
+    const { registrar, write } = registry({ contacts: [shown(today), shown(four)] })
+    await expect(runSettingChange(registrar, change(four))).resolves.toEqual({
+      kind: 'applied',
+      recovered: false,
+      held: {
+        registrant: ADA,
+        contacts: { administrative: BAYO, technical: TUNDE, billing: CHIOMA },
+      },
+    })
+    expect(write).toHaveBeenCalledWith('example.com', four)
+  })
+
+  it('records {} once the registrant holds every role again', async () => {
+    const { registrar } = registry({ contacts: [shown(four), shown(today)] })
+    await expect(runSettingChange(registrar, change(today))).resolves.toMatchObject({
+      kind: 'applied',
+      held: { registrant: ADA, contacts: {} },
+    })
+  })
+
+  it('records a role the registry cannot tell from the registrant under the registrant', async () => {
+    // Asked for separately, but the same person once the registry normalises it.
+    const shouted = { ...ADA, firstName: 'ADA', email: 'ADA@EXAMPLE.COM' }
+    const wanted = contactRoles(ADA, { administrative: shouted })
+    const { registrar, write } = registry({ contacts: [shown(today)] })
+    await expect(runSettingChange(registrar, change(wanted))).resolves.toMatchObject({
+      kind: 'applied',
+      held: { registrant: ADA, contacts: {} },
+    })
+    expect(write).not.toHaveBeenCalled()
   })
 })
 
 describe('sameContacts', () => {
-  it('compares only the roles the registry shows, the registrant always', () => {
-    const shown = { registrant: asRegistryContact(ADA) }
-    expect(sameContacts(shown, all(ADA))).toBe(true)
-    expect(sameContacts(shown, all(BAYO))).toBe(false)
-    expect(sameContacts({}, all(ADA))).toBe(false)
+  it('compares all four roles: one missing from either side is a difference', () => {
+    const held = all(ADA)
+    const { technical: _technical, ...three } = all(ADA)
+    expect(sameContacts(held, all(ADA))).toBe(true)
+    expect(sameContacts(held, all(BAYO))).toBe(false)
+    expect(sameContacts({ registrant: asRegistryContact(ADA) }, all(ADA))).toBe(false)
+    expect(sameContacts(held, three)).toBe(false)
+    expect(sameContacts({}, {})).toBe(false)
   })
 
   it('reads the registry’s normalising as the same details', () => {
@@ -263,6 +329,26 @@ describe('sameContacts', () => {
       phoneCountryCode: '',
       phone: '+234.8031234567',
     }
-    expect(sameContacts({ registrant: registry }, all(ADA))).toBe(true)
+    const shown = {
+      registrant: registry,
+      administrative: registry,
+      technical: registry,
+      billing: registry,
+    }
+    expect(sameContacts(shown, all(ADA))).toBe(true)
+  })
+})
+
+describe('heldContacts', () => {
+  it('records no role the registry does not show, and none without a registrant to compare', () => {
+    const sent = contactRoles(ADA, { technical: BAYO })
+    expect(heldContacts({ registrant: asRegistryContact(ADA) }, sent)).toEqual({
+      registrant: ADA,
+      contacts: {},
+    })
+    expect(heldContacts({ technical: asRegistryContact(BAYO) }, sent)).toEqual({
+      registrant: ADA,
+      contacts: {},
+    })
   })
 })

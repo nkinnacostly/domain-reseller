@@ -307,6 +307,35 @@ describe('transfer worker — sending the request', () => {
     expect(reg.lookup).not.toHaveBeenCalled()
   })
 
+  it('holds a job whose other contacts are broken for a person, touching nothing (FR-A4)', async () => {
+    const reg = transfers({})
+    const { instance, actions } = worker(job({ contacts: { technical: 'Tunde' } }), reg)
+    await instance.tick()
+    expect(actions).toEqual([
+      { type: 'fail', args: ['job-1', 'BAD_JOB', expect.stringContaining('Contacts'), true] },
+    ])
+    expect(reg.lookup).not.toHaveBeenCalled()
+  })
+
+  it('sends the order’s other contacts with the request, the registrant in any role left out', async () => {
+    const tunde = { ...REGISTRANT, firstName: 'Tunde', email: 'tunde@example.com' }
+    const reg = transfers({})
+    const { instance } = worker(job({ contacts: { administrative: tunde } }), reg)
+    await instance.tick()
+    expect(reg.transfer).toHaveBeenCalledWith(
+      expect.objectContaining({ contact: REGISTRANT, contacts: { administrative: tunde } }),
+    )
+  })
+
+  it('keeps polling a submitted transfer whatever its stored contacts say', async () => {
+    const { instance, actions } = worker(
+      submitted(2, { contacts: { technical: 'Tunde' } }),
+      transfers({ lookups: [WAITING] }),
+    )
+    await instance.tick()
+    expect(actions.at(-1)?.type).toBe('reschedule')
+  })
+
   it('holds a transfer for a person when this gateway cannot work transfers', async () => {
     const { instance, actions } = worker(job(), null)
     await instance.tick()

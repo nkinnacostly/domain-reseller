@@ -34,7 +34,7 @@ const TILES = [
   { href: '/app/domains/expiring', label: 'Renewals', icon: CalendarClock },
   { href: '/app/orders', label: 'Orders', icon: Receipt },
   { href: '/cart', label: 'Cart', icon: ShoppingCart },
-  { href: '/transfer', label: 'Transfer', icon: ArrowLeftRight },
+  { href: '/app/transfers', label: 'Transfers', icon: ArrowLeftRight },
   { href: '/app/settings', label: 'Settings', icon: Settings },
 ] as const
 

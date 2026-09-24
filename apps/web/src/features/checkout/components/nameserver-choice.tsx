@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
-import { describedBy, Field, inputClass } from '@/components/common/form-parts'
 import type { NameserverPreset } from '@/features/domains/queries/domains'
-import { type NameserverMode, perZoneExplanation } from '../lib/nameservers'
+import type { HostProblem } from '../lib/line-hosts'
+import type { NameserverMode } from '../lib/nameservers'
+import { PresetPicker, TypedNameservers } from './host-fields'
+import { LineHosts } from './line-hosts'
 
 const OPTION =
   'relative flex items-start gap-3 rounded-xl border border-border bg-background p-4 text-sm/6 transition-colors hover:bg-muted/60 has-[:checked]:border-ring has-[:checked]:bg-brand-subtle'
@@ -17,17 +19,20 @@ const OPTION_LABEL = 'cursor-pointer font-medium text-foreground after:absolute 
  * FR-C10 — collapsed by default, so checkout looks no longer for someone
  * without the values. Three ways in, as on the Nameservers tab (FR-D1):
  * leave the registrar's default, pick a host we hold verified nameservers
- * for (FR-D2), or enter them. The form reads the choice from its fields.
+ * for (FR-D2), or enter them. The choice covers the whole order; a mixed
+ * cart can give a domain its own. The form reads every choice from its fields.
  */
 export function NameserverChoice({
   presets,
-  nameserverError,
-  presetError,
+  domains = [],
+  problem,
   onChange,
 }: {
   presets: NameserverPreset[]
-  nameserverError?: string | undefined
-  presetError?: string | undefined
+  /** The order's domains — two or more can each be given their own host. */
+  domains?: readonly string[]
+  /** A choice that cannot work, shown beside the field it belongs to. */
+  problem?: HostProblem | undefined
   /** Any change of choice, so a problem found on submit can be cleared. */
   onChange?: () => void
 }) {
@@ -37,16 +42,22 @@ export function NameserverChoice({
   const box = useRef<HTMLTextAreaElement>(null)
   const [mode, setMode] = useState<NameserverMode>('default')
   const [presetId, setPresetId] = useState('')
-  const preset = presets.find((candidate) => candidate.id === presetId)
+  const presetError = problem?.field === 'presetId' ? problem.error : undefined
+  const nameserverError = problem?.field === 'nameservers' ? problem.error : undefined
+  const mixed = domains.length > 1
+  // By value: the form rebuilds the problem on every render, and focus must
+  // move only when a new one arrives.
+  const problemKey = problem ? `${problem.field} ${problem.domain ?? ''} ${problem.error}` : ''
 
   // A problem inside a closed section would go unseen: open it, and take
-  // the person to the field (the Pay button can be a screen away).
+  // the person to the field (the Pay button can be a screen away). A
+  // domain's own choice takes them to its field itself.
   useEffect(() => {
-    if (!presetError && !nameserverError) return
+    if (!problemKey) return
     if (details.current) details.current.open = true
-    const field = presetError ? select.current : box.current
-    field?.focus()
-  }, [presetError, nameserverError])
+    if (presetError) select.current?.focus()
+    else if (nameserverError) box.current?.focus()
+  }, [problemKey, presetError, nameserverError])
 
   const choose = (next: NameserverMode) => {
     setMode(next)
@@ -86,8 +97,10 @@ export function NameserverChoice({
       <fieldset className="mt-4 space-y-3" aria-describedby={`${id}-about`}>
         <legend className="text-sm font-medium text-foreground">Nameservers</legend>
         <p id={`${id}-about`} className="text-pretty text-sm/6 text-muted-foreground">
-          One choice for every domain in this order. You can change them later from the domain’s
-          Nameservers tab.
+          {mixed
+            ? 'One choice for every domain in this order, unless you give a domain its own below.'
+            : 'One choice for every domain in this order.'}{' '}
+          You can change them later from the domain’s Nameservers tab.
         </p>
 
         {option(
@@ -104,92 +117,44 @@ export function NameserverChoice({
             )
           : null}
         {mode === 'preset' ? (
-          <div className="space-y-3 pl-7">
-            <Field id={`${id}-preset`} label="Your host" error={presetError}>
-              <select
-                ref={select}
-                id={`${id}-preset`}
-                name="presetId"
-                value={presetId}
-                onChange={(event) => {
-                  setPresetId(event.target.value)
-                  onChange?.()
-                }}
-                aria-invalid={presetError ? true : undefined}
-                aria-describedby={describedBy(`${id}-preset`, presetError)}
-                className={inputClass}
-              >
-                <option value="">Choose your host</option>
-                {presets.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.provider}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {preset ? <PresetDetail preset={preset} /> : null}
+          <div className="pl-7">
+            <PresetPicker
+              ref={select}
+              id={`${id}-preset`}
+              name="presetId"
+              label="Your host"
+              presets={presets}
+              value={presetId}
+              onChange={(next) => {
+                setPresetId(next)
+                onChange?.()
+              }}
+              error={presetError}
+            />
           </div>
         ) : null}
 
         {option('manual', 'Enter nameservers', 'Paste the two or more your host gave you.')}
         <div hidden={mode !== 'manual'} className="pl-7">
-          <Field
+          <TypedNameservers
+            ref={box}
             id={`${id}-nameservers`}
+            name="nameservers"
             label="Nameservers from your host"
             error={nameserverError}
-            hint="One per line. We apply them straight after the domain is registered."
-          >
-            <textarea
-              ref={box}
-              id={`${id}-nameservers`}
-              name="nameservers"
-              rows={3}
-              placeholder={'ns1.yourhost.com\nns2.yourhost.com'}
-              spellCheck={false}
-              autoCapitalize="none"
-              aria-invalid={nameserverError ? true : undefined}
-              aria-describedby={describedBy(`${id}-nameservers`, nameserverError, 'hint')}
-              className={`${inputClass} h-auto py-2.5 font-mono text-sm`}
-            />
-          </Field>
+            onChange={onChange}
+          />
         </div>
       </fieldset>
-    </details>
-  )
-}
 
-/** What a chosen preset sets — or, for a per-zone provider (FR-D3), why it cannot yet. */
-function PresetDetail({ preset }: { preset: NameserverPreset }) {
-  const instructions = (
-    <a
-      href={preset.sourceUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="underline underline-offset-2 hover:text-foreground"
-    >
-      {preset.provider}’s instructions
-    </a>
-  )
-  return (
-    <div className="rounded-xl bg-muted/60 px-4 py-3 text-pretty text-sm/6">
-      {preset.assignsPerZone ? (
-        <p className="text-foreground">{perZoneExplanation(preset.provider)}</p>
-      ) : (
-        <>
-          <p className="text-foreground">Applied straight after the domain is registered:</p>
-          <ul aria-label={`${preset.provider} nameservers`} className="mt-1 font-mono text-xs">
-            {preset.nameservers.map((host) => (
-              <li key={host} className="break-all text-foreground">
-                {host}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      <p className="mt-2 text-muted-foreground">
-        {preset.notes ? `${preset.notes} ` : ''}
-        {instructions}
-      </p>
-    </div>
+      {mixed ? (
+        <LineHosts
+          domains={domains}
+          presets={presets}
+          problem={problem?.field === 'lineHosts' ? problem : undefined}
+          onChange={onChange}
+        />
+      ) : null}
+    </details>
   )
 }

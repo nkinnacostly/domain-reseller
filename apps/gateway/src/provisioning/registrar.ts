@@ -4,6 +4,7 @@ import type { DnaContact, DnaContactSet, DnaDomain, DnaResult } from 'nodejs-dna
 import type { WriteTarget } from '../dna/client'
 import { type Exchange, withExchanges } from '../dna/transport'
 import { type Priority, type Semaphore, supplierSlots } from '../lib/semaphore'
+import { type ContactRoles, contactRoles, type OtherContacts } from './contacts'
 
 /**
  * The registry operations provisioning needs, with every outcome made
@@ -40,7 +41,10 @@ export type Write<T> =
 export type RegisterInput = {
   domainName: string
   periodYears: number
+  /** The registrant. */
   contact: Contact
+  /** The other three roles; one left out is the registrant (FR-A4, migration 29). */
+  contacts?: OtherContacts
   privacy: boolean
 }
 
@@ -107,8 +111,8 @@ export interface SettingsRegistrar {
   contacts(domainName: string): Promise<Reading<RegistryContacts>>
   setTransferLock(domainName: string, locked: boolean): Promise<SettingWrite>
   setPrivacy(domainName: string, enabled: boolean): Promise<SettingWrite>
-  /** Checkout's one person holds every role, so all four are saved together. */
-  updateContacts(domainName: string, contact: Contact): Promise<SettingWrite>
+  /** SaveContacts replaces the set: all four roles are always sent together. */
+  updateContacts(domainName: string, contacts: ContactRoles): Promise<SettingWrite>
 }
 
 /** FR-DS5, FR-T5: the domain's transfer code, fetched on demand and never kept (SEC-12). */
@@ -121,7 +125,10 @@ export type TransferInput = {
   /** The customer's transfer code: sent to the supplier, and to no log or record (N13). */
   authCode: string
   periodYears: number
+  /** The registrant. */
   contact: Contact
+  /** The other three roles; one left out is the registrant (FR-A4, migration 29). */
+  contacts?: OtherContacts
 }
 
 /** CheckTransfer's verdict. A refusal of the check itself is still an answer: not transferable. */
@@ -370,10 +377,14 @@ export function toDnaContact(contact: Contact): DnaContact {
   }
 }
 
-/** Checkout takes one person, who holds every role until contact profiles exist. */
-export function contactSet(contact: Contact): DnaContactSet {
-  const info = toDnaContact(contact)
-  return { Registrant: info, Administrative: info, Technical: info, Billing: info }
+/** The four roles in the SDK's shape (FR-A4). */
+export function contactSet(roles: ContactRoles): DnaContactSet {
+  return {
+    Registrant: toDnaContact(roles.registrant),
+    Administrative: toDnaContact(roles.administrative),
+    Technical: toDnaContact(roles.technical),
+    Billing: toDnaContact(roles.billing),
+  }
 }
 
 /** A settings refusal → our code. Anything not about the contact is the registry's own call. */
@@ -615,9 +626,9 @@ export function createDnaRegistrar(deps: {
         deps.client.ModifyPrivacyProtectionStatus(domainName, enabled),
       ),
 
-    updateContacts: (domainName, contact) =>
+    updateContacts: (domainName, contacts) =>
       settingWrite('SaveContacts', domainName, () =>
-        deps.client.SaveContacts(domainName, contactSet(contact)),
+        deps.client.SaveContacts(domainName, contactSet(contacts)),
       ),
 
     // The code rides in the raw body only: the audit keeps the operation and
@@ -660,7 +671,7 @@ export function createDnaRegistrar(deps: {
       )
     },
 
-    async register({ domainName, periodYears, contact, privacy }) {
+    async register({ domainName, periodYears, contact, contacts, privacy }) {
       const { result, verdict, body } = await call('RegisterWithContactInfo', domainName, () =>
         // Registered on the supplier's default nameservers: the customer's
         // are applied next, so a bad one never costs the registration (FR-R5).
@@ -668,7 +679,7 @@ export function createDnaRegistrar(deps: {
         deps.client.RegisterWithContactInfo(
           domainName,
           periodYears,
-          contactSet(contact),
+          contactSet(contactRoles(contact, contacts)),
           [],
           true,
           privacy,
@@ -770,11 +781,17 @@ export function createDnaRegistrar(deps: {
       return unsettled(verdict) as Unsettled
     },
 
-    async transfer({ domainName, authCode, periodYears, contact }) {
+    async transfer({ domainName, authCode, periodYears, contact, contacts }) {
       const { verdict } = await call(
         'Transfer',
         domainName,
-        () => deps.client.Transfer(domainName, authCode, periodYears, contactSet(contact)),
+        () =>
+          deps.client.Transfer(
+            domainName,
+            authCode,
+            periodYears,
+            contactSet(contactRoles(contact, contacts)),
+          ),
         authCode,
       )
       // Sparse, like a registration's answer: the record is read afterwards.
