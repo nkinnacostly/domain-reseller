@@ -165,6 +165,16 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         ),
       },
       {
+        q: 'How do I sign out a device I no longer use?',
+        a: (
+          <p>
+            Settings lists every device signed in to your account. Sign out any one of them, or all
+            but the one you are using. A device you sign out can keep working for up to an hour,
+            until its current sign-in token expires.
+          </p>
+        ),
+      },
+      {
         q: 'Is my address shown publicly?',
         a: (
           <p>
