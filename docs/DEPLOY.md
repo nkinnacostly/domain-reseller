@@ -130,7 +130,7 @@ needs them on GitHub.
    Without the key, refunds wait and raise alerts and unpaid orders are not
    re-checked; without the bot, alerts are only logged.
 3. **You:** the same two Telegram values on GitHub, for the gateway watch
-   (`.github/workflows/gateway-watch.yml`, every 30 minutes):
+   (`.github/workflows/gateway-watch.yml`, hourly):
    ```bash
    gh secret set TELEGRAM_BOT_TOKEN
    gh secret set TELEGRAM_CHAT_ID

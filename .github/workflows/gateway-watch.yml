@@ -2,10 +2,12 @@ name: Gateway watch
 
 # The gateway cannot report its own death, so this checks its heartbeat from
 # outside and messages the owner on Telegram when it goes quiet (backlog L16).
-# Every 30 minutes keeps it inside the free Actions minutes of a private repo.
+# Hourly: each run bills a whole minute, and the private repo's free Actions
+# minutes are shared with CI and the pricing jobs. Every 30 minutes used
+# three-quarters of them on its own.
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -28,5 +30,5 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RUN_EVERY_MINUTES: 30
+          RUN_EVERY_MINUTES: 60
         run: node scripts/check-heartbeat.mjs

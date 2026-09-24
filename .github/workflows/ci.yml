@@ -1,9 +1,18 @@
 name: CI
 
+# Every push to master and every pull request: lint, types, unit and
+# integration tests with their coverage thresholds, the security guardrails,
+# and the gateway bundle. One job, one install — this is a private repo on the
+# free Actions allowance, shared with the pricing jobs and the gateway watch.
+#
+# End-to-end tests are not run here: they need the Supabase project and a
+# production build, and take longer than the allowance can carry per push.
+# They run locally before every commit (CLAUDE.md §11).
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,11 +23,11 @@ env:
 
 jobs:
   verify:
-    name: Lint · Typecheck · Unit tests
+    name: Lint · Types · Tests · Guardrails
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
@@ -28,43 +37,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint and format check
-        run: pnpm biome ci .
-
-      - name: Typecheck
-        run: pnpm turbo run typecheck
-
-      - name: Unit and integration tests
-        run: pnpm turbo run test:coverage
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: '**/coverage/lcov.info'
-          retention-days: 7
-
-  guardrails:
-    name: Security guardrails
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .nvmrc, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-
-      # SEC-6 — the secret key must never be reachable from the browser.
+      # SEC-6 — the secret key must never be reachable from the browser. Any
+      # module that reads it imports 'server-only', which turns a browser
+      # import into a build error. (env.ts only declares it: t3-env refuses
+      # server variables on the client at runtime.)
       - name: Service-role key is server-only
         run: |
-          if grep -rn "SUPABASE_SECRET_KEY" apps/web/src \
-             --include='*.ts' --include='*.tsx' \
-             | grep -v "apps/web/src/lib/env.ts" \
-             | grep -v "apps/web/src/lib/supabase/admin.ts"; then
-            echo "::error::SUPABASE_SECRET_KEY referenced outside env.ts / supabase/admin.ts"
-            exit 1
-          fi
+          bad=0
+          for file in $(grep -rl "SUPABASE_SECRET_KEY" apps/web/src --include='*.ts' --include='*.tsx' \
+                        | grep -v "/__tests__/" | grep -v "apps/web/src/lib/env.ts"); do
+            if ! grep -q "^import 'server-only'" "$file"; then
+              echo "::error file=$file::reads SUPABASE_SECRET_KEY without import 'server-only'"
+              bad=1
+            fi
+          done
+          exit $bad
 
       # SEC-5 — supplier credentials belong to the gateway alone.
       - name: Supplier credentials stay in the gateway
@@ -82,47 +69,27 @@ jobs:
             exit 1
           fi
 
+      - name: Lint and format
+        run: pnpm biome ci .
+
+      - name: Types
+        run: pnpm turbo run typecheck
+
+      - name: Unit and integration tests, with coverage thresholds
+        run: pnpm turbo run test:coverage
+
+      # Vercel builds the web app on every push; the gateway ships from here.
+      - name: Gateway bundle
+        run: pnpm --filter @dr/gateway build
+
       - name: Dependency audit
         run: pnpm audit --audit-level=high
         continue-on-error: true
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: verify
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .nvmrc, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build
-
-  e2e:
-    name: End-to-end
-    runs-on: ubuntu-latest
-    needs: verify
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .nvmrc, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: pnpm --filter @dr/web exec playwright install --with-deps chromium webkit
-
-      - name: Run Playwright
-        run: pnpm --filter @dr/web test:e2e
-        env:
-          NEXT_PUBLIC_APP_URL: http://localhost:3000
-          NEXT_PUBLIC_APP_NAME: Domain Reseller
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-anon-key
-
-      - uses: actions/upload-artifact@v4
-        if: failure()
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: apps/web/playwright-report/
+          name: coverage
+          path: '**/coverage/lcov.info'
           retention-days: 7
