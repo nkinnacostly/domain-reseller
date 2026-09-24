@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
+import { DomainName, domainLabel } from '@/components/common/domain-name'
 import { DomainStatusPill } from '@/components/common/domain-status-pill'
 import { PanelHeader, PanelPage, PanelPageSkeleton } from '@/components/layout/panel'
 import { DomainBadges } from '@/features/domains/components/domain-badges'
@@ -20,9 +21,13 @@ async function DomainHeader({ params }: { params: Params }) {
       crumbs={[
         { label: 'Home', href: '/' },
         { label: 'Dashboard', href: '/app/domains' },
-        { label: domain.domainName },
+        { label: domainLabel(domain.domainName) },
       ]}
-      title={<span className="break-all">{domain.domainName}</span>}
+      title={
+        <span className="break-all">
+          <DomainName name={domain.domainName} />
+        </span>
+      }
       titleAside={
         <>
           <DomainStatusPill status={domain.status} daysUntilExpiry={days ?? undefined} />

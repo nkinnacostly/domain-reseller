@@ -1,5 +1,6 @@
 import { ArrowRight } from 'lucide-react'
 import Link from 'next/link'
+import { DomainName } from '@/components/common/domain-name'
 import { DomainStatusPill } from '@/components/common/domain-status-pill'
 import { cn } from '@/lib/utils'
 import {
@@ -140,7 +141,7 @@ export function Portfolio({
                   >
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold break-all text-foreground">
-                        {domain.domainName}
+                        <DomainName name={domain.domainName} />
                       </span>
                       <DomainBadges source={domain.source} testMode={domain.testMode} />
                     </span>
@@ -206,7 +207,7 @@ export function Portfolio({
                           data-domain={domain.domainName}
                           className="text-foreground underline-offset-4 hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
                         >
-                          {domain.domainName}
+                          <DomainName name={domain.domainName} />
                         </Link>
                         <DomainBadges
                           source={domain.source}

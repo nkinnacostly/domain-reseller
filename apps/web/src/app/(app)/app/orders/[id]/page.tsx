@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
+import { DomainName } from '@/components/common/domain-name'
 import { FormMessage } from '@/components/common/form-parts'
 import {
   PANEL_HEADING,
@@ -93,10 +94,12 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                         href={`/app/domains/${item.domain}`}
                         className="font-medium break-all text-foreground underline-offset-4 hover:underline"
                       >
-                        {item.domain}
+                        <DomainName name={item.domain} />
                       </Link>
                     ) : (
-                      <span className="font-medium break-all text-foreground">{item.domain}</span>
+                      <span className="font-medium break-all text-foreground">
+                        <DomainName name={item.domain} />
+                      </span>
                     )}
                     {order.status !== 'awaiting_payment' && order.status !== 'cancelled' ? (
                       <span

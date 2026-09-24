@@ -1,4 +1,5 @@
 import { formatNaira } from '@dr/shared'
+import { DomainName } from '@/components/common/domain-name'
 import { Brand } from '@/components/layout/brand'
 import { PANEL } from '@/components/layout/panel'
 import { OrderRefunds } from '@/features/checkout/components/order-refunds'
@@ -116,7 +117,9 @@ export function ReceiptDocument({
             {receipt.lines.map((line) => (
               <tr key={line.id} className="border-border border-b align-top">
                 <td className="py-3">
-                  <p className="font-medium break-all text-foreground">{line.domain}</p>
+                  <p className="font-medium break-all text-foreground">
+                    <DomainName name={line.domain} />
+                  </p>
                   <p className="text-muted-foreground">
                     {lineLabel(line.kind, line.years)} · renews at {formatNaira(line.renewalKobo)}
                     /yr

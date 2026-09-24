@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
+import { domainLabel } from '@/components/common/domain-name'
 import {
   FOCUS,
   PANEL_HEADING,
@@ -69,7 +70,7 @@ async function Orders() {
                     ) : null}
                   </p>
                   <p className="truncate text-sm text-muted-foreground">
-                    {order.order_items.map((item) => item.domain).join(', ')}
+                    {order.order_items.map((item) => domainLabel(item.domain)).join(', ')}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:text-right">

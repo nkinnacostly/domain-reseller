@@ -4,6 +4,7 @@ import { Lock } from 'lucide-react'
 import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useState } from 'react'
+import { DomainName } from '@/components/common/domain-name'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { PANEL } from '@/components/layout/panel'
 import type { NameserverPreset } from '@/features/domains/queries/domains'
@@ -144,7 +145,7 @@ export function CheckoutForm({
           {lines.map((line) => (
             <li key={line.domain}>
               <p className="text-xl font-bold tracking-tight break-all text-foreground">
-                {line.domain}
+                <DomainName name={line.domain} />
               </p>
               <p className="text-sm text-muted-foreground">
                 {line.years} {line.years === 1 ? 'year' : 'years'} · {line.total}, then{' '}

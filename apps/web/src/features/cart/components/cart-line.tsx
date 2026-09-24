@@ -4,6 +4,7 @@ import { CircleAlert, Clock, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
 import { useId } from 'react'
+import { DomainName, domainLabel } from '@/components/common/domain-name'
 import { Switch } from '@/components/ui/switch'
 import { removeCartLine, updateCartLine } from '../actions/cart'
 import { announceCartCount } from '../lib/count'
@@ -38,7 +39,7 @@ export function CartLine({ line }: { line: LineView }) {
             id={`${id}-domain`}
             className="text-lg font-semibold break-all text-foreground sm:text-xl"
           >
-            {line.domain}
+            <DomainName name={line.domain} />
           </h2>
           {line.status === 'held' && line.heldUntil ? (
             <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -63,7 +64,7 @@ export function CartLine({ line }: { line: LineView }) {
           type="button"
           onClick={() => remove.execute({ lineId: line.id })}
           disabled={busy}
-          aria-label={`Remove ${line.domain}`}
+          aria-label={`Remove ${domainLabel(line.domain)}`}
           className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring active:scale-95 disabled:opacity-50"
         >
           <Trash2 className="size-4" aria-hidden="true" />
