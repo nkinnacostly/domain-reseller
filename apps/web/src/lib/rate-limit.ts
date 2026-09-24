@@ -23,6 +23,8 @@ export const LIMITS = {
   // Flutterwave misbehaves: one charge is not settled a hundred times over.
   webhookPerCharge: { max: 20, windowSeconds: 600 },
   webhookAll: { max: 600, windowSeconds: 60 },
+  // Anyone may ask for a price refresh; it only acts when prices really changed.
+  pricingRefresh: { max: 12, windowSeconds: 3600 },
 } as const
 
 export async function withinLimit(

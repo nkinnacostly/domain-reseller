@@ -67,6 +67,12 @@ jobs:
         if: github.event.schedule == '0 6 * * 1' || inputs.job != 'fx'
         run: pnpm --filter @dr/gateway sync:catalogue -- --apply
 
+      # L8: new prices reach the site now rather than within the hour. The
+      # route acts only if prices really changed, so it needs no secret.
+      - name: Refresh prices on the site
+        continue-on-error: true
+        run: curl -fsS --max-time 30 -X POST https://www.mydomainshub.com/api/pricing/refresh
+
       - name: Report held rates
         run: |
           echo "Any rate held for review stays pending until activated."

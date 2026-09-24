@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { createHash } from 'node:crypto'
 import {
   effectiveFxRate,
   type PricingInputs,
@@ -38,6 +39,8 @@ export type PricedCatalogue = {
   rateId: string
   /** VAT on our supply, from pricing settings (N5b). Added at checkout, never in list prices. */
   vatPct: number
+  /** A fingerprint of every price shown: changes whenever any of them does. */
+  version: string
 }
 
 /**
@@ -73,10 +76,17 @@ export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
 export async function loadPricedCatalogue(): Promise<PricedCatalogue | null> {
   'use cache'
   // Rate and catalogue both change at most daily and are identical for every
-  // visitor. Revalidate these tags when a job writes new data.
+  // visitor. /api/pricing/refresh expires this tag when a job writes new data.
   cacheTag('pricing')
   cacheLife('hours')
+  return readPricedCatalogue()
+}
 
+/**
+ * The same read, never cached — what the prices are right now. The refresh
+ * route compares it with the cached copy. Throws on a failed query, as above.
+ */
+export async function readPricedCatalogue(): Promise<PricedCatalogue | null> {
   // Service client: pricing settings hold the margin, which is not public.
   const supabase = createServiceClient()
 
@@ -161,7 +171,7 @@ export async function loadPricedCatalogue(): Promise<PricedCatalogue | null> {
     .map((t) => ({ ...t, tagline: merch.get(t.tld)?.tagline ?? null }))
     .sort((a, b) => (merch.get(a.tld)?.rank ?? 0) - (merch.get(b.tld)?.rank ?? 0))
 
-  return {
+  const priced = {
     tlds,
     featured,
     effectiveRate: Math.round(effectiveFxRate(inputs.fxRate, inputs.fxBufferPct)),
@@ -169,5 +179,9 @@ export async function loadPricedCatalogue(): Promise<PricedCatalogue | null> {
     rateUpdatedAt: new Date(rateResult.data.effective_from as string),
     rateId: rateResult.data.id as string,
     vatPct: Number(settingsResult.data.vat_pct),
+  }
+  return {
+    ...priced,
+    version: createHash('sha256').update(JSON.stringify(priced)).digest('hex').slice(0, 16),
   }
 }

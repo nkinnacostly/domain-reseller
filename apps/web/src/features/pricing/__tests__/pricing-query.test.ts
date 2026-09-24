@@ -6,9 +6,8 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 
 const { createServiceClient } = await import('@/lib/supabase/service')
 const { logger } = await import('@/lib/logger')
-const { getPricedCatalogue, loadPricedCatalogue, PricingReadError } = await import(
-  '../queries/pricing'
-)
+const { getPricedCatalogue, loadPricedCatalogue, PricingReadError, readPricedCatalogue } =
+  await import('../queries/pricing')
 
 type Result = { data: unknown; error: { message: string } | null }
 
@@ -128,5 +127,105 @@ describe('getPricedCatalogue (what pages call)', () => {
     const priced = await getPricedCatalogue()
     expect(priced?.tlds).toHaveLength(1)
     expect(createServiceClient).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('the price version (L8)', () => {
+  it('is the same for the same prices, and changes when any price does', async () => {
+    vi.mocked(createServiceClient).mockReturnValue(healthy() as never)
+    const first = await readPricedCatalogue()
+    const again = await readPricedCatalogue()
+    expect(first?.version).toMatch(/^[0-9a-f]{16}$/)
+    expect(again?.version).toBe(first?.version)
+
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({
+        fx_rates: ok({ ...RATE, costing_rate: 1510 }),
+        pricing_settings: ok(SETTINGS),
+        tlds: ok(TLDS),
+      }) as never,
+    )
+    expect((await readPricedCatalogue())?.version).not.toBe(first?.version)
+
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({
+        fx_rates: ok(RATE),
+        pricing_settings: ok({ ...SETTINGS, vat_pct: 10 }),
+        tlds: ok(TLDS),
+      }) as never,
+    )
+    expect((await readPricedCatalogue())?.version).not.toBe(first?.version)
+  })
+})
+
+describe('what the catalogue says about each extension', () => {
+  const row = (name: string, overrides: Record<string, unknown> = {}) => ({
+    ...TLDS[0],
+    name,
+    featured_rank: null,
+    featured_tagline: null,
+    ...overrides,
+  })
+
+  it('features extensions in the order the database ranks them, not alphabetically', async () => {
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({
+        fx_rates: ok(RATE),
+        pricing_settings: ok(SETTINGS),
+        tlds: ok([
+          row('africa', { featured_rank: 2, featured_tagline: 'For the continent' }),
+          row('com', { featured_rank: 1 }),
+          row('org'),
+        ]),
+      }) as never,
+    )
+    const priced = await readPricedCatalogue()
+
+    expect(priced?.tlds.map((t) => t.tld)).toEqual(['africa', 'com', 'org'])
+    expect(priced?.featured.map((t) => [t.tld, t.tagline])).toEqual([
+      ['com', null],
+      ['africa', 'For the continent'],
+    ])
+  })
+
+  it('prices no transfer where the registry quotes none, rather than inventing one', async () => {
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({
+        fx_rates: ok(RATE),
+        pricing_settings: ok(SETTINGS),
+        tlds: ok([row('com'), row('ng', { transfer_usd: null, restore_usd: null })]),
+      }) as never,
+    )
+    const priced = await readPricedCatalogue()
+
+    expect(priced?.tlds.find((t) => t.tld === 'com')?.transfer).not.toBeNull()
+    expect(priced?.tlds.find((t) => t.tld === 'ng')?.transfer).toBeNull()
+  })
+
+  it('treats a catalogue read that returns no rows at all as missing data', async () => {
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({ fx_rates: ok(RATE), pricing_settings: ok(SETTINGS), tlds: ok(null) }) as never,
+    )
+    await expect(readPricedCatalogue()).resolves.toBeNull()
+    expect(logger.error).toHaveBeenCalledWith('catalogue is empty — cannot price')
+  })
+
+  it('still withholds prices, and logs something readable, when the failure is not an Error', async () => {
+    vi.mocked(createServiceClient).mockImplementation(() => {
+      const rejected = Promise.reject('connection reset')
+      const query = Object.assign(rejected, {
+        select: () => query,
+        eq: () => query,
+        order: () => query,
+        maybeSingle: () => query,
+      })
+      return { from: () => query } as never
+    })
+
+    expect(await getPricedCatalogue()).toBeNull()
+    expect(logger.error).toHaveBeenCalledWith(
+      { err: 'connection reset' },
+      'pricing read failed — withholding prices for this request',
+    )
   })
 })
