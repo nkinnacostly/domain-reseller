@@ -62,7 +62,12 @@ describe('countHeldDomains (FR-A2)', () => {
       ['select', 'id', { count: 'exact', head: true }],
       ['eq', 'user_id', 'user-1'],
       ['neq', 'source', 'demo'],
-      ['not', 'local_status', 'in', '(released,transferred_away,registration_failed,closed)'],
+      [
+        'not',
+        'local_status',
+        'in',
+        '(released,transferred_away,registration_failed,transfer_rejected,transfer_cancelled,closed)',
+      ],
     ])
   })
 

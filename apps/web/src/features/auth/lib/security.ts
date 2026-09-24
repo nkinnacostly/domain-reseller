@@ -68,15 +68,19 @@ export function describeHold(until: Date): string {
 export const TWO_FACTOR_REQUIRED_ABOVE_DOMAINS = 10
 
 /**
- * Statuses in which a domain is no longer the account's (PRD §10): gone from
- * the registry, moved to another registrar, or never registered. Everything
- * else counts as held — a registration under way included, since it is paid
- * for and about to be live. Demo rows never count: they are not domains.
+ * Statuses in which a domain is not the account's (PRD §10): gone from the
+ * registry, moved to another registrar, never registered, or a transfer in
+ * that was refused or cancelled — the domain stayed where it was. Everything
+ * else counts as held — a registration or transfer under way included, since
+ * it is paid for and about to be live. Demo rows never count: they are not
+ * domains.
  */
 export const NOT_HELD_STATUSES = [
   'released',
   'transferred_away',
   'registration_failed',
+  'transfer_rejected',
+  'transfer_cancelled',
   'closed',
 ] as const satisfies readonly LocalStatus[]
 

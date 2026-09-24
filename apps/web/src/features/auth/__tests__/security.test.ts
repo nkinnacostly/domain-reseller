@@ -84,9 +84,16 @@ describe('mandatory two-factor (FR-A2)', () => {
     expect(twoFactorRequired(250)).toBe(true)
   })
 
-  it('stops counting a domain once it has left: released, moved away, never registered or closed', () => {
+  it('stops counting a domain that is not the account’s: gone, moved away, never registered, a transfer in refused or cancelled, or closed', () => {
     expect([...NOT_HELD_STATUSES].sort()).toEqual(
-      ['closed', 'registration_failed', 'released', 'transferred_away'].sort(),
+      [
+        'closed',
+        'registration_failed',
+        'released',
+        'transfer_cancelled',
+        'transfer_rejected',
+        'transferred_away',
+      ].sort(),
     )
     for (const status of NOT_HELD_STATUSES) expect(LOCAL_STATUS).toContain(status)
   })
