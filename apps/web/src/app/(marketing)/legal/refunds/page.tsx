@@ -50,7 +50,8 @@ export default function RefundsPage() {
         <p>
           You get the <strong>full amount you paid for that domain, VAT included</strong>, back to
           the payment method you used, within <strong>{days} business days</strong>. If only some
-          domains in an order fail, only those are refunded; the rest stay registered.
+          domains in an order fail, only those are refunded; the rest stay registered. Flutterwave’s
+          processing fee, added on its payment page, is Flutterwave’s and is not part of the refund.
         </p>
       </LegalSection>
 

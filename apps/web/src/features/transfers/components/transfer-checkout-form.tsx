@@ -16,6 +16,7 @@ import {
 import { FOCUS, PANEL } from '@/components/layout/panel'
 import { RegistrantFields } from '@/features/checkout/components/registrant-fields'
 import { type RegistrantForm, registrantFromForm } from '@/features/checkout/lib/contact'
+import { PROCESSING_FEE_NOTE } from '@/features/checkout/lib/fees'
 import { cn } from '@/lib/utils'
 import { placeTransfer } from '../actions/place-transfer'
 
@@ -216,9 +217,9 @@ export function TransferCheckoutForm({
           Pay {summary.total}
         </SubmitButton>
         <p className="text-pretty text-xs/5 text-muted-foreground">
-          You pay on Flutterwave’s secure page — card, bank transfer or USSD. Before you are charged
-          we check the transfer code with the registry. If the transfer is refused later, what you
-          paid is refunded automatically.
+          You pay on Flutterwave’s secure page — card, bank transfer or USSD. {PROCESSING_FEE_NOTE}{' '}
+          Before you are charged we check the transfer code with the registry. If the transfer is
+          refused later, what you paid is refunded automatically.
         </p>
         <p className="text-pretty text-xs/5 text-muted-foreground">
           By paying you agree to the{' '}

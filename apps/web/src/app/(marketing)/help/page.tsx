@@ -55,7 +55,8 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         a: (
           <p>
             Checkout takes you to Flutterwave, where you can pay by card, bank transfer or the other
-            methods Flutterwave offers. We never see your card details.
+            methods Flutterwave offers. Flutterwave adds its own processing fee there, on top of the
+            total we show. We never see your card details.
           </p>
         ),
       },

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useState } from 'react'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
+import { PROCESSING_FEE_NOTE } from '@/features/checkout/lib/fees'
 import { PanelNote } from '@/features/domains/components/domain-badges'
 import { placeRenewal } from '../actions/place-renewal'
 
@@ -128,9 +129,9 @@ export function RenewForm({
         Pay {chosen.total}
       </SubmitButton>
       <p className="text-pretty text-xs/5 text-muted-foreground">
-        You pay on Flutterwave’s secure page — card, bank transfer or USSD. The renewal is made once
-        the payment is confirmed. If the registry refuses it, what you paid is refunded
-        automatically.
+        You pay on Flutterwave’s secure page — card, bank transfer or USSD. {PROCESSING_FEE_NOTE}{' '}
+        The renewal is made once the payment is confirmed. If the registry refuses it, what you paid
+        is refunded automatically.
       </p>
       <p className="text-pretty text-xs/5 text-muted-foreground">
         By paying you agree to the{' '}

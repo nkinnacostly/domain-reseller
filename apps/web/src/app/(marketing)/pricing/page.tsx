@@ -104,8 +104,8 @@ export default async function PricingPage() {
                 What makes up the price
               </h2>
               <p className="mt-4 text-pretty text-muted-foreground">
-                Four things, and nothing else. No setup fee, no admin fee, nothing added at the last
-                step.
+                Four things, and nothing else from us — no setup fee, no admin fee. Flutterwave,
+                which takes the payment, adds its own processing fee on its payment page.
               </p>
             </div>
 

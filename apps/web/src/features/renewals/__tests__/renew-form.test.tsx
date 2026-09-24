@@ -245,6 +245,13 @@ describe('RenewForm — what the customer is told before paying', () => {
     expect(screen.queryByText('The renewal price has gone up.')).not.toBeInTheDocument()
   })
 
+  it('says Flutterwave adds its own fee on its payment page (FR-C5, N9b)', () => {
+    renderForm()
+    expect(
+      screen.getByText(/Flutterwave adds its own processing fee on its payment page/),
+    ).toBeInTheDocument()
+  })
+
   it('links the registration agreement and refund policy (CMP-1, CMP-2)', () => {
     renderForm()
     expect(screen.getByRole('link', { name: 'registration agreement' })).toHaveAttribute(

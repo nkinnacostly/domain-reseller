@@ -81,6 +81,13 @@ describe('TransferCheckoutForm — what is being bought (FR-T2, N8)', () => {
     expect(payButton()).toHaveTextContent('Pay ₦18,275')
   })
 
+  it('says Flutterwave adds its own fee on its payment page (FR-C5, N9b)', () => {
+    renderForm()
+    expect(
+      screen.getByText(/Flutterwave adds its own processing fee on its payment page/),
+    ).toBeInTheDocument()
+  })
+
   it('says so in test mode, and not otherwise', () => {
     const { unmount } = renderForm(true)
     expect(screen.getByRole('status')).toHaveTextContent(/Test mode\..*registrar’s test system/)

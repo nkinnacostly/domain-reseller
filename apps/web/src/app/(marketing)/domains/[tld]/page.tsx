@@ -75,7 +75,7 @@ export default async function ExtensionPage({ params }: { params: Params }) {
               <p>
                 {/* N8 — the renewal price travels with the first-year price. */}
                 {prices.register} for the first year, then {prices.renew} a year to renew. In naira,
-                with nothing added at the last step but VAT.
+                with VAT added at checkout and Flutterwave’s processing fee on its payment page.
               </p>
             ) : (
               <p>{describeKind(tld, facts.isCountryCode)}</p>

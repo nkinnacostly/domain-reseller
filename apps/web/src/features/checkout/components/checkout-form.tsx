@@ -14,6 +14,7 @@ import type { NameserverPreset } from '@/features/domains/queries/domains'
 import { cn } from '@/lib/utils'
 import { placeOrder } from '../actions/place-order'
 import { type RegistrantForm, registrantFromForm } from '../lib/contact'
+import { PROCESSING_FEE_NOTE } from '../lib/fees'
 import { type HostProblem, hostFailure, hostRequest, isHostFailure } from '../lib/line-hosts'
 import { HostWarnings } from './host-warnings'
 import { NameserverChoice } from './nameserver-choice'
@@ -218,8 +219,8 @@ export function CheckoutForm({
           Pay {summary.total}
         </SubmitButton>
         <p className="text-pretty text-xs/5 text-muted-foreground">
-          You pay on Flutterwave's secure page — card, bank transfer or USSD. Before you are charged
-          we check every name is still free.
+          You pay on Flutterwave's secure page — card, bank transfer or USSD. {PROCESSING_FEE_NOTE}{' '}
+          Before you are charged we check every name is still free.
         </p>
         {/* CMP-1 / CMP-2 — the agreement and the registrant's rights, at the point of purchase. */}
         <p className="text-pretty text-xs/5 text-muted-foreground">

@@ -262,6 +262,13 @@ describe('CheckoutForm — what the customer checks before paying', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
+  it('says Flutterwave adds its own fee on its payment page (FR-C5, N9b)', () => {
+    renderForm()
+    expect(
+      screen.getByText(/Flutterwave adds its own processing fee on its payment page/),
+    ).toBeInTheDocument()
+  })
+
   it('links the registration agreement, refund policy and registrant rights (CMP-1, CMP-2)', () => {
     renderForm()
     expect(screen.getByRole('link', { name: 'registration agreement' })).toHaveAttribute(
