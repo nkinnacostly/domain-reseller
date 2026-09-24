@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronUp, LogOut, Menu, Receipt, Settings } from 'lucide-react'
+import { BookUser, ChevronUp, LogOut, Menu, Receipt, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
@@ -100,6 +100,12 @@ export function AccountMenu({
             <Link href="/app/settings">
               <Settings aria-hidden="true" />
               Settings
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/app/settings/contacts">
+              <BookUser aria-hidden="true" />
+              Contacts
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>

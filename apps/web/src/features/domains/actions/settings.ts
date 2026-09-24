@@ -5,6 +5,16 @@ import { GatewayError } from '@dr/shared/errors'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { registrantFormSchema, toContact } from '@/features/checkout/lib/contact'
+import {
+  CONTACT_ROLES,
+  readRoles,
+  roleChoiceSchema,
+  type StoredContact,
+  sameContact,
+  sameRoles,
+  withRole,
+} from '@/features/contacts/lib/roles'
+import { resolveRoleChoice } from '@/features/contacts/queries/profiles'
 import { BUSINESS } from '@/lib/business'
 import { callGateway } from '@/lib/gateway'
 import { logger } from '@/lib/logger'
@@ -33,7 +43,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>
 type Ctx = { supabase: Supabase; user: { id: string } }
 
 const COLUMNS =
-  'id, domain_name, tld, source, test_mode, local_status, transfer_lock, privacy_enabled, registrant, pending_transfer_lock, pending_privacy, pending_registrant'
+  'id, domain_name, tld, source, test_mode, local_status, transfer_lock, privacy_enabled, registrant, contacts, pending_transfer_lock, pending_privacy, pending_registrant, pending_contacts'
 
 async function ownedDomain(supabase: Supabase, domainId: string) {
   const { data } = await supabase.from('domains').select(COLUMNS).eq('id', domainId).maybeSingle()
@@ -89,7 +99,8 @@ async function request(
   pending:
     | { pending_transfer_lock: boolean }
     | { pending_privacy: boolean }
-    | { pending_registrant: Json },
+    | { pending_registrant: Json }
+    | { pending_contacts: Json },
   payload: Json,
 ): Promise<SettingResult> {
   const service = createServiceClient()
@@ -195,6 +206,50 @@ export const changeRegistrant = elevatedAction
       }
     }
     return request(ctx, domain, 'contacts', { pending_registrant: contact as Json }, { material })
+  })
+
+/**
+ * FR-DS1, SEC-2: the administrative, technical or billing contact — the
+ * registrant, a saved profile (read again under RLS), or new details. Sent
+ * as the whole set of roles (`pending_contacts`, migration 29), merged over
+ * any change already on its way; a role left out follows the registrant, so
+ * `{}` hands all three back. Unlike the registrant (FR-DS2), no role change
+ * starts ICANN's 60-day transfer lock, so none is warned about.
+ */
+export const changeContactRole = elevatedAction
+  .inputSchema(
+    z.object({ domainId: z.uuid(), role: z.enum(CONTACT_ROLES), choice: roleChoiceSchema }),
+  )
+  .action(async ({ parsedInput, ctx }): Promise<SettingResult> => {
+    const domain = await ownedDomain(ctx.supabase, parsedInput.domainId)
+    if (!domain) return NOT_YOURS
+    const refused = refusal(domain)
+    if (refused) return { error: refused }
+
+    const resolved = await resolveRoleChoice(ctx.supabase, parsedInput.choice)
+    if (!resolved.ok) return { error: resolved.error }
+
+    const current = readRoles(domain.contacts)
+    const pending = domain.pending_contacts === null ? null : readRoles(domain.pending_contacts)
+    // The registrant the role would follow: the one on its way, if any. Its
+    // own details in a role are the registrant's role (migration 29).
+    const registrant = (domain.pending_registrant ?? domain.registrant) as StoredContact | null
+    const holder =
+      resolved.contact && !(registrant && sameContact(registrant, resolved.contact))
+        ? resolved.contact
+        : null
+    const next = withRole(pending ?? current, parsedInput.role, holder)
+
+    // As with the lock: asked again re-queues; the registry's own is a no-op.
+    if (pending && sameRoles(pending, next)) return queue(domain, 'contacts')
+    if (!pending && sameRoles(current, next)) return { ok: true }
+    return request(
+      ctx,
+      domain,
+      'contacts',
+      { pending_contacts: next as Json },
+      { roles: [parsedInput.role] },
+    )
   })
 
 /** Per account: a person needs a code a few times at most; a script needs many. */

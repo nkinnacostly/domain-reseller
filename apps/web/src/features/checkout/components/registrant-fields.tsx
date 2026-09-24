@@ -12,10 +12,16 @@ import { NIGERIAN_STATES, REGISTRANT_COUNTRIES } from '../lib/countries'
  */
 export function RegistrantFields({
   idPrefix,
+  namePrefix = '',
   registrant,
   errorFor,
 }: {
   idPrefix: string
+  /**
+   * Prepended to every field's name, so one form can hold several contacts
+   * (FR-A4) — read back with `registrantFromForm(form, namePrefix)`.
+   */
+  namePrefix?: string
   /** What the fields start with; a new registrant starts empty. */
   registrant: Partial<RegistrantForm>
   /** The validation message for one field, if it has one. */
@@ -29,7 +35,7 @@ export function RegistrantFields({
     const error = errorFor(name)
     return {
       id: `${id}-${name}`,
-      name,
+      name: `${namePrefix}${name}`,
       defaultValue: (registrant[name] as string | undefined) ?? '',
       'aria-invalid': error ? true : undefined,
       'aria-describedby': describedBy(`${id}-${name}`, error),
@@ -124,7 +130,7 @@ export function RegistrantFields({
       <Field id={`${id}-country`} label="Country" error={field('country').error}>
         <select
           id={`${id}-country`}
-          name="country"
+          name={`${namePrefix}country`}
           value={country}
           onChange={(event) => setCountry(event.target.value)}
           autoComplete="country"

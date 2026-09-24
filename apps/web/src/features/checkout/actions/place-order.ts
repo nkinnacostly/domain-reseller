@@ -5,6 +5,8 @@ import { accountBalanceSchema, userMessageFor } from '@dr/shared'
 import { z } from 'zod'
 import { getCartView } from '@/features/cart/queries/cart'
 import { deleteLine, findCartId } from '@/features/cart/queries/store'
+import { contactRolesInputSchema } from '@/features/contacts/lib/roles'
+import { resolveContactRoles } from '@/features/contacts/queries/profiles'
 import { checkAvailability } from '@/features/search/queries/availability'
 import { BUSINESS } from '@/lib/business'
 import { env, requirePaymentEnv } from '@/lib/env'
@@ -62,6 +64,9 @@ export const placeOrder = authAction
       confirmed: z.literal(true, { error: 'Tick the box to confirm the spelling' }),
       // The total the customer saw. If it moved, they see the new one first.
       expectedTotalKobo: z.number().int().positive(),
+      // FR-A4, FR-C5 — administrative, technical and billing; any left out
+      // stay with the registrant.
+      contacts: contactRolesInputSchema.optional(),
     }),
   )
   .action(async ({ parsedInput, ctx }): Promise<Result> => {
@@ -85,6 +90,9 @@ export const placeOrder = authAction
     const nameservers = await chooseNameservers(service, parsedInput)
     if (!nameservers.ok) return { error: nameservers.error, field: nameservers.field }
     const registrant = toContact(parsedInput.registrant)
+    // A saved profile is read again as the user (RLS), never taken from the browser.
+    const roles = await resolveContactRoles(ctx.supabase, parsedInput.contacts, registrant)
+    if (!roles.ok) return { error: roles.error, field: `contacts.${roles.role}` }
 
     // ── Price re-validation (FR-C4) ──────────────────────────────────────
     const cart = await getCartView()
@@ -233,6 +241,8 @@ export const placeOrder = authAction
         tx_ref: txRef,
         registrant,
         contact_profile_id: contactProfileId,
+        // Copied to each domain with the payment (record_order_payment, migration 29).
+        contacts: Object.keys(roles.contacts).length > 0 ? roles.contacts : null,
         nameservers: hosts.order.nameservers,
         // Copied to the domain with the payment (record_order_payment, migration 26).
         nameserver_preset_id: hosts.order.presetId,

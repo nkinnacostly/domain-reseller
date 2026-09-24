@@ -402,6 +402,8 @@ describe('RegistrantForm (FR-DS1, FR-DS2)', () => {
     expect(await screen.findByText('Enter a valid email address')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Email' })).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByText('Some details need fixing — they’re marked above.')).toBeInTheDocument()
+    // Marked beside the fields — not also reported as a request that failed.
+    expect(screen.queryByText('That did not go through. Please try again.')).not.toBeInTheDocument()
   })
 })
 

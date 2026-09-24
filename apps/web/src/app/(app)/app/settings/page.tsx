@@ -1,7 +1,10 @@
+import { ArrowRight } from 'lucide-react'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { Suspense } from 'react'
 import { FormMessage } from '@/components/common/form-parts'
 import {
+  FOCUS,
   PANEL,
   PANEL_HEADING,
   PanelHeader,
@@ -67,6 +70,22 @@ async function Settings() {
           <ProfileForm email={account.email} fullName={account.fullName} phone={account.phone} />
         </Section>
         <Section
+          id="contacts"
+          title="Contacts"
+          description="Saved details for your domains’ registrant and their administrative, technical and billing contacts."
+        >
+          <Link
+            href="/app/settings/contacts"
+            className={cn(
+              'inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground transition hover:bg-muted active:scale-[0.98]',
+              FOCUS,
+            )}
+          >
+            Manage contacts
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        </Section>
+        <Section
           id="password"
           title="Password"
           description="Changing it signs you out everywhere else."
@@ -104,7 +123,7 @@ export default function SettingsPage() {
           { label: 'Settings' },
         ]}
         title="Settings"
-        description="Your profile, your password, two-factor sign-in and your devices — what keeps your account, and your domains, yours."
+        description="Your profile, your saved contacts, your password, two-factor sign-in and your devices — what keeps your account, and your domains, yours."
       />
       <Suspense fallback={<PanelSkeleton height="h-96" />}>
         <Settings />
