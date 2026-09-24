@@ -222,7 +222,8 @@ test.describe('domain detail', () => {
       'aria-current',
       /.*/,
     )
-    await expect(page.getByText('Not editable here yet.')).toBeVisible()
+    // A demo domain never reaches a registry, so its settings say so (FR-DS4).
+    await expect(page.getByText('Demo domain.', { exact: true })).toBeVisible()
     expect((await axe(page)).violations).toEqual([])
   })
 

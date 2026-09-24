@@ -56,6 +56,54 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
     case 'demo_created':
       return 'Added as a demo domain'
     default:
+      return describeSettingEvent(type, payload)
+  }
+}
+
+const onOff = (value: unknown) => (value ? 'on' : 'off')
+
+/**
+ * Registry-side settings (migration 26) and transfer-code reveals (FR-DS5).
+ * Payloads carry codes and flags only — never contact details or a code.
+ */
+function describeSettingEvent(type: string, payload: Record<string, unknown>): string {
+  const reason = () => failureReason(payload.code as string | undefined)
+  switch (type) {
+    case 'transfer_lock_requested':
+      return `Asked to turn the transfer lock ${onOff(payload.to)}`
+    case 'transfer_lock_applied':
+      return `Transfer lock turned ${onOff(payload.transfer_lock)} at the registry`
+    case 'transfer_lock_rejected':
+      return `Transfer lock change refused by the registry: ${reason()}`
+    case 'transfer_lock_delayed':
+      return 'Transfer lock change delayed — waiting on the registry'
+    case 'transfer_lock_not_applied':
+      return 'Transfer lock change not applied'
+    case 'privacy_requested':
+      return `Asked to turn contact privacy ${onOff(payload.to)}`
+    case 'privacy_applied':
+      return `Contact privacy turned ${onOff(payload.privacy)} at the registry`
+    case 'privacy_rejected':
+      return `Contact privacy change refused by the registry: ${reason()}`
+    case 'privacy_delayed':
+      return 'Contact privacy change delayed — waiting on the registry'
+    case 'privacy_not_applied':
+      return 'Contact privacy change not applied'
+    case 'contacts_requested':
+      return 'Asked to change the registrant'
+    case 'contacts_applied':
+      return 'Registrant updated at the registry'
+    case 'contacts_rejected':
+      return `Registrant change refused by the registry: ${reason()}`
+    case 'contacts_delayed':
+      return 'Registrant change delayed — waiting on the registry'
+    case 'contacts_not_applied':
+      return 'Registrant change not applied'
+    case 'auth_code_revealed':
+      return payload.sandbox
+        ? 'Transfer code shown, from the registrar’s test system'
+        : 'Transfer code shown'
+    default:
       return type.replaceAll('_', ' ')
   }
 }

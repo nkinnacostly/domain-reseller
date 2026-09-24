@@ -115,6 +115,23 @@ createServer((req, res) => {
     // Like the real account today: an empty float, so test mode records a shortfall.
     return send(res, 200, { ok: true, data: { balanceUsd: 0 } })
   }
+  // A domain's transfer code (FR-DS5): a fixed code per side; `nocode*` names have none.
+  const transferCode = req.url?.match(/^\/v1\/domains\/([^/?]+)\/auth-code\?side=(sandbox|live)$/)
+  if (req.method === 'GET' && transferCode) {
+    if (!req.headers.authorization?.startsWith('Bearer ')) {
+      return send(res, 401, { ok: false, code: 'SUPPLIER_AUTH', message: 'Unauthorised' })
+    }
+    if (transferCode[1].startsWith('nocode')) {
+      return send(res, 502, {
+        ok: false,
+        code: 'AUTH_CODE_UNAVAILABLE',
+        message: 'The registry gave no transfer code for this domain',
+        retryable: false,
+      })
+    }
+    const side = transferCode[2] === 'sandbox' ? 'OTE' : 'LIVE'
+    return send(res, 200, { ok: true, data: { authCode: `E2E-${side}-7qX!code` } })
+  }
   if (req.method !== 'POST' || req.url !== '/v1/availability') {
     return send(res, 404, { ok: false, code: 'NOT_FOUND', message: 'Unknown route' })
   }

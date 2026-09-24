@@ -4,12 +4,16 @@ import { describe, expect, it } from 'vitest'
 import { createTransport } from '../dna/transport'
 import { Semaphore } from '../lib/semaphore'
 import {
+  asRegistryContact,
   type CallRecord,
   classifyRefusal,
+  classifySettingRefusal,
   createDnaRegistrar,
   judgeExchange,
+  sameContact,
   supplierDate,
   toDnaContact,
+  toRegistryContacts,
 } from './registrar'
 
 /**
@@ -492,5 +496,262 @@ describe('listPage (PRD §13.5)', () => {
     expect(page.kind === 'ok' && page.data.items.map((item) => item.domainName)).toEqual([
       SANDBOX_RECORD.domainName,
     ])
+  })
+})
+
+/** A `domains/info` record with its four contacts, as parseContactInfo reads them. */
+const CONTACT_ROW = {
+  firstName: 'Ada',
+  lastName: 'Obi',
+  companyName: '',
+  eMail: 'ada@example.com',
+  address: '1 Marina',
+  city: 'Lagos',
+  state: 'Lagos',
+  country: 'NG',
+  postalCode: '100001',
+  phoneCountryCode: '234',
+  phone: '8031234567',
+}
+const WITH_CONTACTS = {
+  ...DOMAIN_INFO,
+  authCode: 'Zx9!secret-code',
+  contacts: ['Registrant', 'Admin', 'Tech', 'Billing'].map((contactType) => ({
+    ...CONTACT_ROW,
+    contactType,
+  })),
+}
+
+describe('registry-side settings (FR-DS1, FR-DS3, FR-DS4)', () => {
+  it('turns the lock off through POST domains/unlock — the SDK wrongly posts to domains/lock', async () => {
+    const { registrar, sent, calls } = setup(() => new Response(null, { status: 204 }))
+    await expect(registrar.setTransferLock('example.com', false)).resolves.toEqual({ kind: 'ok' })
+    await expect(registrar.setTransferLock('example.com', true)).resolves.toEqual({ kind: 'ok' })
+    expect(sent).toEqual([
+      { method: 'POST', path: '/api/v1/domains/unlock', body: { domainName: 'example.com' } },
+      { method: 'POST', path: '/api/v1/domains/lock', body: { domainName: 'example.com' } },
+    ])
+    expect(calls.map((call) => call.operation)).toEqual([
+      'DisableTheftProtectionLock',
+      'EnableTheftProtectionLock',
+    ])
+  })
+
+  it('sets privacy through POST domains/privacy', async () => {
+    const { registrar, sent } = setup(() => json(200, {}))
+    await expect(registrar.setPrivacy('example.com', true)).resolves.toEqual({ kind: 'ok' })
+    expect(sent[0]).toEqual({
+      method: 'POST',
+      path: '/api/v1/domains/privacy',
+      body: { domainName: 'example.com', privacyStatus: true },
+    })
+  })
+
+  it('saves one person in all four roles through PUT domains/contacts/update', async () => {
+    const { registrar, sent } = setup(() => json(200, {}))
+    await expect(registrar.updateContacts('example.com', CONTACT)).resolves.toEqual({ kind: 'ok' })
+    expect(sent[0]?.method).toBe('PUT')
+    expect(sent[0]?.path).toBe('/api/v1/domains/contacts/update')
+    const body = sent[0]?.body as { domainName: string; contacts: { contactType: string }[] }
+    expect(body.domainName).toBe('example.com')
+    expect(body.contacts.map((contact) => contact.contactType).sort()).toEqual([
+      'Admin',
+      'Billing',
+      'Registrant',
+      'Tech',
+    ])
+  })
+
+  it('reads a client without its REST layer as unknown: nothing was sent', async () => {
+    const client = new DomainNameApi('00000000-0000-0000-0000-000000000000', 'key', {
+      testMode: true,
+      telemetry: false,
+    })
+    const registrar = createDnaRegistrar({
+      client: { ...client, client: {} } as unknown as DomainNameApi,
+      environment: 'ote',
+      audit: async () => {},
+      slots: new Semaphore(2),
+    })
+    await expect(registrar.setTransferLock('example.com', false)).resolves.toMatchObject({
+      kind: 'unknown',
+      code: 'NO_EXCHANGE',
+    })
+  })
+
+  it('never reads a timed-out settings write as done or failed', async () => {
+    const { registrar } = setup(timeout)
+    await expect(registrar.setTransferLock('example.com', false)).resolves.toMatchObject({
+      kind: 'unknown',
+      code: 'TIMEOUT',
+    })
+  })
+
+  it('classifies a refusal: contact problems apart, the rest as the registry’s call', async () => {
+    const refusing = (message: string) => setup(() => json(400, { error: { message } })).registrar
+    await expect(
+      refusing('Invalid phone number').updateContacts('example.com', CONTACT),
+    ).resolves.toMatchObject({ kind: 'rejected', code: 'CONTACT_INVALID' })
+    await expect(
+      refusing('Operation not allowed by the registry').setPrivacy('example.com', true),
+    ).resolves.toMatchObject({ kind: 'rejected', code: 'REGISTRY_REFUSED' })
+  })
+
+  it('reads a settings write for a domain not in our account as a refusal', async () => {
+    const { registrar } = setup(() => json(404, NOT_FOUND))
+    await expect(registrar.setTransferLock('example.com', true)).resolves.toMatchObject({
+      kind: 'rejected',
+      code: 'DOMAIN_NOT_FOUND',
+    })
+  })
+
+  it('reports refused credentials on a settings write as blocked', async () => {
+    const { registrar } = setup(() => json(401, {}))
+    await expect(registrar.setPrivacy('example.com', false)).resolves.toMatchObject({
+      kind: 'blocked',
+      code: 'SUPPLIER_AUTH',
+    })
+  })
+})
+
+describe('contacts read', () => {
+  it('reads every role from the record, flattened as the SDK sends them', async () => {
+    const { registrar, sent } = setup(() => json(200, WITH_CONTACTS))
+    const read = await registrar.contacts('example.com')
+    expect(read).toEqual({
+      kind: 'found',
+      data: {
+        registrant: expect.objectContaining({ firstName: 'Ada', email: 'ada@example.com' }),
+        administrative: expect.objectContaining({ address: '1 Marina' }),
+        technical: expect.objectContaining({ zipCode: '100001' }),
+        billing: expect.objectContaining({ phone: '8031234567', phoneCountryCode: '234' }),
+      },
+    })
+    expect(sent[0]).toMatchObject({ method: 'GET', path: '/api/v1/domains/info' })
+  })
+
+  it('reads a record without a registrant as unknown, never as “no contacts”', async () => {
+    const { registrar } = setup(() => json(200, DOMAIN_INFO))
+    await expect(registrar.contacts('example.com')).resolves.toMatchObject({
+      kind: 'unknown',
+      code: 'UNPARSEABLE',
+    })
+  })
+
+  it('reads a 404 as not ours, and a timeout as unknown', async () => {
+    await expect(setup(() => json(404, NOT_FOUND)).registrar.contacts('a.com')).resolves.toEqual({
+      kind: 'not_found',
+    })
+    await expect(setup(timeout).registrar.contacts('a.com')).resolves.toMatchObject({
+      kind: 'unknown',
+    })
+  })
+
+  it('reads a refused lookup as unknown: it decides nothing', async () => {
+    const { registrar } = setup(() => json(400, { error: { message: 'Bad request' } }))
+    await expect(registrar.contacts('a.com')).resolves.toMatchObject({
+      kind: 'unknown',
+      code: 'LOOKUP_REFUSED',
+    })
+  })
+
+  it('reads a blocked lookup as blocked', async () => {
+    const { registrar } = setup(() => json(401, {}))
+    await expect(registrar.contacts('a.com')).resolves.toMatchObject({ kind: 'blocked' })
+  })
+})
+
+describe('transfer code read (FR-DS5, SEC-12)', () => {
+  it('returns the registry’s code', async () => {
+    const { registrar } = setup(() => json(200, WITH_CONTACTS))
+    await expect(registrar.authCode('example.com')).resolves.toEqual({
+      kind: 'found',
+      data: 'Zx9!secret-code',
+    })
+  })
+
+  it('keeps the code out of the audit record', async () => {
+    const { registrar, calls } = setup(() => json(200, WITH_CONTACTS))
+    await registrar.authCode('example.com')
+    expect(calls).toEqual([
+      expect.objectContaining({ operation: 'GetAuthCode', outcome: 'ok', message: null }),
+    ])
+    expect(JSON.stringify(calls)).not.toContain('Zx9')
+  })
+
+  it('reads an empty code as unavailable, not as a code', async () => {
+    const { registrar } = setup(() => json(200, { ...DOMAIN_INFO, authCode: '  ' }))
+    await expect(registrar.authCode('example.com')).resolves.toMatchObject({
+      kind: 'unknown',
+      code: 'NO_AUTH_CODE',
+    })
+  })
+
+  it('falls back to the eppCode field', async () => {
+    const { registrar } = setup(() => json(200, { ...DOMAIN_INFO, eppCode: 'epp-123' }))
+    await expect(registrar.authCode('example.com')).resolves.toEqual({
+      kind: 'found',
+      data: 'epp-123',
+    })
+  })
+})
+
+describe('contact comparison', () => {
+  it('skips rows it cannot place, and reads the other field names the SDK accepts', () => {
+    expect(
+      toRegistryContacts({
+        contacts: [
+          null,
+          { contactType: 'Owner', firstName: 'X' },
+          {
+            type: 'registrant',
+            firstName: 'Ada',
+            lastName: 'Obi',
+            organizationName: 'Obi Ltd',
+            emailAddress: 'ada@example.com',
+            addressLine1: '1 Marina',
+            addressLine2: 'Suite 4',
+            stateOrProvince: 'Lagos',
+            countryCode: 'NG',
+            zipCode: '100001',
+            phoneNumber: '8031234567',
+          },
+        ],
+      }),
+    ).toEqual({
+      registrant: {
+        firstName: 'Ada',
+        lastName: 'Obi',
+        company: 'Obi Ltd',
+        email: 'ada@example.com',
+        address: '1 Marina Suite 4',
+        city: '',
+        state: 'Lagos',
+        zipCode: '100001',
+        country: 'NG',
+        phoneCountryCode: '',
+        phone: '8031234567',
+      },
+    })
+    expect(toRegistryContacts({})).toBeNull()
+  })
+
+  it('joins address lines 1 and 2 as the SDK does, and drops line 3', () => {
+    expect(
+      asRegistryContact({ ...CONTACT, addressLine2: 'Suite 4', addressLine3: 'Ignored' }).address,
+    ).toBe('1 Marina Suite 4')
+  })
+
+  it('tells a changed name apart from a registry’s formatting', () => {
+    const ours = asRegistryContact(CONTACT)
+    expect(sameContact(ours, { ...ours, lastName: 'OBI ' })).toBe(true)
+    expect(sameContact(ours, { ...ours, phone: '2348031234567' })).toBe(true)
+    expect(sameContact(ours, { ...ours, lastName: 'Okafor' })).toBe(false)
+    expect(sameContact(ours, { ...ours, phone: '8039999999' })).toBe(false)
+  })
+
+  it('classifies settings refusals', () => {
+    expect(classifySettingRefusal('Email address is not valid')).toBe('CONTACT_INVALID')
+    expect(classifySettingRefusal('Status prohibits update')).toBe('REGISTRY_REFUSED')
   })
 })

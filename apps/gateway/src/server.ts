@@ -70,6 +70,13 @@ const worker =
             environment: target,
             audit: (call) => store.recordCall(job.id, target, call),
           }),
+        // FR-DS1, FR-DS3, FR-DS4: registry-side settings, on the same side.
+        settingsFor: (job) =>
+          createDnaRegistrar({
+            client: getDnaWriteClient(target),
+            environment: target,
+            audit: (call) => store.recordCall(job.id, target, call),
+          }),
       })
     : null
 

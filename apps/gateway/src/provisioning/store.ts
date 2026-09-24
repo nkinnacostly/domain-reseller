@@ -1,4 +1,4 @@
-import type { Database } from '@dr/db'
+import type { Database, Json } from '@dr/db'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { WriteTarget } from '../dna/client'
 import { env } from '../env'
@@ -13,7 +13,13 @@ import type { CallRecord, RegistryDomain } from './registrar'
 
 export type ClaimedJob = {
   id: string
-  kind: 'register_domain' | 'apply_nameservers' | 'renew_domain'
+  kind:
+    | 'register_domain'
+    | 'apply_nameservers'
+    | 'renew_domain'
+    | 'set_transfer_lock'
+    | 'set_privacy'
+    | 'update_contacts'
   /** Including this one. */
   attempts: number
   testMode: boolean
@@ -30,6 +36,12 @@ export type ClaimedJob = {
   baselineExpiry: string | null
   /** For a registration or renewal: the charge that paid for it, confirmed with Flutterwave first. */
   payment: PaymentFacts | null
+  /** 'registration', 'transfer' or 'demo' — a demo row never reaches a registry. */
+  source?: string | null
+  /** Registry-side settings (migration 26): what was asked for, not yet confirmed. Null: none. */
+  pendingTransferLock?: boolean | null
+  pendingPrivacy?: boolean | null
+  pendingRegistrant?: unknown
 }
 
 export type Completion = {
@@ -60,6 +72,17 @@ export interface JobStore {
     applied: string[] | null,
     code: string | null,
   ): Promise<void>
+  /**
+   * A settings job's answer (migration 26). `applied` is what the registry
+   * now holds — {transfer_lock}, {privacy} or {registrant} — read back after
+   * the write; null means it refused `attempted`, with `code`.
+   */
+  recordDomainChange(
+    jobId: string,
+    attempted: Record<string, unknown>,
+    applied: Record<string, unknown> | null,
+    code: string | null,
+  ): Promise<void>
   reschedule(jobId: string, delaySeconds: number, code: string, message: string): Promise<void>
   fail(jobId: string, code: string, message: string, needsAttention: boolean): Promise<void>
 }
@@ -86,6 +109,10 @@ type Row = {
     currency: string | null
     status: string | null
   } | null
+  source?: string | null
+  pending_transfer_lock?: boolean | null
+  pending_privacy?: boolean | null
+  pending_registrant?: unknown
 }
 
 const kobo = (value: number | string | null | undefined) =>
@@ -116,6 +143,10 @@ export function toClaimedJob(row: Row): ClaimedJob {
           status: row.payment.status,
         }
       : null,
+    source: row.source ?? null,
+    pendingTransferLock: row.pending_transfer_lock ?? null,
+    pendingPrivacy: row.pending_privacy ?? null,
+    pendingRegistrant: row.pending_registrant ?? null,
   }
 }
 
@@ -203,6 +234,17 @@ export function createSupabaseStore(
           p_job_id: jobId,
           p_attempted: attempted,
           p_applied: nullable(applied),
+          p_code: nullable(code),
+        }),
+      )
+    },
+
+    async recordDomainChange(jobId, attempted, applied, code) {
+      await rpc(
+        client.rpc('record_domain_change', {
+          p_job_id: jobId,
+          p_attempted: attempted as Json,
+          p_applied: nullable(applied as Json),
           p_code: nullable(code),
         }),
       )

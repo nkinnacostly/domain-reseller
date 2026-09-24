@@ -19,8 +19,9 @@ export const metadata: Metadata = {
  * sponsoring registrar and carry the registrant provisions ICANN's 2013 RAA
  * (§3.7.7) requires in every registration agreement. Copy states only what
  * the service does today (N9b): renewal is online and paid by the customer;
- * automatic renewal, restores and self-serve contact edits are not built, so
- * the agreement says so and gives the way that works now.
+ * contacts, the transfer lock and the transfer code are self-serve in the
+ * account (FR-DS1, FR-DS4, FR-DS5); automatic renewal and restores are not
+ * built, so the agreement says so and gives the way that works now.
  */
 export default function RegistrationAgreementPage() {
   return (
@@ -61,8 +62,9 @@ export default function RegistrationAgreementPage() {
       <LegalSection id="accurate" title="Keeping your details accurate">
         <p>
           You must give accurate and reliable contact details for the domain’s registrant (its legal
-          owner), and correct them within <strong>seven days</strong> of any change. To change them,
-          email <EmailLink /> — self-service editing is not available yet.
+          owner), and correct them within <strong>seven days</strong> of any change. Change them on
+          the domain’s Contacts page in your account; the change is sent to the registry and shows
+          there once the registry confirms it.
         </p>
         <p>
           Wilfully giving inaccurate or unreliable information, failing to update it promptly, or
@@ -175,8 +177,10 @@ export default function RegistrationAgreementPage() {
           registered, transferred or its registrant changes.
         </p>
         <p>
-          After that you may move it to any registrar. Email <EmailLink /> for its transfer code and
-          we will send it within five days. We never withhold it over a billing dispute. The{' '}
+          After that you may move it to any registrar. The domain’s Security page in your account
+          turns the transfer lock off and shows its transfer code straight away, after a two-factor
+          check. If it cannot reach the registry, email <EmailLink /> and we will send the code
+          within five days. We never withhold it over a billing dispute. The{' '}
           <PolicyLink href={POLICY_LINKS.transferPolicy}>ICANN Transfer Policy</PolicyLink> applies;
           see <Link href="/legal/transfer-disputes">transfer disputes</Link>.
         </p>

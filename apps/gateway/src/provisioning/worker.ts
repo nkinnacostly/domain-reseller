@@ -1,8 +1,9 @@
 import { contactSchema } from '@dr/shared'
 import type { PaymentCheck } from '../payments/charge-check'
-import type { Registrar } from './registrar'
+import type { Registrar, SettingsRegistrar } from './registrar'
 import { runRenewal } from './renewal'
 import { applyNameservers, runRegistration } from './saga'
+import { runSettingChange, type SettingTask } from './settings'
 import type { ClaimedJob, JobStore } from './store'
 
 /**
@@ -25,6 +26,11 @@ export type WorkerOptions = {
   store: JobStore
   /** A registrar whose calls are recorded against this job (I7). */
   registrarFor: (job: ClaimedJob) => Registrar
+  /**
+   * The same, for registry-side settings (FR-DS1, FR-DS3, FR-DS4). Without
+   * it a settings job is held for a person, never failed as something else.
+   */
+  settingsFor?: (job: ClaimedJob) => SettingsRegistrar
   /** Confirms with Flutterwave that the charge behind a registration is real (SEC-7). */
   checkPayment: (job: ClaimedJob) => Promise<PaymentCheck>
   /** Test payments go to the sandbox, real ones to the live registry — never both. */
@@ -49,6 +55,7 @@ export function createWorker(options: WorkerOptions) {
   const {
     store,
     registrarFor,
+    settingsFor,
     checkPayment,
     testMode,
     workerId,
@@ -226,7 +233,109 @@ export function createWorker(options: WorkerOptions) {
     }
   }
 
+  /** The change a settings job asks for, or why there is nothing to send. */
+  function settingTask(
+    job: ClaimedJob,
+  ):
+    | { task: SettingTask; attempted: Record<string, unknown> }
+    | { refused: string; hold: boolean } {
+    // Belt and braces: enqueue_domain_change never queues these (migration 26).
+    if (job.source === 'demo' || !['active', 'expired_grace'].includes(job.localStatus)) {
+      return { refused: 'The domain is a demo, or not active', hold: false }
+    }
+    const domainName = job.domainName
+    if (job.kind === 'set_transfer_lock' && typeof job.pendingTransferLock === 'boolean') {
+      const requested = job.pendingTransferLock
+      return {
+        task: { kind: job.kind, domainName, requested },
+        attempted: { transfer_lock: requested },
+      }
+    }
+    if (job.kind === 'set_privacy' && typeof job.pendingPrivacy === 'boolean') {
+      const requested = job.pendingPrivacy
+      return { task: { kind: job.kind, domainName, requested }, attempted: { privacy: requested } }
+    }
+    if (job.kind === 'update_contacts' && job.pendingRegistrant) {
+      const contact = contactSchema.safeParse(job.pendingRegistrant)
+      // Our data, not the registry's answer: a person fixes it.
+      if (!contact.success) return { refused: 'Requested registrant is invalid', hold: true }
+      return {
+        task: { kind: job.kind, domainName, requested: contact.data },
+        // Exactly as stored, so the database can tell it is still the one asked for.
+        attempted: { registrant: job.pendingRegistrant },
+      }
+    }
+    return { refused: 'Nothing is waiting to be applied', hold: false }
+  }
+
+  async function changeSetting(job: ClaimedJob, registrar: SettingsRegistrar) {
+    const planned = settingTask(job)
+    if ('refused' in planned) {
+      await store.fail(
+        job.id,
+        planned.hold ? 'BAD_JOB' : 'NOT_APPLICABLE',
+        planned.refused,
+        planned.hold,
+      )
+      log.warn({ jobId: job.id, kind: job.kind }, 'settings job had nothing to apply')
+      return
+    }
+
+    const outcome = await runSettingChange(registrar, planned.task)
+    switch (outcome.kind) {
+      case 'applied': {
+        // What the registry holds, read back: the requested value, compared
+        // field by field (settings.ts). Never the write's own answer.
+        const applied =
+          planned.task.kind === 'update_contacts'
+            ? planned.attempted
+            : planned.task.kind === 'set_transfer_lock'
+              ? { transfer_lock: planned.task.requested }
+              : { privacy: planned.task.requested }
+        await store.recordDomainChange(job.id, planned.attempted, applied, null)
+        log.info(
+          { jobId: job.id, domainId: job.domainId, kind: job.kind, recovered: outcome.recovered },
+          'setting applied',
+        )
+        return
+      }
+      case 'rejected':
+        await store.recordDomainChange(job.id, planned.attempted, null, outcome.code)
+        log.warn({ jobId: job.id, kind: job.kind, code: outcome.code }, 'setting refused')
+        return
+      case 'not_applied':
+        if (job.attempts < maxAttempts) {
+          await store.reschedule(
+            job.id,
+            backoffSeconds(job.attempts),
+            outcome.code,
+            outcome.message,
+          )
+          log.warn({ jobId: job.id, attempt: job.attempts }, 'setting not applied; retrying')
+        } else {
+          // Known not applied, retries spent: the customer sees it was not made.
+          await store.fail(job.id, 'SUPPLIER_UNAVAILABLE', outcome.message, false)
+          log.error({ jobId: job.id, kind: job.kind }, 'setting not applied after retries')
+        }
+        return
+      case 'unknown':
+      case 'blocked':
+        if (outcome.kind === 'blocked') {
+          log.error({ jobId: job.id, code: outcome.code }, 'supplier refused our credentials')
+        }
+        await unsettled(job, outcome.code, outcome.message)
+        return
+    }
+  }
+
   async function run(job: ClaimedJob) {
+    if (
+      job.kind === 'set_transfer_lock' ||
+      job.kind === 'set_privacy' ||
+      job.kind === 'update_contacts'
+    ) {
+      if (settingsFor) return changeSetting(job, settingsFor(job))
+    }
     const registrar = registrarFor(job)
     switch (job.kind) {
       case 'register_domain':
