@@ -89,8 +89,7 @@ export function AttentionTiles({
               )}
             >
               <span>
-                {tile.action}
-                <span className="sr-only"> {tile.detail}</span>
+                {tile.action} <span className="sr-only">{tile.detail}</span>
               </span>
               <span
                 aria-hidden="true"

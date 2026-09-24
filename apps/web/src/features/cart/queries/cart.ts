@@ -2,7 +2,7 @@ import 'server-only'
 
 import { vatKobo } from '@dr/shared'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
-import { env } from '@/lib/env'
+import { env, PRICE_LOCK_DEFAULT_MINUTES } from '@/lib/env'
 import { type CartTotals, cartTotals, type PricedLine, priceLine } from '../lib/lines'
 import { currentOwner, findCartId, loadLines, mergeAnonymousCart } from './store'
 
@@ -33,15 +33,15 @@ export async function getCartView(): Promise<CartView> {
 
   const byTld = new Map(priced.tlds.map((tld) => [tld.tld, tld]))
   const now = new Date()
-  const lines = stored.map((line) =>
-    priceLine(line, byTld.get(line.tld), now, env.PRICE_LOCK_MINUTES),
-  )
+  // Unset only where env validation is skipped, when the default would apply.
+  const lockMinutes = env.PRICE_LOCK_MINUTES ?? PRICE_LOCK_DEFAULT_MINUTES
+  const lines = stored.map((line) => priceLine(line, byTld.get(line.tld), now, lockMinutes))
 
   return {
     state: 'ready',
     lines,
     totals: cartTotals(lines, (amount) => vatKobo(amount, priced.vatPct)),
     vatPct: priced.vatPct,
-    lockMinutes: env.PRICE_LOCK_MINUTES,
+    lockMinutes,
   }
 }

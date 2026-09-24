@@ -36,7 +36,8 @@ export async function callGateway<T>({
   if (idempotencyKey) headers['idempotency-key'] = idempotencyKey
 
   const init: RequestInit = {
-    method: body ? 'POST' : 'GET',
+    // The same test as for the body below, so the two can never disagree.
+    method: body !== undefined ? 'POST' : 'GET',
     headers,
     cache: 'no-store',
   }

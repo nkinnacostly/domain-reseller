@@ -33,6 +33,7 @@ const CATALOGUE: PricedCatalogue = {
   rateUpdatedAt: new Date('2026-09-22T07:00:00Z'),
   rateId: 'rate-1',
   vatPct: 7.5,
+  version: 'test',
 }
 
 const found = (

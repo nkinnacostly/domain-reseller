@@ -9,6 +9,9 @@ import { z } from 'zod'
  * NOTE: DomainNameAPI credentials deliberately do NOT appear here.
  * They belong to apps/gateway alone (PRD §6.4, SEC-5).
  */
+/** FR-C4: how long a quoted price holds. Also the fallback where validation is skipped. */
+export const PRICE_LOCK_DEFAULT_MINUTES = 30
+
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -29,7 +32,7 @@ export const env = createEnv({
     // Overridable only so e2e tests can point at a local mock (N12).
     FLUTTERWAVE_API_URL: z.url().default('https://api.flutterwave.com/v3'),
     FX_BUFFER_PCT: z.coerce.number().min(0).max(25).default(4),
-    PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
+    PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(PRICE_LOCK_DEFAULT_MINUTES),
     RESEND_API_KEY: z.string().optional(),
     EMAIL_FROM: z.string().optional(),
     SENTRY_DSN: z.string().optional(),

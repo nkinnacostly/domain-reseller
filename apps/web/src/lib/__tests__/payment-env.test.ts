@@ -26,6 +26,15 @@ describe('requirePaymentEnv', () => {
     expect(() => require()).toThrow(/Refusing live Flutterwave keys/)
   })
 
+  it('refuses a live public key outside production, even beside a test secret key (N12)', async () => {
+    const require = await paymentEnv({
+      ...TEST_KEYS,
+      NODE_ENV: 'development',
+      NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: 'FLWPUBK-0000000000000000-X',
+    })
+    expect(() => require()).toThrow(/Refusing live Flutterwave keys/)
+  })
+
   it('says exactly what is missing', async () => {
     const require = await paymentEnv({ ...TEST_KEYS, FLUTTERWAVE_WEBHOOK_HASH: undefined })
     expect(() => require()).toThrow(/FLUTTERWAVE_WEBHOOK_HASH/)

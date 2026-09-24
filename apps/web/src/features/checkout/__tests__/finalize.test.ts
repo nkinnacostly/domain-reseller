@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { verifyTransaction } from '@/lib/flutterwave'
+import { logger } from '@/lib/logger'
 import { createServiceClient } from '@/lib/supabase/service'
 
 vi.mock('@/lib/flutterwave', () => ({ verifyTransaction: vi.fn() }))
@@ -9,7 +10,7 @@ vi.mock('@/lib/env', async (original) => ({
   requirePaymentEnv: () => ({ testMode: true }),
 }))
 
-const { finalizePayment } = await import('../queries/finalize')
+const { finalizePayment, markOrderCancelled } = await import('../queries/finalize')
 
 const ORDER = {
   id: 'order-1',
@@ -21,12 +22,13 @@ const ORDER = {
 
 function service({
   rpcError = null as unknown,
+  incidentError = null as unknown,
   order = ORDER as unknown,
   orderError = null as unknown,
 } = {}) {
   const rpc = vi.fn(async (name: string, _args?: unknown) => ({
     data: 'paid',
-    error: name === 'record_payment_incident' ? null : rpcError,
+    error: name === 'record_payment_incident' ? incidentError : rpcError,
   }))
   const client = {
     from: () => ({
@@ -181,5 +183,70 @@ describe('finalizePayment', () => {
     service({ order: null })
     expect(await finalizePayment('nope', '4242')).toBe('mismatch')
     expect(verifyTransaction).not.toHaveBeenCalled()
+  })
+})
+
+describe('finalizePayment — outcomes that settle nothing', () => {
+  it.each([
+    ['pending', 'pending'],
+    ['failed', 'failed'],
+    ['cancelled', 'failed'],
+  ] as const)(
+    'a %s transaction is reported as %s, and nothing is recorded',
+    async (status, outcome) => {
+      const rpc = service()
+      vi.mocked(verifyTransaction).mockResolvedValue(found({ status }))
+      expect(await finalizePayment('order-1', '4242')).toBe(outcome)
+      expect(rpc).not.toHaveBeenCalled()
+    },
+  )
+
+  it('still refuses a mismatch when the incident cannot be recorded, and logs that it was not', async () => {
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined)
+    service({ incidentError: { message: 'db down' } })
+    vi.mocked(verifyTransaction).mockResolvedValue(found({ tx_ref: 'ord_2' }))
+    expect(await finalizePayment('order-1', '4242')).toBe('mismatch')
+    expect(error).toHaveBeenCalledWith(
+      { err: 'db down', orderId: 'order-1', kind: 'tx_ref_mismatch' },
+      'payment incident not recorded',
+    )
+    error.mockRestore()
+  })
+
+  it('records a payment whose method Flutterwave did not name', async () => {
+    const rpc = service()
+    vi.mocked(verifyTransaction).mockResolvedValue(found({ payment_type: undefined }))
+    await finalizePayment('order-1', '4242')
+    expect(rpc).toHaveBeenCalledWith(
+      'record_order_payment',
+      expect.objectContaining({ p_method: '' }),
+    )
+  })
+})
+
+describe('markOrderCancelled', () => {
+  it('closes the order only while it is still awaiting payment, so a paid order is never undone', async () => {
+    const steps: unknown[][] = []
+    const query = {
+      update: (patch: unknown) => {
+        steps.push(['update', patch])
+        return query
+      },
+      eq: (column: string, value: unknown) => {
+        steps.push(['eq', column, value])
+        return query
+      },
+    }
+    const from = vi.fn(() => query)
+    vi.mocked(createServiceClient).mockReturnValue({ from } as never)
+
+    await markOrderCancelled('order-1')
+
+    expect(from).toHaveBeenCalledWith('orders')
+    expect(steps).toEqual([
+      ['update', { status: 'cancelled' }],
+      ['eq', 'id', 'order-1'],
+      ['eq', 'status', 'awaiting_payment'],
+    ])
   })
 })

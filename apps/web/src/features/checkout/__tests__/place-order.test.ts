@@ -69,6 +69,42 @@ function chain(result: unknown) {
 }
 
 let inserted: { orders: unknown[]; items: unknown[] }
+/** Every update made to an order row — a cancelled order shows up here. */
+let orderUpdates: unknown[]
+/** Per-test answers for the tables the action reads and writes. */
+let answers: {
+  tlds: unknown
+  settings: unknown
+  fxRate: unknown
+  order: { data: unknown; error: unknown }
+  itemsError: unknown
+}
+
+/** The signed-in user's own client: their saved contact, read and written under RLS. */
+function userClient({
+  email = 'ada@example.com' as string | null,
+  existing = { id: 'contact-1' } as unknown,
+  saved = { data: { id: 'contact-1' }, error: null } as unknown,
+} = {}) {
+  const writes: { op: 'insert' | 'update'; row: unknown }[] = []
+  const client = {
+    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email } } }) },
+    from: () => {
+      const read = chain({ data: existing, error: null })
+      read.insert = (row: unknown) => {
+        writes.push({ op: 'insert', row })
+        return chain(saved)
+      }
+      read.update = (row: unknown) => {
+        writes.push({ op: 'update', row })
+        return chain(saved)
+      }
+      return read
+    },
+  }
+  vi.mocked(createClient).mockResolvedValue(client as never)
+  return writes
+}
 
 type RpcAnswer = { data: unknown; error: { message: string } | null }
 let rpcAnswers: Record<string, RpcAnswer> = {}
@@ -97,13 +133,15 @@ beforeEach(() => {
   vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 500 })
   vi.mocked(createPaymentLink).mockResolvedValue('https://checkout.test/pay/1')
 
-  const userClient = {
-    auth: {
-      getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }),
-    },
-    from: () => chain({ data: { id: 'contact-1' }, error: null }),
+  userClient()
+  orderUpdates = []
+  answers = {
+    tlds: [{ name: 'com', register_usd: 11.31, renew_usd: 11.51, is_country_code: false }],
+    settings: { icann_fee_usd: 0.2 },
+    fxRate: { id: 'rate-1' },
+    order: { data: { id: 'order-1', order_number: 'ND-001001' }, error: null },
+    itemsError: null,
   }
-  vi.mocked(createClient).mockResolvedValue(userClient as never)
 
   rpcAnswers = {
     rate_limit_hit: { data: true, error: null },
@@ -116,19 +154,19 @@ beforeEach(() => {
       return answer
     }),
     from: (table: string) => {
-      if (table === 'tlds') {
-        return chain({
-          data: [{ name: 'com', register_usd: 11.31, renew_usd: 11.51, is_country_code: false }],
-        })
-      }
-      if (table === 'pricing_settings') return chain({ data: { icann_fee_usd: 0.2 } })
-      if (table === 'fx_rates') return chain({ data: { id: 'rate-1' } })
+      if (table === 'tlds') return chain({ data: answers.tlds })
+      if (table === 'pricing_settings') return chain({ data: answers.settings })
+      if (table === 'fx_rates') return chain({ data: answers.fxRate })
       if (table === 'orders') {
-        const node = chain({ data: { id: 'order-1', order_number: 'ND-001001' }, error: null })
+        const node = chain(answers.order)
         const insert = node.insert as () => unknown
         node.insert = (row: unknown) => {
           inserted.orders.push(row)
           return insert()
+        }
+        node.update = (patch: unknown) => {
+          orderUpdates.push(patch)
+          return node
         }
         return node
       }
@@ -136,7 +174,7 @@ beforeEach(() => {
         return {
           insert: async (rows: unknown) => {
             inserted.items.push(rows)
-            return { error: null }
+            return { error: answers.itemsError }
           },
         }
       }
@@ -289,5 +327,237 @@ describe('placeOrder — the order', () => {
     vi.mocked(createPaymentLink).mockRejectedValue(new Error('Flutterwave 503'))
     const result = await placeOrder(INPUT)
     expect(result?.data).toEqual({ error: expect.stringMatching(/payment provider/) })
+  })
+})
+
+describe('placeOrder — the cart must be ready to buy', () => {
+  it('refuses an empty cart', async () => {
+    vi.mocked(getCartView).mockResolvedValue({ state: 'empty' })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: 'Your cart is empty.' })
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('refuses a cart that cannot be priced right now', async () => {
+    vi.mocked(getCartView).mockResolvedValue({ state: 'unpriced' })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: 'Your cart is empty.' })
+  })
+
+  it.each([
+    ['a changed price has not been accepted', { needsAcknowledgement: true }],
+    ['an extension is no longer sold', { unavailableCount: 1 }],
+  ])('refuses when %s (FR-C4)', async (_, change) => {
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: [LINE],
+      totals: { ...TOTALS, ...change },
+      vatPct: 7.5,
+      lockMinutes: 30,
+    } as never)
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/needs a look before checkout/) })
+    expect(checkAvailability).not.toHaveBeenCalled()
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('asks a signed-out visitor to sign in, and does nothing else', async () => {
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { getUser: async () => ({ data: { user: null } }) },
+    } as never)
+    const result = await placeOrder(INPUT)
+    expect(result?.serverError).toBe('Please sign in to continue.')
+    expect(getCartView).not.toHaveBeenCalled()
+  })
+})
+
+describe('placeOrder — more checks that stop it before money moves', () => {
+  it('refuses when the allowance answer is not what it expects — fails closed', async () => {
+    rpcAnswers.account_domain_allowance = { data: { ordered: '3', max: 20 }, error: null }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/couldn't complete checkout/) })
+    expect(checkAvailability).not.toHaveBeenCalled()
+  })
+
+  it('names every taken domain, and asks the supplier once per extension', async () => {
+    const second = { ...LINE, id: 'line-2', domain: 'paidly.com' }
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: [LINE, second],
+      totals: TOTALS,
+      vatPct: 7.5,
+      lockMinutes: 30,
+    } as never)
+    vi.mocked(checkAvailability).mockResolvedValue({
+      ok: true,
+      results: [
+        { name: 'getpaid', tld: 'com', domain: 'getpaid.com', status: 'registered' },
+        { name: 'paidly', tld: 'com', domain: 'paidly.com', status: 'registered' },
+      ],
+    })
+    vi.mocked(findCartId).mockResolvedValue('cart-1')
+
+    const result = await placeOrder(INPUT)
+
+    expect(checkAvailability).toHaveBeenCalledTimes(1)
+    expect(checkAvailability).toHaveBeenCalledWith(['getpaid', 'paidly'], ['com'], 'high')
+    expect(deleteLine).toHaveBeenCalledTimes(2)
+    expect(result?.data).toEqual({
+      error: expect.stringMatching(/^getpaid.com, paidly.com were registered by someone else/),
+    })
+  })
+
+  it('still reports a taken name when the cart row has gone', async () => {
+    vi.mocked(checkAvailability).mockResolvedValue({
+      ok: true,
+      results: [{ name: 'getpaid', tld: 'com', domain: 'getpaid.com', status: 'registered' }],
+    })
+    vi.mocked(findCartId).mockResolvedValue(null)
+    const result = await placeOrder(INPUT)
+    expect(deleteLine).not.toHaveBeenCalled()
+    expect(result?.data).toEqual({ error: expect.stringMatching(/registered by someone else/) })
+  })
+
+  it('stops when the supplier cost of an extension is unknown, rather than guessing the float', async () => {
+    answers.tlds = null
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/Try again in a few minutes/) })
+    expect(callGateway).not.toHaveBeenCalled()
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('stops when the supplier balance comes back in a shape it does not know', async () => {
+    vi.mocked(callGateway).mockResolvedValue({ balance: 'lots' })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/haven't been charged/) })
+    expect(inserted.orders).toEqual([])
+  })
+})
+
+describe('placeOrder — creating the order', () => {
+  it('covers the order when there is no ICANN fee setting to add', async () => {
+    answers.settings = null
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 11.31 })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(inserted.orders[0]).toMatchObject({ float_check: 'covered' })
+  })
+
+  it('updates the saved default contact rather than adding another', async () => {
+    const writes = userClient()
+    await placeOrder(INPUT)
+    expect(writes).toEqual([
+      { op: 'update', row: expect.objectContaining({ first_name: 'Ada', is_default: true }) },
+    ])
+    expect(inserted.orders[0]).toMatchObject({ contact_profile_id: 'contact-1' })
+  })
+
+  it('saves the registrant as the default contact the first time', async () => {
+    const writes = userClient({ existing: null, saved: { data: { id: 'contact-9' }, error: null } })
+    await placeOrder(INPUT)
+    expect(writes).toEqual([
+      {
+        op: 'insert',
+        row: expect.objectContaining({
+          user_id: 'user-1',
+          company: null,
+          address_line2: null,
+          country: 'NG',
+        }),
+      },
+    ])
+    expect(inserted.orders[0]).toMatchObject({ contact_profile_id: 'contact-9' })
+  })
+
+  it('still places the order when the contact cannot be saved', async () => {
+    userClient({ existing: null, saved: { data: null, error: { message: 'rls', code: '42501' } } })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(inserted.orders[0]).toMatchObject({ contact_profile_id: null })
+  })
+
+  it('charges nothing when the order cannot be written', async () => {
+    answers.order = { data: null, error: { message: 'insert failed', code: '23514' } }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({
+      error: "We couldn't create your order. You haven't been charged.",
+    })
+    expect(inserted.items).toEqual([])
+    expect(createPaymentLink).not.toHaveBeenCalled()
+  })
+
+  it('cancels the order, and charges nothing, when its domains cannot be written', async () => {
+    answers.itemsError = { message: 'insert failed', code: '23514' }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({
+      error: "We couldn't create your order. You haven't been charged.",
+    })
+    expect(orderUpdates).toEqual([{ status: 'cancelled' }])
+    expect(createPaymentLink).not.toHaveBeenCalled()
+  })
+
+  it('cancels the order it created when Flutterwave cannot be reached', async () => {
+    vi.mocked(createPaymentLink).mockRejectedValue(new Error('Flutterwave 503'))
+    await placeOrder(INPUT)
+    expect(orderUpdates).toEqual([{ status: 'cancelled' }])
+  })
+
+  it('writes each domain at the price the customer saw, and privacy only where offered', async () => {
+    const ccTld = {
+      ...LINE,
+      id: 'line-2',
+      domain: 'getpaid.co',
+      tld: 'co',
+      privacy: true,
+      privacyOffered: false,
+    }
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: [LINE, ccTld],
+      totals: TOTALS,
+      vatPct: 7.5,
+      lockMinutes: 30,
+    } as never)
+    vi.mocked(checkAvailability).mockImplementation(async (stems, [tld]) => ({
+      ok: true,
+      results: stems.map((name) => ({
+        name,
+        tld: tld ?? '',
+        domain: `${name}.${tld}`,
+        status: 'available' as const,
+      })),
+    }))
+    answers.tlds = [
+      { name: 'com', register_usd: 11.31, renew_usd: 11.51, is_country_code: false },
+      { name: 'co', register_usd: 19.49, renew_usd: 38.99, is_country_code: true },
+    ]
+
+    await placeOrder(INPUT)
+
+    expect(inserted.items[0]).toEqual([
+      expect.objectContaining({ domain: 'getpaid.com', privacy: true, price_kobo: 1_840_000 }),
+      expect.objectContaining({ domain: 'getpaid.co', privacy: false }),
+    ])
+  })
+
+  it('gives Flutterwave the registrant’s email when the account has none', async () => {
+    userClient({ email: null })
+    await placeOrder(INPUT)
+    expect(createPaymentLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: { email: 'ada@example.com', name: 'Ada Okafor', phone: '+2348031234567' },
+        redirectUrl: expect.stringMatching(/\/app\/checkout\/complete\?order=order-1$/),
+      }),
+    )
+  })
+
+  it('refuses, saying nothing was charged, when there is no exchange rate to record', async () => {
+    answers.fxRate = null
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({
+      error: "Prices are unavailable right now. You haven't been charged. Try again shortly.",
+    })
+    expect(inserted.orders).toEqual([])
+    expect(createPaymentLink).not.toHaveBeenCalled()
   })
 })

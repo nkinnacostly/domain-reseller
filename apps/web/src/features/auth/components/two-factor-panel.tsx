@@ -45,7 +45,7 @@ export function TwoFactorPanel({ factorId }: { factorId: string | null }) {
           </span>
         </p>
         {error ? <FormMessage tone="error">{error}</FormMessage> : null}
-        <form action={() => disable.execute({ factorId })}>
+        <form onSubmit={onSubmitWith(() => disable.execute({ factorId }))}>
           <SubmitButton
             pending={disable.isPending}
             pendingLabel="Turning off…"

@@ -40,7 +40,7 @@ export function SignUpForm({ next }: { next?: string }) {
         </FormMessage>
         {resent ? <FormMessage tone="success">Sent again.</FormMessage> : null}
         {resendError ? <FormMessage tone="error">{resendError}</FormMessage> : null}
-        <form action={() => resend.execute({ email: sentTo, next })}>
+        <form onSubmit={onSubmitWith(() => resend.execute({ email: sentTo, next }))}>
           <SubmitButton pending={resend.isPending} pendingLabel="Sending…" variant="secondary">
             Send the link again
           </SubmitButton>

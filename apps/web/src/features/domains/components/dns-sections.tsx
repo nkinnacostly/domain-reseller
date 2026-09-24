@@ -32,6 +32,12 @@ export async function ResolverViews({
             <span className="flex items-center gap-2 font-medium text-foreground">
               <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
               {view.resolver}
+              {/* The icon says it to the eye; this says it to a screen reader (WCAG 1.4.1). */}
+              {matches !== null ? (
+                <span className="sr-only">
+                  {matches ? ', matches what you set' : ', does not match what you set'}
+                </span>
+              ) : null}
             </span>
             <span className="font-mono text-xs text-pretty break-words text-muted-foreground sm:text-right">
               {view.state === 'answered'

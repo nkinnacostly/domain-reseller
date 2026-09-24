@@ -114,4 +114,60 @@ describe('inspectDns (FR-N4)', () => {
     failures.set('*:nowhere.com', 'ENOTFOUND')
     expect((await inspectDns('nowhere.com')).exists).toBe(false)
   })
+
+  it('still counts a domain as in DNS when it merely has no records of some types', async () => {
+    const records = await inspectDns('quiet.com')
+    expect(records).toEqual({
+      a: [],
+      aaaa: [],
+      cname: [],
+      mx: [],
+      txt: [],
+      caa: [],
+      exists: true,
+    })
+  })
+
+  it('treats a timeout as "no answer", not as "not in DNS"', async () => {
+    failures.set('*:slow.com', 'ETIMEOUT')
+    expect((await inspectDns('slow.com')).exists).toBe(true)
+  })
+
+  it('writes every kind of CAA record the way a zone file would', async () => {
+    answers.set('CAA:getpaid.com', [
+      { critical: 0, issue: 'letsencrypt.org' },
+      { critical: 0, issuewild: ';' },
+      { critical: 0, iodef: 'mailto:security@getpaid.com' },
+      { critical: 128 },
+    ])
+    expect((await inspectDns('getpaid.com')).caa).toEqual([
+      'issue "letsencrypt.org"',
+      'issuewild ";"',
+      'iodef "mailto:security@getpaid.com"',
+      'iodef ""',
+    ])
+  })
+})
+
+describe('lookupHost, when the two address families disagree', () => {
+  it('calls a host that does not exist for IPv4 a typo even if IPv6 timed out', async () => {
+    failures.set('A:ns1.tpyo.com', 'ENOTFOUND')
+    failures.set('AAAA:ns1.tpyo.com', 'ETIMEOUT')
+    expect(await lookupHost('ns1.tpyo.com')).toBe('nxdomain')
+  })
+
+  it('reports a host with neither address type as no answer', async () => {
+    expect(await lookupHost('ns1.empty.com')).toBe('no-answer')
+  })
+})
+
+describe('delegationViews, when a resolver does not answer', () => {
+  it('says the resolver gave no answer rather than that the domain is missing', async () => {
+    failures.set('NS:flaky.com', 'ESERVFAIL')
+    expect(await delegationViews('flaky.com')).toEqual([
+      { resolver: 'Cloudflare', state: 'no-answer' },
+      { resolver: 'Google', state: 'no-answer' },
+      { resolver: 'Quad9', state: 'no-answer' },
+    ])
+  })
 })

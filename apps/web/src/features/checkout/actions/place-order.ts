@@ -179,6 +179,14 @@ export const placeOrder = authAction
       logger.warn({ costUsd, balanceUsd }, 'test mode: float shortfall recorded, order allowed')
     }
 
+    // The rate the order is priced at. Missing only if the rate was withdrawn
+    // since the cart was priced — then nothing is saved and nothing charged.
+    const rateId = await activeRateId(service)
+    if (!rateId) {
+      logger.error('no active FX rate at checkout')
+      return { error: `Prices are unavailable right now. ${NOT_CHARGED} Try again shortly.` }
+    }
+
     // ── Save the registrant for next time, as the user (RLS) ─────────────
     const contactRow = {
       user_id: ctx.user.id,
@@ -225,7 +233,7 @@ export const placeOrder = authAction
         vat_pct: cart.vatPct,
         vat_kobo: totals.vatKobo,
         total_kobo: totals.totalKobo,
-        fx_rate_id: await activeRateId(service),
+        fx_rate_id: rateId,
         tx_ref: txRef,
         registrant,
         contact_profile_id: saved.data?.id ?? null,
@@ -283,8 +291,9 @@ export const placeOrder = authAction
     }
   })
 
-async function activeRateId(service: ReturnType<typeof createServiceClient>): Promise<string> {
-  const { data } = await service.from('fx_rates').select('id').eq('status', 'active').single()
-  if (!data) throw new Error('No active FX rate')
-  return data.id
+async function activeRateId(
+  service: ReturnType<typeof createServiceClient>,
+): Promise<string | null> {
+  const { data } = await service.from('fx_rates').select('id').eq('status', 'active').maybeSingle()
+  return data?.id ?? null
 }
