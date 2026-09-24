@@ -180,6 +180,15 @@ export function createWorker(options: WorkerOptions) {
         if (outcome.kind === 'blocked') {
           log.error({ jobId: job.id, code: outcome.code }, 'supplier refused our credentials')
         }
+        // Contacts the registry accepted but does not show go to a person at
+        // once: in the sandbox (24 Sept 2026) SaveContacts answered 204 and
+        // changed nothing, and sending it again on every retry could repeat
+        // the registrant's verification emails on live.
+        if (job.kind === 'update_contacts' && outcome.code === 'NOT_YET_VISIBLE') {
+          await store.fail(job.id, 'CONTACTS_NOT_VISIBLE', outcome.message, true)
+          log.error({ jobId: job.id }, 'contacts accepted but not shown by the registry')
+          return
+        }
         await unsettled(job, outcome.code, outcome.message)
         return
     }
@@ -231,6 +240,15 @@ export function createWorker(options: WorkerOptions) {
       case 'blocked':
         if (outcome.kind === 'blocked') {
           log.error({ jobId: job.id, code: outcome.code }, 'supplier refused our credentials')
+        }
+        // Contacts the registry accepted but does not show go to a person at
+        // once: in the sandbox (24 Sept 2026) SaveContacts answered 204 and
+        // changed nothing, and sending it again on every retry could repeat
+        // the registrant's verification emails on live.
+        if (job.kind === 'update_contacts' && outcome.code === 'NOT_YET_VISIBLE') {
+          await store.fail(job.id, 'CONTACTS_NOT_VISIBLE', outcome.message, true)
+          log.error({ jobId: job.id }, 'contacts accepted but not shown by the registry')
+          return
         }
         await unsettled(job, outcome.code, outcome.message)
         return
@@ -452,6 +470,15 @@ export function createWorker(options: WorkerOptions) {
       case 'blocked':
         if (outcome.kind === 'blocked') {
           log.error({ jobId: job.id, code: outcome.code }, 'supplier refused our credentials')
+        }
+        // Contacts the registry accepted but does not show go to a person at
+        // once: in the sandbox (24 Sept 2026) SaveContacts answered 204 and
+        // changed nothing, and sending it again on every retry could repeat
+        // the registrant's verification emails on live.
+        if (job.kind === 'update_contacts' && outcome.code === 'NOT_YET_VISIBLE') {
+          await store.fail(job.id, 'CONTACTS_NOT_VISIBLE', outcome.message, true)
+          log.error({ jobId: job.id }, 'contacts accepted but not shown by the registry')
+          return
         }
         await unsettled(job, outcome.code, outcome.message)
         return

@@ -711,14 +711,15 @@ describe('provisioning worker — registry-side settings (FR-DS1, FR-DS3, FR-DS4
       ])
     })
 
-    it('waits on a write the registry accepted but does not show, and never records it', async () => {
-      const { registrar: reg } = settingsRegistry({
+    it('hands a write the registry accepted but does not show to a person, sent once and never recorded', async () => {
+      const { registrar: reg, writes } = settingsRegistry({
         contacts: [shows(REGISTRANT), shows(REGISTRANT)],
       })
       const { instance, actions } = run(contactsJob({ pendingContacts: { technical: TUNDE } }), reg)
       await instance.tick()
+      expect(writes).toHaveLength(1)
       expect(actions).toEqual([
-        { type: 'reschedule', args: ['job-1', 30, 'NOT_YET_VISIBLE', expect.any(String)] },
+        { type: 'fail', args: ['job-1', 'CONTACTS_NOT_VISIBLE', expect.any(String), true] },
       ])
     })
 
