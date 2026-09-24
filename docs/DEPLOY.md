@@ -103,3 +103,78 @@ provider's own CLI or dashboard — never into a chat, a commit or an issue.
   (SPF, DKIM, DMARC) in Cloudflare. That unblocks L1.
 - `CHECKOUT_ALLOWLIST` stays set until launch; live writes can stay on, since
   only listed accounts can pay.
+
+## 6. Refunds and alerts (L15, L16)
+
+The gateway sends refunds for failed registrations, second charges and short
+payments back to the card or account that paid, checks unpaid orders with
+Flutterwave in case a payment's webhook and redirect were both lost, and
+messages you on Telegram when money or a customer's domain needs a person.
+These need secrets on Fly; the outside check that notices a stopped gateway
+needs them on GitHub.
+
+1. **You:** make a Telegram bot. In Telegram, message **@BotFather**, send
+   `/newbot`, and follow the prompts; it replies with a token like
+   `123456789:AA…`. Send your new bot any message, then open
+   `https://api.telegram.org/bot<token>/getUpdates` in a browser — the number
+   under `"chat":{"id":` is your chat id. Keep the token out of chats and
+   screenshots: anyone with it can post as the bot.
+2. **You:** give the gateway the live Flutterwave secret key (the same one
+   Vercel has) and the bot. Type the values in your terminal, not here:
+   ```bash
+   fly secrets set FLUTTERWAVE_SECRET_KEY=… TELEGRAM_BOT_TOKEN=… TELEGRAM_CHAT_ID=… -a mydomainshub-gateway
+   ```
+   The gateway refuses a test key on the live side, a live key anywhere but
+   production (N12), and a live key with `FLUTTERWAVE_API_URL` set to
+   anything but Flutterwave's own address — leave that variable unset on Fly.
+   Without the key, refunds wait and raise alerts and unpaid orders are not
+   re-checked; without the bot, alerts are only logged.
+3. **You:** the same two Telegram values on GitHub, for the gateway watch
+   (`.github/workflows/gateway-watch.yml`, every 30 minutes):
+   ```bash
+   gh secret set TELEGRAM_BOT_TOKEN
+   gh secret set TELEGRAM_CHAT_ID
+   ```
+   (`gh secret set` prompts for the value, so it never lands in your shell
+   history.) It reuses the pricing jobs' `NEXT_PUBLIC_SUPABASE_URL` and
+   `SUPABASE_SECRET_KEY`.
+4. **Ask Flutterwave support** to enable refund webhooks (off by default),
+   and confirm: the refund window, whether USSD payments can be refunded,
+   whether part-refunds accept kobo (e.g. ₦19,672.50), and how a failed
+   disbursement is reported. The worker is built to be safe whatever the
+   answers — it reads refunds back rather than trusting any single reply —
+   but the answers decide how often a refund needs you.
+
+### When an alert arrives
+
+Every alert names an order or a domain and a code. What they mean, and what
+to do — the functions below run in the Supabase **SQL editor** (they are not
+open to the service key, on purpose):
+
+| Alert | What it means | What to do |
+|---|---|---|
+| Refund … is **held** — `OVER_SINGLE_LIMIT` / `OVER_DAILY_LIMIT` | Above the automatic limit (₦250,000 per refund, ₦1,000,000 per day) | Check the order, then `select approve_refund('<refund id>', 'your name');` |
+| Refund … **needs attention** — `REGISTERED_AT_REGISTRY` | The line failed here, but the registry has the domain in our account (and no other customer here holds it) | Don't refund. Finish the registration for the customer (ask Claude), then `select cancel_refund('<id>', 'your name', 'registered after all');` |
+| … `CHARGE_NOT_OURS` / `CHARGE_NOT_FOUND` | The charge at Flutterwave does not match our record — another reference, amount or currency, or no such charge for this key. The Flutterwave account is shared with other apps, so a refund is never sent to a charge that is not provably this order's | Don't refund. Compare the order with the charge in the Flutterwave dashboard. If the row looks tampered with, rotate `SUPABASE_SECRET_KEY` (Supabase → API keys, then Vercel, Fly and GitHub). `cancel_refund` once understood. |
+| … `CHARGEBACK_ON_CHARGE` | The customer disputed the charge with their bank | Answer the dispute in Flutterwave; refunding as well could pay them twice. `cancel_refund` once settled. |
+| … `REFUND_OUTCOME_UNKNOWN` / `UNTRACKED_REFUND_AT_PROVIDER` / `ALREADY_AT_PROVIDER` | A refund may already have been sent, or someone refunded by hand | Look at the charge in the Flutterwave dashboard. **Refunded** (by us or by hand): `select record_manual_refund('<id>', '<Flutterwave refund id>', 'your name');` — it is then shown to the customer as refunded. **Not refunded:** `select retry_refund('<id>', 'your name');` |
+| … `AMOUNT_MISMATCH` | Flutterwave refunded a different amount from the one asked for; its reference is kept | Check the refund in the dashboard. If the right money went back, `record_manual_refund` with that refund's id; otherwise ask Claude before doing anything. |
+| Refund … **failed** — `FLW_HTTP_…` / `PROVIDER_REFUND_FAILED` | Flutterwave refused it, or the money bounced | Read the code; fix the cause (often our Flutterwave balance), then `retry_refund`. A bounced refund's reference is kept on record and the retry gets a new one. |
+| Refund … has waited … — `INSUFFICIENT_BALANCE` | Our Flutterwave balance can't cover it | Top up or wait for settlement; it retries by itself |
+| Payment incident: **underpayment** | Someone paid less than the total; it is being refunded | Nothing, unless it repeats. `select resolve_payment_incident(<id>, 'your name');` |
+| Payment incident: **tx ref mismatch** / **currency mismatch** | A transaction was presented for the wrong order, or not in naira | Check Flutterwave. Repeats for one account look like someone probing. Resolve when done. |
+| Payment incident: **unrecorded payment** | Flutterwave has the money; we could not record it | Urgent: ask Claude to record it. Flutterwave also resends the webhook (we answer it 503 until it is recorded), and the gateway re-checks unpaid orders every 5 minutes for 3 days. |
+| Payment incident: **registered after refund** | A line registered after its refund had already gone to Flutterwave: the customer may have the domain and the money | Check both. Decide with the customer; nothing is undone automatically. |
+| Payment incident: **mode mismatch** | A test payment was presented for a live order, or the reverse | Nothing was recorded. Check the order; repeats look like probing. |
+| Order … is still `paid`/`provisioning` (I5) | Paid over 15 minutes ago, not registered | Is the gateway running? `fly status -a mydomainshub-gateway` |
+| The gateway has gone quiet | No heartbeat: nothing is being registered, refunded or alerted | `fly status -a mydomainshub-gateway`; add the card (L19) if the trial stopped it |
+
+`cancel_refund` means "no money went back and none will"; use
+`record_manual_refund` whenever money did go back, so the customer's order
+page tells the truth. Retrying a failed registration (`select retry_job('<job
+id>');`) takes back its pending refund first, and is refused once that refund
+has reached Flutterwave.
+
+Limits and timings live in the `ops_settings` table (edit it in the Supabase
+table editor). Refunds are refused anything that would take more than their
+charge — that rule is in the database, so no setting changes it.
