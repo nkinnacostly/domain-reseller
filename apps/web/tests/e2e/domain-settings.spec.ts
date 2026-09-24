@@ -196,7 +196,8 @@ test.describe('registry-side settings on a sandbox domain', () => {
 
     const log = await activity(page)
     await expect(log).toContainText('Asked to change the registrant')
-    await expect(log).toContainText('Registrant updated at the registry')
+    // One job applies all four contacts (migration 29).
+    await expect(log).toContainText('Contacts updated at the registry')
     // N13: the activity log never carries contact details.
     await expect(log).not.toContainText('ada@example.com')
   })
@@ -231,6 +232,7 @@ test.describe('a demo domain’s settings', () => {
       .getByRole('link', { name: 'Contacts' })
       .click()
     await expect(page.getByRole('form', { name: 'Change the registrant' })).toHaveCount(0)
+    await expect(page.getByRole('form', { name: 'Change the billing contact' })).toHaveCount(0)
     await expect(page.getByText('Demo domain.', { exact: true })).toBeVisible()
     expect((await axe(page)).violations).toEqual([])
   })

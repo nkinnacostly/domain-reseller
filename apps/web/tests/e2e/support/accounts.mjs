@@ -446,11 +446,38 @@ export async function updateTestDomain(domainId, fields) {
   if (error) throw error
 }
 
+/** A JSON value with its keys in a fixed order, so two contacts compare by content. */
+const canonical = (value) =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? JSON.stringify(
+        Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, value[key]]),
+        ),
+      )
+    : JSON.stringify(value)
+
+/**
+ * What the registry holds after an update_contacts job (migration 29): the
+ * registrant, and the roles someone other than the registrant holds — a
+ * role left out is the registrant's.
+ */
+function contactsApplied(context) {
+  const registrant = context.pending_registrant ?? context.registrant
+  const roles = context.pending_contacts ?? context.contacts ?? {}
+  const contacts = Object.fromEntries(
+    Object.entries(roles).filter(([, contact]) => canonical(contact) !== canonical(registrant)),
+  )
+  return { registrant, contacts }
+}
+
 /**
  * Answers a domain's open settings job the way the gateway worker does,
  * without a registry (migration 26): claim it, then record_domain_change
  * with what the registry now holds — the requested value when `outcome` is
- * 'applied', or null and `outcome` as the refusal code.
+ * 'applied', or null and `outcome` as the refusal code. A contacts job asks
+ * for the registrant and the other three roles together (migration 29).
  *
  * @param {string} domainId
  * @param {'set_transfer_lock' | 'set_privacy' | 'update_contacts'} kind
@@ -479,13 +506,38 @@ export async function settleDomainChange(domainId, kind, outcome = 'applied') {
         ? { transfer_lock: context.pending_transfer_lock }
         : kind === 'set_privacy'
           ? { privacy: context.pending_privacy }
-          : { registrant: context.pending_registrant }
+          : { registrant: context.pending_registrant, contacts: context.pending_contacts }
+    const applied = kind === 'update_contacts' ? contactsApplied(context) : attempted
     const recorded = await client.rpc('record_domain_change', {
       p_job_id: job.id,
       p_attempted: attempted,
-      p_applied: outcome === 'applied' ? attempted : null,
+      p_applied: outcome === 'applied' ? applied : null,
       p_code: outcome === 'applied' ? null : outcome,
     })
     if (recorded.error) throw recorded.error
   }
+}
+
+/**
+ * The other three contacts an order stored, and those its domains carry once
+ * paid (migration 29) — read with the secret key, for asserting what
+ * checkout sent and what the payment copied.
+ *
+ * @param {string} orderId
+ */
+export async function contactsForOrder(orderId) {
+  const client = admin()
+  const { data: order, error } = await client
+    .from('orders')
+    .select('contacts, order_items(id)')
+    .eq('id', orderId)
+    .single()
+  if (error) throw error
+  const itemIds = (order.order_items ?? []).map((item) => item.id)
+  const { data: domains, error: domainsError } = await client
+    .from('domains')
+    .select('contacts')
+    .in('order_item_id', itemIds)
+  if (domainsError) throw domainsError
+  return { order: order.contacts, domains: (domains ?? []).map((domain) => domain.contacts) }
 }
