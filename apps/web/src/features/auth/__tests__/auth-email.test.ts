@@ -98,6 +98,16 @@ describe('planAuthEmail (L1, L2)', () => {
     expect(email?.text).toContain('Your code: 123456')
   })
 
+  it('heads every email with the brand mark and name, readable with images blocked', () => {
+    const [email] = sent(planAuthEmail(payload('signup'), APP))
+    expect(email?.html).toContain(
+      'src="https://www.mydomainshub.com/brand/mydomainshub-mark-96.png" width="32" height="32" alt=""',
+    )
+    expect(email?.html).toMatch(/alt=""[^>]*>MyDomainsHub</)
+    expect(email?.html).toContain('background:#155dfc')
+    expect(email?.text.startsWith('MyDomainsHub\n')).toBe(true)
+  })
+
   it('invites replies to the support inbox in every email', () => {
     const [email] = sent(planAuthEmail(payload('signup'), APP))
     expect(email?.text).toContain('Reply to this email, or write to hello@mydomainshub.com.')

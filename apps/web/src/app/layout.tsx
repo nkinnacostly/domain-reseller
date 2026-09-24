@@ -3,6 +3,7 @@ import { Poppins } from 'next/font/google'
 import { BRAND_NAME } from '@/components/layout/brand'
 import { ThemeProvider } from '@/components/layout/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { env } from '@/lib/env'
 import './globals.css'
 
 // Geometric sans with the tight, heavy display weights the design leans on.
@@ -14,9 +15,14 @@ const poppins = Poppins({
 })
 
 export const metadata: Metadata = {
+  // Absolute URLs for the social card (app/opengraph-image.png) and canonical links.
+  metadataBase: new URL(env.NEXT_PUBLIC_APP_URL),
+  applicationName: BRAND_NAME,
   title: { default: BRAND_NAME, template: `%s · ${BRAND_NAME}` },
   description:
     'Search, register and manage domain names. Naira pricing, renewal price shown upfront, no hidden fees.',
+  openGraph: { type: 'website', siteName: BRAND_NAME, locale: 'en_NG' },
+  twitter: { card: 'summary_large_image' },
 }
 
 export const viewport: Viewport = {

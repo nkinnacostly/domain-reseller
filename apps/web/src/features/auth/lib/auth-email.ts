@@ -33,7 +33,9 @@ export type AuthEmailPlan =
   /** Nothing to send for this action — we do not use it, or it carries no link. */
   | { kind: 'skip'; reason: string }
 
-const BLUE = '#2563eb'
+const BLUE = '#155dfc'
+/** The brand mark, hosted with the site (public/brand). Text follows it, for clients that block images. */
+const MARK_URL = `https://${BUSINESS.site}/brand/mydomainshub-mark-96.png`
 
 function escapeHtml(value: string): string {
   return value
@@ -64,7 +66,7 @@ function render(content: Content): { html: string; text: string } {
       <tr>
         <td align="center">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;padding:32px">
-            <tr><td style="font-size:14px;font-weight:bold;letter-spacing:2px">MYDOMAINSHUB</td></tr>
+            <tr><td style="font-size:18px;font-weight:bold;color:#0b1e24"><img src="${MARK_URL}" width="32" height="32" alt="" style="vertical-align:middle;border:0;border-radius:7px;margin-right:8px">${escapeHtml(BUSINESS.brand)}</td></tr>
             <tr><td style="padding-top:24px;font-size:22px;font-weight:bold">${escapeHtml(content.heading)}</td></tr>
             <tr><td style="padding-top:12px;font-size:15px;line-height:22px;color:#4a5a5f">${escapeHtml(content.body)}</td></tr>
             ${action}
