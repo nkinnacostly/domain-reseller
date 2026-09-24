@@ -10,10 +10,15 @@ import { domainStemSchema } from '../schemas/index'
 /**
  * Bounds per request. A supplier call costs ~0.75s per extension and little
  * per extra name (PRD V4), so extensions are the costly axis. Names are
- * bounded for bulk search (FR-S5), which packs up to this many into one
- * request so its calls grow with blocks of names, not with names.
+ * bounded for bulk search (FR-S5).
+ *
+ * `maxChecksPerCall` is the supplier's own limit, measured against production
+ * on 24 Sept 2026: a CheckAvailability of 20 name × extension checks is
+ * answered, 21 is refused with HTTP 403 (20×1, 5×4 and 1×20 answered; 21×1,
+ * 7×3 and 11×2 refused). The gateway splits every request into calls under
+ * it; bulk search sizes its blocks to one call each.
  */
-export const AVAILABILITY_LIMITS = { maxNames: 50, maxTlds: 12 } as const
+export const AVAILABILITY_LIMITS = { maxNames: 50, maxTlds: 12, maxChecksPerCall: 20 } as const
 
 const tldSchema = z
   .string()

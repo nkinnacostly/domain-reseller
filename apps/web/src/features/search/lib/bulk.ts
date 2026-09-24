@@ -6,12 +6,13 @@ import { displayQuery, parseSearchQuery } from './query'
  * Bulk search (PRD FR-S5): up to 500 names, pasted or read from a CSV file,
  * each line answered on its own.
  *
- * The supplier allows two calls in flight for the whole account (PRD V4), and
- * a call costs about the same for one name as for fifty on the same
- * extensions. So a list is packed into blocks of names — each block one
- * gateway request, asked about every extension it needs at once — and the
- * blocks go one after another at low priority. Requests grow with blocks ×
- * extensions, never with names. Anything answerable here (not a name, an
+ * The supplier allows two calls in flight for the whole account (PRD V4) and
+ * refuses a call of more than 20 name × extension checks (measured 24 Sept
+ * 2026), and a call costs per extension, not per name: 20 names on one
+ * extension answered in about 2 s, 5 names on four in about 6 s. So a list is
+ * packed into blocks of up to 20 names on one extension — each block one
+ * gateway request and one supplier call — and the blocks go one after another
+ * at low priority. Anything answerable here (not a name, an
  * extension we don't sell, a length the extension refuses — FR-S9) never
  * reaches the supplier.
  */
@@ -20,14 +21,10 @@ import { displayQuery, parseSearchQuery } from './query'
 export const BULK_MAX_NAMES = 500
 /** Extensions a name without one can be checked on — the featured set at most. */
 export const BULK_MAX_EXTENSIONS = 7
-/**
- * One gateway request of a bulk search. Fifty names is the contract's limit;
- * the extensions are those one name can be checked on, so a request costs at
- * most what a single search's grid does.
- */
+/** One gateway request of a bulk search: one supplier call, within its ceiling. */
 export const BULK_CHUNK = {
-  maxNames: AVAILABILITY_LIMITS.maxNames,
-  maxTlds: BULK_MAX_EXTENSIONS,
+  maxNames: AVAILABILITY_LIMITS.maxChecksPerCall,
+  maxTlds: 1,
 } as const
 
 /** One name, one extension — the unit a result row shows. */
@@ -206,12 +203,24 @@ export function chunkChecks(
     groups.set(key, group)
   }
 
+  // Names outer, extensions inner, so each name's rows fill before the next's.
   const blocks: BulkChunk[] = []
   for (const group of groups.values()) {
-    for (let t = 0; t < group.tlds.length; t += limits.maxTlds) {
-      const tlds = group.tlds.slice(t, t + limits.maxTlds)
-      for (let n = 0; n < group.names.length; n += limits.maxNames) {
-        blocks.push({ names: group.names.slice(n, n + limits.maxNames), tlds })
+    const perBlock = Math.max(
+      1,
+      Math.min(
+        limits.maxNames,
+        Math.floor(
+          AVAILABILITY_LIMITS.maxChecksPerCall / Math.min(limits.maxTlds, group.tlds.length),
+        ),
+      ),
+    )
+    for (let n = 0; n < group.names.length; n += perBlock) {
+      for (let t = 0; t < group.tlds.length; t += limits.maxTlds) {
+        blocks.push({
+          names: group.names.slice(n, n + perBlock),
+          tlds: group.tlds.slice(t, t + limits.maxTlds),
+        })
       }
     }
   }
@@ -238,6 +247,8 @@ function canShare(
   const names = new Set([...chunk.names, ...block.names])
   const tlds = new Set([...chunk.tlds, ...block.tlds])
   if (names.size > limits.maxNames || tlds.size > limits.maxTlds) return false
+  // The supplier refuses a call of more checks than this (HTTP 403).
+  if (names.size * tlds.size > AVAILABILITY_LIMITS.maxChecksPerCall) return false
   for (const name of names) for (const tld of tlds) if (!canAsk(name, tld)) return false
   return true
 }

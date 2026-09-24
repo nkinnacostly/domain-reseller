@@ -33,12 +33,12 @@ export const LIMITS = {
   // so one scraper cannot get our lookups — transfer checks included — refused.
   whoisLookup: { max: 30, windowSeconds: 600 },
   whoisAll: { max: 600, windowSeconds: 600 },
-  // FR-S5 — per address, counted per block of up to 50 names (one gateway
-  // request), so the count follows the names checked, not the searches run.
-  // A 500-name list is 10 blocks: room for one, a retry and a second list in
-  // ten minutes. The supplier allows two calls at a time for everyone (PRD
-  // V4), so one script must not be able to keep it busy.
-  bulkSearch: { max: 24, windowSeconds: 600 },
+  // FR-S5 — per address, counted per block (one gateway request and one
+  // supplier call of at most 20 checks), so the count follows the checks
+  // made, not the searches run. A 500-name list on four extensions is 100
+  // blocks: room for it and a retry in ten minutes. The supplier allows two
+  // calls at a time for everyone (PRD V4), and the gateway lets bulk use one.
+  bulkSearch: { max: 120, windowSeconds: 600 },
   // Adding every available name re-checks them all with the registry first.
   bulkAddToCart: { max: 20, windowSeconds: 600 },
   // A transfer check confirms or denies a code (FR-T1). Counted per domain, so

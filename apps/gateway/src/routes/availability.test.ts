@@ -6,7 +6,7 @@ import { createApp } from '../app'
 import { TokenBucket } from '../lib/rate-limit'
 import { Semaphore } from '../lib/semaphore'
 import { TtlCache } from '../lib/ttl-cache'
-import { createAvailabilityRoute, toBatches } from './availability'
+import { createAvailabilityRoute, toBatches, toCalls } from './availability'
 
 const SECRET = process.env.GATEWAY_SHARED_SECRET as string
 
@@ -119,6 +119,27 @@ describe('POST /v1/availability — the supplier ceiling (PRD V4)', () => {
     expect(check).toHaveBeenCalledWith(['getpaid', 'trygetpaid'], ['com', 'co'], 1)
     expect(check).toHaveBeenCalledWith(['getpaid', 'trygetpaid'], ['africa'], 1)
     expect(statuses(json)).toEqual(Array(6).fill('available'))
+  })
+
+  it('never asks the supplier more than 20 checks in one call — it refuses a 21st with 403', async () => {
+    const { check, client } = supplier(async (names, tlds) =>
+      names.length * tlds.length > 20 ? refused('API_403') : available(names, tlds),
+    )
+    const names = Array.from({ length: 25 }, (_, i) => `name${i}`)
+    const { json } = await post(appWith({ ...deps, client }), { names, tlds: ['com'] })
+    expect(check.mock.calls.map(([asked, tlds]) => asked.length * tlds.length)).toEqual([20, 5])
+    expect(statuses(json)).toEqual(Array(25).fill('available'))
+  })
+
+  it('packs names to the 20-check ceiling on every extension group', async () => {
+    const { check, client } = supplier()
+    const names = Array.from({ length: 12 }, (_, i) => `name${i}`)
+    await post(appWith({ ...deps, client }), { names, tlds: ['com', 'net', 'org', 'io'] })
+    for (const [asked, tlds] of check.mock.calls) {
+      expect(asked.length * tlds.length).toBeLessThanOrEqual(20)
+    }
+    // Two extensions per group: 10 names a call, so 12 names take two calls a group.
+    expect(check).toHaveBeenCalledTimes(4)
   })
 
   it('never has more than two supplier calls in flight, across concurrent searches', async () => {
@@ -415,6 +436,32 @@ describe('POST /v1/availability — re-validation (FR-S6)', () => {
 
     const { json } = await post(app, { names: ['getpaid'], tlds: ['com', 'app'], fresh: true })
     expect(statuses(json)).toEqual(['available', 'unknown'])
+  })
+})
+
+describe('toCalls', () => {
+  it('keeps one call per extension group while it fits', () => {
+    expect(toCalls(['getpaid'], ['com', 'net', 'org'], 2)).toEqual([
+      { names: ['getpaid'], tlds: ['com', 'org'] },
+      { names: ['getpaid'], tlds: ['net'] },
+    ])
+  })
+
+  it('splits the names of a group so no call passes the ceiling', () => {
+    const names = Array.from({ length: 7 }, (_, i) => `n${i}`)
+    expect(toCalls(names, ['com', 'net', 'org'], 1, 6)).toEqual([
+      { names: ['n0', 'n1'], tlds: ['com', 'net', 'org'] },
+      { names: ['n2', 'n3'], tlds: ['com', 'net', 'org'] },
+      { names: ['n4', 'n5'], tlds: ['com', 'net', 'org'] },
+      { names: ['n6'], tlds: ['com', 'net', 'org'] },
+    ])
+  })
+
+  it('splits a group wider than the ceiling, one name at a time', () => {
+    expect(toCalls(['a'], ['com', 'net', 'org'], 1, 2)).toEqual([
+      { names: ['a'], tlds: ['com', 'net'] },
+      { names: ['a'], tlds: ['org'] },
+    ])
   })
 })
 
