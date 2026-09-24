@@ -34,8 +34,9 @@ export default function TransferDisputesPage() {
       <LegalSection id="rights" title="Moving your domain away">
         <ul>
           <li>
-            Email <EmailLink /> for the domain’s transfer code. We send it within five days, and we
-            remove the transfer lock so the move can go ahead.
+            Turn the transfer lock off and get the domain’s transfer code on its Security page in
+            your account — straight away, after a two-factor check. If that page cannot reach the
+            registry, email <EmailLink /> and we send the code within five days.
           </li>
           <li>We never refuse or delay a transfer because of a billing dispute.</li>
           <li>

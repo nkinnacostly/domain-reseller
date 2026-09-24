@@ -153,7 +153,8 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         a: (
           <p>
             It stops anyone moving your domain to another registrar without your say-so. It is on
-            from registration.
+            from registration. Turn it off on the domain’s Security page when you are ready to move
+            it — that needs two-factor authentication.
           </p>
         ),
       },
@@ -181,8 +182,8 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         a: (
           <p>
             Where the extension allows it, contact privacy keeps your personal details out of the
-            public registration record, free of charge. See the{' '}
-            <Link href="/legal/privacy">privacy notice</Link>.
+            public registration record, free of charge. Turn it on or off on the domain’s Security
+            page. See the <Link href="/legal/privacy">privacy notice</Link>.
           </p>
         ),
       },
@@ -235,9 +236,11 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         q: 'How do I move a domain away?',
         a: (
           <p>
-            Email <EmailLink /> for the transfer code and we send it within five days. A domain
-            cannot usually move for {TRANSFER_LOCK_DAYS} days after it is registered or changes
-            owner. We never hold a domain back over a billing dispute.
+            Open the domain in your account and go to Security: turn the transfer lock off, then get
+            the transfer code — it is shown straight away, after a two-factor check. If the page
+            cannot reach the registry, email <EmailLink /> and we send the code within five days. A
+            domain cannot usually move for {TRANSFER_LOCK_DAYS} days after it is registered or
+            changes owner. We never hold a domain back over a billing dispute.
           </p>
         ),
       },

@@ -120,6 +120,27 @@ test.describe('compliance statements', () => {
     )
   })
 
+  test('contacts, the transfer lock and the transfer code are self-serve, and say where (FR-DS1, FR-DS5)', async ({
+    page,
+  }) => {
+    await page.goto('/legal/registration-agreement')
+    const agreement = page.getByRole('main')
+    await expect(agreement).toContainText('Change them on the domain’s Contacts page')
+    await expect(agreement).toContainText('shows its transfer code straight away')
+    await expect(agreement).not.toContainText('self-service editing is not available yet')
+
+    await page.goto('/legal/transfer-disputes')
+    await expect(page.getByRole('main')).toContainText('on its Security page in your account')
+    // N14: the five-day promise still stands where the page cannot reach the registry.
+    await expect(page.getByRole('main')).toContainText('we send the code within five days')
+
+    await page.goto('/help')
+    await page.getByRole('button', { name: 'How do I move a domain away?' }).click()
+    await expect(
+      page.getByText(/turn the transfer lock off, then get\s+the transfer code/),
+    ).toBeVisible()
+  })
+
   test('help answers expand', async ({ page }) => {
     await page.goto('/help')
     const question = page.getByRole('button', { name: 'How do I renew?' })

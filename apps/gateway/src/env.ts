@@ -24,6 +24,29 @@ const schema = z
     PROVISION_POLL_MS: z.coerce.number().int().min(500).default(5_000),
     /** How often the portfolio is compared with the registry (PRD §13.5: hourly). */
     RECONCILE_EVERY_MINUTES: z.coerce.number().int().min(5).default(60),
+    /**
+     * How often the supplier catalogue is synced into `tlds` (weekly). Only a
+     * production deployment reading the production catalogue runs it.
+     */
+    CATALOGUE_SYNC_EVERY_HOURS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(28 * 24)
+      .default(7 * 24),
+    /**
+     * The storefront, e.g. https://www.mydomainshub.com. After the catalogue
+     * sync writes new costs the gateway asks it to refresh its cached prices
+     * (`POST /api/pricing/refresh`); unset, they reach the site within the hour.
+     */
+    APP_URL: z.url().optional(),
+    /** How often live domains' nameservers are checked against public resolvers (FR-D5). */
+    DELEGATION_CHECK_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(24 * 60)
+      .default(30),
 
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     SUPABASE_SECRET_KEY: z.string().min(1),

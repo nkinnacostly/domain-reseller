@@ -181,3 +181,68 @@ describe('Supabase job store — renewals (migration 23)', () => {
     await expect(store.completeRenewal('j1', 'x', false)).rejects.toThrow('not a renewal')
   })
 })
+
+describe('Supabase job store — registry-side settings (migration 26)', () => {
+  it('reads what a settings job asks for from the claim', () => {
+    const registrant = { firstName: 'Bayo' }
+    expect(
+      toClaimedJob({
+        ...ROW,
+        kind: 'update_contacts',
+        source: 'registration',
+        pending_transfer_lock: false,
+        pending_privacy: true,
+        pending_registrant: registrant,
+      }),
+    ).toMatchObject({
+      kind: 'update_contacts',
+      source: 'registration',
+      pendingTransferLock: false,
+      pendingPrivacy: true,
+      pendingRegistrant: registrant,
+    })
+  })
+
+  it('leaves the settings fields empty for other jobs', () => {
+    expect(toClaimedJob(ROW)).toMatchObject({
+      source: null,
+      pendingTransferLock: null,
+      pendingPrivacy: null,
+      pendingRegistrant: null,
+    })
+  })
+
+  it('records what the registry holds, or a refusal with its code', async () => {
+    const { client, calls } = fakeClient()
+    const store = createSupabaseStore(client)
+    await store.recordDomainChange('j1', { transfer_lock: false }, { transfer_lock: false }, null)
+    await store.recordDomainChange('j1', { privacy: true }, null, 'REGISTRY_REFUSED')
+    expect(calls).toEqual([
+      {
+        fn: 'record_domain_change',
+        args: {
+          p_job_id: 'j1',
+          p_attempted: { transfer_lock: false },
+          p_applied: { transfer_lock: false },
+          p_code: null,
+        },
+      },
+      {
+        fn: 'record_domain_change',
+        args: {
+          p_job_id: 'j1',
+          p_attempted: { privacy: true },
+          p_applied: null,
+          p_code: 'REGISTRY_REFUSED',
+        },
+      },
+    ])
+  })
+
+  it('throws what the database refused', async () => {
+    const { client } = fakeClient({ error: { message: 'job j1 is not a settings change' } })
+    await expect(
+      createSupabaseStore(client).recordDomainChange('j1', { privacy: true }, null, 'X'),
+    ).rejects.toThrow('not a settings change')
+  })
+})

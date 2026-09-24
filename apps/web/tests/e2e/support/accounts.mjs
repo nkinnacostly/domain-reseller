@@ -352,3 +352,59 @@ export async function settleRenewal(orderId, outcome) {
     if (done.error) throw done.error
   }
 }
+
+/**
+ * Sets columns on a test domain directly — a registrant for the Contacts tab,
+ * or a state the UI cannot reach on its own. Test rows only.
+ *
+ * @param {string} domainId
+ * @param {Record<string, unknown>} fields
+ */
+export async function updateTestDomain(domainId, fields) {
+  const { error } = await admin().from('domains').update(fields).eq('id', domainId)
+  if (error) throw error
+}
+
+/**
+ * Answers a domain's open settings job the way the gateway worker does,
+ * without a registry (migration 26): claim it, then record_domain_change
+ * with what the registry now holds — the requested value when `outcome` is
+ * 'applied', or null and `outcome` as the refusal code.
+ *
+ * @param {string} domainId
+ * @param {'set_transfer_lock' | 'set_privacy' | 'update_contacts'} kind
+ * @param {string} [outcome]
+ */
+export async function settleDomainChange(domainId, kind, outcome = 'applied') {
+  const client = admin()
+  const { data: jobs, error } = await client
+    .from('jobs')
+    .select('id, test_mode')
+    .eq('domain_id', domainId)
+    .eq('kind', kind)
+    .in('status', ['queued', 'running'])
+  if (error) throw error
+  if (!jobs?.length) throw new Error(`No open ${kind} job for domain ${domainId}`)
+  for (const job of jobs) {
+    const claim = await client.rpc('claim_job', {
+      p_worker: 'e2e',
+      p_test_mode: job.test_mode,
+      p_job_id: job.id,
+    })
+    if (claim.error) throw claim.error
+    const context = claim.data ?? {}
+    const attempted =
+      kind === 'set_transfer_lock'
+        ? { transfer_lock: context.pending_transfer_lock }
+        : kind === 'set_privacy'
+          ? { privacy: context.pending_privacy }
+          : { registrant: context.pending_registrant }
+    const recorded = await client.rpc('record_domain_change', {
+      p_job_id: job.id,
+      p_attempted: attempted,
+      p_applied: outcome === 'applied' ? attempted : null,
+      p_code: outcome === 'applied' ? null : outcome,
+    })
+    if (recorded.error) throw recorded.error
+  }
+}

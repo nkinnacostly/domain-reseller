@@ -1,19 +1,19 @@
 name: Pricing data
 
 # Prices only change when these jobs run, so they run on a schedule.
-# The FX rate moves daily; the supplier catalogue moves rarely but matters
-# more — Verisign raises .com on 1 November 2026.
+# The FX rate moves daily. The supplier catalogue is synced weekly by the
+# gateway itself (apps/gateway/src/catalogue/schedule.ts): once the supplier
+# allowlists the gateway's address, a runner here cannot call it.
 on:
   schedule:
     - cron: '0 7 * * *'    # 08:00 WAT, daily — exchange rate
-    - cron: '0 6 * * 1'    # 07:00 WAT Monday — supplier catalogue
   workflow_dispatch:
     inputs:
       job:
         description: Which job to run
         type: choice
-        options: [fx, catalogue, both]
-        default: both
+        options: [fx]
+        default: fx
 
 concurrency:
   group: pricing-data
@@ -25,9 +25,6 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      DNA_RESELLER_ID: ${{ secrets.DNA_RESELLER_ID }}
-      DNA_API_KEY: ${{ secrets.DNA_API_KEY }}
-      DNA_ENV: production
       FX_PARALLEL_API_KEY: ${{ secrets.FX_PARALLEL_API_KEY }}
     steps:
       - uses: actions/checkout@v5
@@ -42,17 +39,10 @@ jobs:
           {
             echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"
             echo "SUPABASE_SECRET_KEY=$SUPABASE_SECRET_KEY"
-            echo "DNA_RESELLER_ID=$DNA_RESELLER_ID"
-            echo "DNA_API_KEY=$DNA_API_KEY"
-            echo "DNA_ENV=$DNA_ENV"
             echo "FX_PARALLEL_API_KEY=$FX_PARALLEL_API_KEY"
           } > .env
 
-      # On a schedule `inputs.job` is empty, so each job is chosen by its cron.
       - name: Update exchange rate
-        if: >-
-          (github.event_name == 'schedule' && github.event.schedule == '0 7 * * *') ||
-          (github.event_name == 'workflow_dispatch' && inputs.job != 'catalogue')
         # Exit 3 means the rate moved too far and is waiting for review — a
         # working outcome, not a failure. Anything else fails the run, so a
         # broken feed or key shows up red instead of hiding behind green.
@@ -62,22 +52,6 @@ jobs:
           code=$?
           if [ "$code" -eq 3 ]; then
             echo "::warning::Rate held for review (fx_rates.status = pending_review)"
-            exit 0
-          fi
-          exit $code
-
-      - name: Sync supplier catalogue
-        if: >-
-          (github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1') ||
-          (github.event_name == 'workflow_dispatch' && inputs.job != 'fx')
-        # Exit 2 means the catalogue changed and, with --apply, was written —
-        # a working outcome. Anything else non-zero fails the run.
-        run: |
-          set +e
-          pnpm --filter @dr/gateway sync:catalogue -- --apply
-          code=$?
-          if [ "$code" -eq 2 ]; then
-            echo "::notice::Supplier catalogue changed; the new costs were written"
             exit 0
           fi
           exit $code

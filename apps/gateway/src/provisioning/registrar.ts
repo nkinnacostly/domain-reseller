@@ -62,6 +62,54 @@ export interface Registrar {
   setNameservers(domainName: string, nameservers: string[]): Promise<Write<string[]>>
 }
 
+/** A read that answers with something other than the domain record. */
+export type Reading<T> = { kind: 'found'; data: T } | { kind: 'not_found' } | Unsettled
+
+/**
+ * A settings write. Its answer carries nothing we keep: whatever the
+ * registry says it did, what it now holds is read back (I2).
+ */
+export type SettingWrite =
+  | { kind: 'ok' }
+  | { kind: 'rejected'; code: string; message: string }
+  | Unsettled
+
+/**
+ * One contact as the registry holds it, flattened the way the SDK sends it:
+ * SaveContacts joins address lines 1 and 2 into one `address`.
+ */
+export type RegistryContact = {
+  firstName: string
+  lastName: string
+  company: string
+  email: string
+  address: string
+  city: string
+  state: string
+  zipCode: string
+  country: string
+  phoneCountryCode: string
+  phone: string
+}
+
+export type ContactRole = 'registrant' | 'administrative' | 'technical' | 'billing'
+export type RegistryContacts = Partial<Record<ContactRole, RegistryContact>>
+
+/** Registry-side settings (FR-DS1, FR-DS3, FR-DS4): each write is judged, then read back. */
+export interface SettingsRegistrar {
+  lookup(domainName: string): Promise<Lookup>
+  contacts(domainName: string): Promise<Reading<RegistryContacts>>
+  setTransferLock(domainName: string, locked: boolean): Promise<SettingWrite>
+  setPrivacy(domainName: string, enabled: boolean): Promise<SettingWrite>
+  /** Checkout's one person holds every role, so all four are saved together. */
+  updateContacts(domainName: string, contact: Contact): Promise<SettingWrite>
+}
+
+/** FR-DS5, FR-T5: the domain's transfer code, fetched on demand and never kept (SEC-12). */
+export interface AuthCodeReader {
+  authCode(domainName: string): Promise<Reading<string>>
+}
+
 export type CallRecord = {
   operation: string
   /** Null for calls about the whole portfolio. */
@@ -240,6 +288,107 @@ export function contactSet(contact: Contact): DnaContactSet {
   return { Registrant: info, Administrative: info, Technical: info, Billing: info }
 }
 
+/** A settings refusal → our code. Anything not about the contact is the registry's own call. */
+export function classifySettingRefusal(message: string): string {
+  if (/contact|phone|e-?mail|address|zip|postal|city|country|first ?name|last ?name/i.test(message))
+    return 'CONTACT_INVALID'
+  return 'REGISTRY_REFUSED'
+}
+
+const text = (...values: unknown[]) =>
+  values.find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? ''
+
+const ROLE_BY_TYPE: Record<string, ContactRole> = {
+  registrant: 'registrant',
+  admin: 'administrative',
+  administrative: 'administrative',
+  tech: 'technical',
+  technical: 'technical',
+  billing: 'billing',
+}
+
+/**
+ * The contacts in a raw `domains/info` body, read with the same field names
+ * the SDK's parseContactInfo accepts. From the body, not the SDK's result:
+ * our typings for that shape are a guess, the body is what was sent.
+ */
+export function toRegistryContacts(body: unknown): RegistryContacts | null {
+  const list = (body as { contacts?: unknown } | null)?.contacts
+  if (!Array.isArray(list)) return null
+  const contacts: RegistryContacts = {}
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue
+    const raw = item as Record<string, unknown>
+    const role = ROLE_BY_TYPE[text(raw.contactType, raw.type).toLowerCase()]
+    if (!role) continue
+    contacts[role] = {
+      firstName: text(raw.firstName),
+      lastName: text(raw.lastName),
+      company: text(raw.companyName, raw.organizationName, raw.company),
+      email: text(raw.eMail, raw.emailAddress, raw.email),
+      address: [text(raw.address, raw.addressLine1), text(raw.addressLine2), text(raw.addressLine3)]
+        .filter(Boolean)
+        .join(' '),
+      city: text(raw.city),
+      state: text(raw.state, raw.stateOrProvince),
+      zipCode: text(raw.postalCode, raw.zipCode),
+      country: text(raw.country, raw.countryCode),
+      phoneCountryCode: text(raw.phoneCountryCode),
+      phone: text(raw.phone, raw.phoneNumber),
+    }
+  }
+  return contacts
+}
+
+const squash = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase()
+const digits = (value: string) => value.replace(/\D/g, '')
+
+/** The number with its dialling code, whether the registry keeps them apart or together. */
+function fullNumber(countryCode: string, phone: string): string {
+  const code = digits(countryCode)
+  const number = digits(phone)
+  return code && number.startsWith(code) && number.length > 9 ? number : `${code}${number}`
+}
+
+/** What we sent, in the registry's flattened shape. The SDK drops address line 3. */
+export function asRegistryContact(contact: Contact): RegistryContact {
+  return {
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    company: contact.company ?? '',
+    email: contact.email,
+    address: [contact.addressLine1, contact.addressLine2].filter(Boolean).join(' '),
+    city: contact.city,
+    state: contact.state,
+    zipCode: contact.zipCode,
+    country: contact.country,
+    phoneCountryCode: contact.phoneCountryCode,
+    phone: contact.phone,
+  }
+}
+
+/**
+ * Field by field, after the normalising registries do: case, spacing, and
+ * the phone's dialling code kept apart or joined on.
+ */
+export function sameContact(a: RegistryContact, b: RegistryContact): boolean {
+  const fields = [
+    'firstName',
+    'lastName',
+    'company',
+    'email',
+    'address',
+    'city',
+    'state',
+    'zipCode',
+    'country',
+  ] as const
+  return (
+    fields.every((field) => squash(a[field]) === squash(b[field])) &&
+    fullNumber(a.phoneCountryCode, a.phone) === fullNumber(b.phoneCountryCode, b.phone)
+  )
+}
+
 function unsettled(verdict: Verdict): Unsettled | null {
   if (verdict.outcome === 'blocked') {
     return { kind: 'blocked', code: verdict.code, message: verdict.message }
@@ -255,7 +404,7 @@ export function createDnaRegistrar(deps: {
   environment: WriteTarget
   audit: AuditSink
   slots?: Semaphore
-}): Registrar & PortfolioReader {
+}): Registrar & PortfolioReader & SettingsRegistrar & AuthCodeReader {
   const slots = deps.slots ?? supplierSlots
 
   async function call<T>(
@@ -291,7 +440,111 @@ export function createDnaRegistrar(deps: {
     return result?.result === 'OK' ? toRegistryDomain(result.data, body) : null
   }
 
+  /** A settings write, judged from the exchange alone. */
+  async function settingWrite(
+    operation: string,
+    domainName: string,
+    run: () => Promise<unknown>,
+  ): Promise<SettingWrite> {
+    const { verdict } = await call(operation, domainName, run)
+    if (verdict.outcome === 'ok') return { kind: 'ok' }
+    if (verdict.outcome === 'rejected') {
+      return {
+        kind: 'rejected',
+        code: classifySettingRefusal(verdict.message),
+        message: verdict.message,
+      }
+    }
+    if (verdict.outcome === 'not_found') {
+      return { kind: 'rejected', code: 'DOMAIN_NOT_FOUND', message: verdict.message }
+    }
+    return unsettled(verdict) as Unsettled
+  }
+
+  /** A read of `domains/info` that wants something other than the domain record. */
+  async function infoRead<T>(
+    operation: string,
+    domainName: string,
+    run: () => Promise<unknown>,
+    pick: (body: unknown) => T | null,
+    missing = { code: 'UNPARSEABLE', message: `${operation} answer could not be read` },
+  ): Promise<Reading<T>> {
+    const { verdict, body } = await call(operation, domainName, run)
+    if (verdict.outcome === 'not_found') return { kind: 'not_found' }
+    if (verdict.outcome === 'ok') {
+      const data = pick(body)
+      return data === null ? { kind: 'unknown', ...missing } : { kind: 'found', data }
+    }
+    return (
+      unsettled(verdict) ?? {
+        kind: 'unknown',
+        code: 'LOOKUP_REFUSED',
+        message: 'message' in verdict ? verdict.message : 'Lookup refused',
+      }
+    )
+  }
+
+  const settings: Omit<SettingsRegistrar, 'lookup'> & AuthCodeReader = {
+    contacts: (domainName) =>
+      infoRead(
+        'GetContacts',
+        domainName,
+        () => deps.client.GetContacts(domainName),
+        (body) => {
+          const contacts = toRegistryContacts(body)
+          return contacts?.registrant ? contacts : null
+        },
+      ),
+
+    // Not through the SDK: its DisableTheftProtectionLock posts to domains/lock
+    // with lockStatus false, a field the API does not have — the supplier's
+    // OpenAPI spec has POST domains/lock and POST domains/unlock, each taking
+    // only the name. In the sandbox (24 Sept 2026) the SDK's call answered 204
+    // and the domain stayed locked.
+    setTransferLock: (domainName, locked) =>
+      settingWrite(
+        locked ? 'EnableTheftProtectionLock' : 'DisableTheftProtectionLock',
+        domainName,
+        async () => {
+          const rest = deps.client.client
+          if (!rest.post) throw new Error('Only the REST client can change the lock')
+          // It throws on a non-2xx, as the SDK's own methods do inside; the
+          // recorded exchange is what decides, so the throw is not needed.
+          return rest
+            .post(locked ? 'domains/lock' : 'domains/unlock', { domainName })
+            .catch(() => null)
+        },
+      ),
+
+    setPrivacy: (domainName, enabled) =>
+      settingWrite('ModifyPrivacyProtectionStatus', domainName, () =>
+        deps.client.ModifyPrivacyProtectionStatus(domainName, enabled),
+      ),
+
+    updateContacts: (domainName, contact) =>
+      settingWrite('SaveContacts', domainName, () =>
+        deps.client.SaveContacts(domainName, contactSet(contact)),
+      ),
+
+    // The code rides in the raw body only: the audit keeps the operation and
+    // outcome, never a body, so it cannot reach a log or a table (N13, SEC-13).
+    authCode: (domainName) =>
+      infoRead(
+        'GetAuthCode',
+        domainName,
+        () => deps.client.GetDetails(domainName),
+        (body) => {
+          const raw = (body ?? {}) as { authCode?: unknown; eppCode?: unknown }
+          const code = text(raw.authCode, raw.eppCode).trim()
+          return code === '' ? null : code
+        },
+        { code: 'NO_AUTH_CODE', message: 'The registry record carries no transfer code' },
+      ),
+  }
+
   return {
+    ...settings,
+
     async lookup(domainName) {
       const { result, verdict, body } = await call('GetDetails', domainName, () =>
         deps.client.GetDetails(domainName),

@@ -9,7 +9,7 @@ export async function getOrders() {
   const { data } = await supabase
     .from('orders')
     .select(
-      'id, order_number, status, total_kobo, test_mode, created_at, order_items(domain, item_type)',
+      'id, order_number, status, total_kobo, test_mode, created_at, invoice_number, order_items(domain, item_type)',
     )
     .order('created_at', { ascending: false })
     .limit(50)

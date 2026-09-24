@@ -167,6 +167,7 @@ describe('CheckoutForm — placing the order', () => {
 
     await user.type(screen.getByLabelText('Company (optional)'), 'Paidly Ltd')
     await user.click(screen.getByText('Already know where this domain is going?'))
+    await user.click(screen.getByRole('radio', { name: 'Enter nameservers' }))
     await user.type(
       screen.getByLabelText('Nameservers from your host'),
       'ns1.host.com{Enter}ns2.host.com',
