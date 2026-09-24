@@ -23,7 +23,7 @@ const STEPS = [
   {
     n: '03',
     title: 'Enter it and pay',
-    body: 'Pay the transfer price in naira. Where the registry adds a year to your registration, that year is included.',
+    body: 'We check the code with the registry before you pay the transfer price in naira. Where the registry adds a year to your registration, that year is included.',
   },
   {
     n: '04',
@@ -68,8 +68,8 @@ export function TransferGuide() {
             </h2>
             <p className="mt-4 text-pretty text-muted-foreground">
               A transfer changes who manages your registration. Done right, your website and email
-              never notice, and the time you have already paid for comes with it. Starting one with
-              us is not open yet — the check above works today.
+              never notice, and the time you have already paid for comes with it. Check your domain
+              above; if it can move, start the transfer from the result.
             </p>
           </div>
 

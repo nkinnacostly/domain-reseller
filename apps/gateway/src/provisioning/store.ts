@@ -13,7 +13,7 @@ import type { CallRecord, RegistryDomain } from './registrar'
 
 export type ClaimedJob = {
   id: string
-  kind: 'register_domain' | 'apply_nameservers' | 'renew_domain'
+  kind: 'register_domain' | 'apply_nameservers' | 'renew_domain' | 'transfer_domain'
   /** Including this one. */
   attempts: number
   testMode: boolean
@@ -30,7 +30,14 @@ export type ClaimedJob = {
   baselineExpiry: string | null
   /** For a registration or renewal: the charge that paid for it, confirmed with Flutterwave first. */
   payment: PaymentFacts | null
+  /** A transfer's code, handed over only until the registry has the request (migration 26). */
+  authCode?: string | null
+  /** A transfer: when the registry took the request. Set, the job polls. */
+  submittedAt?: string | null
 }
+
+/** What became of recording a transfer the registry shows done. */
+export type TransferRecorded = 'recorded' | 'held_elsewhere'
 
 export type Completion = {
   domain: RegistryDomain
@@ -53,6 +60,17 @@ export interface JobStore {
   /** Records a renewal's baseline before its first Renew call; returns the one stored. */
   noteRenewalBaseline(jobId: string, expiresAt: string): Promise<string>
   completeRenewal(jobId: string, expiresAt: string, recovered: boolean): Promise<void>
+  /** The registry has the request: the code is deleted and the job polls from `pollAfterSeconds`. */
+  markTransferSubmitted(jobId: string, pollAfterSeconds: number): Promise<void>
+  /**
+   * The domain is ours at the registry. `held_elsewhere`: another account here
+   * already holds the name, so this line's transfer is not what put it there.
+   */
+  completeTransfer(
+    jobId: string,
+    domain: RegistryDomain & { expiresAt: string },
+    recovered: boolean,
+  ): Promise<TransferRecorded>
   /** `applied` null means the registry refused `attempted`. */
   recordNameserverChange(
     jobId: string,
@@ -86,6 +104,8 @@ type Row = {
     currency: string | null
     status: string | null
   } | null
+  auth_code?: string | null
+  submitted_at?: string | null
 }
 
 const kobo = (value: number | string | null | undefined) =>
@@ -116,8 +136,13 @@ export function toClaimedJob(row: Row): ClaimedJob {
           status: row.payment.status,
         }
       : null,
+    authCode: row.auth_code ?? null,
+    submittedAt: row.submitted_at ?? null,
   }
 }
+
+/** Postgres's unique_violation: here, `domains_held_name_unique`. */
+const UNIQUE_VIOLATION = '23505'
 
 /** The generated types mark every function argument required and non-null; SQL accepts null. */
 const nullable = <T>(value: T | null) => value as T
@@ -195,6 +220,32 @@ export function createSupabaseStore(
           p_recovered: recovered,
         }),
       )
+    },
+
+    async markTransferSubmitted(jobId, pollAfterSeconds) {
+      await rpc(
+        client.rpc('mark_transfer_submitted', {
+          p_job_id: jobId,
+          p_poll_after_seconds: pollAfterSeconds,
+        }),
+      )
+    },
+
+    async completeTransfer(jobId, domain, recovered) {
+      const { error } = await client.rpc('complete_transfer', {
+        p_job_id: jobId,
+        p_registered_at: nullable(domain.registeredAt),
+        p_expires_at: domain.expiresAt,
+        p_nameservers: domain.nameservers,
+        p_transfer_lock: domain.transferLock,
+        p_privacy: domain.privacy,
+        p_recovered: recovered,
+      })
+      // Another account here holds the name while it is active (migration 13's
+      // index), so the transaction rolled back: nothing was recorded.
+      if (error?.code === UNIQUE_VIOLATION) return 'held_elsewhere'
+      if (error) throw new Error(error.message)
+      return 'recorded'
     },
 
     async recordNameserverChange(jobId, attempted, applied, code) {

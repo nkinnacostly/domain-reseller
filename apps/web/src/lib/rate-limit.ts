@@ -25,6 +25,9 @@ export const LIMITS = {
   webhookAll: { max: 600, windowSeconds: 60 },
   // Anyone may ask for a price refresh; it only acts when prices really changed.
   pricingRefresh: { max: 12, windowSeconds: 3600 },
+  // A transfer check confirms or denies a code (FR-T1). Counted per domain, so
+  // many accounts cannot share out guesses at someone else's.
+  transferCheckDomain: { max: 10, windowSeconds: 3600 },
 } as const
 
 export async function withinLimit(

@@ -75,6 +75,11 @@ function fakeStore(claimed: ClaimedJob | null) {
       return args[1]
     },
     completeRenewal: record('renewed') as JobStore['completeRenewal'],
+    markTransferSubmitted: record('submitted') as JobStore['markTransferSubmitted'],
+    completeTransfer: async (...args) => {
+      actions.push({ type: 'transferred', args })
+      return 'recorded'
+    },
     recordNameserverChange: record('nameservers') as JobStore['recordNameserverChange'],
     reschedule: record('reschedule') as JobStore['reschedule'],
     fail: record('fail') as JobStore['fail'],
@@ -498,14 +503,14 @@ describe('provisioning worker — renewals (FR-RN1)', () => {
 
   it('holds a job of a kind it does not know, rather than failing it as something else', async () => {
     const { instance, actions } = worker(
-      job({ kind: 'transfer_domain' as ClaimedJob['kind'] }),
+      job({ kind: 'kind_from_a_newer_web' as ClaimedJob['kind'] }),
       registrar({}),
     )
     await instance.tick()
     expect(actions).toEqual([
       {
         type: 'fail',
-        args: ['job-1', 'UNKNOWN_JOB_KIND', 'No handler for transfer_domain', true],
+        args: ['job-1', 'UNKNOWN_JOB_KIND', 'No handler for kind_from_a_newer_web', true],
       },
     ])
   })

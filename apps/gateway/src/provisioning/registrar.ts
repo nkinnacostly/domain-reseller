@@ -1,9 +1,9 @@
-import type { Contact, GatewayErrorCode } from '@dr/shared'
+import type { Contact, GatewayErrorCode, TransferCheckResult, TransferRefusal } from '@dr/shared'
 import type DomainNameApi from 'nodejs-dna'
 import type { DnaContact, DnaContactSet, DnaDomain, DnaResult } from 'nodejs-dna'
 import type { WriteTarget } from '../dna/client'
 import { type Exchange, withExchanges } from '../dna/transport'
-import { type Semaphore, supplierSlots } from '../lib/semaphore'
+import { type Priority, type Semaphore, supplierSlots } from '../lib/semaphore'
 
 /**
  * The registry operations provisioning needs, with every outcome made
@@ -17,6 +17,12 @@ export type RegistryDomain = {
   nameservers: string[]
   transferLock: boolean
   privacy: boolean
+  /**
+   * The supplier's word for the domain's state in our account — 'Active',
+   * 'WaitingForIncomingTransfer', … (STATUS_WORDS). Absent where an answer
+   * carries none. A transfer in is judged by it (transferState).
+   */
+  status?: string
 }
 
 type Unsettled =
@@ -60,6 +66,39 @@ export interface Registrar {
   /** Adds `years` to the registration. The answer's date is a hint: read the record back. */
   renew(domainName: string, years: number): Promise<Write<{ expiresAt: string | null }>>
   setNameservers(domainName: string, nameservers: string[]): Promise<Write<string[]>>
+}
+
+export type TransferInput = {
+  domainName: string
+  /** The customer's transfer code: sent to the supplier, and to no log or record (N13). */
+  authCode: string
+  periodYears: number
+  contact: Contact
+}
+
+/** CheckTransfer's verdict. A refusal of the check itself is still an answer: not transferable. */
+export type TransferCheckAnswer = { kind: 'ok'; data: TransferCheckResult } | Unsettled
+
+/** Transfer's answer. `ok` means the registry took the request — not that the domain moved. */
+export type TransferWrite =
+  | { kind: 'ok' }
+  | {
+      kind: 'rejected'
+      code: TransferRefusal | 'SUPPLIER_INSUFFICIENT_FUNDS'
+      message: string
+    }
+  | Unsettled
+
+/**
+ * Transfers in (PRD E9). Kept apart from Registrar so the doubles written
+ * before transfers existed still type-check; the real registrar is both.
+ */
+export interface TransferRegistrar {
+  lookup(domainName: string): Promise<Lookup>
+  /** CheckTransfer: a read, safe to repeat. Asked before money moves and before Transfer (FR-T1, N4). */
+  checkTransfer(domainName: string, authCode: string): Promise<TransferCheckAnswer>
+  /** Transfer: a write with no idempotency key (N3). */
+  transfer(input: TransferInput): Promise<TransferWrite>
 }
 
 export type CallRecord = {
@@ -109,6 +148,29 @@ export function classifyRefusal(message: string): GatewayErrorCode {
     return 'CONTACT_INVALID'
   if (/not available|already|exist|taken|in use|registered/i.test(message)) return 'DOMAIN_TAKEN'
   return 'REGISTRATION_FAILED'
+}
+
+/**
+ * A transfer refusal in the supplier's words → our reason (FR-T1). The
+ * supplier's text is read, never shown (N10). Most specific first.
+ */
+export function classifyTransferRefusal(message: string): TransferRefusal {
+  if (/auth|epp|transfer ?code|password|authori[sz]ation/i.test(message)) {
+    return 'AUTH_CODE_INVALID'
+  }
+  // "Lock", "locked", "TransferLock", "clientTransferProhibited" — but not "blocked".
+  if (/(?<![a-z])lock|transfer ?lock|prohibit/i.test(message)) return 'TRANSFER_LOCKED'
+  return 'NOT_TRANSFERABLE'
+}
+
+/**
+ * Takes a secret out of supplier text before it is recorded (N13): a registry
+ * error can quote the transfer code it refused.
+ */
+export function redact(text: string, secret: string | undefined): string {
+  if (!secret) return text
+  const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(escaped, 'gi'), '[redacted]')
 }
 
 /** What one HTTP exchange tells us, regardless of what the SDK made of it. */
@@ -165,6 +227,29 @@ export function supplierDate(raw: unknown, fallback?: string): string | null {
   return null
 }
 
+/** The REST API sends a status as a number (SDK DOMAIN_STATUS_MAP); we keep the word. */
+const STATUS_WORDS: Record<string, string> = {
+  0: 'Active',
+  1: 'WaitingForRegistration',
+  2: 'WaitingForDocument',
+  3: 'WaitingForIncomingTransfer',
+  4: 'TransferredOut',
+  7: 'PendingDelete',
+  8: 'Deleted',
+  9: 'ConfirmationEmailSend',
+  11: 'WaitingForOutgoingTransfer',
+  12: 'PendingHold',
+  15: 'ModificationPending',
+  18: 'InCase',
+  19: 'PendingRestore',
+}
+
+/** A status as a word, whether the supplier sent the word or its number. */
+export function statusWord(status: unknown): string {
+  const text = String(status ?? '').trim()
+  return /^\d+$/.test(text) ? (STATUS_WORDS[text] ?? text) : text
+}
+
 export function toRegistryDomain(sdk: DnaDomain, body: unknown): RegistryDomain {
   const raw = (body ?? {}) as Record<string, unknown>
   const nameservers = Array.isArray(raw.nameservers)
@@ -176,20 +261,26 @@ export function toRegistryDomain(sdk: DnaDomain, body: unknown): RegistryDomain 
     nameservers: nameservers.map((host) => host.toLowerCase()),
     transferLock: sdk.LockStatus === 'true',
     privacy: sdk.PrivacyProtectionStatus === 'true',
+    status: statusWord(raw.status ?? sdk.Status),
   }
 }
 
-/** The REST list sends a numeric status where info sends a word (SDK DOMAIN_STATUS_MAP). */
-const STATUS_WORDS: Record<string, string> = {
-  0: 'Active',
-  1: 'WaitingForRegistration',
-  2: 'WaitingForDocument',
-  3: 'WaitingForIncomingTransfer',
-  4: 'TransferredOut',
-  7: 'PendingDelete',
-  8: 'Deleted',
-  9: 'ConfirmationEmailSend',
-  11: 'WaitingForOutgoingTransfer',
+/**
+ * Where a transfer in stands, by the supplier's status for the domain in our
+ * account (PRD FR-T3 — the REST API has no QueryTransfer):
+ * - `landed`  — in our account and active: the transfer completed;
+ * - `waiting` — the request is with the current registrar;
+ * - `gone`    — the request was cancelled or refused, or the domain left us;
+ * - `unclear` — anything else. Never guessed either way (I2).
+ */
+export type TransferState = 'landed' | 'waiting' | 'gone' | 'unclear'
+
+export function transferState(status: string | undefined): TransferState {
+  const word = statusWord(status)
+  if (/^(active|ok)$/i.test(word)) return 'landed'
+  if (/incoming ?transfer|pending ?transfer|confirmation ?email/i.test(word)) return 'waiting'
+  if (/transferred ?out|^deleted$|cancel|reject/i.test(word)) return 'gone'
+  return 'unclear'
 }
 
 export function toListing(item: unknown): RegistryListing | null {
@@ -199,10 +290,7 @@ export function toListing(item: unknown): RegistryListing | null {
   const status = raw.status ?? raw.statusCode
   return {
     domainName: raw.domainName.toLowerCase(),
-    status:
-      typeof status === 'number' || /^\d+$/.test(String(status ?? ''))
-        ? (STATUS_WORDS[String(status)] ?? String(status))
-        : String(status ?? ''),
+    status: statusWord(status),
     expiresAt: supplierDate(raw.expirationDate),
     nameservers: Array.isArray(raw.nameservers)
       ? raw.nameservers.map((host) => String(host).toLowerCase())
@@ -255,26 +343,32 @@ export function createDnaRegistrar(deps: {
   environment: WriteTarget
   audit: AuditSink
   slots?: Semaphore
-}): Registrar & PortfolioReader {
+  /** How long a call may wait for a supplier slot, and in which lane. Default: its turn, however long. */
+  slotWait?: { waitMs: number; priority: Priority }
+}): Registrar & PortfolioReader & TransferRegistrar {
   const slots = deps.slots ?? supplierSlots
 
   async function call<T>(
     operation: string,
     domainName: string | null,
     run: () => Promise<T>,
+    /** Scrubbed from everything recorded about the call (N13). */
+    secret?: string,
   ): Promise<{ result: T | null; verdict: Verdict; body: unknown }> {
     const started = Date.now()
     let result: T | null = null
     let exchange: Exchange | undefined
     try {
-      const recorded = await slots.run(() => withExchanges(run))
+      const recorded = await slots.run(() => withExchanges(run), deps.slotWait)
       result = recorded.result
       exchange = recorded.exchanges.at(-1)
     } catch {
       // The SDK catches its own errors, so this is ours or a slot timeout.
       // With no exchange recorded, the verdict below is `unknown`.
     }
-    const verdict = judgeExchange(exchange)
+    const judged = judgeExchange(exchange)
+    const verdict: Verdict =
+      'message' in judged ? { ...judged, message: redact(judged.message, secret) } : judged
     await deps.audit({
       operation,
       domainName,
@@ -383,6 +477,65 @@ export function createDnaRegistrar(deps: {
         return { kind: 'rejected', code: verdict.code, message: verdict.message }
       if (verdict.outcome === 'not_found') {
         return { kind: 'rejected', code: 'DOMAIN_NOT_FOUND', message: verdict.message }
+      }
+      return unsettled(verdict) as Unsettled
+    },
+
+    async checkTransfer(domainName, authCode) {
+      const { verdict, body } = await call(
+        'CheckTransfer',
+        domainName,
+        () => deps.client.CheckTransfer(domainName, authCode),
+        authCode,
+      )
+      if (verdict.outcome === 'ok') {
+        // Read from the raw body: the SDK turns a missing field into `false`.
+        const raw = (body ?? {}) as Record<string, unknown>
+        if (typeof raw.transferAvailabilityStatus !== 'boolean') {
+          return {
+            kind: 'unknown',
+            code: 'UNPARSEABLE',
+            message: 'Transfer check could not be read',
+          }
+        }
+        if (raw.transferAvailabilityStatus) return { kind: 'ok', data: { transferable: true } }
+        const reason: TransferRefusal =
+          raw.transferLock === true
+            ? 'TRANSFER_LOCKED'
+            : raw.authCodeIsValid === false
+              ? 'AUTH_CODE_INVALID'
+              : 'NOT_TRANSFERABLE'
+        return { kind: 'ok', data: { transferable: false, reason } }
+      }
+      // A refused check is still the supplier's answer: not transferable, and why.
+      if (verdict.outcome === 'rejected' || verdict.outcome === 'not_found') {
+        return {
+          kind: 'ok',
+          data: { transferable: false, reason: classifyTransferRefusal(verdict.message) },
+        }
+      }
+      return unsettled(verdict) as Unsettled
+    },
+
+    async transfer({ domainName, authCode, periodYears, contact }) {
+      const { verdict } = await call(
+        'Transfer',
+        domainName,
+        () => deps.client.Transfer(domainName, authCode, periodYears, contactSet(contact)),
+        authCode,
+      )
+      // Sparse, like a registration's answer: the record is read afterwards.
+      if (verdict.outcome === 'ok') return { kind: 'ok' }
+      if (verdict.outcome === 'rejected' || verdict.outcome === 'not_found') {
+        return {
+          kind: 'rejected',
+          // An empty float is ours to fix, not the domain's: keep it apart.
+          code:
+            verdict.outcome === 'rejected' && verdict.code === 'SUPPLIER_INSUFFICIENT_FUNDS'
+              ? 'SUPPLIER_INSUFFICIENT_FUNDS'
+              : classifyTransferRefusal(verdict.message),
+          message: verdict.message,
+        }
       }
       return unsettled(verdict) as Unsettled
     },

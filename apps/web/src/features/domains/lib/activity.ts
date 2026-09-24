@@ -33,6 +33,20 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
       return `Renewal failed: ${failureReason(payload.code as string | undefined)}`
     case 'renewal_delayed':
       return 'Renewal delayed — waiting on the registry'
+    case 'transfer_submitted':
+      return 'Transfer request sent to the registry — waiting on the current registrar'
+    case 'transferred_in': {
+      const done = payload.sandbox
+        ? 'Transferred into the registrar’s test system'
+        : 'Transferred in'
+      return typeof payload.expires_at === 'string'
+        ? `${done} — expires ${dateFormat.format(new Date(payload.expires_at))}`
+        : done
+    }
+    case 'transfer_failed':
+      return `Transfer failed: ${failureReason(payload.code as string | undefined)}`
+    case 'transfer_delayed':
+      return 'Transfer delayed — waiting on the registry'
     case 'nameservers_requested':
       return `Nameserver change requested: ${list(payload.after)}`
     case 'nameservers_applied':

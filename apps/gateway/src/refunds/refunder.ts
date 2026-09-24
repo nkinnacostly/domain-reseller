@@ -7,7 +7,7 @@ import {
   MIN_REFUND_KOBO,
   refundState,
 } from '../payments/flutterwave'
-import type { Lookup } from '../provisioning/registrar'
+import { type Lookup, transferState } from '../provisioning/registrar'
 import { renewedSince } from '../provisioning/renewal'
 import type { ClaimedRefund, RefundStore } from './store'
 
@@ -26,7 +26,8 @@ import type { ClaimedRefund, RefundStore } from './store'
  *   3. for a failed registration, the registry confirms the domain is not
  *      ours after all — refunding a registered domain pays twice; for a
  *      failed renewal, that the registry's expiry has not moved on by the
- *      years paid for;
+ *      years paid for; for a failed transfer, that it has not landed in our
+ *      account and is not still waiting to;
  *   4. no chargeback on the charge — Flutterwave warns a refund on a disputed
  *      charge can pay the customer twice;
  *   5. Flutterwave's own list of refunds on the charge matches ours, and
@@ -257,6 +258,33 @@ export function createRefunder(options: RefunderOptions) {
         }
       } else if (registry.kind !== 'not_found') {
         return notSent(refund, 'REGISTRY_UNREADABLE', 'Could not read the domain’s expiry')
+      }
+    }
+
+    // A transfer we gave up on may have landed after all (PRD E9): refunding a
+    // domain that is now ours would pay twice. Waiting, or unreadable, is not
+    // a no yet. Gone from our account is, and so is someone else's record here.
+    if (refund.reason === 'transfer_failed') {
+      if (!refund.domainName) return stop(refund, 'NO_DOMAIN', 'Refund for a line with no domain')
+      const registry = await lookup(refund.domainName)
+      if (registry.kind === 'found' && !refund.heldByOtherAccount) {
+        const state = transferState(registry.domain.status)
+        if (state === 'landed') {
+          return stop(
+            refund,
+            'TRANSFERRED_AT_REGISTRY',
+            'The registry holds this domain in our account: refunding would pay twice',
+          )
+        }
+        if (state !== 'gone') {
+          return notSent(
+            refund,
+            'TRANSFER_UNSETTLED',
+            `The registry lists the domain as "${registry.domain.status ?? ''}"`,
+          )
+        }
+      } else if (registry.kind !== 'found' && registry.kind !== 'not_found') {
+        return notSent(refund, 'REGISTRY_UNREADABLE', 'Could not confirm the transfer did not land')
       }
     }
 

@@ -61,6 +61,25 @@ export const registrantFormSchema = z.object({
 })
 export type RegistrantForm = z.input<typeof registrantFormSchema>
 
+/** The registrant fields as a submitted form holds them (RegistrantFields). */
+export function registrantFromForm(form: FormData): RegistrantForm {
+  const value = (name: keyof RegistrantForm) => String(form.get(name) ?? '')
+  return {
+    firstName: value('firstName'),
+    lastName: value('lastName'),
+    company: value('company'),
+    email: value('email'),
+    phoneCountryCode: value('phoneCountryCode'),
+    phone: value('phone'),
+    addressLine1: value('addressLine1'),
+    addressLine2: value('addressLine2'),
+    city: value('city'),
+    state: value('state'),
+    zipCode: value('zipCode'),
+    country: value('country'),
+  }
+}
+
 export function toContact(form: z.output<typeof registrantFormSchema>): Contact {
   return contactSchema.parse({ ...form, phone: nationalNumber(form.phone, form.phoneCountryCode) })
 }

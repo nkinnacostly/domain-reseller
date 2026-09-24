@@ -26,3 +26,8 @@ export const TRANSFER_QUERY_MESSAGES = {
 export function transferCheckHref(domain: string): string {
   return `/transfer?domain=${encodeURIComponent(domain)}#check`
 }
+
+/** Where a transfer is started and paid for (FR-T2). Signed in: the proxy asks first. */
+export function transferStartHref(domain: string): string {
+  return `/app/transfers/new?domain=${encodeURIComponent(domain)}`
+}

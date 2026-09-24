@@ -15,6 +15,11 @@
  * It also stands in for Flutterwave (under /flw): the payments API, a hosted
  * checkout page with "Pay (test)" and "Cancel", and transaction verification —
  * plus GET /v1/account/balance, reporting an empty float like the real one.
+ *
+ * POST /v1/transfers/check (PRD FR-T1) answers by the code:
+ *   GOOD-…   → transferable
+ *   LOCKED-… → TRANSFER_LOCKED
+ *   anything else → AUTH_CODE_INVALID
  */
 import { createServer } from 'node:http'
 
@@ -114,6 +119,23 @@ createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/v1/account/balance') {
     // Like the real account today: an empty float, so test mode records a shortfall.
     return send(res, 200, { ok: true, data: { balanceUsd: 0 } })
+  }
+  if (req.method === 'POST' && req.url === '/v1/transfers/check') {
+    if (!req.headers.authorization?.startsWith('Bearer ')) {
+      return send(res, 401, { ok: false, code: 'SUPPLIER_AUTH', message: 'Unauthorised' })
+    }
+    return void readBody(req).then(({ authCode = '' }) => {
+      const code = String(authCode).toUpperCase()
+      send(res, 200, {
+        ok: true,
+        data: code.startsWith('GOOD-')
+          ? { transferable: true }
+          : {
+              transferable: false,
+              reason: code.startsWith('LOCKED-') ? 'TRANSFER_LOCKED' : 'AUTH_CODE_INVALID',
+            },
+      })
+    })
   }
   if (req.method !== 'POST' || req.url !== '/v1/availability') {
     return send(res, 404, { ok: false, code: 'NOT_FOUND', message: 'Unknown route' })

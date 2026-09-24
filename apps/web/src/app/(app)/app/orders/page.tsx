@@ -55,9 +55,9 @@ async function Orders() {
                 <div className="min-w-0">
                   <p className="font-medium text-foreground">
                     {order.order_number}
-                    {orderKind(order.order_items) === 'renew' ? (
+                    {orderKind(order.order_items) !== 'register' ? (
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        renewal
+                        {orderKind(order.order_items) === 'renew' ? 'renewal' : 'transfer'}
                       </span>
                     ) : null}
                     {order.test_mode ? (
@@ -96,7 +96,7 @@ export default function OrdersPage() {
           { label: 'Orders' },
         ]}
         title="Orders"
-        description="Every order on your account, newest first. Open one to follow its registration, see its refunds or check who it was registered to."
+        description="Every order on your account, newest first. Open one to follow its registration, renewal or transfer, see its refunds or check who it was registered to."
         actions={
           <Link
             href="/search"

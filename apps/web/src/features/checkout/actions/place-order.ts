@@ -18,6 +18,7 @@ import { checkoutOpenTo } from '../lib/access'
 import { registrantFormSchema, toContact } from '../lib/contact'
 import { type SupplierCost, wholesaleCostUsd } from '../lib/cost'
 import { parseNameservers } from '../lib/nameservers'
+import { saveDefaultContact } from '../queries/registrant'
 
 /**
  * Places an order and hands the customer to Flutterwave (PRD §13.4 steps
@@ -188,38 +189,7 @@ export const placeOrder = authAction
     }
 
     // ── Save the registrant for next time, as the user (RLS) ─────────────
-    const contactRow = {
-      user_id: ctx.user.id,
-      label: 'Registrant',
-      first_name: registrant.firstName,
-      last_name: registrant.lastName,
-      company: registrant.company ?? null,
-      email: registrant.email,
-      phone: registrant.phone,
-      phone_country_code: registrant.phoneCountryCode,
-      address_line1: registrant.addressLine1,
-      address_line2: registrant.addressLine2 ?? null,
-      city: registrant.city,
-      state: registrant.state,
-      zip_code: registrant.zipCode,
-      country: registrant.country,
-      is_default: true,
-    }
-    const { data: existing } = await ctx.supabase
-      .from('contact_profiles')
-      .select('id')
-      .eq('user_id', ctx.user.id)
-      .eq('is_default', true)
-      .maybeSingle()
-    const saved = existing
-      ? await ctx.supabase
-          .from('contact_profiles')
-          .update(contactRow)
-          .eq('id', existing.id)
-          .select('id')
-          .single()
-      : await ctx.supabase.from('contact_profiles').insert(contactRow).select('id').single()
-    if (saved.error) logger.warn(dbError(saved.error), 'could not save default contact')
+    const contactProfileId = await saveDefaultContact(ctx.supabase, ctx.user.id, registrant)
 
     // ── Create the order (step 1) ────────────────────────────────────────
     // The Flutterwave account is shared with other apps; Paidly's webhook
@@ -236,7 +206,7 @@ export const placeOrder = authAction
         fx_rate_id: rateId,
         tx_ref: txRef,
         registrant,
-        contact_profile_id: saved.data?.id ?? null,
+        contact_profile_id: contactProfileId,
         nameservers: nameservers.nameservers,
         float_check: shortfall ? 'shortfall_test_mode' : 'covered',
         test_mode: payment.testMode,

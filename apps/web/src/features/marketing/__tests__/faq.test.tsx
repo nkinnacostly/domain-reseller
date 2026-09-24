@@ -47,12 +47,13 @@ describe('Faq', () => {
     expect(screen.queryByText(/We always show both numbers/)).not.toBeInTheDocument()
   })
 
-  it('states the transfer lock from the shared rule, and that transfers are not open yet (N9b)', async () => {
+  it('states the transfer lock from the shared rule, and how a transfer is started (N9b)', async () => {
     const user = userEvent.setup()
     render(<Faq />)
 
     await user.click(screen.getByRole('button', { name: 'Can I transfer a domain I already own?' }))
-    const answer = screen.getByText(/starting a transfer is not available/)
+    const answer = screen.getByText(/we check it with the registry, and you pay/)
     expect(answer).toHaveTextContent(`at least ${TRANSFER_LOCK_DAYS} days old`)
+    expect(answer).toHaveTextContent('usually take up to five days')
   })
 })

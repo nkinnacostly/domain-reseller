@@ -12,7 +12,8 @@
     "./pricing": "./src/pricing/index.ts",
     "./schemas": "./src/schemas/index.ts",
     "./errors": "./src/errors/index.ts",
-    "./payments": "./src/payments/index.ts"
+    "./payments": "./src/payments/index.ts",
+    "./transfers": "./src/transfers/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

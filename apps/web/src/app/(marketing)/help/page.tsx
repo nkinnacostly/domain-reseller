@@ -17,8 +17,8 @@ export const metadata: Metadata = {
 
 /**
  * Help centre. Every answer describes what the product does today (N9b) —
- * where something is not built (automatic renewal, starting a transfer), it says
- * so and gives the way that works now.
+ * where something is not built (automatic renewal), it says so and gives the
+ * way that works now.
  */
 const TOPICS: { id: string; title: string; questions: { q: string; a: React.ReactNode }[] }[] = [
   {
@@ -214,8 +214,11 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         q: 'Can I transfer a domain to you?',
         a: (
           <p>
-            You can <Link href="/transfer">check whether a domain can move</Link> now. Starting a
-            transfer is not available yet.
+            Yes. <Link href="/transfer">Check whether it can move</Link>, then start the transfer
+            from the result: enter the transfer code from your current registrar, we check it with
+            the registry, and you pay. Your current registrar may email the domain’s owner to
+            approve the move; transfers usually take up to five days. If a transfer is refused, what
+            you paid is refunded automatically.
           </p>
         ),
       },

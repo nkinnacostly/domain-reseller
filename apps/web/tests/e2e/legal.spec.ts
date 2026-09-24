@@ -126,6 +126,22 @@ test.describe('compliance statements', () => {
     await question.click()
     await expect(page.getByText(/Open the domain in your account and choose Renew\./)).toBeVisible()
   })
+
+  test('help and the refund policy describe transfers in as they work (N9b, PRD E9)', async ({
+    page,
+  }) => {
+    await page.goto('/help')
+    await page.getByRole('button', { name: 'Can I transfer a domain to you?' }).click()
+    const answer = page.getByText(/start the transfer from the result/)
+    await expect(answer).toBeVisible()
+    await expect(answer).toContainText('transfers usually take up to five days')
+    await expect(page.getByRole('main')).not.toContainText('Starting a transfer is not available')
+
+    await page.goto('/legal/refunds')
+    const main = page.getByRole('main')
+    await expect(main).toContainText('The transfer could not be completed')
+    await expect(main).toContainText('A transfer that has completed')
+  })
 })
 
 test.describe('footer', () => {

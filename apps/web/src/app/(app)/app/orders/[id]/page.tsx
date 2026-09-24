@@ -47,6 +47,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
   // The return from Flutterwave already says a cancelled payment charged nothing.
   const progress =
     notice && order.status === 'cancelled' ? null : orderNotice(order.status, order.test_mode, kind)
+  const linesHeading = kind === 'renew' ? 'Renewal' : kind === 'transfer' ? 'Transfer' : 'Domains'
 
   return (
     <>
@@ -73,7 +74,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
       <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
         <Panel labelledBy="items-heading">
           <h2 id="items-heading" className={PANEL_HEADING}>
-            {kind === 'renew' ? 'Renewal' : 'Domains'}
+            {linesHeading}
           </h2>
           <ul className="mt-4 space-y-2">
             {order.order_items.map((item) => (
@@ -83,7 +84,10 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
               >
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2">
-                    {item.status === 'completed' || item.item_type === 'renew' ? (
+                    {item.status === 'completed' ||
+                    item.item_type === 'renew' ||
+                    // A paid transfer has a domain page from the start: it shows each step.
+                    (item.item_type === 'transfer' && order.paid_at) ? (
                       <Link
                         href={`/app/domains/${item.domain}`}
                         className="font-medium break-all text-foreground underline-offset-4 hover:underline"
@@ -105,13 +109,19 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                       </span>
                     ) : null}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    {item.item_type === 'renew' ? 'Renewal · ' : ''}
-                    {item.period_years} {item.period_years === 1 ? 'year' : 'years'} · renews at{' '}
-                    {formatNaira(Number(item.renewal_kobo))}/yr
-                    {item.item_type !== 'renew' && item.auto_renew ? ' · auto-renew on' : ''}
-                    {item.item_type !== 'renew' && item.privacy ? ' · privacy on' : ''}
-                  </p>
+                  {item.item_type === 'transfer' ? (
+                    <p className="text-sm text-muted-foreground">
+                      Transfer in · renews at {formatNaira(Number(item.renewal_kobo))}/yr
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {item.item_type === 'renew' ? 'Renewal · ' : ''}
+                      {item.period_years} {item.period_years === 1 ? 'year' : 'years'} · renews at{' '}
+                      {formatNaira(Number(item.renewal_kobo))}/yr
+                      {item.item_type !== 'renew' && item.auto_renew ? ' · auto-renew on' : ''}
+                      {item.item_type !== 'renew' && item.privacy ? ' · privacy on' : ''}
+                    </p>
+                  )}
                   {item.status === 'failed' ? (
                     <p className="mt-1 text-sm text-foreground">
                       {failureReason(item.failure_code)}
@@ -127,7 +137,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
 
           <dl className="mt-5 max-w-sm space-y-2 text-sm sm:ml-auto">
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">{kind === 'renew' ? 'Renewal' : 'Domains'}</dt>
+              <dt className="text-muted-foreground">{linesHeading}</dt>
               <dd className="tabular-nums">{formatNaira(Number(order.subtotal_kobo))}</dd>
             </div>
             <div className="flex justify-between">
@@ -155,6 +165,18 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
           </Panel>
         ) : (
           <Panel labelledBy="owner-heading" className="h-fit text-sm/6">
+            {kind === 'transfer' ? (
+              // FR-T3: the expected window, not a guess at a finish date.
+              <div className="mb-5">
+                <h2 className={PANEL_HEADING}>About transfers</h2>
+                <p className="mt-2 text-pretty text-muted-foreground">
+                  Transfers usually take up to five days. The current registrar may email the
+                  domain’s owner to approve it; if they don’t answer, the registry completes it
+                  after five days. We call it done only once the registry shows the domain in our
+                  account.
+                </p>
+              </div>
+            ) : null}
             <h2 id="owner-heading" className={PANEL_HEADING}>
               Registrant
             </h2>

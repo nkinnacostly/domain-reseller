@@ -25,6 +25,15 @@ describe('domain state machine', () => {
     expect(canTransition('redemption', 'active')).toBe(true)
   })
 
+  it('follows a transfer in to active, and never lets a rejected one become active', () => {
+    expect(canTransition('transfer_requested', 'transfer_pending')).toBe(true)
+    expect(canTransition('transfer_pending', 'active')).toBe(true)
+    // Found already ours by the first read: an earlier attempt landed (I1).
+    expect(canTransition('transfer_requested', 'active')).toBe(true)
+    expect(canTransition('transfer_rejected', 'active')).toBe(false)
+    expect(canTransition('transfer_cancelled', 'active')).toBe(false)
+  })
+
   it('throws on an illegal transition rather than silently allowing it', () => {
     expect(() => assertTransition('active', 'released')).toThrow(/Illegal domain transition/)
   })
