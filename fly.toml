@@ -14,6 +14,8 @@ primary_region = "lhr"
   PORT = "8787"
   DNA_ENV = "production"
   LOG_LEVEL = "info"
+  # After the weekly catalogue sync writes new costs, the site is asked to refresh its prices.
+  APP_URL = "https://www.mydomainshub.com"
 
 [http_service]
   internal_port = 8787

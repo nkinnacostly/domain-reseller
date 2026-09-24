@@ -117,3 +117,26 @@ describe('refund and alert settings', () => {
     ).toBe('-100123')
   })
 })
+
+describe('scheduled job settings', () => {
+  it('syncs the catalogue weekly by default', () => {
+    const env = parseEnv(BASE)
+    expect(env.CATALOGUE_SYNC_EVERY_HOURS).toBe(168)
+  })
+
+  it('keeps the intervals within sense', () => {
+    expect(() => parseEnv({ ...BASE, CATALOGUE_SYNC_EVERY_HOURS: '0' })).toThrow()
+    expect(() => parseEnv({ ...BASE, CATALOGUE_SYNC_EVERY_HOURS: '1000' })).toThrow()
+    expect(parseEnv({ ...BASE, CATALOGUE_SYNC_EVERY_HOURS: '24' }).CATALOGUE_SYNC_EVERY_HOURS).toBe(
+      24,
+    )
+  })
+
+  it('asks the site to refresh prices only when it knows the site’s address', () => {
+    expect(parseEnv(BASE).APP_URL).toBeUndefined()
+    expect(parseEnv({ ...BASE, APP_URL: 'https://www.mydomainshub.com' }).APP_URL).toBe(
+      'https://www.mydomainshub.com',
+    )
+    expect(() => parseEnv({ ...BASE, APP_URL: 'www.mydomainshub.com' })).toThrow()
+  })
+})
