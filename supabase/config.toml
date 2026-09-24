@@ -42,6 +42,12 @@ refresh_token_reuse_interval = 10
 enable_signup = true
 enable_anonymous_sign_ins = false
 
+[auth.rate_limit]
+# Emails Supabase Auth may send per hour, across all users. Custom SMTP
+# (Brevo, below) lifts the built-in sender's cap; Brevo's free plan allows 300
+# a day.
+email_sent = 100
+
 [auth.email]
 enable_signup = true
 enable_confirmations = true
@@ -54,25 +60,38 @@ secure_password_change = false
 max_frequency = "1m0s"
 otp_length = 8
 
-# Custom templates link to /auth/confirm with a token hash, which works when the
-# email is opened on another device. The hosted free tier refuses template
-# changes on Supabase's built-in email sender — enable these once custom SMTP
-# is configured (see CLAUDE.md §15).
-# [auth.email.template.confirmation]
-# subject = "Confirm your email"
-# content_path = "./supabase/templates/confirmation.html"
+# Auth emails go out through Brevo from the authenticated subdomain
+# notify.mydomainshub.com (SPF, DKIM, DMARC in Cloudflare, 24 Sept 2026) — the
+# built-in sender only reached the Supabase organisation's members (L1). The
+# login and key come from the environment at push time, never this file:
+#   set -a; . ./.env; set +a; supabase config push
+[auth.email.smtp]
+enabled = true
+host = "smtp-relay.brevo.com"
+port = 587
+user = "env(BREVO_SMTP_LOGIN)"
+pass = "env(BREVO_SMTP_KEY)"
+admin_email = "no-reply@notify.mydomainshub.com"
+sender_name = "MyDomainsHub"
 
-# [auth.email.template.recovery]
-# subject = "Reset your password"
-# content_path = "./supabase/templates/recovery.html"
+# Token-hash links to /auth/confirm, which work when the email is opened on
+# another device (L2). Needs custom SMTP: the free tier refuses template
+# changes on the built-in sender.
+[auth.email.template.confirmation]
+subject = "Confirm your email"
+content_path = "./supabase/templates/confirmation.html"
 
-# [auth.email.template.magic_link]
-# subject = "Your sign-in link"
-# content_path = "./supabase/templates/magic_link.html"
+[auth.email.template.recovery]
+subject = "Reset your password"
+content_path = "./supabase/templates/recovery.html"
 
-# [auth.email.template.email_change]
-# subject = "Confirm your new email"
-# content_path = "./supabase/templates/email_change.html"
+[auth.email.template.magic_link]
+subject = "Your sign-in link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new email"
+content_path = "./supabase/templates/email_change.html"
 
 [auth.mfa]
 max_enrolled_factors = 10

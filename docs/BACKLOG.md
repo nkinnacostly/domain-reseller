@@ -10,8 +10,8 @@ back here. Each item says why it waited and what unblocks it.
 
 | # | Item | Why it matters | Unblocked by |
 |---|---|---|---|
-| L1 | **Custom SMTP for Supabase Auth** (e.g. Resend with a verified sending domain) | The built-in sender delivers only to members of the Supabase organisation, a few emails an hour. Sign-up confirmations, reset and sign-in links fail for everyone else. | A sending domain + SMTP credentials |
-| L2 | **Enable the any-device email templates** in `supabase/config.toml` (`[auth.email.template.*]`, currently commented out) | Until then, email links only work in the browser that asked for them. The free tier refuses template changes on the built-in sender. | L1 |
+| L1 | ~~Custom SMTP for Supabase Auth~~ | Done 24 Sept 2026: Brevo, from `no-reply@notify.mydomainshub.com` (SPF, DKIM, DMARC on the subdomain); 100 auth emails an hour. The app's own emails (receipts, reminders, refund and security notices) are not built yet. | Done |
+| L2 | ~~Enable the any-device email templates~~ | Done 24 Sept 2026: token-hash links to `/auth/confirm`, in the MyDomainsHub brand. | Done |
 | L3 | ~~Production `site_url` and redirect URLs~~ | Done 23 Sept 2026: the site runs on `https://www.mydomainshub.com` (the apex redirects there); Supabase Auth and `NEXT_PUBLIC_APP_URL` point at it. `mydomainshub.vercel.app` still serves, so Paidly's forward keeps working. | Done |
 | L4 | **Ask DomainNameAPI to raise the concurrency limit** | They refuse a third concurrent request (PRD V4). A search is ~4 calls, so capacity is about one uncached search every 2 s across all users. | DomainNameAPI support — asked 24 Sept 2026, not answered; ask again |
 | L5 | ~~DomainNameAPI OTE (sandbox) credentials~~ | Received 23 Sept 2026 (`DNA_API_TEST_KEY`); verified read-only: same reseller account, USD 1,000 sandbox balance. | Done |
