@@ -204,7 +204,8 @@ export async function AppSidebar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-border border-b bg-background/95 px-4 py-2.5 sm:px-6 lg:hidden">
+      {/* Receipts print on their own: the panel's chrome stays on screen (CMP-17). */}
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-border border-b bg-background/95 px-4 py-2.5 sm:px-6 lg:hidden print:hidden">
         <Link
           href="/app/domains"
           aria-label={`${BRAND_NAME} — your dashboard`}
@@ -219,7 +220,7 @@ export async function AppSidebar() {
       </header>
       <aside
         aria-label="Panel"
-        className="sticky top-4 hidden h-[calc(100dvh-2rem)] w-[17.5rem] shrink-0 rounded-3xl border border-brand-subtle-border bg-card/70 shadow-xs lg:block"
+        className="sticky top-4 hidden h-[calc(100dvh-2rem)] w-[17.5rem] shrink-0 rounded-3xl border border-brand-subtle-border bg-card/70 shadow-xs lg:block print:hidden"
       >
         {content}
       </aside>

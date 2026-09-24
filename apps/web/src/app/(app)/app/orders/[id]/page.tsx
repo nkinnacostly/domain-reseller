@@ -11,6 +11,7 @@ import {
   PanelPage,
   PanelPageSkeleton,
 } from '@/components/layout/panel'
+import { ReceiptLink } from '@/features/billing/components/receipt-link'
 import { OrderRefunds } from '@/features/checkout/components/order-refunds'
 import { OrderStatus } from '@/features/checkout/components/order-status'
 import { RefreshWhile } from '@/features/checkout/components/refresh-while'
@@ -139,6 +140,12 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
               <dd className="tabular-nums">{formatNaira(Number(order.total_kobo))}</dd>
             </div>
           </dl>
+          {/* CMP-17 — a paid order has a receipt, with its invoice number. */}
+          {order.paid_at ? (
+            <div className="mt-4 flex sm:justify-end">
+              <ReceiptLink orderId={order.id} />
+            </div>
+          ) : null}
 
           <OrderRefunds refunds={refunds} />
         </Panel>

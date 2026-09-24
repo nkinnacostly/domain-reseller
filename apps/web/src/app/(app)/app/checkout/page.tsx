@@ -6,12 +6,13 @@ import { Suspense } from 'react'
 import { FOCUS, PANEL, PanelHeader, PanelPage, PanelSkeleton } from '@/components/layout/panel'
 import { CheckoutForm } from '@/features/checkout/components/checkout-form'
 import { getCheckoutView } from '@/features/checkout/queries/checkout'
+import { getNameserverPresets } from '@/features/domains/queries/domains'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Checkout' }
 
 async function Checkout() {
-  const view = await getCheckoutView()
+  const [view, presets] = await Promise.all([getCheckoutView(), getNameserverPresets()])
   if (!view || view.cart.state === 'empty') redirect('/cart')
 
   const back = (message: string) => (
@@ -50,6 +51,7 @@ async function Checkout() {
     <CheckoutForm
       testMode={view.testMode}
       registrant={view.registrant}
+      presets={presets}
       lines={lines.map((line) => ({
         domain: line.domain,
         years: line.periodYears,

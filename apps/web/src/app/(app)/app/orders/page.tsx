@@ -12,6 +12,7 @@ import {
   PanelSkeleton,
   ROUND_LINK,
 } from '@/components/layout/panel'
+import { ReceiptLink } from '@/features/billing/components/receipt-link'
 import { OrderStatus } from '@/features/checkout/components/order-status'
 import { orderKind } from '@/features/checkout/lib/progress'
 import { getOrders } from '@/features/checkout/queries/orders'
@@ -47,10 +48,13 @@ async function Orders() {
       ) : (
         <ul aria-label="Your orders" className="mt-4 space-y-2">
           {orders.map((order) => (
-            <li key={order.id}>
+            <li
+              key={order.id}
+              className="overflow-hidden rounded-2xl border border-border bg-background/80"
+            >
               <Link
                 href={`/app/orders/${order.id}`}
-                className="flex flex-col gap-2 rounded-2xl border border-border bg-background/80 px-5 py-4 transition-colors hover:bg-brand-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 px-5 py-4 transition-colors hover:bg-brand-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="font-medium text-foreground">
@@ -78,6 +82,16 @@ async function Orders() {
                   </span>
                 </div>
               </Link>
+              {/* CMP-17 — its own link: a link cannot sit inside the order's. */}
+              {order.invoice_number ? (
+                <div className="border-border border-t px-3 py-0.5">
+                  <ReceiptLink
+                    orderId={order.id}
+                    invoiceNumber={order.invoice_number}
+                    className="h-11 border-0 bg-transparent px-2 font-normal text-muted-foreground hover:text-foreground"
+                  />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
