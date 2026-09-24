@@ -39,7 +39,8 @@ async function Contacts({ params }: { params: Params }) {
   ])
   const availability = settingsAvailability(domain)
   const requested = settings.pendingRegistrant
-  const alsoHolds = registrantAlsoHolds(settings.pendingContacts ?? settings.contacts)
+  // What the registry holds now; a change on its way is shown with its role.
+  const alsoHolds = registrantAlsoHolds(settings.contacts)
   const saved = profiles ?? []
 
   return (
