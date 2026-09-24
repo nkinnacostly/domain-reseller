@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 import { canonicalExtensionPath } from '@/features/extensions/lib/extension'
 import { env } from '@/lib/env'
+import { forwardedAuthHeaders } from '@/lib/supabase/forwarded'
 
 /**
  * Next 16 replaced `middleware.ts` with `proxy.ts`.
@@ -39,6 +40,9 @@ export async function proxy(request: NextRequest) {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
+      // A refresh here rewrites the session's device and address: send the
+      // person's, or every session reads as our server (FR-A5).
+      global: { headers: forwardedAuthHeaders(request.headers) },
       cookies: {
         getAll: () => request.cookies.getAll(),
         setAll(cookiesToSet) {

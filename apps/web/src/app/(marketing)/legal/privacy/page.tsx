@@ -60,8 +60,16 @@ export default function PrivacyPage() {
             if you are not signed in.
           </li>
           <li>
+            <strong>Where you are signed in:</strong> for each device signed in to your account, the
+            browser it reports, its IP address, and when it signed in and last renewed its sign-in.
+            Our sign-in provider keeps these until that session ends; you can see them, and sign a
+            device out, in Settings.
+          </li>
+          <li>
             <strong>Technical data:</strong> our hosting providers keep standard request logs, which
-            include IP addresses and the addresses of pages you visit, for a short time.
+            include IP addresses and the addresses of pages you visit, for a short time. To stop one
+            connection from overloading bulk search, we count bulk searches, and names added to a
+            cart in one go, against a one-way hash of the IP address — never the address itself.
           </li>
         </ul>
         <p>

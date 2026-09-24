@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ExactResult } from '../components/exact-result'
-import type { SearchRow } from '../lib/rows'
+import { lengthRow, type SearchRow } from '../lib/rows'
 
 const row = (overrides: Partial<SearchRow> = {}): SearchRow => ({
   domain: 'getpaid.com',
+  display: 'getpaid.com',
   name: 'getpaid',
   tld: 'com',
   status: 'available',
@@ -51,5 +52,53 @@ describe('ExactResult', () => {
   it('does not invent a price for an available name the catalogue cannot price', () => {
     render(<ExactResult row={row({ price: null })} />)
     expect(screen.getByText(/cannot show a price/)).toBeInTheDocument()
+  })
+
+  it('leads with an international name as read, with its ASCII form (FR-S8)', () => {
+    render(
+      <ExactResult
+        row={row({ domain: 'xn--caf-dma.com', display: 'café.com', name: 'xn--caf-dma' })}
+      />,
+    )
+    expect(screen.getByRole('heading', { name: 'café.com' })).toBeInTheDocument()
+    expect(screen.getByText('xn--caf-dma.com')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add café.com to cart' })).toBeInTheDocument()
+  })
+
+  it('warns that a Cyrillic name can pass for a Latin one (FR-S8)', () => {
+    render(
+      <ExactResult
+        row={row({
+          domain: 'xn--80ak6aa92e.com',
+          display: 'аррӏе.com',
+          name: 'xn--80ak6aa92e',
+        })}
+      />,
+    )
+    expect(screen.getByText(/Looks like “apple”/)).toBeInTheDocument()
+    expect(screen.getByText(/written in Cyrillic letters that look like Latin ones/)).toBeVisible()
+  })
+
+  it('says an extension refused an international name, in its own words (FR-S8)', () => {
+    render(
+      <ExactResult
+        row={row({
+          domain: 'xn--caf-dma.africa',
+          display: 'café.africa',
+          name: 'xn--caf-dma',
+          tld: 'africa',
+          status: 'restricted',
+          price: null,
+        })}
+      />,
+    )
+    expect(screen.getByText(/Not available for this extension/)).toBeInTheDocument()
+    expect(screen.queryByText(/most often the minimum length/)).not.toBeInTheDocument()
+  })
+
+  it('names the length rule a name breaks (FR-S9)', () => {
+    render(<ExactResult row={lengthRow('ab', 'io', { kind: 'too-short', min: 3, max: 63 })} />)
+    expect(screen.getByText('Too short for .io (3–63 characters).')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })

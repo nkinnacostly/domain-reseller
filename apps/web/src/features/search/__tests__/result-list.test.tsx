@@ -2,8 +2,8 @@ import { type PricingInputs, priceCatalogue, type TldRecord } from '@dr/shared'
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { type PublicPriceRow, toPublicRow } from '@/features/pricing/lib/public-row'
-import { ResultList } from '../components/result-list'
-import { toSearchRows } from '../lib/rows'
+import { ResultItem, ResultList } from '../components/result-list'
+import { lengthRow, toSearchRows } from '../lib/rows'
 
 // Fixed inputs so expectations do not move with the live rate.
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
@@ -91,5 +91,50 @@ describe('ResultList', () => {
     render(<ResultList rows={[]} label="More available alternatives" />)
 
     expect(screen.getByRole('list', { name: 'More available alternatives' })).toBeEmptyDOMElement()
+  })
+
+  it('shows an international name as read, its ASCII form beside it, and names the button so (FR-S8)', () => {
+    const [idn] = toSearchRows(
+      [{ name: 'xn--caf-dma', tld: 'com', domain: 'xn--caf-dma.com', status: 'available' }],
+      prices,
+    )
+    render(<ResultList rows={idn ? [idn] : []} label="Results" />)
+
+    const row = screen.getByRole('listitem')
+    expect(row.querySelector('span')).toHaveTextContent('café.com')
+    expect(row).toHaveTextContent('Also written as xn--caf-dma.com')
+    expect(within(row).getByRole('button', { name: 'Add café.com to cart' })).toBeEnabled()
+  })
+
+  it('says why a name was refused when there is a reason to give (FR-S9)', () => {
+    render(
+      <ResultList
+        rows={[lengthRow('ab', 'io', { kind: 'too-short', min: 3, max: 63 })]}
+        label="Results"
+      />,
+    )
+
+    const row = screen.getByRole('listitem')
+    expect(row).toHaveTextContent('Not available')
+    expect(row).toHaveTextContent('Too short for .io (3–63 characters)')
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+  })
+})
+
+describe('ResultItem — lookalikes (FR-S8)', () => {
+  const [lookalike] = toSearchRows(
+    // аррӏе — Cyrillic letters that read as "apple".
+    [{ name: 'xn--80ak6aa92e', tld: 'com', domain: 'xn--80ak6aa92e.com', status: 'available' }],
+    prices,
+  )
+
+  it('warns when asked, in a row that stands for its own name', () => {
+    render(<ul>{lookalike ? <ResultItem row={lookalike} lookalike /> : null}</ul>)
+    expect(screen.getByRole('listitem')).toHaveTextContent('Can pass for “apple”')
+  })
+
+  it('stays quiet otherwise, as in a grid of one name on many extensions', () => {
+    render(<ul>{lookalike ? <ResultItem row={lookalike} /> : null}</ul>)
+    expect(screen.getByRole('listitem')).not.toHaveTextContent('Can pass for')
   })
 })

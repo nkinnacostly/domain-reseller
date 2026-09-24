@@ -8,6 +8,7 @@ import {
   PanelPage,
   PanelSkeleton,
 } from '@/components/layout/panel'
+import { SessionsSection, SessionsSkeleton } from '@/features/auth/components/sessions-section'
 import { ChangePasswordForm, ProfileForm } from '@/features/auth/components/settings-forms'
 import { TwoFactorPanel } from '@/features/auth/components/two-factor-panel'
 import { describeHold, resetHoldUntil } from '@/features/auth/lib/security'
@@ -75,6 +76,15 @@ async function Settings() {
         >
           <TwoFactorPanel factorId={account.totpFactor?.id ?? null} />
         </Section>
+        <Section
+          id="sessions"
+          title="Where you're signed in"
+          description="Every device signed in to your account. Sign out any you don't recognise."
+        >
+          <Suspense fallback={<SessionsSkeleton />}>
+            <SessionsSection />
+          </Suspense>
+        </Section>
       </div>
     </>
   )
@@ -90,7 +100,7 @@ export default function SettingsPage() {
           { label: 'Settings' },
         ]}
         title="Settings"
-        description="Your profile, your password and two-factor sign-in — what keeps your account, and your domains, yours."
+        description="Your profile, your password, two-factor sign-in and your devices — what keeps your account, and your domains, yours."
       />
       <Suspense fallback={<PanelSkeleton height="h-96" />}>
         <Settings />

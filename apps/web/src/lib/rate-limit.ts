@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { headers } from 'next/headers'
+import { clientKey } from '@/lib/client-ip'
 import { logger } from '@/lib/logger'
 import { createServiceClient } from '@/lib/supabase/service'
 
@@ -31,7 +33,22 @@ export const LIMITS = {
   // so one scraper cannot get our lookups — transfer checks included — refused.
   whoisLookup: { max: 30, windowSeconds: 600 },
   whoisAll: { max: 600, windowSeconds: 600 },
+  // FR-S5 — per address. A bulk search is up to 20 names and a few supplier
+  // calls; the supplier allows two at a time for everyone (PRD V4), so one
+  // script must not be able to keep it busy.
+  bulkSearch: { max: 20, windowSeconds: 600 },
+  // Adding every available name re-checks them all with the registry first.
+  bulkAddToCart: { max: 20, windowSeconds: 600 },
 } as const
+
+/**
+ * A limit key for the caller's address, for public actions that have no
+ * account to count against. The address is hashed, so the table never holds
+ * it as written.
+ */
+export async function addressKey(scope: string): Promise<string> {
+  return `${scope}:${clientKey(await headers())}`
+}
 
 export async function withinLimit(
   key: string,

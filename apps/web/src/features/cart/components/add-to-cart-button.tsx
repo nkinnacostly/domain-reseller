@@ -15,10 +15,14 @@ import { announceCartCount } from '../lib/count'
  */
 export function AddToCartButton({
   domain,
+  label = domain,
   size = 'default',
   className,
 }: {
+  /** The ASCII form, which is what the cart stores. */
   domain: string
+  /** How the name reads, for the accessible name — `café.com`, not its `xn--` form (FR-S8). */
+  label?: string
   size?: 'default' | 'large'
   className?: string
 }) {
@@ -57,7 +61,7 @@ export function AddToCartButton({
         onClick={() => add.execute({ domain })}
         disabled={add.isPending}
         aria-busy={add.isPending || undefined}
-        aria-label={`Add ${domain} to cart`}
+        aria-label={`Add ${label} to cart`}
         className={cn(
           'inline-flex shrink-0 items-center justify-center gap-2 bg-accent font-medium text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70',
           shape,

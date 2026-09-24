@@ -31,7 +31,9 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
           <p>
             Type the name you want into the search on the <Link href="/">home page</Link>. You see
             straight away whether your exact name is free, then the same name across other
-            extensions, and suggestions if it is taken.
+            extensions, and suggestions if it is taken. To check a list, use{' '}
+            <Link href="/search/bulk">bulk search</Link> — up to 20 names at once. Names in other
+            scripts, like café.com, work too.
           </p>
         ),
       },
@@ -162,6 +164,16 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
           <p>
             Yes. It protects your account with a code from an app on your phone, and it is required
             for sensitive changes such as nameservers.
+          </p>
+        ),
+      },
+      {
+        q: 'How do I sign out a device I no longer use?',
+        a: (
+          <p>
+            Settings lists every device signed in to your account. Sign out any one of them, or all
+            but the one you are using. A device you sign out can keep working for up to an hour,
+            until its current sign-in token expires.
           </p>
         ),
       },

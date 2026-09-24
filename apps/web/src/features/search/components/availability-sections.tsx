@@ -1,9 +1,10 @@
 import { RotateCw } from 'lucide-react'
 import Link from 'next/link'
 import type { PublicPriceRow } from '@/features/pricing/lib/public-row'
-import type { SearchPlan } from '../lib/plan'
+import { toUnicodeLabel } from '../lib/idn'
+import { type SearchPlan, stemIssue, suggestionNamesFor } from '../lib/plan'
 import { searchHref } from '../lib/query'
-import { pickSuggestions, SUGGESTION_COUNT, toSearchRows } from '../lib/rows'
+import { lengthRow, pickSuggestions, SUGGESTION_COUNT, toSearchRows } from '../lib/rows'
 import { type AvailabilityOutcome, checkAvailability } from '../queries/availability'
 import { ExactResult } from './exact-result'
 import { ResultList } from './result-list'
@@ -46,6 +47,10 @@ function CheckFailed({ reason, query }: { reason: keyof typeof FAILURE_COPY; que
  */
 export async function ExactSection({ plan, prices, query }: SectionProps) {
   if (!plan.exact) return null
+  // FR-S9: a name the extension's rules refuse is answered without a supplier call.
+  const issue = stemIssue(plan, plan.exact.tld)
+  if (issue) return <ExactResult row={lengthRow(plan.exact.name, plan.exact.tld, issue)} />
+
   const outcome = await checkAvailability([plan.exact.name], [plan.exact.tld], 'high')
   if (!outcome.ok) return <CheckFailed reason={outcome.reason} query={query} />
 
@@ -58,18 +63,31 @@ export async function GridSection({ plan, prices, query }: SectionProps) {
   const tlds = plan.gridTlds.filter((tld) => tld !== plan.exact?.tld)
   if (tlds.length === 0) return null
 
-  const outcome = await checkAvailability([plan.stem], tlds)
+  // FR-S9: only the extensions that can take the name are asked about.
+  const asked = tlds.filter((tld) => !stemIssue(plan, tld))
+  const outcome =
+    asked.length > 0
+      ? await checkAvailability([plan.stem], asked)
+      : ({ ok: true, results: [] } as const)
+  const name = toUnicodeLabel(plan.stem) ?? plan.stem
 
   return (
     <section aria-labelledby="other-extensions" className="min-w-0">
       <h2 id="other-extensions" className="text-lg font-semibold break-all text-foreground">
-        {plan.stem} on other extensions
+        {name} on other extensions
       </h2>
       <div className="mt-4">
         {outcome.ok ? (
           <ResultList
-            rows={toSearchRows(outcome.results, prices)}
-            label={`${plan.stem} on other extensions`}
+            rows={tlds.flatMap((tld) => {
+              const issue = stemIssue(plan, tld)
+              if (issue) return [lengthRow(plan.stem, tld, issue)]
+              return toSearchRows(
+                outcome.results.filter((result) => result.tld === tld),
+                prices,
+              )
+            })}
+            label={`${name} on other extensions`}
           />
         ) : (
           <CheckFailed reason={outcome.reason} query={query} />
@@ -88,13 +106,20 @@ export async function GridSection({ plan, prices, query }: SectionProps) {
  */
 export async function Suggestions({ plan, prices, query }: SectionProps) {
   const [first, second] = plan.suggestionTlds
-  if (plan.suggestionNames.length === 0 || !first) return null
+  // FR-S9: names an extension's length rule refuses are never asked about.
+  const firstNames = first ? suggestionNamesFor(plan, first) : []
+  if (!first || firstNames.length === 0) return null
 
-  const outcome = await checkAvailability(plan.suggestionNames, [first])
+  const outcome = await checkAvailability(firstNames, [first])
   let rows = outcome.ok ? toSearchRows(outcome.results, prices) : []
 
-  if (second && pickSuggestions(rows, plan.suggestionTlds).length < SUGGESTION_COUNT) {
-    const more = await checkAvailability(plan.suggestionNames, [second])
+  const secondNames = second ? suggestionNamesFor(plan, second) : []
+  if (
+    second &&
+    secondNames.length > 0 &&
+    pickSuggestions(rows, plan.suggestionTlds).length < SUGGESTION_COUNT
+  ) {
+    const more = await checkAvailability(secondNames, [second])
     if (more.ok) rows = [...rows, ...toSearchRows(more.results, prices)]
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSearchQuery, searchHref } from '../lib/query'
+import { describeProblem, displayQuery, parseSearchQuery, searchHref } from '../lib/query'
 
 describe('parseSearchQuery', () => {
   it('accepts a bare label', () => {
@@ -59,7 +59,87 @@ describe('parseSearchQuery', () => {
   })
 })
 
+describe('parseSearchQuery — names in other scripts (FR-S8)', () => {
+  it('refuses a name mixing lookalike alphabets, and says which', () => {
+    // The second letter is Cyrillic а (U+0430).
+    expect(parseSearchQuery('pаypal.com')).toEqual({
+      stem: 'xn--pypal-4ve',
+      tld: null,
+      isValid: false,
+      problem: { kind: 'mixed-script', scripts: ['Latin', 'Cyrillic'] },
+    })
+  })
+
+  it('refuses an xn-- label that is not a real encoding', () => {
+    expect(parseSearchQuery('xn--zz.com').isValid).toBe(false)
+    expect(parseSearchQuery('getpaid.xn--zz').isValid).toBe(false)
+  })
+
+  it('refuses a name that would start or end with a hyphen once read', () => {
+    expect(parseSearchQuery('-café.com').isValid).toBe(false)
+    expect(parseSearchQuery('café-.com').isValid).toBe(false)
+  })
+
+  it('refuses input no host name can be', () => {
+    expect(parseSearchQuery('café@evil.com')).toEqual({ stem: '', tld: null, isValid: false })
+  })
+
+  it('searches the ASCII form of a Unicode name', () => {
+    expect(parseSearchQuery('Café.com')).toEqual({
+      stem: 'xn--caf-dma',
+      tld: 'com',
+      isValid: true,
+    })
+  })
+
+  it('accepts the ASCII form typed directly', () => {
+    expect(parseSearchQuery('xn--caf-dma.com')).toEqual({
+      stem: 'xn--caf-dma',
+      tld: 'com',
+      isValid: true,
+    })
+  })
+
+  it('cleans a pasted international URL like any other', () => {
+    expect(parseSearchQuery('https://www.ọmọ.africa/about')).toEqual({
+      stem: 'xn--m-jxmb',
+      tld: 'africa',
+      isValid: true,
+    })
+  })
+
+  it('does not take a name in one other alphabet for a lookalike', () => {
+    expect(parseSearchQuery('аррӏе.com').isValid).toBe(true)
+  })
+})
+
+describe('displayQuery', () => {
+  it('shows an international name as people read it', () => {
+    expect(displayQuery({ stem: 'xn--caf-dma', tld: 'com' })).toBe('café.com')
+  })
+
+  it('shows a bare stem without an extension', () => {
+    expect(displayQuery({ stem: 'getpaid', tld: null })).toBe('getpaid')
+  })
+})
+
+describe('describeProblem', () => {
+  it('names the alphabets and says what to do', () => {
+    expect(describeProblem({ kind: 'mixed-script', scripts: ['Latin', 'Cyrillic'] })).toBe(
+      "This name mixes letters from different alphabets (Latin and Cyrillic). Names like that are used to imitate other websites, so we don't sell them. Type it in one alphabet.",
+    )
+  })
+})
+
 describe('searchHref', () => {
+  it('carries the readable form of an international name', () => {
+    expect(searchHref('xn--caf-dma.com')).toBe(`/search?q=${encodeURIComponent('café.com')}`)
+  })
+
+  it('sends a mixed-script name to the bare search page', () => {
+    expect(searchHref('pаypal.com')).toBe('/search')
+  })
+
   it('builds a canonical URL for a full domain', () => {
     expect(searchHref('GetPaid.COM.NG')).toBe('/search?q=getpaid.com.ng')
   })

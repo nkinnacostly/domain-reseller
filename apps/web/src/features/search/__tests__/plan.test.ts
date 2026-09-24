@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { GRID_SIZE, planSearch, suggestionNames } from '../lib/plan'
+import { toUnicodeHost } from '../lib/idn'
+import { GRID_SIZE, planSearch, stemIssue, suggestionNames, suggestionNamesFor } from '../lib/plan'
 
 const SOLD = new Set(['com', 'net', 'org', 'africa', 'co', 'app', 'io', 'dev', 'xyz'])
 const FEATURED = ['com', 'net', 'org', 'africa', 'co', 'app']
@@ -59,5 +60,66 @@ describe('suggestionNames', () => {
     expect(names).toContain(`go${stem}`) // 63 — the limit
     expect(names).not.toContain(`get${stem}`) // 64 — one over
     expect(names.every((name) => name.length <= 63)).toBe(true)
+  })
+})
+
+describe('suggestionNames — international names (FR-S8)', () => {
+  it('puts the affixes on the name as people read it, then writes it in ASCII', () => {
+    const names = suggestionNames('xn--caf-dma')
+    expect(names[0]).toBe('xn--getcaf-gva')
+    expect(names.map(toUnicodeHost)).toContain('caféhq')
+  })
+
+  it('offers no Latin affix on a Cyrillic name — together they would be a lookalike', () => {
+    // аррӏе, all Cyrillic.
+    expect(suggestionNames('xn--80ak6aa92e')).toEqual([])
+  })
+})
+
+describe('planSearch — length rules (FR-S9)', () => {
+  const rules = { io: { min: 3, max: 63 }, com: { min: null, max: 10 }, edu: { min: 5, max: 5 } }
+
+  it('keeps only the rules for the extensions it will ask about', () => {
+    const plan = planSearch({
+      stem: 'ab',
+      tld: 'io',
+      sold: SOLD,
+      featured: FEATURED,
+      lengthRules: rules,
+    })
+    expect(plan.lengthRules).toEqual({ io: rules.io, com: rules.com })
+  })
+
+  it('knows which extensions refuse the name outright', () => {
+    const plan = planSearch({
+      stem: 'ab',
+      tld: 'io',
+      sold: SOLD,
+      featured: FEATURED,
+      lengthRules: rules,
+    })
+    expect(stemIssue(plan, 'io')).toEqual({ kind: 'too-short', min: 3, max: 63 })
+    expect(stemIssue(plan, 'com')).toBeNull()
+    expect(stemIssue(plan, 'net')).toBeNull()
+  })
+
+  it('never offers a suggestion an extension would refuse', () => {
+    const plan = planSearch({
+      stem: 'mybrand',
+      tld: null,
+      sold: SOLD,
+      featured: FEATURED,
+      lengthRules: rules,
+    })
+    const onCom = suggestionNamesFor(plan, 'com')
+    expect(onCom).toContain('getmybrand') // exactly 10, the limit
+    expect(onCom).not.toContain('mybrandonline') // 13
+    expect(suggestionNamesFor(plan, 'net')).toContain('mybrandonline')
+  })
+
+  it('has no rules when the catalogue knows none', () => {
+    const plan = planSearch({ stem: 'ab', tld: null, sold: SOLD, featured: FEATURED })
+    expect(plan.lengthRules).toEqual({})
+    expect(stemIssue(plan, 'com')).toBeNull()
   })
 })

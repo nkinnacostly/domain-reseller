@@ -10,6 +10,7 @@ const lib = vi.hoisted(() => ({
   createServerClient: vi.fn(() => ({ kind: 'server' })),
   createClient: vi.fn(() => ({ kind: 'plain' })),
   cookies: vi.fn(),
+  headers: vi.fn(async () => new Headers()),
 }))
 
 vi.mock('@supabase/ssr', () => ({
@@ -17,7 +18,7 @@ vi.mock('@supabase/ssr', () => ({
   createServerClient: lib.createServerClient,
 }))
 vi.mock('@supabase/supabase-js', () => ({ createClient: lib.createClient }))
-vi.mock('next/headers', () => ({ cookies: lib.cookies }))
+vi.mock('next/headers', () => ({ cookies: lib.cookies, headers: lib.headers }))
 
 // From the test setup: the local Supabase URL and its publishable key.
 const PROJECT_URL = 'http://127.0.0.1:54321'
@@ -114,6 +115,23 @@ describe('server client', () => {
     expect(client).toEqual({ kind: 'server' })
     expect([url, key]).toEqual([PROJECT_URL, PUBLISHABLE])
     expect(cookies.getAll()).toEqual([{ name: 'sb-access-token', value: 'abc' }])
+  })
+
+  it("passes on the person's browser and address, so their sessions record them (FR-A5)", async () => {
+    lib.headers.mockResolvedValueOnce(
+      new Headers({ 'user-agent': 'Mozilla/5.0 Chrome/140.0', 'x-real-ip': '102.89.1.2' }),
+    )
+    await build({ getAll: () => [], set: vi.fn() })
+    const [, , options] = lib.createServerClient.mock.calls[0] as unknown as [
+      string,
+      string,
+      { global: { headers: Record<string, string> } },
+    ]
+
+    expect(options.global.headers).toEqual({
+      'user-agent': 'Mozilla/5.0 Chrome/140.0',
+      'x-forwarded-for': '102.89.1.2',
+    })
   })
 
   it('writes every refreshed session cookie back, with its options', async () => {

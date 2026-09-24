@@ -1,7 +1,13 @@
 import type { AvailabilityResult } from '@dr/shared'
 import { describe, expect, it } from 'vitest'
 import type { PublicPriceRow } from '@/features/pricing/lib/public-row'
-import { pickSuggestions, SUGGESTION_COUNT, toSearchRows } from '../lib/rows'
+import {
+  lengthRow,
+  pickSuggestions,
+  refusalNote,
+  SUGGESTION_COUNT,
+  toSearchRows,
+} from '../lib/rows'
 
 const price = (tld: string, overrides: Partial<PublicPriceRow> = {}): PublicPriceRow => ({
   tld,
@@ -86,5 +92,47 @@ describe('pickSuggestions', () => {
       prices,
     )
     expect(pickSuggestions(rows, ['com'])).toHaveLength(SUGGESTION_COUNT)
+  })
+})
+
+describe('international names in results (FR-S8)', () => {
+  const prices = new Map([['com', price('com')]])
+
+  it('keeps the ASCII form for the cart and shows the readable one', () => {
+    const [row] = toSearchRows([result('xn--caf-dma', 'com')], prices)
+    expect(row).toMatchObject({ domain: 'xn--caf-dma.com', display: 'café.com' })
+  })
+
+  it('says an extension did not take the name when its registry refused it', () => {
+    const [row] = toSearchRows([result('xn--caf-dma', 'com', 'restricted')], prices)
+    expect(row && refusalNote(row)).toBe(
+      'Not available for this extension — its registry did not accept this international name',
+    )
+  })
+
+  it('leaves an ordinary refusal to the card, which has its own words', () => {
+    const [row] = toSearchRows([result('x', 'com', 'restricted')], prices)
+    expect(row && refusalNote(row)).toBeNull()
+  })
+})
+
+describe('lengthRow (FR-S9)', () => {
+  const row = lengthRow('ab', 'io', { kind: 'too-short', min: 3, max: 63 })
+
+  it('refuses the name, unpriced, without a supplier answer', () => {
+    expect(row).toMatchObject({
+      domain: 'ab.io',
+      display: 'ab.io',
+      status: 'restricted',
+      price: null,
+    })
+  })
+
+  it('says which rule it breaks', () => {
+    expect(refusalNote(row)).toBe('Too short for .io (3–63 characters)')
+  })
+
+  it('is never offered as a suggestion', () => {
+    expect(pickSuggestions([row], ['io'])).toEqual([])
   })
 })
