@@ -13,15 +13,32 @@ export class QueueTimeout extends Error {
   }
 }
 
-export type Priority = 'high' | 'normal'
+/**
+ * `high` — the one answer a person is watching for (the exact match).
+ * `normal` — everything else a person is waiting on.
+ * `low` — bulk search (FR-S5): waits behind both, and is capped below the
+ * full limit so it can never hold every slot while someone searches.
+ */
+export type Priority = 'high' | 'normal' | 'low'
+
+const RANK: Record<Priority, number> = { high: 0, normal: 1, low: 2 }
 
 type Waiter = { grant: () => void; timer: NodeJS.Timeout | undefined; priority: Priority }
 
 export class Semaphore {
   private active = 0
+  private activeLow = 0
   private readonly waiting: Waiter[] = []
 
-  constructor(private readonly max: number) {}
+  /**
+   * @param max    tasks in flight at once
+   * @param maxLow of those, how many may be `low` — below `max` keeps a slot
+   *               free for people searching one name at a time
+   */
+  constructor(
+    private readonly max: number,
+    private readonly maxLow: number = max,
+  ) {}
 
   get inFlight(): number {
     return this.active
@@ -33,8 +50,8 @@ export class Semaphore {
 
   /**
    * Runs `task` once a slot is free, or throws QueueTimeout after `waitMs`.
-   * `high` waits ahead of every `normal` task (FIFO within each lane), for the
-   * one answer a person is actually watching for.
+   * Waiters are served by lane — `high`, then `normal`, then `low` — and
+   * first come first served within a lane.
    */
   async run<T>(
     task: () => Promise<T>,
@@ -47,20 +64,31 @@ export class Semaphore {
     try {
       return await task()
     } finally {
-      this.release()
+      this.release(priority)
     }
   }
 
+  private canStart(priority: Priority): boolean {
+    return this.active < this.max && (priority !== 'low' || this.activeLow < this.maxLow)
+  }
+
+  private take(priority: Priority): void {
+    this.active += 1
+    if (priority === 'low') this.activeLow += 1
+  }
+
   private acquire(waitMs: number, priority: Priority): Promise<void> {
-    if (this.active < this.max) {
-      this.active += 1
+    // Nobody eligible is ever left waiting while a slot is free (see
+    // `dispatch`), so a task that can start now jumps no one.
+    if (this.canStart(priority)) {
+      this.take(priority)
       return Promise.resolve()
     }
     return new Promise((resolve, reject) => {
       const entry: Waiter = {
         grant: () => {
           clearTimeout(entry.timer)
-          this.active += 1
+          this.take(priority)
           resolve()
         },
         timer: undefined,
@@ -73,20 +101,30 @@ export class Semaphore {
           reject(new QueueTimeout())
         }, waitMs)
       }
-      if (priority === 'high') {
-        const firstNormal = this.waiting.findIndex((waiter) => waiter.priority === 'normal')
-        this.waiting.splice(firstNormal === -1 ? this.waiting.length : firstNormal, 0, entry)
-      } else {
-        this.waiting.push(entry)
-      }
+      const behind = this.waiting.findIndex((waiter) => RANK[waiter.priority] > RANK[priority])
+      this.waiting.splice(behind === -1 ? this.waiting.length : behind, 0, entry)
     })
   }
 
-  private release(): void {
+  private release(priority: Priority): void {
     this.active -= 1
-    this.waiting.shift()?.grant()
+    if (priority === 'low') this.activeLow -= 1
+    this.dispatch()
+  }
+
+  /** Grants free slots to the first waiters allowed to take them. */
+  private dispatch(): void {
+    while (this.active < this.max) {
+      const next = this.waiting.findIndex((waiter) => this.canStart(waiter.priority))
+      if (next === -1) return
+      const [waiter] = this.waiting.splice(next, 1)
+      waiter?.grant()
+    }
   }
 }
 
-/** The one limit every supplier call shares. */
-export const supplierSlots = new Semaphore(2)
+/**
+ * The one limit every supplier call shares. Bulk search may hold one of the
+ * two slots at most (FR-S5), so single searches are never starved by it.
+ */
+export const supplierSlots = new Semaphore(2, 1)

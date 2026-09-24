@@ -29,6 +29,7 @@ function supplier(check: Check = async (names, tlds) => available(names, tlds)) 
 
 const fresh = () => ({
   bucket: new TokenBucket(100, 100),
+  bulkBucket: new TokenBucket(100, 100),
   cache: new TtlCache<AvailabilityStatus>(60_000, 1000),
   slots: new Semaphore(2),
   backoff: () => 0,
@@ -292,6 +293,128 @@ describe('POST /v1/availability — answers', () => {
     const { client } = supplier(async (names) => available(names, ['net']))
     const { json } = await post(appWith({ ...deps, client }), { names: ['getpaid'], tlds: ['com'] })
     expect(statuses(json)).toEqual(['unknown'])
+  })
+})
+
+describe('POST /v1/availability — bulk search, low priority (FR-S5)', () => {
+  let deps: ReturnType<typeof fresh>
+  beforeEach(() => {
+    deps = fresh()
+  })
+
+  it('refuses bulk when its own limit is spent, and still answers a single search', async () => {
+    const { check, client } = supplier()
+    const app = appWith({ ...deps, client, bulkBucket: new TokenBucket(1, 0) })
+
+    const bulk = await post(app, {
+      names: ['bulkone', 'bulktwo'],
+      tlds: ['com', 'net'],
+      priority: 'low',
+    })
+    expect(bulk.status).toBe(429)
+    expect(bulk.json).toMatchObject({ code: 'RATE_LIMITED' })
+    expect(check).not.toHaveBeenCalled()
+
+    const single = await post(app, { names: ['getpaid'], tlds: ['com', 'net'] })
+    expect(single.status).toBe(200)
+  })
+
+  it('never spends the tokens single searches need', async () => {
+    const { client } = supplier()
+    const bucket = new TokenBucket(2, 0)
+    const app = appWith({ ...deps, client, bucket })
+
+    await post(app, { names: ['bulkone'], tlds: ['com', 'net'], priority: 'low' })
+    expect(bucket.availableTokens()).toBe(2)
+  })
+
+  it('leaves one supplier slot free for single searches while a bulk call runs', async () => {
+    const gate: { open: () => void } = { open: () => {} }
+    const opened = new Promise<void>((resolve) => {
+      gate.open = resolve
+    })
+    const seen: string[] = []
+    const { client } = supplier(async (names, tlds) => {
+      seen.push(names[0] ?? '')
+      if (names[0] === 'bulkone') await opened
+      return available(names, tlds)
+    })
+    const app = appWith({ ...deps, client, slots: new Semaphore(2, 1) })
+
+    // Two bulk requests would take both slots if nothing held them back.
+    const bulkA = post(app, { names: ['bulkone'], tlds: ['com'], priority: 'low' })
+    const bulkB = post(app, { names: ['bulktwo'], tlds: ['com'], priority: 'low' })
+    const single = await post(app, { names: ['getpaid'], tlds: ['com'] })
+
+    expect(single.status).toBe(200)
+    expect(seen).toEqual(['bulkone', 'getpaid'])
+    gate.open()
+    await Promise.all([bulkA, bulkB])
+    expect(seen).toEqual(['bulkone', 'getpaid', 'bulktwo'])
+  })
+
+  it('waits longer for its turn than a single search would', async () => {
+    const slots = new Semaphore(1)
+    let release: () => void = () => {}
+    const blocker = slots.run(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        }),
+    )
+    const { check, client } = supplier()
+    const app = appWith({ ...deps, client, slots, queueWaitMs: 5, lowQueueWaitMs: 1_000 })
+
+    const bulk = post(app, { names: ['bulkone'], tlds: ['com'], priority: 'low' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    release()
+    await blocker
+
+    expect((await bulk).status).toBe(200)
+    expect(check).toHaveBeenCalledOnce()
+  })
+})
+
+describe('POST /v1/availability — re-validation (FR-S6)', () => {
+  let deps: ReturnType<typeof fresh>
+  beforeEach(() => {
+    deps = fresh()
+  })
+
+  it('asks the supplier again when told to, and keeps the new answer', async () => {
+    let taken = false
+    const { check, client } = supplier(async (names, tlds) =>
+      available(names, tlds).map((row) =>
+        taken ? { ...row, Status: 'notavailable', Reason: 'Domain exists' } : row,
+      ),
+    )
+    const app = appWith({ ...deps, client })
+    await post(app, { names: ['getpaid'], tlds: ['com'] })
+    taken = true
+
+    const cachedAnswer = await post(app, { names: ['getpaid'], tlds: ['com'] })
+    expect(statuses(cachedAnswer.json)).toEqual(['available'])
+    expect(check).toHaveBeenCalledOnce()
+
+    const freshAnswer = await post(app, { names: ['getpaid'], tlds: ['com'], fresh: true })
+    expect(statuses(freshAnswer.json)).toEqual(['registered'])
+    expect(check).toHaveBeenCalledTimes(2)
+
+    const after = await post(app, { names: ['getpaid'], tlds: ['com'] })
+    expect(statuses(after.json)).toEqual(['registered'])
+  })
+
+  it('reports unknown rather than the old answer when a fresh call fails', async () => {
+    let failing = false
+    const { client } = supplier(async (names, tlds) =>
+      failing && tlds.includes('app') ? refused('SOMETHING') : available(names, tlds),
+    )
+    const app = appWith({ ...deps, client })
+    await post(app, { names: ['getpaid'], tlds: ['com', 'app'] })
+    failing = true
+
+    const { json } = await post(app, { names: ['getpaid'], tlds: ['com', 'app'], fresh: true })
+    expect(statuses(json)).toEqual(['available', 'unknown'])
   })
 })
 
