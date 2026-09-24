@@ -10,6 +10,9 @@
  *   xn--* on .app        → restricted (an extension refusing international names)
  *   allgone*             → every name registered, so no alternatives
  *   gatewaydown          → the whole request fails (502)
+ *   failonce*            → the first request asking about that exact name fails
+ *                          (502); every later one is answered — a bulk block
+ *                          that fails once and succeeds on retry
  *   busysearch           → rate limited (429)
  *   anything else        → available
  *
@@ -40,6 +43,8 @@ import { createServer } from 'node:http'
 
 const PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 8788)
 const TAKEN = new Set(['takenbrand', 'google'])
+/** `failonce*` names already failed once, so the next request is answered. */
+const FAILED_ONCE = new Set()
 
 function statusFor(name, tld) {
   if (TAKEN.has(name) || name.includes('allgone')) return 'registered'
@@ -276,6 +281,16 @@ createServer((req, res) => {
   })
   req.on('end', () => {
     const { names = [], tlds = [] } = JSON.parse(raw || '{}')
+    const failOnce = names.filter((name) => name.startsWith('failonce') && !FAILED_ONCE.has(name))
+    if (failOnce.length > 0) {
+      for (const name of failOnce) FAILED_ONCE.add(name)
+      return send(res, 502, {
+        ok: false,
+        code: 'SUPPLIER_UNAVAILABLE',
+        message: 'Gateway error',
+        retryable: true,
+      })
+    }
     if (names.includes('gatewaydown')) {
       return send(res, 502, {
         ok: false,

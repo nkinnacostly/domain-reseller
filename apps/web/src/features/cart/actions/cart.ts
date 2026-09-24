@@ -4,7 +4,7 @@ import type { TldPricing } from '@dr/shared'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
-import { BULK_MAX_EXTENSIONS, BULK_MAX_NAMES, chunkChecks } from '@/features/search/lib/bulk'
+import { packChecks } from '@/features/search/lib/bulk'
 import { toUnicodeHost } from '@/features/search/lib/idn'
 import { describeLengthIssue, lengthIssue } from '@/features/search/lib/length'
 import { parseSearchQuery } from '@/features/search/lib/query'
@@ -94,9 +94,10 @@ export const addToCart = actionClient
     const pricing = priced.tlds.find((candidate) => candidate.tld === tld)
     if (!pricing) return { error: `We don't sell .${tld}.` }
 
-    // The search may be minutes old. Never put a name in a cart that cannot
-    // be bought (checkout checks again, FR-C7).
-    const availability = await checkAvailability([stem], [tld], 'high')
+    // The search may be minutes old, and its answer cached (FR-S6): ask the
+    // registry again. Never put a name in a cart that cannot be bought
+    // (checkout checks again, FR-C7).
+    const availability = await checkAvailability([stem], [tld], 'high', { fresh: true })
     if (!availability.ok)
       return { error: "We couldn't confirm it's still free. Try again in a moment." }
     if (availability.results[0]?.status !== 'available') {
@@ -134,20 +135,18 @@ export const addToCart = actionClient
 export type NotAdded = { domain: string; reason: string }
 
 /**
- * "Add all available" from a bulk search (FR-S5). Every name is re-checked
- * first, like a single add — grouped by extension into as few gateway
- * requests as the search itself used, and at normal priority, so a bulk add
- * never jumps ahead of someone waiting on their exact match (PRD V4).
- * Only names the person was shown as available are sent; nothing is ticked
- * for them (N9).
+ * "Add selected to cart" from a bulk search (FR-S5). Every name is re-checked
+ * with the registry first, past its cache (FR-S6), like a single add —
+ * grouped into as few gateway requests as the search itself used, and at
+ * normal priority, so a bulk add never jumps ahead of someone waiting on
+ * their exact match (PRD V4). Only names the person ticked are sent; nothing
+ * is ticked for them (N9). A cart holds MAX_CART_ITEMS lines, so no more are
+ * accepted, and names past the room left are never re-checked.
  */
 export const addDomainsToCart = actionClient
   .inputSchema(
     z.object({
-      domains: z
-        .array(z.string().min(3).max(253))
-        .min(1)
-        .max(BULK_MAX_NAMES * BULK_MAX_EXTENSIONS),
+      domains: z.array(z.string().min(3).max(253)).min(1).max(MAX_CART_ITEMS),
     }),
   )
   .action(
@@ -186,21 +185,28 @@ export const addDomainsToCart = actionClient
         }
       }
 
-      const outcomes = await Promise.all(
-        chunkChecks(wanted).map((chunk) => checkAvailability(chunk.names, chunk.tlds)),
-      )
-      const statusOf = new Map(
-        outcomes.flatMap((outcome) =>
-          outcome.ok
-            ? outcome.results.map((result) => [result.domain, result.status] as const)
-            : [],
-        ),
-      )
-
       try {
         const cartId = await findOrCreateCartId(await ownerForWrite())
         const inCart = new Set((await loadLines(cartId)).map((line) => line.domain))
         let count = inCart.size
+
+        // Only as many as the cart has room for are worth asking the registry about.
+        const room = Math.max(0, MAX_CART_ITEMS - count)
+        const toCheck = wanted.filter((entry) => !inCart.has(entry.domain)).slice(0, room)
+        const asked = new Set(toCheck.map((entry) => entry.domain))
+        const outcomes = await Promise.all(
+          packChecks(
+            toCheck.map((entry) => ({ ...entry, issue: null })),
+            lengthRules,
+          ).map((chunk) => checkAvailability(chunk.names, chunk.tlds, 'normal', { fresh: true })),
+        )
+        const statusOf = new Map(
+          outcomes.flatMap((outcome) =>
+            outcome.ok
+              ? outcome.results.map((result) => [result.domain, result.status] as const)
+              : [],
+          ),
+        )
         const added: string[] = []
 
         for (const entry of wanted) {
@@ -210,16 +216,16 @@ export const addDomainsToCart = actionClient
             added.push(shown)
             continue
           }
+          if (!asked.has(entry.domain) || count >= MAX_CART_ITEMS) {
+            notAdded.push({ domain: shown, reason: `A cart holds up to ${MAX_CART_ITEMS} domains` })
+            continue
+          }
           if (status === undefined || status === 'unknown') {
             notAdded.push({ domain: shown, reason: "We couldn't confirm it's still free" })
             continue
           }
           if (status !== 'available') {
             notAdded.push({ domain: shown, reason: 'Taken while you were looking' })
-            continue
-          }
-          if (count >= MAX_CART_ITEMS) {
-            notAdded.push({ domain: shown, reason: `A cart holds up to ${MAX_CART_ITEMS} domains` })
             continue
           }
 

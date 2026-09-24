@@ -35,7 +35,26 @@ describe('availabilityRequestSchema', () => {
         names: ['getpaid'],
         tlds: ['com', 'co.uk'],
         priority: 'normal',
+        fresh: false,
       },
     )
+  })
+
+  it('takes a bulk block of names in one request (FR-S5)', () => {
+    const names = Array.from({ length: AVAILABILITY_LIMITS.maxNames }, (_, i) => `name${i}`)
+    expect(AVAILABILITY_LIMITS.maxNames).toBe(50)
+    expect(availabilityRequestSchema.safeParse({ names, tlds: ['com'] }).success).toBe(true)
+  })
+
+  it('accepts the low lane for bulk search, and no lane it does not know', () => {
+    const base = { names: ['getpaid'], tlds: ['com'] }
+    expect(availabilityRequestSchema.parse({ ...base, priority: 'low' }).priority).toBe('low')
+    expect(availabilityRequestSchema.safeParse({ ...base, priority: 'urgent' }).success).toBe(false)
+  })
+
+  it('asks for a fresh answer only when told to (FR-S6)', () => {
+    const base = { names: ['getpaid'], tlds: ['com'] }
+    expect(availabilityRequestSchema.parse({ ...base, fresh: true }).fresh).toBe(true)
+    expect(availabilityRequestSchema.safeParse({ ...base, fresh: 'yes' }).success).toBe(false)
   })
 })

@@ -1,6 +1,11 @@
 import 'server-only'
 
-import { type AvailabilityResult, availabilityResponseSchema, GatewayError } from '@dr/shared'
+import {
+  type AvailabilityPriority,
+  type AvailabilityResult,
+  availabilityResponseSchema,
+  GatewayError,
+} from '@dr/shared'
 import { cache } from 'react'
 import { callGateway } from '@/lib/gateway'
 import { logger } from '@/lib/logger'
@@ -15,6 +20,16 @@ export type AvailabilityOutcome =
  */
 const TIMEOUT_MS = 15_000
 
+export type AvailabilityOptions = {
+  /**
+   * Skip the gateway's 60-second cache (FR-S6): for the re-check before a
+   * name goes into a cart or is paid for (FR-C7, N4), never for a search.
+   */
+  fresh?: boolean
+  /** Bulk search waits behind every other search, so it may wait longer. */
+  timeoutMs?: number
+}
+
 /**
  * Availability for names × extensions, via the registrar gateway (N1 — never
  * the supplier directly). Deduplicated per render; not cached across requests
@@ -23,20 +38,30 @@ const TIMEOUT_MS = 15_000
 export function checkAvailability(
   names: readonly string[],
   tlds: readonly string[],
-  /** `high` for the exact match — it jumps the gateway's queue (PRD V4). */
-  priority: 'high' | 'normal' = 'normal',
+  /**
+   * `high` for the exact match — it jumps the gateway's queue (PRD V4);
+   * `low` for bulk search, which waits behind everything else (FR-S5).
+   */
+  priority: AvailabilityPriority = 'normal',
+  { fresh = false, timeoutMs = TIMEOUT_MS }: AvailabilityOptions = {},
 ): Promise<AvailabilityOutcome> {
   // React `cache` compares arguments by identity, so key on a string.
-  return checkOnce(JSON.stringify([names, tlds, priority]))
+  return checkOnce(JSON.stringify([names, tlds, priority, fresh, timeoutMs]))
 }
 
 const checkOnce = cache(async (key: string): Promise<AvailabilityOutcome> => {
-  const [names, tlds, priority] = JSON.parse(key) as [string[], string[], 'high' | 'normal']
+  const [names, tlds, priority, fresh, timeoutMs] = JSON.parse(key) as [
+    string[],
+    string[],
+    AvailabilityPriority,
+    boolean,
+    number,
+  ]
   try {
     const data = await callGateway<unknown>({
       path: 'availability',
-      body: { names, tlds, priority },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      body: { names, tlds, priority, ...(fresh ? { fresh } : {}) },
+      signal: AbortSignal.timeout(timeoutMs),
     })
     const parsed = availabilityResponseSchema.safeParse(data)
     if (!parsed.success) {

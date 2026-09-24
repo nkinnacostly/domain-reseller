@@ -83,4 +83,35 @@ describe('checkAvailability', () => {
       reason: 'unavailable',
     })
   })
+
+  it('asks past the cache only when told to re-validate (FR-S6)', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.post('http://gateway.test/v1/availability', async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ ok: true, data: { results: [] } })
+      }),
+    )
+
+    await checkAvailability(['recheck'], ['com'], 'high', { fresh: true })
+    await checkAvailability(['search'], ['com'], 'low')
+
+    expect(bodies).toEqual([
+      { names: ['recheck'], tlds: ['com'], priority: 'high', fresh: true },
+      { names: ['search'], tlds: ['com'], priority: 'low' },
+    ])
+  })
+
+  it('gives up after the time it was given, as unavailable', async () => {
+    server.use(
+      http.post('http://gateway.test/v1/availability', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        return HttpResponse.json({ ok: true, data: { results: [] } })
+      }),
+    )
+    expect(await checkAvailability(['slow'], ['com'], 'low', { timeoutMs: 20 })).toEqual({
+      ok: false,
+      reason: 'unavailable',
+    })
+  })
 })
