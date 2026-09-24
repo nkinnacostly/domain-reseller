@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { finalizePayment, markOrderCancelled } from '@/features/checkout/queries/finalize'
 import { getOrder } from '@/features/checkout/queries/orders'
+import { LIMITS, withinLimit } from '@/lib/rate-limit'
 
 /**
  * Where Flutterwave sends the customer back. The query string says what
@@ -27,5 +28,13 @@ export async function GET(request: NextRequest) {
   }
   if (!transactionId) return toOrder('pending')
 
-  return toOrder(await finalizePayment(order.id, transactionId))
+  // Each return makes a Flutterwave call. Past either limit the order simply
+  // waits: the webhook and the sweeper still settle it, so nothing is lost.
+  const allowed =
+    (await withinLimit(`checkout_return:${order.id}`, LIMITS.checkoutReturn)) &&
+    (await withinLimit(`checkout_return_user:${order.user_id}`, LIMITS.checkoutReturnAccount))
+  if (!allowed) return toOrder('pending')
+
+  const outcome = await finalizePayment(order.id, transactionId)
+  return toOrder(outcome === 'unverified' ? 'pending' : outcome)
 }

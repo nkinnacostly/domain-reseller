@@ -9,9 +9,9 @@ export const metadata: Metadata = {
 }
 
 /**
- * Refund policy (FR-PUB4). The timescale is the owner's commitment; refunds
- * are made by hand until automatic refunds (FR-R3, backlog L15) exist, so the
- * copy promises the outcome and the deadline, not a mechanism.
+ * Refund policy (FR-PUB4). The timescale is the owner's commitment. Refunds
+ * for failed registrations, second charges and short payments are automatic
+ * (FR-R3, migrations 15–16), back to the payment method used — as this says.
  */
 export default function RefundsPage() {
   const days = BUSINESS.refundBusinessDays

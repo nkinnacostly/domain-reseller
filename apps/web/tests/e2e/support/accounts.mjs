@@ -47,11 +47,15 @@ export async function createTestUser(label, { fullName = 'Test Person' } = {}) {
   return { id: data.user.id, email, password: TEST_PASSWORD }
 }
 
-/** Orders refuse deletion while they exist (money records), so remove a test user's first. */
+/**
+ * Orders refuse deletion while they exist (money records), so remove a test
+ * user's first. Payments and refunds cannot be deleted directly, even with
+ * the secret key: purge_test_orders removes them, and refuses live orders.
+ */
 async function deleteOrdersFor(client, userId) {
   await client.from('domains').delete().eq('user_id', userId)
-  await client.from('payments').delete().eq('user_id', userId)
-  await client.from('orders').delete().eq('user_id', userId)
+  const { error } = await client.rpc('purge_test_orders', { p_user_id: userId })
+  if (error) throw error
 }
 
 export async function deleteTestUser(id) {

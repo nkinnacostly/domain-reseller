@@ -68,35 +68,73 @@ describe('createPaymentLink', () => {
 })
 
 describe('verifyTransaction', () => {
+  const verified = (id: number, overrides = {}) => ({
+    status: 'success',
+    data: {
+      id,
+      tx_ref: 'ord_1',
+      status: 'successful',
+      amount: 19780,
+      currency: 'NGN',
+      ...overrides,
+    },
+  })
+
   it('re-reads the transaction from the API', async () => {
     server.use(
       http.get('https://flw.test/v3/transactions/:id/verify', ({ params }) =>
-        HttpResponse.json({
-          status: 'success',
-          data: {
-            id: Number(params.id),
-            tx_ref: 'ord_1',
-            status: 'successful',
-            amount: 19780,
-            currency: 'NGN',
-          },
-        }),
+        HttpResponse.json(verified(Number(params.id))),
       ),
     )
-    expect(await verifyTransaction('4242')).toMatchObject({ id: 4242, status: 'successful' })
+    expect(await verifyTransaction('4242')).toMatchObject({
+      kind: 'found',
+      transaction: { id: 4242, status: 'successful' },
+    })
   })
 
   it('never puts a browser-supplied id into the path unless it is a number', async () => {
-    expect(await verifyTransaction('../../balances')).toBeNull()
+    expect(await verifyTransaction('../../balances')).toEqual({ kind: 'missing' })
+    expect(await verifyTransaction('1'.repeat(21))).toEqual({ kind: 'missing' })
   })
 
-  it('treats an unknown transaction as nothing to verify', async () => {
+  it('reads a refusal for the id as "no such transaction"', async () => {
     server.use(
       http.get('https://flw.test/v3/transactions/:id/verify', () =>
-        HttpResponse.json({ status: 'error', message: 'No transaction' }, { status: 404 }),
+        HttpResponse.json({ status: 'error', message: 'No transaction' }, { status: 400 }),
       ),
     )
-    expect(await verifyTransaction('1')).toBeNull()
+    expect(await verifyTransaction('1')).toEqual({ kind: 'missing' })
+  })
+
+  it.each([
+    [500, 'Flutterwave failing'],
+    [503, 'Flutterwave overloaded'],
+    [429, 'rate limited'],
+    [401, 'our key refused'],
+  ])('a %i (%s) is not a verdict: ask again later', async (status) => {
+    server.use(
+      http.get('https://flw.test/v3/transactions/:id/verify', () =>
+        HttpResponse.json({ status: 'error', message: 'x' }, { status }),
+      ),
+    )
+    expect(await verifyTransaction('1')).toEqual({ kind: 'unreachable' })
+  })
+
+  it('no answer at all is not a verdict either', async () => {
+    server.use(http.get('https://flw.test/v3/transactions/:id/verify', () => HttpResponse.error()))
+    expect(await verifyTransaction('1')).toEqual({ kind: 'unreachable' })
+  })
+
+  it('does not believe an answer about a different transaction, or one it cannot read', async () => {
+    server.use(
+      http.get('https://flw.test/v3/transactions/:id/verify', ({ params }) =>
+        params.id === '7'
+          ? HttpResponse.json(verified(8))
+          : HttpResponse.json(verified(9, { amount: 'lots' })),
+      ),
+    )
+    expect(await verifyTransaction('7')).toEqual({ kind: 'unreachable' })
+    expect(await verifyTransaction('9')).toEqual({ kind: 'unreachable' })
   })
 })
 

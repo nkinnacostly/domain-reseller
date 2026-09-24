@@ -19,7 +19,7 @@ describe('order progress (§13.4 steps 7–8)', () => {
   it('treats a partial success as normal, and owes a refund for the rest (FR-R2)', () => {
     expect(orderNotice('partially_failed', false)).toEqual({
       tone: 'error',
-      text: 'Some domains could not be registered — each one says why below. We’ll refund what you paid for those.',
+      text: 'Some domains could not be registered — each one says why below. What you paid for those is refunded automatically — see Refunds below.',
     })
   })
 

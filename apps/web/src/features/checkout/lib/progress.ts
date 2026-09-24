@@ -33,14 +33,18 @@ export function orderNotice(status: string, testMode: boolean): OrderNotice | nu
       return {
         tone: 'error',
         text: `Some domains could not be registered — each one says why below. ${
-          testMode ? 'No money moved.' : 'We’ll refund what you paid for those.'
+          testMode
+            ? 'No money moved.'
+            : 'What you paid for those is refunded automatically — see Refunds below.'
         }`,
       }
     case 'failed':
       return {
         tone: 'error',
         text: `We could not register the domains in this order — each one says why below. ${
-          testMode ? 'No money moved.' : 'We’ll refund what you paid.'
+          testMode
+            ? 'No money moved.'
+            : 'What you paid is refunded automatically — see Refunds below.'
         }`,
       }
     default:

@@ -1,21 +1,20 @@
 /**
- * Whether a Flutterwave transaction pays for an order (SEC-7). Everything the
- * redirect or webhook claims is re-read from the API first; this decides what
- * the re-read means. Pure, so every rule is testable.
+ * Whether a Flutterwave transaction pays for an order (SEC-7). The rules are
+ * shared with the gateway's payment sweeper, so a charge is judged the same
+ * way whichever of them finds it.
  */
-export type PaymentAssessment = 'paid' | 'pending' | 'failed' | 'mismatch'
+export {
+  assessTransaction,
+  type TransactionVerdict,
+  transactionRecord,
+} from '@dr/shared/payments'
 
-export function assessTransaction(
-  transaction: { tx_ref: string; status: string; amount: number; currency: string },
-  order: { txRef: string; totalKobo: number },
-): PaymentAssessment {
-  // A transaction for another order, or in another currency, pays for nothing.
-  if (transaction.tx_ref !== order.txRef || transaction.currency !== 'NGN') return 'mismatch'
+/** What the customer is told about the payment, on the order page. */
+export type PaymentAssessment = 'paid' | 'underpaid' | 'pending' | 'failed' | 'mismatch'
 
-  if (transaction.status === 'successful') {
-    // Less than the order total is not a payment for it, whatever the status.
-    return Math.round(transaction.amount * 100) >= order.totalKobo ? 'paid' : 'mismatch'
-  }
-  if (transaction.status === 'pending') return 'pending'
-  return 'failed'
-}
+/**
+ * What settling a payment came to. `unverified`: Flutterwave could not be
+ * asked, or the answer could not be recorded — nothing is settled yet, and
+ * the webhook asks Flutterwave to send it again. People see it as pending.
+ */
+export type FinalizeOutcome = PaymentAssessment | 'unverified'

@@ -558,6 +558,84 @@ export type Database = {
         }
         Relationships: []
       }
+      ops_alerts: {
+        Row: {
+          first_seen_at: string
+          id: number
+          key: string
+          kind: string
+          last_seen_at: string
+          notified_at: string | null
+          notify_count: number
+          resolved_at: string | null
+          resolved_notified_at: string | null
+          severity: string
+          summary: string
+          test_mode: boolean
+        }
+        Insert: {
+          first_seen_at?: string
+          id?: number
+          key: string
+          kind: string
+          last_seen_at?: string
+          notified_at?: string | null
+          notify_count?: number
+          resolved_at?: string | null
+          resolved_notified_at?: string | null
+          severity: string
+          summary: string
+          test_mode: boolean
+        }
+        Update: {
+          first_seen_at?: string
+          id?: number
+          key?: string
+          kind?: string
+          last_seen_at?: string
+          notified_at?: string | null
+          notify_count?: number
+          resolved_at?: string | null
+          resolved_notified_at?: string | null
+          severity?: string
+          summary?: string
+          test_mode?: boolean
+        }
+        Relationships: []
+      }
+      ops_settings: {
+        Row: {
+          auto_refund_daily_max_kobo: number
+          auto_refund_max_kobo: number
+          float_alert_usd: number
+          id: boolean
+          max_domains_per_account_day: number
+          refund_delay_minutes: number
+          stuck_order_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          auto_refund_daily_max_kobo?: number
+          auto_refund_max_kobo?: number
+          float_alert_usd?: number
+          id?: boolean
+          max_domains_per_account_day?: number
+          refund_delay_minutes?: number
+          stuck_order_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          auto_refund_daily_max_kobo?: number
+          auto_refund_max_kobo?: number
+          float_alert_usd?: number
+          id?: boolean
+          max_domains_per_account_day?: number
+          refund_delay_minutes?: number
+          stuck_order_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           auto_renew: boolean
@@ -627,6 +705,8 @@ export type Database = {
           nameservers: string[] | null
           order_number: string
           paid_at: string | null
+          payment_checked_at: string | null
+          payment_id: string | null
           registrant: Json
           status: Database["public"]["Enums"]["order_status"]
           subtotal_kobo: number
@@ -647,6 +727,8 @@ export type Database = {
           nameservers?: string[] | null
           order_number?: string
           paid_at?: string | null
+          payment_checked_at?: string | null
+          payment_id?: string | null
           registrant: Json
           status?: Database["public"]["Enums"]["order_status"]
           subtotal_kobo: number
@@ -667,6 +749,8 @@ export type Database = {
           nameservers?: string[] | null
           order_number?: string
           paid_at?: string | null
+          payment_checked_at?: string | null
+          payment_id?: string | null
           registrant?: Json
           status?: Database["public"]["Enums"]["order_status"]
           subtotal_kobo?: number
@@ -698,6 +782,50 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_incidents: {
+        Row: {
+          created_at: string
+          detail: Json
+          id: number
+          kind: string
+          order_id: string | null
+          provider_reference: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          test_mode: boolean
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          id?: number
+          kind: string
+          order_id?: string | null
+          provider_reference?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          test_mode: boolean
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          id?: number
+          kind?: string
+          order_id?: string | null
+          provider_reference?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          test_mode?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_incidents_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -840,6 +968,24 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          hits: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          hits?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          hits?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       reconcile_runs: {
         Row: {
           domains_seen: number | null
@@ -869,6 +1015,154 @@ export type Database = {
           test_mode?: boolean
         }
         Relationships: []
+      }
+      refund_events: {
+        Row: {
+          actor: string
+          created_at: string
+          detail: Json
+          event: string
+          id: number
+          refund_id: string
+        }
+        Insert: {
+          actor?: string
+          created_at?: string
+          detail?: Json
+          event: string
+          id?: number
+          refund_id: string
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          detail?: Json
+          event?: string
+          id?: number
+          refund_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refund_events_refund_id_fkey"
+            columns: ["refund_id"]
+            isOneToOne: false
+            referencedRelation: "refunds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refunds: {
+        Row: {
+          amount_kobo: number
+          approved_at: string | null
+          approved_by: string | null
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          failed_provider_refund_ids: string[]
+          id: string
+          last_error: string | null
+          last_error_code: string | null
+          locked_at: string | null
+          locked_by: string | null
+          order_id: string
+          order_item_id: string | null
+          payment_id: string
+          provider_called_at: string | null
+          provider_refund_id: string | null
+          provider_status: string | null
+          reason: Database["public"]["Enums"]["refund_reason"]
+          run_after: string
+          status: Database["public"]["Enums"]["refund_status"]
+          submitted_at: string | null
+          test_mode: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_kobo: number
+          approved_at?: string | null
+          approved_by?: string | null
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          failed_provider_refund_ids?: string[]
+          id?: string
+          last_error?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          order_id: string
+          order_item_id?: string | null
+          payment_id: string
+          provider_called_at?: string | null
+          provider_refund_id?: string | null
+          provider_status?: string | null
+          reason: Database["public"]["Enums"]["refund_reason"]
+          run_after?: string
+          status?: Database["public"]["Enums"]["refund_status"]
+          submitted_at?: string | null
+          test_mode: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_kobo?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          failed_provider_refund_ids?: string[]
+          id?: string
+          last_error?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          order_id?: string
+          order_item_id?: string | null
+          payment_id?: string
+          provider_called_at?: string | null
+          provider_refund_id?: string | null
+          provider_status?: string | null
+          reason?: Database["public"]["Enums"]["refund_reason"]
+          run_after?: string
+          status?: Database["public"]["Enums"]["refund_status"]
+          submitted_at?: string | null
+          test_mode?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refunds_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       registry_drift: {
         Row: {
@@ -923,6 +1217,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      service_heartbeats: {
+        Row: {
+          beat_at: string
+          detail: Json
+          name: string
+          test_mode: boolean
+        }
+        Insert: {
+          beat_at?: string
+          detail?: Json
+          name: string
+          test_mode: boolean
+        }
+        Update: {
+          beat_at?: string
+          detail?: Json
+          name?: string
+          test_mode?: boolean
+        }
+        Relationships: []
+      }
+      supplier_balance_snapshots: {
+        Row: {
+          balance_usd: number
+          id: number
+          taken_at: string
+          test_mode: boolean
+        }
+        Insert: {
+          balance_usd: number
+          id?: number
+          taken_at?: string
+          test_mode: boolean
+        }
+        Update: {
+          balance_usd?: number
+          id?: number
+          taken_at?: string
+          test_mode?: boolean
+        }
+        Relationships: []
       }
       supplier_calls: {
         Row: {
@@ -1036,6 +1372,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_domain_allowance: { Args: { p_user_id: string }; Returns: Json }
       activate_fx_rate: {
         Args: { actor?: string; rate_id: string }
         Returns: {
@@ -1064,9 +1401,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      approve_refund: {
+        Args: { p_by: string; p_refund_id: string }
+        Returns: undefined
+      }
       begin_reconcile: {
         Args: { p_min_interval_seconds: number; p_test_mode: boolean }
         Returns: string
+      }
+      cancel_refund: {
+        Args: { p_by: string; p_note: string; p_refund_id: string }
+        Returns: undefined
       }
       claim_job: {
         Args: {
@@ -1076,6 +1421,59 @@ export type Database = {
           p_worker: string
         }
         Returns: Json
+      }
+      claim_refund: {
+        Args: {
+          p_lease_seconds?: number
+          p_test_mode: boolean
+          p_worker: string
+        }
+        Returns: Json
+      }
+      claimed_refund: {
+        Args: { p_refund_id: string; p_worker: string }
+        Returns: {
+          amount_kobo: number
+          approved_at: string | null
+          approved_by: string | null
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          failed_provider_refund_ids: string[]
+          id: string
+          last_error: string | null
+          last_error_code: string | null
+          locked_at: string | null
+          locked_by: string | null
+          order_id: string
+          order_item_id: string | null
+          payment_id: string
+          provider_called_at: string | null
+          provider_refund_id: string | null
+          provider_status: string | null
+          reason: Database["public"]["Enums"]["refund_reason"]
+          run_after: string
+          status: Database["public"]["Enums"]["refund_status"]
+          submitted_at: string | null
+          test_mode: boolean
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "refunds"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      complete_refund: {
+        Args: {
+          p_provider_refund_id: string
+          p_provider_status: string
+          p_refund_id: string
+          p_worker: string
+        }
+        Returns: undefined
       }
       complete_registration: {
         Args: {
@@ -1091,9 +1489,33 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["domain_status"]
       }
+      current_alert_conditions: {
+        Args: { p_test_mode: boolean }
+        Returns: {
+          key: string
+          kind: string
+          severity: string
+          summary: string
+        }[]
+      }
+      enqueue_line_refund: {
+        Args: { p_order_item_id: string }
+        Returns: string
+      }
       enqueue_nameserver_change: {
         Args: { p_domain_id: string }
         Returns: undefined
+      }
+      enqueue_refund: {
+        Args: {
+          p_amount_kobo: number
+          p_delay_minutes?: number
+          p_order_id: string
+          p_order_item_id: string
+          p_payment_id: string
+          p_reason: Database["public"]["Enums"]["refund_reason"]
+        }
+        Returns: string
       }
       fail_job: {
         Args: {
@@ -1108,9 +1530,75 @@ export type Database = {
         Args: { p_error: string; p_run_id: string }
         Returns: undefined
       }
+      fail_refund: {
+        Args: {
+          p_code: string
+          p_message: string
+          p_needs_attention: boolean
+          p_provider_refund_id?: string
+          p_refund_id: string
+          p_worker: string
+        }
+        Returns: undefined
+      }
+      finish_refund: {
+        Args: {
+          p_actor: string
+          p_provider_refund_id: string
+          p_provider_status: string
+          p_refund_id: string
+        }
+        Returns: undefined
+      }
+      mark_alerts_notified: {
+        Args: { p_alert_ids: number[]; p_resolved_ids: number[] }
+        Returns: undefined
+      }
       merge_anonymous_cart: {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: number
+      }
+      my_order_refunds: {
+        Args: { p_order_id: string }
+        Returns: {
+          amount_kobo: number
+          domain: string
+          id: string
+          reason: string
+          refunded_at: string
+          state: string
+          test_mode: boolean
+        }[]
+      }
+      note_refund_provider_call: {
+        Args: { p_refund_id: string; p_worker: string }
+        Returns: undefined
+      }
+      orders_to_check: {
+        Args: { p_limit: number; p_test_mode: boolean }
+        Returns: {
+          id: string
+          order_number: string
+          total_kobo: number
+          tx_ref: string
+        }[]
+      }
+      purge_test_orders: { Args: { p_user_id: string }; Returns: undefined }
+      rate_limit_hit: {
+        Args: { p_key: string; p_max: number; p_window_seconds: number }
+        Returns: boolean
+      }
+      record_heartbeat: {
+        Args: { p_detail: Json; p_name: string; p_test_mode: boolean }
+        Returns: undefined
+      }
+      record_manual_refund: {
+        Args: {
+          p_by: string
+          p_provider_refund_id: string
+          p_refund_id: string
+        }
+        Returns: undefined
       }
       record_nameserver_change: {
         Args: {
@@ -1132,6 +1620,15 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["order_status"]
       }
+      record_payment_incident: {
+        Args: {
+          p_detail: Json
+          p_kind: string
+          p_order_id: string
+          p_provider_reference: string
+        }
+        Returns: undefined
+      }
       record_reconciliation: {
         Args: {
           p_complete: boolean
@@ -1142,6 +1639,39 @@ export type Database = {
         }
         Returns: number
       }
+      record_refund_submitted: {
+        Args: {
+          p_check_after_seconds: number
+          p_provider_refund_id: string
+          p_provider_status: string
+          p_refund_id: string
+          p_worker: string
+        }
+        Returns: undefined
+      }
+      record_supplier_balance: {
+        Args: { p_balance_usd: number; p_test_mode: boolean }
+        Returns: undefined
+      }
+      record_underpayment: {
+        Args: {
+          p_amount_kobo: number
+          p_currency: string
+          p_method: string
+          p_order_id: string
+          p_provider_reference: string
+          p_raw: Json
+        }
+        Returns: string
+      }
+      refund_hold_reason: {
+        Args: {
+          p_amount_kobo: number
+          p_exclude_id: string
+          p_test_mode: boolean
+        }
+        Returns: string
+      }
       reschedule_job: {
         Args: {
           p_code: string
@@ -1151,8 +1681,28 @@ export type Database = {
         }
         Returns: undefined
       }
+      reschedule_refund: {
+        Args: {
+          p_code: string
+          p_delay_seconds: number
+          p_message: string
+          p_refund_id: string
+          p_sent: boolean
+          p_worker: string
+        }
+        Returns: undefined
+      }
+      resolve_payment_incident: {
+        Args: { p_by: string; p_incident_id: number }
+        Returns: undefined
+      }
       retry_job: { Args: { p_job_id: string }; Returns: undefined }
+      retry_refund: {
+        Args: { p_by: string; p_refund_id: string }
+        Returns: undefined
+      }
       settle_order: { Args: { p_order_id: string }; Returns: undefined }
+      sync_alerts: { Args: { p_test_mode: boolean }; Returns: Json }
     }
     Enums: {
       account_type: "individual" | "business"
@@ -1199,6 +1749,21 @@ export type Database = {
         | "completed"
         | "partially_failed"
         | "failed"
+        | "cancelled"
+      refund_reason:
+        | "registration_failed"
+        | "duplicate_charge"
+        | "overpayment"
+        | "underpayment"
+        | "empty_order"
+      refund_status:
+        | "queued"
+        | "held"
+        | "sending"
+        | "submitted"
+        | "completed"
+        | "failed"
+        | "needs_attention"
         | "cancelled"
     }
     CompositeTypes: {
@@ -1378,6 +1943,23 @@ export const Constants = {
         "completed",
         "partially_failed",
         "failed",
+        "cancelled",
+      ],
+      refund_reason: [
+        "registration_failed",
+        "duplicate_charge",
+        "overpayment",
+        "underpayment",
+        "empty_order",
+      ],
+      refund_status: [
+        "queued",
+        "held",
+        "sending",
+        "submitted",
+        "completed",
+        "failed",
+        "needs_attention",
         "cancelled",
       ],
     },

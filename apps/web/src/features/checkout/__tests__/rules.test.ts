@@ -106,16 +106,24 @@ describe('assessTransaction (SEC-7)', () => {
     expect(assessTransaction(tx, order)).toBe('paid')
   })
 
-  it('refuses a transaction for a different order', () => {
-    expect(assessTransaction({ ...tx, tx_ref: 'ord_2' }, order)).toBe('mismatch')
+  it('refuses a transaction for a different order, whatever its status', () => {
+    expect(assessTransaction({ ...tx, tx_ref: 'ord_2' }, order)).toBe('wrong_order')
+    expect(assessTransaction({ ...tx, tx_ref: 'ord_2', status: 'failed' }, order)).toBe(
+      'wrong_order',
+    )
   })
 
-  it('refuses a payment short of the total, whatever its status says', () => {
-    expect(assessTransaction({ ...tx, amount: 100 }, order)).toBe('mismatch')
+  it('never lets a short payment pay the order — it is refunded instead', () => {
+    expect(assessTransaction({ ...tx, amount: 100 }, order)).toBe('underpaid')
+    expect(assessTransaction({ ...tx, amount: 19_779.99 }, order)).toBe('underpaid')
   })
 
-  it('refuses another currency', () => {
-    expect(assessTransaction({ ...tx, currency: 'USD' }, order)).toBe('mismatch')
+  it('accepts more than the total — the excess is refunded', () => {
+    expect(assessTransaction({ ...tx, amount: 20_000 }, order)).toBe('paid')
+  })
+
+  it('refuses another currency, even at the right number', () => {
+    expect(assessTransaction({ ...tx, currency: 'USD' }, order)).toBe('wrong_currency')
   })
 
   it('waits on a pending payment and reports a failed one', () => {

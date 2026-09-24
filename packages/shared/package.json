@@ -11,7 +11,8 @@
     "./domain": "./src/domain/index.ts",
     "./pricing": "./src/pricing/index.ts",
     "./schemas": "./src/schemas/index.ts",
-    "./errors": "./src/errors/index.ts"
+    "./errors": "./src/errors/index.ts",
+    "./payments": "./src/payments/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

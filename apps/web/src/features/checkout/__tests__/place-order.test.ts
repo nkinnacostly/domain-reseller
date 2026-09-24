@@ -70,6 +70,9 @@ function chain(result: unknown) {
 
 let inserted: { orders: unknown[]; items: unknown[] }
 
+type RpcAnswer = { data: unknown; error: { message: string } | null }
+let rpcAnswers: Record<string, RpcAnswer> = {}
+
 beforeEach(() => {
   vi.clearAllMocks()
   inserted = { orders: [], items: [] }
@@ -102,7 +105,16 @@ beforeEach(() => {
   }
   vi.mocked(createClient).mockResolvedValue(userClient as never)
 
+  rpcAnswers = {
+    rate_limit_hit: { data: true, error: null },
+    account_domain_allowance: { data: { ordered: 0, max: 20 }, error: null },
+  }
   const service = {
+    rpc: vi.fn(async (name: string) => {
+      const answer = rpcAnswers[name]
+      if (!answer) throw new Error(`unexpected rpc ${name}`)
+      return answer
+    }),
     from: (table: string) => {
       if (table === 'tlds') {
         return chain({
@@ -135,6 +147,38 @@ beforeEach(() => {
 })
 
 describe('placeOrder — nothing is created or charged when a check fails', () => {
+  it('pauses an account that keeps trying, before any supplier or payment call (SEC-11)', async () => {
+    rpcAnswers.rate_limit_hit = { data: false, error: null }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/Too many checkout attempts/) })
+    expect(checkAvailability).not.toHaveBeenCalled()
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('refuses when the limit cannot be checked — fails closed', async () => {
+    rpcAnswers.rate_limit_hit = { data: null, error: { message: 'db down' } }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/Too many checkout attempts/) })
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('caps the domains one account orders in a day (SEC-11)', async () => {
+    rpcAnswers.account_domain_allowance = { data: { ordered: 20, max: 20 }, error: null }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({
+      error: expect.stringMatching(/up to 20 domains a day, and this would take you to 21/),
+    })
+    expect(checkAvailability).not.toHaveBeenCalled()
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('refuses when the day’s allowance cannot be read', async () => {
+    rpcAnswers.account_domain_allowance = { data: null, error: { message: 'db down' } }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/haven't been charged/) })
+    expect(inserted.orders).toEqual([])
+  })
+
   it('refuses an account not on the pre-launch allowlist', async () => {
     // env is read-only by type; the gate reads it at call time.
     const settings = env as { CHECKOUT_ALLOWLIST?: string }

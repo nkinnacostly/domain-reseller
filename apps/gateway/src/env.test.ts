@@ -36,3 +36,71 @@ describe('supplier write settings', () => {
     ).toBe('production')
   })
 })
+
+describe('refund and alert settings', () => {
+  const OTE = { ...BASE, DNA_WRITE_ENV: 'ote', DNA_API_TEST_KEY: 'ote-key' }
+  const LIVE = { ...BASE, NODE_ENV: 'production', DNA_WRITE_ENV: 'production' }
+  const TEST_KEY = 'FLWSECK_TEST-0000000000000000-X'
+  const LIVE_KEY = 'FLWSECK-0000000000000000-X'
+  /** Dummy keys go through here so the pre-commit secret scan does not mistake them for real ones. */
+  const flw = (key: string) => ({ FLUTTERWAVE_SECRET_KEY: key })
+
+  it('sends no refunds without a key', () => {
+    expect(parseEnv(OTE).FLUTTERWAVE_SECRET_KEY).toBeUndefined()
+  })
+
+  it('refunds test payments with a test key on the sandbox side', () => {
+    expect(parseEnv({ ...OTE, ...flw(TEST_KEY) }).FLUTTERWAVE_SECRET_KEY).toBe(TEST_KEY)
+  })
+
+  it('refuses a live key on the sandbox side (N12)', () => {
+    expect(() => parseEnv({ ...OTE, ...flw(LIVE_KEY) })).toThrow(/FLWSECK_TEST-/)
+  })
+
+  it('refuses a test key on the live side', () => {
+    expect(() => parseEnv({ ...LIVE, ...flw(TEST_KEY) })).toThrow(/live key/)
+  })
+
+  it('refuses a live key anywhere but production', () => {
+    expect(() => parseEnv({ ...BASE, ...flw(LIVE_KEY) })).toThrow(/outside production/)
+  })
+
+  it('takes the live key in a production deployment', () => {
+    expect(parseEnv({ ...LIVE, ...flw(LIVE_KEY) }).FLUTTERWAVE_SECRET_KEY).toBe(LIVE_KEY)
+  })
+
+  it('sends a live key to Flutterwave and nowhere else', () => {
+    expect(() =>
+      parseEnv({
+        ...LIVE,
+        ...flw(LIVE_KEY),
+        FLUTTERWAVE_API_URL: 'https://flutterwave.attacker.test/v3',
+      }),
+    ).toThrow(/only sent to https:\/\/api\.flutterwave\.com\/v3/)
+  })
+
+  it('lets a test key go to a local mock', () => {
+    const env = parseEnv({
+      ...OTE,
+      ...flw(TEST_KEY),
+      FLUTTERWAVE_API_URL: 'http://127.0.0.1:4010/v3',
+    })
+    expect(env.FLUTTERWAVE_API_URL).toBe('http://127.0.0.1:4010/v3')
+  })
+
+  it('needs the Telegram token and chat together, and checks their shape', () => {
+    const token = '123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw'
+    expect(() => parseEnv({ ...BASE, TELEGRAM_BOT_TOKEN: token })).toThrow(/together/)
+    expect(() => parseEnv({ ...BASE, TELEGRAM_CHAT_ID: '-100123' })).toThrow(/together/)
+    expect(() => parseEnv({ ...BASE, TELEGRAM_BOT_TOKEN: 'nope', TELEGRAM_CHAT_ID: '1' })).toThrow(
+      /Telegram bot token/,
+    )
+    expect(() => parseEnv({ ...BASE, TELEGRAM_BOT_TOKEN: token, TELEGRAM_CHAT_ID: '@me' })).toThrow(
+      /chat id/,
+    )
+    expect(
+      parseEnv({ ...BASE, TELEGRAM_BOT_TOKEN: token, TELEGRAM_CHAT_ID: '-100123' })
+        .TELEGRAM_CHAT_ID,
+    ).toBe('-100123')
+  })
+})

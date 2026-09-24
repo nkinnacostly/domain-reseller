@@ -5,11 +5,13 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { FormMessage } from '@/components/common/form-parts'
 import { Container } from '@/components/layout/site-shell'
+import { OrderRefunds } from '@/features/checkout/components/order-refunds'
 import { OrderStatus } from '@/features/checkout/components/order-status'
 import { RefreshWhile } from '@/features/checkout/components/refresh-while'
 import { isSettling, LINE_STATUS, orderNotice } from '@/features/checkout/lib/progress'
-import { getOrder } from '@/features/checkout/queries/orders'
+import { getOrder, getOrderRefunds } from '@/features/checkout/queries/orders'
 import { failureReason } from '@/features/domains/lib/registration'
+import { BUSINESS } from '@/lib/business'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Order' }
@@ -31,15 +33,19 @@ const PAYMENT_NOTICES: Record<string, { tone: 'success' | 'error'; text: string 
     tone: 'error',
     text: "We're still waiting for Flutterwave to confirm this payment. This page updates when it does — nothing is charged twice.",
   },
+  underpaid: {
+    tone: 'error',
+    text: 'We received less than this order’s total, so it hasn’t been applied and nothing has been registered. The full amount is being refunded to the card or account you paid with — nothing is needed from you.',
+  },
   mismatch: {
     tone: 'error',
-    text: "That payment doesn't match this order, so it hasn't been applied. Contact support if you were charged.",
+    text: `That payment doesn't match this order, so it hasn't been applied. We've recorded it to look into. If you were charged, email ${BUSINESS.email} with your order number.`,
   },
 }
 
 async function Order({ params, searchParams }: { params: Params; searchParams: Search }) {
   const [{ id }, { payment }] = await Promise.all([params, searchParams])
-  const order = await getOrder(id)
+  const [order, refunds] = await Promise.all([getOrder(id), getOrderRefunds(id)])
   if (!order) notFound()
 
   const registrant = order.registrant as Contact
@@ -129,6 +135,8 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
               <dd className="tabular-nums">{formatNaira(Number(order.total_kobo))}</dd>
             </div>
           </dl>
+
+          <OrderRefunds refunds={refunds} />
         </section>
 
         <section

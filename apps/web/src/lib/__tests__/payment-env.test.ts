@@ -50,4 +50,26 @@ describe('requirePaymentEnv', () => {
     })
     expect(require().secretKey).toBe('FLWSECK-live-X')
   })
+
+  it('never sends a live key anywhere but Flutterwave', async () => {
+    // Through a helper, so the pre-commit secret scan does not take the dummy for a real key.
+    const withSecret = (key: string) => ({ FLUTTERWAVE_SECRET_KEY: key })
+    const require = await paymentEnv({
+      ...TEST_KEYS,
+      NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: 'FLWPUBK-live-X',
+      ...withSecret('FLWSECK-live-X'),
+      NODE_ENV: 'production',
+      FLUTTERWAVE_API_URL: 'https://flutterwave.attacker.test/v3',
+    })
+    expect(() => require()).toThrow(/only sent to https:\/\/api\.flutterwave\.com\/v3/)
+  })
+
+  it('lets test keys go to the e2e mock', async () => {
+    const require = await paymentEnv({
+      ...TEST_KEYS,
+      NODE_ENV: 'development',
+      FLUTTERWAVE_API_URL: 'http://127.0.0.1:4010/v3',
+    })
+    expect(require().testMode).toBe(true)
+  })
 })

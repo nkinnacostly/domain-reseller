@@ -1,3 +1,4 @@
+import { FLUTTERWAVE_LIVE_API_URL, isTestSecretKey } from '@dr/shared/payments'
 import { createEnv } from '@t3-oss/env-nextjs'
 import { z } from 'zod'
 
@@ -74,9 +75,16 @@ export function requirePaymentEnv() {
 
   // N12 in code: anywhere but production, only test keys will do. Flutterwave
   // marks them FLWSECK_TEST- / FLWPUBK_TEST-.
-  const isTestKey = (key: string) => key.includes('_TEST-')
+  const isTestKey = isTestSecretKey
   if (env.NODE_ENV !== 'production' && (!isTestKey(secretKey) || !isTestKey(publicKey))) {
     throw new Error('Refusing live Flutterwave keys outside production. Use test keys (N12).')
+  }
+  // A live key goes to Flutterwave and nowhere else: FLUTTERWAVE_API_URL exists
+  // for the e2e mock, and must not become a way to send the key elsewhere.
+  // (Unset only where validation is skipped, when the default applies.)
+  const apiUrl = env.FLUTTERWAVE_API_URL ?? FLUTTERWAVE_LIVE_API_URL
+  if (!isTestKey(secretKey) && apiUrl !== FLUTTERWAVE_LIVE_API_URL) {
+    throw new Error(`A live Flutterwave key is only sent to ${FLUTTERWAVE_LIVE_API_URL}.`)
   }
 
   return { secretKey, publicKey, webhookHash, testMode: isTestKey(secretKey) }

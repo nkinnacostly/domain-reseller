@@ -167,6 +167,12 @@ test.describe('checkout', () => {
     await expect(page.getByRole('alert').filter({ hasText: 'could not register' })).toContainText(
       'No money moved.',
     )
+    // FR-R3: the failed line's refund is queued at once, with no ticket. On a
+    // test order it says so, and that no money moves.
+    const refunds = main.getByRole('region', { name: 'Refunds' })
+    await expect(refunds.getByText(`${name}.com`)).toBeVisible()
+    await expect(refunds).toContainText('Being processed')
+    await expect(refunds).toContainText('Test refund — no money moves.')
     expect((await axe(page)).violations).toEqual([])
 
     await page.goto(`/app/domains/${name}.com`)

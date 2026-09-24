@@ -6,10 +6,12 @@ import { z } from 'zod'
 import { getCartView } from '@/features/cart/queries/cart'
 import { deleteLine, findCartId } from '@/features/cart/queries/store'
 import { checkAvailability } from '@/features/search/queries/availability'
+import { BUSINESS } from '@/lib/business'
 import { env, requirePaymentEnv } from '@/lib/env'
 import { createPaymentLink } from '@/lib/flutterwave'
 import { callGateway } from '@/lib/gateway'
 import { logger } from '@/lib/logger'
+import { LIMITS, withinLimit } from '@/lib/rate-limit'
 import { authAction } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
 import { checkoutOpenTo } from '../lib/access'
@@ -28,6 +30,16 @@ type Result = { error: string; field?: string } | { redirectTo: string }
 
 const NOT_CHARGED = "You haven't been charged."
 
+/**
+ * A database error, fit for a log line. PostgREST's `details` can quote the
+ * failing row — the registrant's name, email and address — so only the code
+ * and message are kept (N13).
+ */
+const dbError = (error: { code?: string; message: string } | null) => ({
+  code: error?.code,
+  err: error?.message,
+})
+
 export const placeOrder = authAction
   .inputSchema(
     z.object({
@@ -42,6 +54,18 @@ export const placeOrder = authAction
   .action(async ({ parsedInput, ctx }): Promise<Result> => {
     if (!checkoutOpenTo(ctx.user.email, env.CHECKOUT_ALLOWLIST)) {
       return { error: `Checkout isn't open yet. ${NOT_CHARGED}` }
+    }
+    // SEC-11: an account that keeps placing orders is paused before any
+    // supplier or payment call is made on its behalf.
+    const [recent, today] = await Promise.all([
+      withinLimit(`place_order:${ctx.user.id}`, LIMITS.placeOrder),
+      withinLimit(`place_order_day:${ctx.user.id}`, LIMITS.placeOrderDaily),
+    ])
+    if (!recent || !today) {
+      logger.warn({ userId: ctx.user.id }, 'checkout rate limit reached')
+      return {
+        error: `Too many checkout attempts. ${NOT_CHARGED} Wait a few minutes, then try again.`,
+      }
     }
     const payment = requirePaymentEnv()
     const nameservers = parseNameservers(parsedInput.nameservers)
@@ -60,6 +84,25 @@ export const placeOrder = authAction
     if (totals.totalKobo !== parsedInput.expectedTotalKobo) {
       return {
         error: 'Your total has changed since this page loaded. Check the new total, then pay.',
+      }
+    }
+
+    // ── Velocity (SEC-11) ────────────────────────────────────────────────
+    // Stolen cards buy domains in bulk for phishing: a cap on domains per
+    // account per day limits what one account can do before a person looks.
+    const service = createServiceClient()
+    const { data: allowance, error: allowanceError } = await service.rpc(
+      'account_domain_allowance',
+      { p_user_id: ctx.user.id },
+    )
+    const { ordered, max } = (allowance ?? {}) as { ordered?: number; max?: number }
+    if (allowanceError || typeof ordered !== 'number' || typeof max !== 'number') {
+      logger.error({ err: allowanceError?.message }, 'domain allowance could not be checked')
+      return { error: `We couldn't complete checkout just now. ${NOT_CHARGED} Try again shortly.` }
+    }
+    if (ordered + lines.length > max) {
+      return {
+        error: `You can order up to ${max} domains a day, and this would take you to ${ordered + lines.length}. ${NOT_CHARGED} Remove some, or email ${BUSINESS.email} to raise your limit.`,
       }
     }
 
@@ -92,7 +135,6 @@ export const placeOrder = authAction
     }
 
     // ── Float pre-flight (FR-C8) ─────────────────────────────────────────
-    const service = createServiceClient()
     const [{ data: tldRows }, { data: settings }] = await Promise.all([
       service
         .from('tlds')
@@ -169,7 +211,7 @@ export const placeOrder = authAction
           .select('id')
           .single()
       : await ctx.supabase.from('contact_profiles').insert(contactRow).select('id').single()
-    if (saved.error) logger.warn({ err: saved.error }, 'could not save default contact')
+    if (saved.error) logger.warn(dbError(saved.error), 'could not save default contact')
 
     // ── Create the order (step 1) ────────────────────────────────────────
     // The Flutterwave account is shared with other apps; Paidly's webhook
@@ -194,7 +236,7 @@ export const placeOrder = authAction
       .select('id, order_number')
       .single()
     if (orderError || !order) {
-      logger.error({ err: orderError }, 'order insert failed')
+      logger.error(dbError(orderError), 'order insert failed')
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }
 
@@ -211,7 +253,7 @@ export const placeOrder = authAction
       })),
     )
     if (itemsError) {
-      logger.error({ err: itemsError }, 'order items insert failed')
+      logger.error({ ...dbError(itemsError), orderId: order.id }, 'order items insert failed')
       await service.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }

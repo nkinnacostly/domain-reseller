@@ -175,8 +175,8 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
       if (jobIds.length) await db.from('supplier_calls').delete().in('job_id', jobIds)
       await db.from('domains').delete().in('id', ids)
     }
-    await db.from('payments').delete().eq('user_id', userId)
-    await db.from('orders').delete().eq('user_id', userId)
+    // Money rows go only through the purge, which refuses live orders.
+    await db.rpc('purge_test_orders', { p_user_id: userId })
     await db.auth.admin.deleteUser(userId)
   })
 
