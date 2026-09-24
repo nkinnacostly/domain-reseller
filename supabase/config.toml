@@ -74,6 +74,16 @@ pass = "env(BREVO_SMTP_KEY)"
 admin_email = "no-reply@notify.mydomainshub.com"
 sender_name = "MyDomainsHub"
 
+# Every auth email goes to our own route instead (Send Email hook), which sends
+# it through Brevo's API from no-reply@ with Reply-To hello@ — SMTP cannot set
+# a Reply-To. SMTP above stays configured: with the hook disabled, Supabase
+# falls back to it. Enable only once the route and its env vars (BREVO_API_KEY,
+# SEND_EMAIL_HOOK_SECRET) are live on Vercel, or auth email stops.
+[auth.hook.send_email]
+enabled = true
+uri = "https://www.mydomainshub.com/api/auth/send-email"
+secrets = "env(SEND_EMAIL_HOOK_SECRET)"
+
 # Token-hash links to /auth/confirm, which work when the email is opened on
 # another device (L2). Needs custom SMTP: the free tier refuses template
 # changes on the built-in sender.

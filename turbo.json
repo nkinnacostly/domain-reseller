@@ -17,8 +17,8 @@
         "RDAP_BOOTSTRAP_URL",
         "FX_BUFFER_PCT",
         "PRICE_LOCK_MINUTES",
-        "RESEND_API_KEY",
-        "EMAIL_FROM",
+        "BREVO_API_KEY",
+        "SEND_EMAIL_HOOK_SECRET",
         "SENTRY_DSN",
         "LOG_LEVEL"
       ]

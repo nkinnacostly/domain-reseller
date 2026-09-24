@@ -122,6 +122,23 @@ transfers in are closed. `APP_URL` (in `fly.toml`) lets it refresh the site's
 prices afterwards. The pricing workflow no longer needs the `DNA_*` GitHub
 secrets: `gh secret delete DNA_API_KEY` and `gh secret delete DNA_RESELLER_ID`.
 
+## 5c. Email (L1)
+
+Supabase Auth sends every email through our route `/api/auth/send-email`,
+which uses Brevo's API: from `no-reply@notify.mydomainshub.com`, replies to
+`hello@mydomainshub.com` (a Spaceship mailbox).
+
+- **Vercel** needs `BREVO_API_KEY` and `SEND_EMAIL_HOOK_SECRET` (the value in
+  `.env`, starting `v1,whsec_`) in Production. Deploy them **before** pushing
+  the Supabase config that enables the hook, or auth email stops.
+- **Supabase:** `set -a; . ./.env; set +a; supabase config push` — read the
+  diff first (CLAUDE.md §15).
+- **If sign-up emails stop:** set `enabled = false` under
+  `[auth.hook.send_email]` and push the config again. Supabase falls back to
+  Brevo's SMTP (without the Reply-To) while you look.
+- Brevo's free plan sends 300 a day. Its delivery log is under Transactional →
+  Logs.
+
 ## 6. Refunds and alerts (L15, L16)
 
 The gateway sends refunds for failed registrations, second charges and short

@@ -37,8 +37,11 @@ export const env = createEnv({
     RDAP_BOOTSTRAP_URL: z.url().default('https://data.iana.org/rdap/dns.json'),
     FX_BUFFER_PCT: z.coerce.number().min(0).max(25).default(4),
     PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(PRICE_LOCK_DEFAULT_MINUTES),
-    RESEND_API_KEY: z.string().optional(),
-    EMAIL_FROM: z.string().optional(),
+    // Email through Brevo (L1): the API key sends; the hook secret proves a
+    // request to /api/auth/send-email came from Supabase Auth (Standard
+    // Webhooks, `v1,whsec_…`). Asserted where used, like the payment keys.
+    BREVO_API_KEY: z.string().min(1).optional(),
+    SEND_EMAIL_HOOK_SECRET: z.string().startsWith('v1,whsec_').optional(),
     SENTRY_DSN: z.string().optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   },

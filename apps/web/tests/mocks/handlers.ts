@@ -6,6 +6,11 @@ import { HttpResponse, http } from 'msw'
  * unhandled request is a genuine signal, not noise.
  */
 export const handlers = [
+  // Brevo transactional email (L1): accepted, as Brevo answers a good send.
+  http.post('https://api.brevo.com/v3/smtp/email', () =>
+    HttpResponse.json({ messageId: '<test@smtp-relay.mailin.fr>' }, { status: 201 }),
+  ),
+
   // Registrar gateway — availability, in the shared contract's shape. Every
   // pair is available unless a test overrides it.
   http.post('*/v1/availability', async ({ request }) => {

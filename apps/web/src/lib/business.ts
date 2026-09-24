@@ -12,6 +12,12 @@ export const BUSINESS = {
   site: 'www.mydomainshub.com',
   /** One address for support, abuse and privacy requests (the owner's choice). */
   email: 'hello@mydomainshub.com',
+  /**
+   * Automated email comes from here — an authenticated subdomain, so its
+   * reputation is kept apart — and every reply goes to `email` (the owner's
+   * choice, 24 Sept 2026).
+   */
+  noReplyEmail: 'no-reply@notify.mydomainshub.com',
   /** Promise for refunding a paid line that fails to register (the owner's choice). */
   refundBusinessDays: 5,
   lastUpdated: '23 September 2026',
