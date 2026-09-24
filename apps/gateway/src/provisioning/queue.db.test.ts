@@ -44,6 +44,8 @@ const REGISTRANT = {
   zipCode: '100001',
   country: 'NG',
 }
+/** FR-A4 (migration 29): the order's own technical contact; the registrant holds the rest. */
+const TECHNICAL = { ...REGISTRANT, firstName: 'Tunde', email: 'tunde@example.com' }
 const VERCEL = ['ns1.vercel-dns.com', 'ns2.vercel-dns.com']
 const NETLIFY = ['dns1.p01.nsone.net', 'dns2.p01.nsone.net']
 const REGISTERED: RegistryDomain = {
@@ -63,6 +65,7 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
   const good = `e2ecartgw${stamp}a.com`
   const taken = `e2ecartgw${stamp}b.com`
   const paymentsSeen: ClaimedJob['payment'][] = []
+  const contactsSent: unknown[] = []
 
   /** Registers `good` and refuses `taken`, recording each call as the real one does. */
   const registrarFor = (job: ClaimedJob): Registrar => ({
@@ -78,7 +81,8 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
       })
       return { kind: 'not_found' }
     },
-    async register({ domainName }) {
+    async register({ domainName, contacts }) {
+      contactsSent.push(contacts)
       return domainName === taken
         ? { kind: 'rejected', code: 'DOMAIN_TAKEN', message: 'Domain exists' }
         : { kind: 'ok', data: REGISTERED }
@@ -152,6 +156,7 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
         fx_rate_id: rate?.id ?? '',
         tx_ref: `e2e-gw-${stamp}`,
         registrant: REGISTRANT,
+        contacts: { technical: TECHNICAL },
         nameservers: VERCEL,
         float_check: 'covered',
         test_mode: true,
@@ -255,6 +260,15 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
         status: 'successful',
       })
     }
+  })
+
+  it('registers every line with the order’s other contacts, and keeps them on the domain (FR-A4)', async () => {
+    expect(contactsSent).toEqual([{ technical: TECHNICAL }, { technical: TECHNICAL }])
+    const { data } = await db.from('domains').select('contacts').eq('user_id', userId)
+    expect((data ?? []).map((row) => row.contacts)).toEqual([
+      { technical: TECHNICAL },
+      { technical: TECHNICAL },
+    ])
   })
 
   it('records every supplier call against its job (I7)', async () => {

@@ -1,4 +1,5 @@
 import type { Contact } from '@dr/shared'
+import type { OtherContacts } from './contacts'
 import type { Registrar, RegistryDomain } from './registrar'
 
 /**
@@ -20,7 +21,10 @@ export type RegistrationTask = {
   domainName: string
   periodYears: number
   privacy: boolean
+  /** The registrant. */
   contact: Contact
+  /** The other three roles; one left out is the registrant (FR-A4). */
+  contacts?: OtherContacts
   nameservers: string[] | null
 }
 
@@ -96,6 +100,7 @@ export async function runRegistration(
       domainName: task.domainName,
       periodYears: task.periodYears,
       contact: task.contact,
+      ...(task.contacts ? { contacts: task.contacts } : {}),
       privacy: task.privacy,
     })
     if (written.kind === 'rejected') {

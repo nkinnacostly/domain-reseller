@@ -37,6 +37,16 @@ const CONTACT: Contact = {
   country: 'NG',
 }
 
+const TUNDE: Contact = { ...CONTACT, firstName: 'Tunde', email: 'tunde@example.com' }
+const CHIOMA: Contact = { ...CONTACT, firstName: 'Chioma', email: 'chioma@example.com' }
+const BAYO: Contact = { ...CONTACT, firstName: 'Bayo', email: 'bayo@example.com' }
+
+/** Who the SDK sent in each role, by the supplier's contact type. */
+function firstNameByRole(body: unknown): Record<string, string> {
+  const contacts = (body as { contacts?: { contactType: string; firstName: string }[] }).contacts
+  return Object.fromEntries((contacts ?? []).map((row) => [row.contactType, row.firstName]))
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -155,8 +165,31 @@ describe('register', () => {
       privacyEnabled: true,
       nameServers: ['ns1.domainnameapi.com', 'ns2.domainnameapi.com'],
     })
-    const body = call?.body as { contacts?: unknown[] } | undefined
-    expect(body?.contacts).toHaveLength(4)
+    // No other contacts on the order: the registrant holds every role.
+    expect(firstNameByRole(call?.body)).toEqual({
+      Admin: 'Ada',
+      Billing: 'Ada',
+      Registrant: 'Ada',
+      Tech: 'Ada',
+    })
+  })
+
+  it('registers each role with its own contact, the registrant where there is none (FR-A4)', async () => {
+    const { registrar, sent } = setup(() => json(200, DOMAIN_INFO))
+    await registrar.register({
+      domainName: 'example.com',
+      periodYears: 1,
+      contact: CONTACT,
+      contacts: { technical: TUNDE, billing: CHIOMA },
+      privacy: false,
+    })
+    const call = sent.find((request) => request.path.endsWith('/domains/register-with-contacts'))
+    expect(firstNameByRole(call?.body)).toEqual({
+      Admin: 'Ada',
+      Billing: 'Chioma',
+      Registrant: 'Ada',
+      Tech: 'Tunde',
+    })
   })
 
   it('returns what the registry recorded', async () => {
@@ -549,19 +582,25 @@ describe('registry-side settings (FR-DS1, FR-DS3, FR-DS4)', () => {
     })
   })
 
-  it('saves one person in all four roles through PUT domains/contacts/update', async () => {
+  it('saves all four roles, each its own person, through PUT domains/contacts/update', async () => {
     const { registrar, sent } = setup(() => json(200, {}))
-    await expect(registrar.updateContacts('example.com', CONTACT)).resolves.toEqual({ kind: 'ok' })
+    await expect(
+      registrar.updateContacts('example.com', {
+        registrant: CONTACT,
+        administrative: BAYO,
+        technical: TUNDE,
+        billing: CHIOMA,
+      }),
+    ).resolves.toEqual({ kind: 'ok' })
     expect(sent[0]?.method).toBe('PUT')
     expect(sent[0]?.path).toBe('/api/v1/domains/contacts/update')
-    const body = sent[0]?.body as { domainName: string; contacts: { contactType: string }[] }
-    expect(body.domainName).toBe('example.com')
-    expect(body.contacts.map((contact) => contact.contactType).sort()).toEqual([
-      'Admin',
-      'Billing',
-      'Registrant',
-      'Tech',
-    ])
+    expect(sent[0]?.body).toMatchObject({ domainName: 'example.com' })
+    expect(firstNameByRole(sent[0]?.body)).toEqual({
+      Admin: 'Bayo',
+      Billing: 'Chioma',
+      Registrant: 'Ada',
+      Tech: 'Tunde',
+    })
   })
 
   it('reads a client without its REST layer as unknown: nothing was sent', async () => {
@@ -592,7 +631,12 @@ describe('registry-side settings (FR-DS1, FR-DS3, FR-DS4)', () => {
   it('classifies a refusal: contact problems apart, the rest as the registry’s call', async () => {
     const refusing = (message: string) => setup(() => json(400, { error: { message } })).registrar
     await expect(
-      refusing('Invalid phone number').updateContacts('example.com', CONTACT),
+      refusing('Invalid phone number').updateContacts('example.com', {
+        registrant: CONTACT,
+        administrative: CONTACT,
+        technical: CONTACT,
+        billing: CONTACT,
+      }),
     ).resolves.toMatchObject({ kind: 'rejected', code: 'CONTACT_INVALID' })
     await expect(
       refusing('Operation not allowed by the registry').setPrivacy('example.com', true),

@@ -43,6 +43,13 @@ export type ClaimedJob = {
   pendingTransferLock?: boolean | null
   pendingPrivacy?: boolean | null
   pendingRegistrant?: unknown
+  /**
+   * FR-DS1 (migration 29): the administrative, technical and billing contacts
+   * the domain holds, and those asked for. A role left out is the registrant;
+   * a pending `{}` puts all three back on the registrant. Null: none stored.
+   */
+  contacts?: unknown
+  pendingContacts?: unknown
   /** A transfer's code, handed over only until the registry has the request (migration 26). */
   authCode?: string | null
   /** A transfer: when the registry took the request. Set, the job polls. */
@@ -92,9 +99,9 @@ export interface JobStore {
     code: string | null,
   ): Promise<void>
   /**
-   * A settings job's answer (migration 26). `applied` is what the registry
-   * now holds — {transfer_lock}, {privacy} or {registrant} — read back after
-   * the write; null means it refused `attempted`, with `code`.
+   * A settings job's answer (migrations 26, 29). `applied` is what the
+   * registry now holds — {transfer_lock}, {privacy} or {registrant, contacts}
+   * — read back after the write; null means it refused `attempted`, with `code`.
    */
   recordDomainChange(
     jobId: string,
@@ -132,6 +139,8 @@ type Row = {
   pending_transfer_lock?: boolean | null
   pending_privacy?: boolean | null
   pending_registrant?: unknown
+  contacts?: unknown
+  pending_contacts?: unknown
   auth_code?: string | null
   submitted_at?: string | null
 }
@@ -168,6 +177,8 @@ export function toClaimedJob(row: Row): ClaimedJob {
     pendingTransferLock: row.pending_transfer_lock ?? null,
     pendingPrivacy: row.pending_privacy ?? null,
     pendingRegistrant: row.pending_registrant ?? null,
+    contacts: row.contacts ?? null,
+    pendingContacts: row.pending_contacts ?? null,
     authCode: row.auth_code ?? null,
     submittedAt: row.submitted_at ?? null,
   }

@@ -1,7 +1,6 @@
-import type { Contact } from '@dr/shared'
+import { type ContactRoles, OTHER_ROLES, type OtherContacts } from './contacts'
 import {
   asRegistryContact,
-  type ContactRole,
   type RegistryContacts,
   type SettingsRegistrar,
   type SettingWrite,
@@ -30,13 +29,20 @@ import {
 export type SettingTask =
   | { kind: 'set_transfer_lock'; domainName: string; requested: boolean }
   | { kind: 'set_privacy'; domainName: string; requested: boolean }
-  | { kind: 'update_contacts'; domainName: string; requested: Contact }
+  /** All four roles, each filled in: SaveContacts replaces the whole set (FR-DS1). */
+  | { kind: 'update_contacts'; domainName: string; requested: ContactRoles }
 
 export type SettingOutcome =
   | {
       kind: 'applied'
       /** Found applied by a read — nothing written, or an unclear write that landed. */
       recovered: boolean
+      /**
+       * What the registry now holds, read back, in the shape
+       * record_domain_change takes: {transfer_lock}, {privacy}, or
+       * {registrant, contacts}.
+       */
+      held: Record<string, unknown>
     }
   /** Refused by the registry: recorded as refused, with this code. */
   | { kind: 'rejected'; code: string; message: string }
@@ -50,12 +56,13 @@ type Held<T> =
   | { kind: 'found'; value: T }
   | Exclude<SettingOutcome, { kind: 'applied' } | { kind: 'not_applied' }>
 
-/** One setting as a read, a comparison and a write. */
+/** One setting as a read, a comparison, a write, and how a matching read is recorded. */
 type Setting<T> = {
   read(): Promise<Held<T>>
   same(held: T, other: T): boolean
   requested: T
   write(): Promise<SettingWrite>
+  record(held: T): Record<string, unknown>
 }
 
 const NOT_OURS = {
@@ -76,24 +83,52 @@ function flag(
   }
 }
 
+const ROLES = ['registrant', ...OTHER_ROLES] as const
+
 /**
- * The roles the registry shows, each against the same role in `other`. A
- * role missing from either side is not compared; the registrant always is.
+ * All four roles, each against the same role in `other`. A role missing from
+ * either side is a difference: with four different people possible, a role
+ * the registry does not show cannot be taken to hold what was sent. (The
+ * sandbox's GetContacts shows all four, 24 Sept 2026.)
  */
 export function sameContacts(shown: RegistryContacts, other: RegistryContacts): boolean {
-  if (!shown.registrant || !other.registrant) return false
-  return (Object.keys(shown) as ContactRole[]).every((role) => {
+  return ROLES.every((role) => {
     const mine = shown[role]
     const theirs = other[role]
-    return !mine || !theirs || sameContact(mine, theirs)
+    return Boolean(mine && theirs && sameContact(mine, theirs))
   })
+}
+
+/**
+ * The four roles as `record_domain_change` stores them (migration 29): the
+ * registrant, and in `contacts` each other role the registry shows held by
+ * someone other than the registrant — {} when the registrant holds all three.
+ *
+ * `shown` matched `sent` role by role (sameContacts), so each role is
+ * recorded as what was sent: the registry's copy is flattened (one address
+ * line, its own spacing and phone format) and would not read back as a Contact.
+ */
+export function heldContacts(
+  shown: RegistryContacts,
+  sent: ContactRoles,
+): { registrant: ContactRoles['registrant']; contacts: OtherContacts } {
+  const contacts: OtherContacts = {}
+  for (const role of OTHER_ROLES) {
+    const holder = shown[role]
+    if (holder && shown.registrant && !sameContact(holder, shown.registrant)) {
+      contacts[role] = sent[role]
+    }
+  }
+  return { registrant: sent.registrant, contacts }
 }
 
 async function run<T>(change: Setting<T>): Promise<SettingOutcome> {
   // a. I1: never written without looking first.
   const before = await change.read()
   if (before.kind !== 'found') return before
-  if (change.same(before.value, change.requested)) return { kind: 'applied', recovered: true }
+  if (change.same(before.value, change.requested)) {
+    return { kind: 'applied', recovered: true, held: change.record(before.value) }
+  }
 
   // b.
   const written = await change.write()
@@ -104,7 +139,7 @@ async function run<T>(change: Setting<T>): Promise<SettingOutcome> {
   // c. What the registry holds decides, never the write's answer.
   const after = await change.read()
   if (after.kind === 'found' && change.same(after.value, change.requested)) {
-    return { kind: 'applied', recovered: written.kind !== 'ok' }
+    return { kind: 'applied', recovered: written.kind !== 'ok', held: change.record(after.value) }
   }
   if (written.kind === 'ok') {
     return {
@@ -134,6 +169,7 @@ export function runSettingChange(
         same: sameFlag,
         requested: task.requested,
         write: () => registrar.setTransferLock(task.domainName, task.requested),
+        record: (held) => ({ transfer_lock: held }),
       })
     case 'set_privacy':
       return run({
@@ -141,10 +177,10 @@ export function runSettingChange(
         same: sameFlag,
         requested: task.requested,
         write: () => registrar.setPrivacy(task.domainName, task.requested),
+        record: (held) => ({ privacy: held }),
       })
     case 'update_contacts': {
-      // Checkout's one person holds every role (registrar.ts contactSet).
-      const wanted = asRegistryContact(task.requested)
+      const sent = task.requested
       return run<RegistryContacts>({
         read: async () => {
           const read = await registrar.contacts(task.domainName)
@@ -153,12 +189,13 @@ export function runSettingChange(
         },
         same: sameContacts,
         requested: {
-          registrant: wanted,
-          administrative: wanted,
-          technical: wanted,
-          billing: wanted,
+          registrant: asRegistryContact(sent.registrant),
+          administrative: asRegistryContact(sent.administrative),
+          technical: asRegistryContact(sent.technical),
+          billing: asRegistryContact(sent.billing),
         },
-        write: () => registrar.updateContacts(task.domainName, task.requested),
+        write: () => registrar.updateContacts(task.domainName, sent),
+        record: (held) => heldContacts(held, sent),
       })
     }
   }

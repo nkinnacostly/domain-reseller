@@ -54,6 +54,8 @@ const ADA = {
   country: 'NG',
 }
 const BAYO = { ...ADA, firstName: 'Bayo', email: 'bayo@example.com' }
+const TUNDE = { ...ADA, firstName: 'Tunde', email: 'tunde@example.com' }
+const CHIOMA = { ...ADA, firstName: 'Chioma', email: 'chioma@example.com' }
 
 const HELD: RegistryDomain = {
   registeredAt: '2026-09-23T10:00:00.000Z',
@@ -94,10 +96,14 @@ describe.skipIf(!enabled)('registry-side settings against the database', () => {
       registry = { ...registry, privacy: enabled }
       return { kind: 'ok' }
     },
-    async updateContacts(_name, contact) {
+    async updateContacts(_name, roles) {
       if (refuse) return refuse
-      const held = asRegistryContact(contact)
-      contacts = { registrant: held, administrative: held, technical: held, billing: held }
+      contacts = {
+        registrant: asRegistryContact(roles.registrant),
+        administrative: asRegistryContact(roles.administrative),
+        technical: asRegistryContact(roles.technical),
+        billing: asRegistryContact(roles.billing),
+      }
       return { kind: 'ok' }
     },
   }
@@ -139,7 +145,7 @@ describe.skipIf(!enabled)('registry-side settings against the database', () => {
     const { data } = await db
       .from('domains')
       .select(
-        'transfer_lock, privacy_enabled, registrant, pending_transfer_lock, pending_privacy, pending_registrant',
+        'transfer_lock, privacy_enabled, registrant, pending_transfer_lock, pending_privacy, pending_registrant, contacts, pending_contacts',
       )
       .eq('id', id)
       .single()
@@ -351,6 +357,9 @@ describe.skipIf(!enabled)('registry-side settings against the database', () => {
     expect(await domain(ids.active)).toMatchObject({
       registrant: BAYO,
       pending_registrant: null,
+      // The new registrant holds the other three roles too.
+      contacts: {},
+      pending_contacts: null,
     })
     const applied = (await events(ids.active)).filter(
       (event) => event.event_type === 'contacts_applied',
@@ -359,9 +368,80 @@ describe.skipIf(!enabled)('registry-side settings against the database', () => {
     expect(JSON.stringify(await events(ids.active))).not.toContain('bayo@example.com')
   })
 
+  it('gives the other three roles their own people, and records what the registry holds (FR-DS1)', async () => {
+    const pending = { technical: TUNDE, billing: CHIOMA }
+    await ask(ids.active, 'update_contacts', { pending_contacts: pending })
+    const [job] = (await openJobs(ids.active, 'update_contacts')).filter(
+      (row) => row.status === 'queued',
+    )
+    // The claim carries what the domain holds and what was asked for.
+    const claimed = await store.claim('db-test-settings', true, 300, job?.id)
+    expect(claimed).toMatchObject({
+      kind: 'update_contacts',
+      registrant: BAYO,
+      contacts: {},
+      pendingContacts: pending,
+      pendingRegistrant: null,
+    })
+    await store.reschedule(job?.id ?? '', 0, 'TIMEOUT', 'db test')
+
+    await workerFor([job?.id ?? '']).tick()
+    expect(contacts).toEqual({
+      registrant: asRegistryContact(BAYO),
+      administrative: asRegistryContact(BAYO),
+      technical: asRegistryContact(TUNDE),
+      billing: asRegistryContact(CHIOMA),
+    })
+    expect(await domain(ids.active)).toMatchObject({
+      registrant: BAYO,
+      contacts: pending,
+      pending_contacts: null,
+      pending_registrant: null,
+    })
+    expect(JSON.stringify(await events(ids.active))).not.toContain('tunde@example.com')
+  })
+
+  it('keeps a newer request made while the change ran, and queues it again', async () => {
+    await ask(ids.active, 'update_contacts', { pending_contacts: { administrative: TUNDE } })
+    const [running] = (await openJobs(ids.active, 'update_contacts')).filter(
+      (row) => row.status === 'queued',
+    )
+    const claimed = await store.claim('db-test-settings', true, 300, running?.id)
+    expect(claimed?.pendingContacts).toEqual({ administrative: TUNDE })
+
+    // They ask again before the registry answers: the open job keeps it from queueing.
+    await ask(ids.active, 'update_contacts', { pending_contacts: {} })
+    expect(
+      (await openJobs(ids.active, 'update_contacts')).filter((row) => row.status === 'queued'),
+    ).toEqual([])
+
+    // The first answer lands: what it asked for is recorded, the newer request stays.
+    await store.recordDomainChange(
+      running?.id ?? '',
+      { registrant: null, contacts: { administrative: TUNDE } },
+      { registrant: BAYO, contacts: { administrative: TUNDE } },
+      null,
+    )
+    expect(await domain(ids.active)).toMatchObject({
+      contacts: { administrative: TUNDE },
+      pending_contacts: {},
+    })
+    const [requeued] = (await openJobs(ids.active, 'update_contacts')).filter(
+      (row) => row.status === 'queued',
+    )
+    expect(requeued).toBeDefined()
+
+    // Worked: all three roles go back to the registrant.
+    await workerFor([requeued?.id ?? '']).tick()
+    expect(await domain(ids.active)).toMatchObject({ contacts: {}, pending_contacts: null })
+    expect(contacts.technical).toEqual(asRegistryContact(BAYO))
+  })
+
   it('keeps a change a person must look at, and drops one given up on', async () => {
     await ask(ids.active, 'update_contacts', { pending_registrant: ADA })
-    const [, held] = await openJobs(ids.active, 'update_contacts')
+    const [held] = (await openJobs(ids.active, 'update_contacts')).filter(
+      (row) => row.status === 'queued',
+    )
     await store.claim('db-test-settings', true, 300, held?.id)
     await store.fail(held?.id ?? '', 'TIMEOUT', 'db test', true)
     expect(await domain(ids.active)).toMatchObject({ pending_registrant: ADA })
