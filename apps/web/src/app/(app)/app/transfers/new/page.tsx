@@ -25,6 +25,7 @@ type Search = Promise<{ domain?: string | string[] }>
 const CRUMBS = [
   { label: 'Home', href: '/' },
   { label: 'Dashboard', href: '/app/domains' },
+  { label: 'Transfers', href: '/app/transfers' },
   { label: 'Transfer in' },
 ]
 

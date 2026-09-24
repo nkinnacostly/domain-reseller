@@ -272,13 +272,19 @@ export async function settleRegistration(orderId, outcome) {
 
 /**
  * A domain registered in the registrar's sandbox from a test payment — the
- * state a settled test order leaves behind — without buying it first.
+ * state a settled test order leaves behind — without buying it first. With
+ * `source: 'transfer'` and a transfer status, a transfer in at that stage.
  *
  * @param {string} userId
- * @param {{ expiresInDays?: number }} [options]
+ * @param {{ expiresInDays?: number, source?: string, status?: string }} [options]
  */
-export async function createSandboxDomain(userId, { expiresInDays = 200 } = {}) {
+export async function createSandboxDomain(
+  userId,
+  { expiresInDays = 200, source = 'registration', status = 'active' } = {},
+) {
   const client = admin()
+  // A transfer still under way has no dates yet: the registry has not moved it.
+  const dated = !status.startsWith('transfer_')
   const domainName = `${TEST_DOMAIN_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}.com`
   const { data, error } = await client
     .from('domains')
@@ -286,11 +292,13 @@ export async function createSandboxDomain(userId, { expiresInDays = 200 } = {}) 
       user_id: userId,
       domain_name: domainName,
       tld: 'com',
-      source: 'registration',
+      source,
       test_mode: true,
-      local_status: 'active',
-      registered_at: new Date(Date.now() - (365 - expiresInDays) * DAY_MS).toISOString(),
-      expires_at: new Date(Date.now() + expiresInDays * DAY_MS).toISOString(),
+      local_status: status,
+      registered_at: dated
+        ? new Date(Date.now() - (365 - expiresInDays) * DAY_MS).toISOString()
+        : null,
+      expires_at: dated ? new Date(Date.now() + expiresInDays * DAY_MS).toISOString() : null,
       auto_renew: true,
       privacy_enabled: false,
     })
