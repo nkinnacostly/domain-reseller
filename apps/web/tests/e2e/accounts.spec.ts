@@ -19,6 +19,19 @@ type TestUser = { id: string; email: string; password: string }
 
 const SIGN_IN_PROJECTS = ['chromium-desktop', 'mobile-ios']
 
+/** Sign-out lives in the account menu, in the sidebar — a drawer on phones. */
+async function signOutFromPanel(page: Page) {
+  const drawer = page.getByRole('button', { name: 'Open menu' })
+  const account = page.getByRole('button', { name: 'Account menu' })
+  // The drawer and the menu open once the page has hydrated: keep trying.
+  await expect(async () => {
+    if (!(await account.isVisible())) await drawer.click({ timeout: 1_000 })
+    await account.click({ timeout: 1_000 })
+    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+}
+
 async function signIn(page: Page, user: TestUser, path = '/sign-in') {
   await page.goto(path)
   const form = page.getByRole('form', { name: 'Sign in', exact: true })
@@ -133,7 +146,9 @@ test.describe('signed in', () => {
     // Signed-in people are sent past the sign-in page.
     await page.goto('/sign-in')
     await expect(page).toHaveURL(/\/app\/domains$/)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome, Test')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      /^Good (morning|afternoon|evening), Test$/,
+    )
 
     // The marketing header knows, after hydration. On phones the link is in the menu.
     await page.goto('/pricing')
@@ -144,7 +159,7 @@ test.describe('signed in', () => {
     ).toBeVisible()
 
     await page.goto('/app/domains')
-    await page.getByRole('button', { name: 'Sign out' }).click()
+    await signOutFromPanel(page)
     await expect(page).toHaveURL(/\/$/)
     await page.goto('/app/domains')
     await expect(page).toHaveURL(/\/sign-in/)
@@ -235,7 +250,7 @@ test.describe('two-factor authentication', () => {
     await setup.getByRole('button', { name: 'Confirm and turn on' }).click()
     await expect(panel).toContainText('On.')
 
-    await page.getByRole('button', { name: 'Sign out' }).click()
+    await signOutFromPanel(page)
     await expect(page).toHaveURL(/\/$/)
 
     await signIn(page, user)

@@ -4,7 +4,13 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { FormMessage } from '@/components/common/form-parts'
-import { Container } from '@/components/layout/site-shell'
+import {
+  PANEL_HEADING,
+  Panel,
+  PanelHeader,
+  PanelPage,
+  PanelPageSkeleton,
+} from '@/components/layout/panel'
 import { OrderRefunds } from '@/features/checkout/components/order-refunds'
 import { OrderStatus } from '@/features/checkout/components/order-status'
 import { RefreshWhile } from '@/features/checkout/components/refresh-while'
@@ -17,6 +23,11 @@ import { cn } from '@/lib/utils'
 export const metadata: Metadata = { title: 'Order' }
 
 type Params = Promise<{ id: string }>
+
+const placedFormat = new Intl.DateTimeFormat('en-GB', {
+  dateStyle: 'long',
+  timeZone: 'Africa/Lagos',
+})
 type Search = Promise<{ payment?: string }>
 
 const PAYMENT_NOTICES: Record<string, { tone: 'success' | 'error'; text: string }> = {
@@ -54,41 +65,48 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Order {order.order_number}
-        </h1>
-        <OrderStatus status={order.status} />
-      </div>
-
-      <div className="mt-6 max-w-2xl space-y-3">
-        {notice ? <FormMessage tone={notice.tone}>{notice.text}</FormMessage> : null}
-        {progress ? <FormMessage tone={progress.tone}>{progress.text}</FormMessage> : null}
-      </div>
+      <PanelHeader
+        crumbs={[
+          { label: 'Home', href: '/' },
+          { label: 'Dashboard', href: '/app/domains' },
+          { label: 'Orders', href: '/app/orders' },
+          { label: order.order_number },
+        ]}
+        title={`Order ${order.order_number}`}
+        titleAside={<OrderStatus status={order.status} />}
+        description={`Placed ${placedFormat.format(new Date(order.created_at))} · ${formatNaira(Number(order.total_kobo))}${order.test_mode ? ' · test payment' : ''}`}
+      >
+        {notice || progress ? (
+          <div className="max-w-2xl space-y-3">
+            {notice ? <FormMessage tone={notice.tone}>{notice.text}</FormMessage> : null}
+            {progress ? <FormMessage tone={progress.tone}>{progress.text}</FormMessage> : null}
+          </div>
+        ) : null}
+      </PanelHeader>
       <RefreshWhile active={isSettling(order.status)} />
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
-        <section aria-labelledby="items-heading">
-          <h2 id="items-heading" className="text-lg font-semibold text-foreground">
+      <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <Panel labelledBy="items-heading">
+          <h2 id="items-heading" className={PANEL_HEADING}>
             Domains
           </h2>
-          <ul className="mt-4 divide-y divide-border/70 rounded-2xl border border-border">
+          <ul className="mt-4 space-y-2">
             {order.order_items.map((item) => (
               <li
                 key={item.id}
-                className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-1 rounded-2xl border border-border bg-background/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2">
                     {item.status === 'completed' ? (
                       <Link
                         href={`/app/domains/${item.domain}`}
-                        className="font-semibold break-all text-foreground underline-offset-4 hover:underline"
+                        className="font-medium break-all text-foreground underline-offset-4 hover:underline"
                       >
                         {item.domain}
                       </Link>
                     ) : (
-                      <span className="font-semibold break-all text-foreground">{item.domain}</span>
+                      <span className="font-medium break-all text-foreground">{item.domain}</span>
                     )}
                     {order.status !== 'awaiting_payment' && order.status !== 'cancelled' ? (
                       <span
@@ -121,7 +139,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
             ))}
           </ul>
 
-          <dl className="mt-4 max-w-sm space-y-2 text-sm sm:ml-auto">
+          <dl className="mt-5 max-w-sm space-y-2 text-sm sm:ml-auto">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Domains</dt>
               <dd className="tabular-nums">{formatNaira(Number(order.subtotal_kobo))}</dd>
@@ -137,13 +155,10 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
           </dl>
 
           <OrderRefunds refunds={refunds} />
-        </section>
+        </Panel>
 
-        <section
-          aria-labelledby="owner-heading"
-          className="h-fit rounded-2xl border border-border p-5 text-sm/6"
-        >
-          <h2 id="owner-heading" className="font-semibold text-foreground">
+        <Panel labelledBy="owner-heading" className="h-fit text-sm/6">
+          <h2 id="owner-heading" className={PANEL_HEADING}>
             Registrant
           </h2>
           <p className="mt-2 text-muted-foreground">
@@ -157,21 +172,14 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
           </p>
           {order.nameservers?.length ? (
             <>
-              <h2 className="mt-4 font-semibold text-foreground">Nameservers</h2>
-              <p className="mt-1 font-mono text-xs text-muted-foreground">
+              <h2 className="mt-4 font-medium text-foreground">Nameservers</h2>
+              <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
                 {order.nameservers.join(', ')}
               </p>
             </>
           ) : null}
-        </section>
+        </Panel>
       </div>
-
-      <Link
-        href="/app/orders"
-        className="mt-8 inline-block text-sm font-medium text-foreground underline-offset-4 hover:underline"
-      >
-        All orders
-      </Link>
     </>
   )
 }
@@ -184,12 +192,10 @@ export default function OrderPage({
   searchParams: Search
 }) {
   return (
-    <Container className="py-10 sm:py-14">
-      <Suspense
-        fallback={<div aria-hidden="true" className="h-96 animate-pulse rounded-3xl bg-muted" />}
-      >
+    <PanelPage>
+      <Suspense fallback={<PanelPageSkeleton />}>
         <Order params={params} searchParams={searchParams} />
       </Suspense>
-    </Container>
+    </PanelPage>
   )
 }

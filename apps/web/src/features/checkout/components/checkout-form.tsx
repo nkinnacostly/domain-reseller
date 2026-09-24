@@ -12,6 +12,8 @@ import {
   onSubmitWith,
   SubmitButton,
 } from '@/components/common/form-parts'
+import { PANEL } from '@/components/layout/panel'
+import { cn } from '@/lib/utils'
 import { placeOrder } from '../actions/place-order'
 import type { RegistrantForm } from '../lib/contact'
 import { NIGERIAN_STATES, REGISTRANT_COUNTRIES } from '../lib/countries'
@@ -83,7 +85,7 @@ export function CheckoutForm({
     <form
       aria-label="Checkout"
       noValidate
-      className="grid gap-10 lg:grid-cols-[1.6fr_1fr] lg:gap-14"
+      className="grid gap-4 xl:grid-cols-[1.6fr_1fr]"
       onSubmit={onSubmitWith((form) => {
         const value = (name: string) => String(form.get(name) ?? '')
         place.execute({
@@ -107,7 +109,7 @@ export function CheckoutForm({
         })
       })}
     >
-      <div className="space-y-10">
+      <div className={cn(PANEL, 'space-y-10 p-5 sm:p-7')}>
         {testMode ? (
           <FormMessage tone="success">
             <span className="font-medium">Test mode.</span> Payments use Flutterwave test keys — no
@@ -230,7 +232,7 @@ export function CheckoutForm({
           </div>
         </section>
 
-        <details className="group rounded-2xl border border-border p-5">
+        <details className="group rounded-2xl border border-border bg-background/80 p-5">
           <summary className="cursor-pointer list-none font-medium text-foreground marker:hidden">
             Already know where this domain is going?{' '}
             <span className="font-normal text-muted-foreground">Optional</span>
@@ -262,7 +264,7 @@ export function CheckoutForm({
 
       <aside
         aria-labelledby={`${id}-review`}
-        className="h-fit space-y-6 rounded-3xl border border-border bg-background p-6 lg:sticky lg:top-8"
+        className={cn(PANEL, 'h-fit space-y-6 p-5 sm:p-7 xl:sticky xl:top-4')}
       >
         <h2 id={`${id}-review`} className="text-lg font-semibold text-foreground">
           Check and pay

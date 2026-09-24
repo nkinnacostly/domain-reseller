@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
+import { PANEL_HEADING, Panel, PanelSkeleton } from '@/components/layout/panel'
 import { PanelNote } from '@/features/domains/components/domain-badges'
 import { getDomain } from '@/features/domains/queries/domains'
 
@@ -14,12 +15,9 @@ async function Contacts({ params }: { params: Params }) {
   const r = domain.registrant
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <section
-        aria-labelledby="registrant-heading"
-        className="rounded-2xl border border-border p-5 text-sm/6"
-      >
-        <h2 id="registrant-heading" className="font-semibold text-foreground">
+    <Panel labelledBy="registrant-heading" className="text-sm/6">
+      <div className="max-w-2xl">
+        <h2 id="registrant-heading" className={PANEL_HEADING}>
           Registrant — the legal owner
         </h2>
         {r ? (
@@ -37,19 +35,19 @@ async function Contacts({ params }: { params: Params }) {
         <p className="mt-3 text-muted-foreground">
           The same details are used for the admin, technical and billing contacts.
         </p>
-      </section>
-      <PanelNote title="Not editable here yet.">
-        Changing contacts from here is not built yet.
-      </PanelNote>
-    </div>
+        <div className="mt-5">
+          <PanelNote title="Not editable here yet.">
+            Changing contacts from here is not built yet.
+          </PanelNote>
+        </div>
+      </div>
+    </Panel>
   )
 }
 
 export default function ContactsPage({ params }: { params: Params }) {
   return (
-    <Suspense
-      fallback={<div aria-hidden="true" className="h-48 animate-pulse rounded-2xl bg-muted" />}
-    >
+    <Suspense fallback={<PanelSkeleton height="h-48" />}>
       <Contacts params={params} />
     </Suspense>
   )

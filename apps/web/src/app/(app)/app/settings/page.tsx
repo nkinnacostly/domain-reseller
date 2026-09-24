@@ -1,11 +1,18 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { FormMessage } from '@/components/common/form-parts'
-import { Container } from '@/components/layout/site-shell'
+import {
+  PANEL,
+  PANEL_HEADING,
+  PanelHeader,
+  PanelPage,
+  PanelSkeleton,
+} from '@/components/layout/panel'
 import { ChangePasswordForm, ProfileForm } from '@/features/auth/components/settings-forms'
 import { TwoFactorPanel } from '@/features/auth/components/two-factor-panel'
 import { describeHold, resetHoldUntil } from '@/features/auth/lib/security'
 import { getAccount } from '@/features/auth/queries/account'
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Settings' }
 
@@ -24,10 +31,10 @@ function Section({
     <section
       id={id}
       aria-labelledby={`${id}-heading`}
-      className="grid scroll-mt-8 gap-6 border-border border-t py-10 lg:grid-cols-[1fr_2fr] lg:gap-12"
+      className={cn(PANEL, 'grid scroll-mt-20 gap-6 p-5 sm:p-7 xl:grid-cols-[1fr_2fr] xl:gap-12')}
     >
       <div>
-        <h2 id={`${id}-heading`} className="text-lg font-semibold text-foreground">
+        <h2 id={`${id}-heading`} className={PANEL_HEADING}>
           {title}
         </h2>
         <p className="mt-1.5 text-pretty text-sm/6 text-muted-foreground">{description}</p>
@@ -45,12 +52,12 @@ async function Settings() {
   return (
     <>
       {hold ? (
-        <FormMessage tone="error" className="mt-6">
+        <FormMessage tone="error">
           Your password was reset. {describeHold(hold)} If you didn't reset it, contact support now.
         </FormMessage>
       ) : null}
 
-      <div className="mt-8">
+      <div className="space-y-4">
         <Section id="profile" title="Profile" description="Who you are on invoices and reminders.">
           <ProfileForm email={account.email} fullName={account.fullName} phone={account.phone} />
         </Section>
@@ -75,15 +82,19 @@ async function Settings() {
 
 export default function SettingsPage() {
   return (
-    <Container className="py-10 sm:py-14">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Settings</h1>
-      <Suspense
-        fallback={
-          <div aria-hidden="true" className="mt-8 h-96 animate-pulse rounded-3xl bg-muted" />
-        }
-      >
+    <PanelPage>
+      <PanelHeader
+        crumbs={[
+          { label: 'Home', href: '/' },
+          { label: 'Dashboard', href: '/app/domains' },
+          { label: 'Settings' },
+        ]}
+        title="Settings"
+        description="Your profile, your password and two-factor sign-in — what keeps your account, and your domains, yours."
+      />
+      <Suspense fallback={<PanelSkeleton height="h-96" />}>
         <Settings />
       </Suspense>
-    </Container>
+    </PanelPage>
   )
 }

@@ -3,9 +3,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
-import { Container } from '@/components/layout/site-shell'
+import { FOCUS, PANEL, PanelHeader, PanelPage, PanelSkeleton } from '@/components/layout/panel'
 import { CheckoutForm } from '@/features/checkout/components/checkout-form'
 import { getCheckoutView } from '@/features/checkout/queries/checkout'
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Checkout' }
 
@@ -14,11 +15,14 @@ async function Checkout() {
   if (!view || view.cart.state === 'empty') redirect('/cart')
 
   const back = (message: string) => (
-    <div className="max-w-xl rounded-2xl border border-border p-6">
-      <p className="text-pretty text-foreground">{message}</p>
+    <div className={cn(PANEL, 'p-5 sm:p-7')}>
+      <p className="max-w-xl text-pretty text-foreground">{message}</p>
       <Link
         href="/cart"
-        className="mt-4 inline-flex h-11 items-center rounded-full bg-accent px-6 text-sm font-medium text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className={cn(
+          'mt-4 inline-flex h-11 items-center rounded-full bg-accent px-6 text-sm font-medium text-accent-foreground transition hover:bg-accent/90 active:scale-[0.98]',
+          FOCUS,
+        )}
       >
         Back to your cart
       </Link>
@@ -66,17 +70,19 @@ async function Checkout() {
 
 export default function CheckoutPage() {
   return (
-    <Container className="py-10 sm:py-14">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Checkout</h1>
-      <div className="mt-8">
-        <Suspense
-          fallback={
-            <div aria-hidden="true" className="h-[32rem] animate-pulse rounded-3xl bg-muted" />
-          }
-        >
-          <Checkout />
-        </Suspense>
-      </div>
-    </Container>
+    <PanelPage>
+      <PanelHeader
+        crumbs={[
+          { label: 'Home', href: '/' },
+          { label: 'Cart', href: '/cart' },
+          { label: 'Checkout' },
+        ]}
+        title="Checkout"
+        description="Who owns the domains, then payment with Flutterwave. Every name is checked again, and the price confirmed, before you pay."
+      />
+      <Suspense fallback={<PanelSkeleton height="h-[32rem]" />}>
+        <Checkout />
+      </Suspense>
+    </PanelPage>
   )
 }

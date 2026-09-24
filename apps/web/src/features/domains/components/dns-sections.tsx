@@ -33,7 +33,7 @@ export async function ResolverViews({
               <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
               {view.resolver}
             </span>
-            <span className="font-mono text-xs text-muted-foreground break-all sm:text-right">
+            <span className="font-mono text-xs text-pretty break-words text-muted-foreground sm:text-right">
               {view.state === 'answered'
                 ? view.nameservers.join(', ')
                 : view.state === 'nxdomain'

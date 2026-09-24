@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
+import { PANEL_HEADING, Panel, PanelSkeleton } from '@/components/layout/panel'
 import { PanelNote } from '@/features/domains/components/domain-badges'
 import { getDomain } from '@/features/domains/queries/domains'
 
@@ -31,15 +32,18 @@ async function Security({ params }: { params: Params }) {
   ]
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <ul
-        aria-label="Security settings"
-        className="divide-y divide-border/70 rounded-2xl border border-border"
-      >
+    <Panel labelledBy="security-heading">
+      <h2 id="security-heading" className={PANEL_HEADING}>
+        Security
+      </h2>
+      <ul aria-label="Security settings" className="mt-4 grid gap-2 xl:grid-cols-3">
         {rows.map((row) => (
-          <li key={row.title} className="px-5 py-4">
+          <li
+            key={row.title}
+            className="rounded-2xl border border-border bg-background/80 px-5 py-4"
+          >
             <div className="flex items-center justify-between gap-4">
-              <h2 className="font-semibold text-foreground">{row.title}</h2>
+              <h3 className="font-medium text-foreground">{row.title}</h3>
               <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
                 {row.state}
               </span>
@@ -48,18 +52,18 @@ async function Security({ params }: { params: Params }) {
           </li>
         ))}
       </ul>
-      <PanelNote title="Not editable here yet.">
-        Changing the lock, privacy or transfer code from here is not built yet.
-      </PanelNote>
-    </div>
+      <div className="mt-5 max-w-2xl">
+        <PanelNote title="Not editable here yet.">
+          Changing the lock, privacy or transfer code from here is not built yet.
+        </PanelNote>
+      </div>
+    </Panel>
   )
 }
 
 export default function SecurityPage({ params }: { params: Params }) {
   return (
-    <Suspense
-      fallback={<div aria-hidden="true" className="h-64 animate-pulse rounded-2xl bg-muted" />}
-    >
+    <Suspense fallback={<PanelSkeleton />}>
       <Security params={params} />
     </Suspense>
   )

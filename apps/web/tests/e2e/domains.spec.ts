@@ -90,6 +90,67 @@ test.describe('portfolio', () => {
     expect((await axe(page)).violations).toEqual([])
   })
 
+  test('the overview counts this account’s own portfolio (FR-P1)', async ({ page }) => {
+    await signIn(page, user as TestUser)
+    const heading = page.getByRole('heading', { level: 1 })
+    await expect(heading).toHaveText(/^Good (morning|afternoon|evening), Ada$/)
+
+    // later, soon and gone: two active, two due within 30 days (gone has
+    // expired), and auto-renew on for two of the three.
+    const overview = page.getByRole('region', { name: /^Good (morning|afternoon|evening), Ada$/ })
+    await expect(overview.locator('dl')).toHaveText(
+      /Domains\s*3\s*Active\s*2\s*Due within 30 days\s*2\s*Orders\s*0/,
+    )
+    await expect(
+      page.getByRole('img', { name: 'Auto-renew is on for 67% of your domains (2 of 3)' }),
+    ).toBeVisible()
+
+    const comingUp = page.getByRole('region', { name: 'Coming up' })
+    await expect(comingUp.getByRole('listitem').first()).toContainText(names.expired)
+    await comingUp.getByRole('tab', { name: 'Orders' }).click()
+    await expect(comingUp.getByText('Your orders will appear here.')).toBeVisible()
+    await comingUp.getByRole('tab', { name: 'Activity' }).click()
+    await expect(comingUp.getByText('Added as a demo domain').first()).toBeVisible()
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+
+    await page.getByRole('link', { name: 'View domains due this week' }).click()
+    await expect(page).toHaveURL(/within=7/)
+    await expect.poll(() => listed(page)).toEqual([names.expired])
+  })
+
+  test('the sidebar holds the panel’s pages, the soonest renewals and the account', async ({
+    page,
+  }) => {
+    await signIn(page, user as TestUser)
+    await expect(page).toHaveURL(/\/app\/domains$/)
+
+    // A drawer on phones, a sidebar on wide screens. The drawer opens once the
+    // page has hydrated, so keep trying until its navigation shows.
+    const drawer = page.getByRole('button', { name: 'Open menu' })
+    const nav = page.getByRole('navigation', { name: 'Account' })
+    await expect(async () => {
+      if (!(await nav.isVisible())) await drawer.click({ timeout: 1_000 })
+      await expect(nav).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 15_000 })
+    await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    await expect(page.getByRole('link', { name: new RegExp(names.expired) }).first()).toBeVisible()
+
+    await page.getByRole('button', { name: 'Account menu' }).click()
+    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await nav.getByRole('link', { name: 'Orders' }).click()
+    await expect(page).toHaveURL(/\/app\/orders$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Orders')
+  })
+
   test('the 30-day view shows what needs attention, expired included (FR-P5)', async ({ page }) => {
     await signIn(page, user as TestUser)
     await page.getByRole('link', { name: 'Expiring in 30 days' }).click()

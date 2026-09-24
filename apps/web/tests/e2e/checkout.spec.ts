@@ -148,7 +148,11 @@ test.describe('checkout', () => {
     // The page refreshes itself while the order is open.
     await expect(line).toHaveText('Registered', { timeout: 15_000 })
     await expect(page.getByText('Every domain in this order is registered.')).toBeVisible()
-    await page.getByRole('link', { name: `${name}.com` }).click()
+    // The order's own link — the sidebar also lists the domain under "Renew soonest".
+    await page
+      .getByRole('main')
+      .getByRole('link', { name: `${name}.com` })
+      .click()
 
     await expect(page.getByRole('heading', { name: `${name}.com` })).toBeVisible()
     await expect(page.getByText('Sandbox registration.')).toBeVisible()

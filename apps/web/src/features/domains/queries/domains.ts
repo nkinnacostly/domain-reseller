@@ -44,10 +44,36 @@ function toPortfolio(row: Row): PortfolioDomain {
   }
 }
 
-export async function getPortfolio(): Promise<PortfolioDomain[]> {
+/** Request-scoped: the panel's sidebar and the portfolio page share one read. */
+export const getPortfolio = cache(async (): Promise<PortfolioDomain[]> => {
   const supabase = await createClient()
   const { data } = await supabase.from('domains').select(COLUMNS).order('domain_name').limit(500)
   return (data ?? []).map(toPortfolio)
+})
+
+export type RecentEvent = {
+  id: number
+  type: string
+  payload: Record<string, unknown>
+  createdAt: string
+  domainName: string
+}
+
+/** The latest events across the account's domains, newest first (FR-P6). */
+export async function getRecentActivity(limit = 6): Promise<RecentEvent[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('domain_events')
+    .select('id, event_type, payload, created_at, domains!inner(domain_name)')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  return (data ?? []).map((row) => ({
+    id: Number(row.id),
+    type: row.event_type,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+    createdAt: row.created_at,
+    domainName: row.domains.domain_name,
+  }))
 }
 
 /** One domain by name — the URL segment. Null if it is not the user's. */

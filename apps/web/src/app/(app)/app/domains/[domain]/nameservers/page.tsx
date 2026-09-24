@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
+import { PANEL_HEADING, Panel, PanelSkeleton } from '@/components/layout/panel'
 import { getAccount } from '@/features/auth/queries/account'
 import {
   currentRecordSummary,
@@ -28,9 +29,9 @@ async function Nameservers({ params }: { params: Params }) {
   const note = nameserverNote(domain)
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:gap-14">
-      <section aria-labelledby="change-heading">
-        <h2 id="change-heading" className="text-lg font-semibold text-foreground">
+    <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+      <Panel labelledBy="change-heading" className="h-fit">
+        <h2 id="change-heading" className={PANEL_HEADING}>
           Point it at your host
         </h2>
         <p className="mt-1.5 text-pretty text-sm/6 text-muted-foreground">
@@ -53,11 +54,11 @@ async function Nameservers({ params }: { params: Params }) {
             />
           </Suspense>
         </div>
-      </section>
+      </Panel>
 
-      <div className="space-y-10">
-        <section aria-labelledby="resolvers-heading">
-          <h2 id="resolvers-heading" className="text-lg font-semibold text-foreground">
+      <div className="space-y-4">
+        <Panel labelledBy="resolvers-heading">
+          <h2 id="resolvers-heading" className={PANEL_HEADING}>
             What the internet sees
           </h2>
           <p className="mt-1.5 text-pretty text-sm/6 text-muted-foreground">
@@ -69,10 +70,10 @@ async function Nameservers({ params }: { params: Params }) {
               <ResolverViews domain={domain.domainName} expected={requested} />
             </Suspense>
           </div>
-        </section>
+        </Panel>
 
-        <section aria-labelledby="records-heading">
-          <h2 id="records-heading" className="text-lg font-semibold text-foreground">
+        <Panel labelledBy="records-heading">
+          <h2 id="records-heading" className={PANEL_HEADING}>
             DNS records
           </h2>
           <p className="mt-1.5 text-pretty text-sm/6 text-muted-foreground">
@@ -83,7 +84,7 @@ async function Nameservers({ params }: { params: Params }) {
               <DnsRecords domain={domain.domainName} />
             </Suspense>
           </div>
-        </section>
+        </Panel>
       </div>
     </div>
   )
@@ -98,7 +99,7 @@ async function NameserverFormWithRecords(
 
 export default function NameserversPage({ params }: { params: Params }) {
   return (
-    <Suspense fallback={<DnsSkeleton rows={6} />}>
+    <Suspense fallback={<PanelSkeleton height="h-96" />}>
       <Nameservers params={params} />
     </Suspense>
   )

@@ -13,15 +13,14 @@ export function DomainTabs({ domain }: { domain: string }) {
     { href: `${base}/activity`, label: 'Activity' },
   ]
   return (
-    <nav aria-label="Domain" className="relative -mx-1 overflow-x-auto border-border border-b">
-      <ul className="flex min-w-max gap-6 px-1">
+    <nav aria-label="Domain" className="relative -mx-1 overflow-x-auto px-1 py-1">
+      <ul className="flex min-w-max gap-2">
         {tabs.map((tab) => (
           <li key={tab.href}>
             <NavLink
               href={tab.href}
               exact={tab.exact}
-              className="inline-block py-3 text-sm"
-              activeClassName="after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-accent"
+              className="inline-flex h-10 items-center rounded-full border border-border bg-background px-4 text-sm hover:bg-brand-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] data-[current=true]:border-brand data-[current=true]:bg-brand data-[current=true]:text-brand-foreground"
             >
               {tab.label}
             </NavLink>

@@ -3,12 +3,14 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
+import { FOCUS, PANEL, PANEL_HEADING, PanelSkeleton } from '@/components/layout/panel'
 import { AutoRenewToggle } from '@/features/domains/components/auto-renew-toggle'
 import { PanelNote } from '@/features/domains/components/domain-badges'
 import { DELEGATION_LABEL, daysUntilExpiry } from '@/features/domains/lib/portfolio'
 import { registrationNote } from '@/features/domains/lib/registration'
 import { getDomain } from '@/features/domains/queries/domains'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Domain' }
 
@@ -26,15 +28,15 @@ async function Overview({ params }: { params: Params }) {
   const note = registrationNote(domain)
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-4 xl:grid-cols-2">
       {note ? (
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2">
           <PanelNote title={note.title}>{note.body}</PanelNote>
         </div>
       ) : null}
 
-      <section aria-labelledby="dates-heading" className="rounded-2xl border border-border p-5">
-        <h2 id="dates-heading" className="font-semibold text-foreground">
+      <section aria-labelledby="dates-heading" className={cn(PANEL, 'p-5 sm:p-6')}>
+        <h2 id="dates-heading" className={PANEL_HEADING}>
           Registration
         </h2>
         <dl className="mt-4 space-y-3 text-sm">
@@ -72,8 +74,8 @@ async function Overview({ params }: { params: Params }) {
         </div>
       </section>
 
-      <section aria-labelledby="pointing-heading" className="rounded-2xl border border-border p-5">
-        <h2 id="pointing-heading" className="font-semibold text-foreground">
+      <section aria-labelledby="pointing-heading" className={cn(PANEL, 'p-5 sm:p-6')}>
+        <h2 id="pointing-heading" className={PANEL_HEADING}>
           Where it points
         </h2>
         {(domain.pendingNameservers ?? domain.nameservers)?.length ? (
@@ -95,7 +97,10 @@ async function Overview({ params }: { params: Params }) {
         )}
         <Link
           href={`/app/domains/${domain.domainName}/nameservers`}
-          className="mt-5 inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className={cn(
+            'mt-5 inline-flex h-10 items-center rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground transition hover:bg-brand-subtle active:scale-[0.98]',
+            FOCUS,
+          )}
         >
           Manage nameservers
         </Link>
@@ -106,9 +111,7 @@ async function Overview({ params }: { params: Params }) {
 
 export default function DomainOverviewPage({ params }: { params: Params }) {
   return (
-    <Suspense
-      fallback={<div aria-hidden="true" className="h-64 animate-pulse rounded-2xl bg-muted" />}
-    >
+    <Suspense fallback={<PanelSkeleton />}>
       <Overview params={params} />
     </Suspense>
   )
