@@ -1,5 +1,6 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { env } from '@/lib/env'
 import { actionClient, authAction } from '@/lib/safe-action'
@@ -7,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { callbackUrl } from '../lib/links'
 import { authMessage } from '../lib/messages'
 import { safeNext } from '../lib/redirect'
+import { noteSignIn } from '../queries/notices'
 import { emailOnlySchema, signInSchema, signUpSchema } from '../schemas'
 
 /** Expected failures come back as `{ error }` for the form to show; nothing throws. */
@@ -16,11 +18,13 @@ export const signIn = actionClient
   .inputSchema(signInSchema)
   .action(async ({ parsedInput }): Promise<Failure | undefined> => {
     const supabase = await createClient()
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: parsedInput.email,
       password: parsedInput.password,
     })
     if (error) return { error: authMessage(error.code) }
+    // SEC-4: a new device gets a security email.
+    if (data.user) await noteSignIn(data.user.id, (await headers()).get('user-agent'))
 
     const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
     // An account with two-factor on is not signed in until the second step.

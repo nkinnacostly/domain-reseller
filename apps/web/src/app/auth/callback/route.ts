@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { safeNext } from '@/features/auth/lib/redirect'
+import { noteSignIn } from '@/features/auth/queries/notices'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -20,8 +21,12 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) return to(next)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      // SEC-4: a new device gets a security email.
+      if (data.user) await noteSignIn(data.user.id, request.headers.get('user-agent'))
+      return to(next)
+    }
   }
 
   // Supabase reports an expired or reused link as `error_code=otp_expired`.

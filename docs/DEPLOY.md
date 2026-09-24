@@ -139,6 +139,27 @@ which uses Brevo's API: from `no-reply@notify.mydomainshub.com`, replies to
 - Brevo's free plan sends 300 a day. Its delivery log is under Transactional →
   Logs.
 
+## 5c-2. Notification emails (migration 31)
+
+Receipts, domain news, refunds, security notices, ERRP renewal reminders and
+the undelegated nudge are queued in the database (`email_outbox`) by the
+thing that causes them, and sent by the gateway through Brevo.
+
+- **Fly** needs `BREVO_API_KEY` (the same key as Vercel's):
+  ```bash
+  grep '^BREVO_API_KEY=' .env | fly secrets import -a mydomainshub-gateway
+  ```
+  Without it the gateway logs a warning and emails wait; after 30 minutes the
+  `emails_waiting` alert reaches Telegram.
+- The daily `email-notices` cron (08:05 WAT) queues ERRP reminders and nudges;
+  `purge-email-records` clears outbox rows after 90 days. ERRP notices are
+  logged in `compliance_notices` for three years, with delivery read back from
+  Brevo every 30 minutes — a bounce is a critical alert: reach the registrant
+  another way.
+- Nothing is ever sent to example.com or another reserved address (e2e users).
+- To see what went out: `select kind, status, sent_at, delivery_status from
+  email_outbox order by created_at desc limit 20;`
+
 ## 5d. Search engines and AI assistants
 
 Built into the site (`apps/web/src/features/seo`), nothing to configure:

@@ -7,6 +7,9 @@ import { createApp } from './app'
 import { catalogueScheduleFor } from './catalogue/schedule'
 import { delegationCheckerFor } from './delegation/checker'
 import { getDnaWriteClient } from './dna/client'
+import { createBrevo } from './email/brevo'
+import { createEmailSender } from './email/sender'
+import { createEmailStore } from './email/store'
 import { env } from './env'
 import { logger } from './lib/logger'
 import { supplierSlots } from './lib/semaphore'
@@ -162,6 +165,21 @@ const monitor = target
     })
   : null
 
+// PRD E12: the notification emails the database queues, for this side.
+const emailSender =
+  target && env.BREVO_API_KEY
+    ? createEmailSender({
+        store: createEmailStore(),
+        mailer: createBrevo({ apiKey: env.BREVO_API_KEY }),
+        testMode: target === 'ote',
+        workerId: `${hostname()}:${process.pid}`,
+        siteUrl: env.APP_URL ?? 'https://www.mydomainshub.com',
+        pollMs: env.EMAIL_POLL_MS,
+        deliveryEveryMs: env.EMAIL_DELIVERY_CHECK_MINUTES * 60_000,
+        log: logger,
+      })
+    : null
+
 // N5b: the weekly supplier catalogue sync — here, so it keeps working once the supplier allowlists this address.
 const catalogueSync = catalogueScheduleFor(env, logger)
 // FR-D5: live domains' delegation, checked against public resolvers.
@@ -180,6 +198,10 @@ sweeper?.start()
 monitor?.start()
 catalogueSync?.start()
 delegationCheck?.start()
+emailSender?.start()
+if (target && !env.BREVO_API_KEY) {
+  logger.warn({ target }, 'no BREVO_API_KEY: notification emails wait in the outbox')
+}
 if (target && !(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID)) {
   logger.warn({ target }, 'no Telegram bot configured: alerts are only logged')
 }
@@ -194,6 +216,7 @@ async function shutdown(signal: string) {
     monitor?.stop(),
     catalogueSync?.stop(),
     delegationCheck?.stop(),
+    emailSender?.stop(),
   ])
   server.close()
   process.exit(0)

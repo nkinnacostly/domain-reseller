@@ -75,6 +75,21 @@ const schema = z
       .optional(),
     ALERT_EVERY_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
 
+    /**
+     * Notification emails (migration 31), sent through Brevo from the
+     * authenticated no-reply subdomain. Unset, queued emails wait — and an
+     * ops alert says so after half an hour.
+     */
+    BREVO_API_KEY: z.string().min(20).optional(),
+    EMAIL_POLL_MS: z.coerce.number().int().min(1_000).default(15_000),
+    /** How often the delivery of sent ERRP and security notices is read back (FR-NT3). */
+    EMAIL_DELIVERY_CHECK_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(24 * 60)
+      .default(30),
+
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
   })
   .superRefine((value, ctx) => {

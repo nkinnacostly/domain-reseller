@@ -1,5 +1,5 @@
+import { renderEmail } from '@dr/shared/email'
 import { z } from 'zod'
-import { BUSINESS } from '@/lib/business'
 import type { OutgoingEmail } from '@/lib/email/brevo'
 
 /**
@@ -33,19 +33,6 @@ export type AuthEmailPlan =
   /** Nothing to send for this action — we do not use it, or it carries no link. */
   | { kind: 'skip'; reason: string }
 
-const BLUE = '#155dfc'
-/** The brand mark, hosted with the site (public/brand). Text follows it, for clients that block images. */
-const MARK_URL = `https://${BUSINESS.site}/brand/mydomainshub-mark-96.png`
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
 type Content = {
   heading: string
   body: string
@@ -54,49 +41,14 @@ type Content = {
   footer: string
 }
 
+/** The shared email layout (@dr/shared/email), which the gateway's notices use too. */
 function render(content: Content): { html: string; text: string } {
-  const action =
-    'code' in content.action
-      ? `<tr><td style="padding-top:24px;font-size:28px;font-weight:bold;letter-spacing:6px">${escapeHtml(content.action.code)}</td></tr>`
-      : `<tr><td style="padding-top:24px"><a href="${escapeHtml(content.action.href)}" style="display:inline-block;background:${BLUE};color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:999px">${escapeHtml(content.action.label)}</a></td></tr>`
-  const html = `<!doctype html>
-<html lang="en">
-  <body style="margin:0;padding:32px 16px;background:#f4f6f6;font-family:Arial,Helvetica,sans-serif;color:#0f1f24">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;padding:32px">
-            <tr><td style="font-size:18px;font-weight:bold;color:#0b1e24"><img src="${MARK_URL}" width="32" height="32" alt="" style="vertical-align:middle;border:0;border-radius:7px;margin-right:8px">${escapeHtml(BUSINESS.brand)}</td></tr>
-            <tr><td style="padding-top:24px;font-size:22px;font-weight:bold">${escapeHtml(content.heading)}</td></tr>
-            <tr><td style="padding-top:12px;font-size:15px;line-height:22px;color:#4a5a5f">${escapeHtml(content.body)}</td></tr>
-            ${action}
-            <tr><td style="padding-top:24px;font-size:13px;line-height:20px;color:#6b7174">${escapeHtml(content.footer)}</td></tr>
-            <tr><td style="padding-top:16px;font-size:13px;line-height:20px;color:#6b7174">Questions? Reply to this email, or write to ${escapeHtml(BUSINESS.email)}.</td></tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-`
-  const actionText =
-    'code' in content.action
-      ? `Your code: ${content.action.code}`
-      : `${content.action.label}: ${content.action.href}`
-  const text = [
-    BUSINESS.brand,
-    '',
-    content.heading,
-    '',
-    content.body,
-    '',
-    actionText,
-    '',
-    content.footer,
-    '',
-    `Questions? Reply to this email, or write to ${BUSINESS.email}.`,
-  ].join('\n')
-  return { html, text }
+  return renderEmail({
+    heading: content.heading,
+    blocks: [{ kind: 'text', text: content.body }],
+    action: content.action,
+    footer: [content.footer],
+  })
 }
 
 function confirmLink(appUrl: string, tokenHash: string, type: string, next: string): string {

@@ -1,4 +1,5 @@
 import type { LocalStatus } from '@dr/shared'
+import { failureReason } from '@dr/shared/email'
 
 /**
  * What the panel says about a domain's registration and a waiting
@@ -16,27 +17,8 @@ type Subject = {
 
 export type Note = { title: string; body: string }
 
-/** PRD §13.8, in words for the person who paid. Never the supplier's own text (N10). */
-const FAILURE_REASON: Record<string, string> = {
-  DOMAIN_TAKEN: 'Someone else registered this name before we could.',
-  TLD_UNSUPPORTED: 'The registry would not accept this extension from us.',
-  CONTACT_INVALID: 'The registry rejected the contact details.',
-  // Renewals (migration 23): the line named a domain this account does not hold.
-  NOT_RENEWABLE: 'This domain is not one this account can renew.',
-  DOMAIN_NOT_FOUND: 'The registry does not list this domain in our account.',
-  // Transfers in (migration 26): the supplier's reasons, and what became of the request.
-  AUTH_CODE_INVALID: 'The current registrar did not accept the transfer code.',
-  AUTH_CODE_MISSING: 'We no longer held the transfer code, so the request was never sent.',
-  TRANSFER_LOCKED: 'The domain is locked at its current registrar.',
-  NOT_TRANSFERABLE: 'The registry would not let this domain transfer.',
-  TRANSFER_REJECTED: 'The transfer was refused or cancelled before it completed.',
-  ALREADY_HERE: 'This domain is already registered with us on another account.',
-}
-const FAILURE_FALLBACK = 'The registry could not complete it.'
-
-export function failureReason(code: string | null | undefined): string {
-  return (code && FAILURE_REASON[code]) || FAILURE_FALLBACK
-}
+/** PRD §13.8, in words for the person who paid (N10) — the emails say the same. */
+export { failureReason }
 
 /** A transfer in that is not finished: no expiry, no nameservers of ours yet (PRD E9). */
 export function isTransferInProgress(status: LocalStatus): boolean {

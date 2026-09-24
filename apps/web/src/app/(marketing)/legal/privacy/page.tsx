@@ -71,6 +71,14 @@ export default function PrivacyPage() {
             device out, in Settings.
           </li>
           <li>
+            <strong>The devices you sign in from:</strong> the browser and system each one reports,
+            such as “Chrome on macOS” — no address — so we can email you when a new one signs in.
+          </li>
+          <li>
+            <strong>The emails we send you:</strong> what each was about, when it was sent and
+            whether it was delivered.
+          </li>
+          <li>
             <strong>Technical data:</strong> our hosting providers keep standard request logs, which
             include IP addresses and the addresses of pages you visit, for a short time. To stop one
             connection from overloading bulk search, we count the names it checks there, and the
@@ -103,7 +111,13 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>To keep the service secure and handle abuse and fraud</strong> — our legitimate
-            interest in protecting you, us and others.
+            interest in protecting you, us and others. That includes the security emails we send
+            when a new device signs in or a sensitive setting changes.
+          </li>
+          <li>
+            <strong>To email you receipts, news of your domains and renewal reminders</strong> —
+            necessary to perform our contract; the renewal reminders are also required by ICANN’s
+            Expired Registration Recovery Policy.
           </li>
         </ul>
         <p>We do not sell your data or use it for advertising.</p>
@@ -135,6 +149,10 @@ export default function PrivacyPage() {
             <strong>Vercel</strong> — hosts this website (United States, with servers worldwide).
           </li>
           <li>
+            <strong>Brevo</strong> — sends our emails: your email address and each message (France,
+            European Union).
+          </li>
+          <li>
             <strong>Authorities and dispute providers</strong>, where the law, a court order or a
             domain dispute requires it.
           </li>
@@ -144,9 +162,9 @@ export default function PrivacyPage() {
       <LegalSection id="abroad" title="Transfers outside Nigeria">
         <p>
           Registering a domain is international by nature, so your data goes to Türkiye, the United
-          Kingdom, the United States and the country of your extension’s registry. We transfer it
-          because it is necessary to provide the registration you asked for, and rely on our
-          providers’ data protection terms where they offer them.
+          Kingdom, the United States, the European Union (for our emails) and the country of your
+          extension’s registry. We transfer it because it is necessary to provide the registration
+          you asked for, and rely on our providers’ data protection terms where they offer them.
         </p>
       </LegalSection>
 
@@ -172,6 +190,11 @@ export default function PrivacyPage() {
           </li>
           <li>Orders and payments: for as long as tax and accounting law requires.</li>
           <li>The cart cookie: 60 days.</li>
+          <li>
+            Records of the emails we send: 90 days. Renewal reminders: three years, because we must
+            be able to show they were sent. The devices you sign in from: while your account is
+            open.
+          </li>
         </ul>
       </LegalSection>
 

@@ -8,6 +8,7 @@ import { authAction } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
 import { authMessage } from '../lib/messages'
 import { startedFromEmailLink } from '../lib/security'
+import { queueAccountNotice } from '../queries/notices'
 import { changePasswordSchema, newPasswordSchema } from '../schemas'
 
 type Result = { error: string } | { ok: true }
@@ -42,6 +43,7 @@ export const completePasswordReset = authAction
       .update({ password_reset_at: new Date().toISOString() })
       .eq('id', ctx.user.id)
     if (holdError) logger.error({ err: holdError }, 'could not record password reset hold')
+    await queueAccountNotice(ctx.user.id, 'password_changed')
 
     await ctx.supabase.auth.signOut({ scope: 'others' })
     redirect('/app/settings?reset=1')
@@ -77,6 +79,7 @@ export const changePassword = authAction
 
     const { error } = await ctx.supabase.auth.updateUser({ password: parsedInput.password })
     if (error) return { error: authMessage(error.code) }
+    await queueAccountNotice(ctx.user.id, 'password_changed')
 
     await ctx.supabase.auth.signOut({ scope: 'others' })
     return { ok: true }

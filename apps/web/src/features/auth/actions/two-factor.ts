@@ -13,6 +13,7 @@ import {
   resetHoldUntil,
   startedWithPassword,
 } from '../lib/security'
+import { queueAccountNotice } from '../queries/notices'
 import { totpCodeSchema } from '../schemas'
 
 /**
@@ -74,6 +75,7 @@ export const confirmTotpEnrollment = authAction
       code: parsedInput.code,
     })
     if (error) return { error: authMessage(error.code) }
+    await queueAccountNotice(ctx.user.id, 'two_factor_on')
     revalidatePath('/app/settings')
     return { ok: true }
   })
@@ -93,6 +95,7 @@ export const disableTwoFactor = authAction
 
       const { error } = await ctx.supabase.auth.mfa.unenroll({ factorId: parsedInput.factorId })
       if (error) return { error: authMessage(error.code) }
+      await queueAccountNotice(ctx.user.id, 'two_factor_off')
       revalidatePath('/app/settings')
       return { ok: true }
     },

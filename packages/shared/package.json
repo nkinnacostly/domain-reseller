@@ -13,7 +13,8 @@
     "./schemas": "./src/schemas/index.ts",
     "./errors": "./src/errors/index.ts",
     "./payments": "./src/payments/index.ts",
-    "./transfers": "./src/transfers/index.ts"
+    "./transfers": "./src/transfers/index.ts",
+    "./email": "./src/email/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

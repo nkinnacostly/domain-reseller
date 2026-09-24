@@ -168,6 +168,8 @@ test.describe('signed in', () => {
   test('the panel has no accessibility violations', async ({ page }) => {
     await signIn(page, user, '/sign-in?next=%2Fapp%2Fsettings')
     await expect(page).toHaveURL(/\/app\/settings$/)
+    // A signed-in page streams its <title> after the first HTML: check the finished page.
+    await expect(page).toHaveTitle('Settings · MyDomainsHub')
     expect((await axe(page)).violations).toEqual([])
     await page.goto('/app/domains')
     await expect(page.getByRole('heading', { name: 'No domains yet' })).toBeVisible()

@@ -172,6 +172,20 @@ export const HELP_TOPICS: {
         ),
       },
       {
+        q: 'What emails will you send me?',
+        a: (
+          <p>
+            A receipt when you pay; a note when each domain is registered, renewed or transferred
+            in, or if one could not be, and when a refund is sent; renewal reminders about a month
+            and a week before a domain expires, and just after; and a security notice when a new
+            device signs in, when your password or two-factor authentication changes, and when a
+            domain’s nameservers, transfer lock or contacts change, or its transfer code is shown.
+            Security notices and renewal reminders cannot be switched off. We send no marketing
+            email.
+          </p>
+        ),
+      },
+      {
         q: 'Is my address shown publicly?',
         a: (
           <p>
@@ -204,8 +218,9 @@ export const HELP_TOPICS: {
         q: 'What happens if my domain expires?',
         a: (
           <p>
-            It usually stops working. For a while it can still be renewed at the normal price, then
-            only restored for an extra registry fee, and after that anyone can register it. The{' '}
+            It usually stops working. We email you about a month and about a week before a domain
+            expires, and again just after. For a while it can still be renewed at the normal price,
+            then only restored for an extra registry fee, and after that anyone can register it. The{' '}
             <Link href="/legal/registration-agreement#term">registration agreement</Link> explains
             the stages.
           </p>

@@ -10,7 +10,7 @@ back here. Each item says why it waited and what unblocks it.
 
 | # | Item | Why it matters | Unblocked by |
 |---|---|---|---|
-| L1 | ~~Custom SMTP for Supabase Auth~~ | Done 24 Sept 2026: Brevo, from `no-reply@notify.mydomainshub.com` (SPF, DKIM, DMARC on the subdomain); 100 auth emails an hour. The app's own emails (receipts, reminders, refund and security notices) are not built yet. | Done |
+| L1 | ~~Custom SMTP for Supabase Auth~~ | Done 24 Sept 2026: Brevo, from `no-reply@notify.mydomainshub.com` (SPF, DKIM, DMARC on the subdomain); 100 auth emails an hour. The app's own emails — receipts, domain news, refunds, security notices, ERRP reminders and the undelegated nudge — are built (24 Sept 2026, migration 31) and sent by the gateway once `BREVO_API_KEY` is set on Fly. | Done |
 | L2 | ~~Enable the any-device email templates~~ | Done 24 Sept 2026: token-hash links to `/auth/confirm`, in the MyDomainsHub brand. | Done |
 | L3 | ~~Production `site_url` and redirect URLs~~ | Done 23 Sept 2026: the site runs on `https://www.mydomainshub.com` (the apex redirects there); Supabase Auth and `NEXT_PUBLIC_APP_URL` point at it. `mydomainshub.vercel.app` still serves, so Paidly's forward keeps working. | Done |
 | L4 | **Ask DomainNameAPI to raise the concurrency limit** | They refuse a third concurrent request (PRD V4). A search is ~4 calls, so capacity is about one uncached search every 2 s across all users. | DomainNameAPI support — asked 24 Sept 2026, not answered; ask again |
@@ -29,6 +29,7 @@ back here. Each item says why it waited and what unblocks it.
 | L17 | **Live registrations for customers** — first live registration done 23 Sept 2026: `mydomainshub.com`, order ND-001036, confirmed at Verisign (sponsoring registrar **Atak Domain Bilgi Teknolojileri A.S.** — the name CMP-1 needs on the registration agreement for .com). | `DNA_WRITE_ENV=production` on the deployed gateway and `CHECKOUT_ALLOWLIST` removed, after L6, L10, L15, L16, L18 and the legal pages. The owner's own purchase runs earlier behind the allowlist (`docs/DEPLOY.md`). | Those |
 | L18 | ~~Switch off the supplier's own auto-renew~~ (FR-R6) | Answered 24 Sept 2026 (Ticket#36270966): automatic renewal "is currently not available" for our account, so the supplier never renews from our float — every renewal is one we make. The sandbox's `renewalMode: "AutoRenew"` is therefore only a label. Reconciliation still reports `supplier_renewed` if that ever changes. The flip side: a domain nobody renews expires, so expiry reminders (ERRP, needs L1) matter. | Done |
 | L19 | **A payment card on the Fly account** | Without one, the trial stops the gateway machine after five minutes, so paid orders wait in the queue until someone wakes it. It stalled a nameserver change on 23 Sept 2026. | Owner, https://fly.io/trial |
+| L21 | **`BREVO_API_KEY` on the gateway** | The gateway sends every notification email (receipts, refunds, security notices, ERRP renewal reminders). Without the key they wait in the outbox, and after 30 minutes an ops alert says so. Set it from `.env`: `grep '^BREVO_API_KEY=' .env \| fly secrets import -a mydomainshub-gateway`. | Owner |
 | L20 | ~~Receive mail at `hello@mydomainshub.com`~~ | Done 24 Sept 2026: a Spaceship mailbox (MX, SPF, DKIM, autodiscover and DMARC `p=none` in Cloudflare). Automated email comes from `no-reply@notify.mydomainshub.com` with Reply-To hello@. | Done |
 
 ## 1b. Being found — owner steps
@@ -48,7 +49,7 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 
 ### Accounts (PRD E2)
 - **Google sign-in** (FR-A1) — needs Google Cloud OAuth credentials added in Supabase.
-- **Security emails** (SEC-4): new-device sign-in, password change, 2FA change, contact/nameserver/lock changes — needs L1.
+- **Security emails** (SEC-4) — built 24 Sept 2026 (migration 31): a new device, a password or two-factor change, and a domain's nameservers, lock, contacts or transfer code. Still to add: "transfer-out requested" once the supplier tells us about one.
 - **MFA recovery codes** (FR-A2) — `supabase-js` supports them (experimental) but the hosted server returns `mfa_recovery_codes_enroll_not_enabled`, and the CLI cannot enable it. Settings currently advises adding a second device.
 - **Mandatory 2FA** above 10 domains or a wallet threshold (FR-A2) — needs the portfolio and wallet.
 - **Bot protection on sign-up and search** (SEC-9) — Cloudflare Turnstile keys.
@@ -57,10 +58,10 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 ### Refunds and alerts (after L15, L16)
 - **An admin screen for refunds and alerts** (PRD §16 "Order queue") — approving, retrying, cancelling and recording manual refunds is SQL today (`docs/DEPLOY.md` §6). Needs a decision first: who is an admin, and how they sign in (the refund functions are closed to the service key on purpose).
 - **Refund policy wording** — *owner:* the policy promises money back "within 5 business days"; we *send* it within minutes, but Flutterwave says card refunds take 3–15 days to reach the customer. The order page says so; the policy should too.
-- **Refund emails** (FR-R3) — built once L1 (email sending) is set up.
+- **Refund emails** (FR-R3) — built 24 Sept 2026: a failed line is explained by email, and each refund is announced when it is sent.
 
 ### Checkout and orders (PRD E3, E4)
-- **Receipts by email** (FR-C5) — the printable receipt and invoice numbers are built (24 Sept 2026, migration 26); emailing them needs L1.
+- **Receipts by email** (FR-C5) — built 24 Sept 2026: sent when the payment is recorded, every line with its renewal price (N8), linking the printable receipt.
 - **Tax invoices** (CMP-17/18) — *owner:* receipts don't call themselves tax invoices until `apps/web/src/lib/business.ts` has the company's TIN and CAC number. Send them to Claude. FIRS e-invoicing (FR-TAX-1) comes after.
 - **More registrant countries** — the form offers Nigeria, Africa and common diaspora countries; extend when needed.
 - **Wallet and mixed payment** (FR-C9, FR-W1/W2).
@@ -71,8 +72,9 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 - **Privacy default** — the sandbox turned contact privacy on for a line bought without it. We record what the registry reports; confirm on live whether the flag we send is honoured.
 - **Domain deep sync and drift review** (§13.5) — the hourly portfolio reconcile is built; a per-domain `GetDetails` deep sync, and a screen to review and close `registry_drift`, are not. The sandbox holds two test domains we no longer track, so it reports two `unknown_domain` rows by design.
 - **`supplier_calls` retention** — rows accumulate; decide how long to keep them.
-- **The one-time undelegated nudge** (FR-D8) — needs L1. Delegation is verified by the gateway every 30 minutes (FR-D5, 24 Sept 2026).
-- **Automatic renewal and dunning** (FR-RN2, FR-RN3) — renewing without the customer present needs a way to charge them: saved cards (Flutterwave tokenisation) or the wallet (FR-W1). The reminder emails before expiry (ERRP, §7.4) need L1. Renew now (FR-RN1, FR-RN5, FR-RN7) is built: `/app/domains/{name}/renew`, migrations 22–24.
+- **The one-time undelegated nudge** (FR-D8) — built 24 Sept 2026: once, three days after registration. Delegation is verified by the gateway every 30 minutes (FR-D5).
+- **SMS and WhatsApp** (FR-NT1) — ERRP notices and security notices go by email only; a second channel, and the fallback for a bounced ERRP notice (FR-NT3), need an SMS/WhatsApp provider. Until then a bounce is an ops alert and the owner reaches the registrant by hand.
+- **Automatic renewal and dunning** (FR-RN2, FR-RN3) — renewing without the customer present needs a way to charge them: saved cards (Flutterwave tokenisation) or the wallet (FR-W1). The ERRP reminders (§7.4) are built (24 Sept 2026, migration 31). Renew now (FR-RN1, FR-RN5, FR-RN7) is built: `/app/domains/{name}/renew`, migrations 22–24.
 - **Restore from redemption** (FR-RN6) — the SDK has no restore call; ask DomainNameAPI how a restore is ordered. Until then the renew page sends people to email for a quote.
 - **Labels and bulk actions** (FR-P3, FR-P4, FR-N2), **glue records** (FR-N3), **revert to previous nameservers** (FR-N5).
 - **More nameserver presets** — Go54 (WhoGoHost) and QServers once their own documentation confirms the values; quarterly re-verification and auto-hiding presets that stop resolving (FR-D2).

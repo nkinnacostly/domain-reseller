@@ -153,7 +153,10 @@ export default function RegistrationAgreementPage() {
       <LegalSection id="term" title="Term, renewal and expiry">
         <p>
           You choose the registration period at checkout, within the limits the extension allows.
-          Your account shows each domain’s expiry date. Renewing on time is your responsibility.
+          Your account shows each domain’s expiry date. Renewing on time is your responsibility; we
+          email reminders to your account’s address about a month and about a week before a domain
+          expires, and again shortly after it expires, as the Expired Registration Recovery Policy
+          requires.
         </p>
         <p>
           To renew, open the domain in your account, choose Renew, pick how many years to add and

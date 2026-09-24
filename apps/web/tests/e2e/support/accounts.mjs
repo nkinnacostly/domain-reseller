@@ -549,3 +549,18 @@ export async function contactsForOrder(orderId) {
   if (domainsError) throw domainsError
   return { order: order.contacts, domains: (domains ?? []).map((domain) => domain.contacts) }
 }
+
+/**
+ * The emails queued for a test user (migration 31). Test users live at
+ * example.com, so every one is queued as skipped — never sent — which is
+ * what lets e2e check that the right email was queued.
+ */
+export async function queuedEmails(userId) {
+  const { data, error } = await admin()
+    .from('email_outbox')
+    .select('kind, category, status, skip_reason, test_mode, order_id, data')
+    .eq('user_id', userId)
+    .order('created_at')
+  if (error) throw new Error(error.message)
+  return data ?? []
+}

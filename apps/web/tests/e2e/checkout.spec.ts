@@ -3,6 +3,7 @@ import { expect, type Page, test } from '@playwright/test'
 import {
   createTestUser,
   deleteTestUser,
+  queuedEmails,
   settleRegistration,
   TEST_DOMAIN_PREFIX,
 } from './support/accounts.mjs'
@@ -157,6 +158,15 @@ test.describe('checkout', () => {
     await expect(page.getByRole('heading', { name: `${name}.com` })).toBeVisible()
     await expect(page.getByText('Sandbox registration.')).toBeVisible()
     await expect(page.getByText('Active', { exact: true }).first()).toBeVisible()
+
+    // PRD E12: a receipt when paid, and a note when the domain is registered —
+    // queued, and never sent to a test user's example.com address.
+    const emails = (await queuedEmails((user as TestUser).id)).filter(
+      (email) => email.order_id === orderId || email.data?.domain === `${name}.com`,
+    )
+    expect(emails.map((email) => email.kind)).toEqual(['order_receipt', 'domain_registered'])
+    expect(emails.every((email) => email.status === 'skipped' && email.test_mode)).toBe(true)
+    expect(emails[0]?.data?.lines?.[0]).toMatchObject({ domain: `${name}.com`, kind: 'register' })
   })
 
   test('a line the registry refuses says why, and a test order owes nothing', async ({ page }) => {
@@ -181,6 +191,12 @@ test.describe('checkout', () => {
 
     await page.goto(`/app/domains/${name}.com`)
     await expect(page.getByText('Registration failed.')).toBeVisible()
+
+    // FR-R3: the failure is explained by email as well.
+    const failed = (await queuedEmails((user as TestUser).id)).find(
+      (email) => email.kind === 'order_line_failed' && email.data?.domain === `${name}.com`,
+    )
+    expect(failed?.data).toMatchObject({ action: 'registration', code: 'DOMAIN_TAKEN' })
   })
 
   test('paying takes you to Flutterwave and back to a paid, queued order', async ({ page }) => {

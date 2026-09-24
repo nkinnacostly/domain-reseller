@@ -131,6 +131,82 @@ export type Database = {
           },
         ]
       }
+      compliance_notices: {
+        Row: {
+          channel: string
+          created_at: string
+          delivery_checked_at: string | null
+          delivery_status: string
+          domain_id: string | null
+          domain_name: string
+          email_id: string | null
+          expires_at: string
+          id: string
+          notice_type: string
+          provider_message_id: string | null
+          recipient: string
+          sent_at: string
+          template_version: string
+          user_id: string | null
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          delivery_checked_at?: string | null
+          delivery_status?: string
+          domain_id?: string | null
+          domain_name: string
+          email_id?: string | null
+          expires_at: string
+          id?: string
+          notice_type: string
+          provider_message_id?: string | null
+          recipient: string
+          sent_at: string
+          template_version: string
+          user_id?: string | null
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          delivery_checked_at?: string | null
+          delivery_status?: string
+          domain_id?: string | null
+          domain_name?: string
+          email_id?: string | null
+          expires_at?: string
+          id?: string
+          notice_type?: string
+          provider_message_id?: string | null
+          recipient?: string
+          sent_at?: string
+          template_version?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compliance_notices_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_notices_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: true
+            referencedRelation: "email_outbox"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_notices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_profiles: {
         Row: {
           address_line1: string
@@ -367,6 +443,109 @@ export type Database = {
           },
         ]
       }
+      email_outbox: {
+        Row: {
+          attempts: number
+          category: string
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          data: Json
+          dedupe_key: string
+          delivery_checked_at: string | null
+          delivery_status: string | null
+          domain_id: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          next_attempt_at: string
+          order_id: string | null
+          provider_message_id: string | null
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          template_version: string | null
+          test_mode: boolean
+          to_email: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          category: string
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          data?: Json
+          dedupe_key: string
+          delivery_checked_at?: string | null
+          delivery_status?: string | null
+          domain_id?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          next_attempt_at?: string
+          order_id?: string | null
+          provider_message_id?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          template_version?: string | null
+          test_mode?: boolean
+          to_email: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          category?: string
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          data?: Json
+          dedupe_key?: string
+          delivery_checked_at?: string | null
+          delivery_status?: string | null
+          domain_id?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          order_id?: string | null
+          provider_message_id?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          template_version?: string | null
+          test_mode?: boolean
+          to_email?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_outbox_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fx_rates: {
         Row: {
           base: string
@@ -501,6 +680,35 @@ export type Database = {
             columns: ["order_item_id"]
             isOneToOne: false
             referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      known_devices: {
+        Row: {
+          device: string
+          first_seen_at: string
+          last_seen_at: string
+          user_id: string
+        }
+        Insert: {
+          device: string
+          first_seen_at?: string
+          last_seen_at?: string
+          user_id: string
+        }
+        Update: {
+          device?: string
+          first_seen_at?: string
+          last_seen_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "known_devices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1501,6 +1709,21 @@ export type Database = {
         Args: { p_by: string; p_note: string; p_refund_id: string }
         Returns: undefined
       }
+      claim_emails: {
+        Args: { p_limit?: number; p_test_mode: boolean; p_worker: string }
+        Returns: {
+          attempts: number
+          category: string
+          data: Json
+          domain_id: string
+          id: string
+          kind: string
+          order_id: string
+          test_mode: boolean
+          to_email: string
+          user_id: string
+        }[]
+      }
       claim_job: {
         Args: {
           p_job_id?: string
@@ -1611,6 +1834,14 @@ export type Database = {
           nameservers: string[]
         }[]
       }
+      emails_for_delivery_check: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+          provider_message_id: string
+          sent_at: string
+        }[]
+      }
       enqueue_domain_change: {
         Args: {
           p_domain_id: string
@@ -1618,6 +1849,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      enqueue_expiry_notices: { Args: never; Returns: number }
       enqueue_line_refund: {
         Args: { p_order_item_id: string }
         Returns: string
@@ -1637,6 +1869,7 @@ export type Database = {
         }
         Returns: string
       }
+      enqueue_undelegated_nudges: { Args: never; Returns: number }
       expire_unpaid_orders: { Args: { p_older_than?: string }; Returns: number }
       fail_job: {
         Args: {
@@ -1671,9 +1904,32 @@ export type Database = {
         }
         Returns: undefined
       }
+      is_reserved_email: { Args: { p_email: string }; Returns: boolean }
       mark_alerts_notified: {
         Args: { p_alert_ids: number[]; p_resolved_ids: number[] }
         Returns: undefined
+      }
+      mark_email_failed: {
+        Args: {
+          p_error: string
+          p_id: string
+          p_permanent?: boolean
+          p_worker: string
+        }
+        Returns: boolean
+      }
+      mark_email_sent: {
+        Args: {
+          p_id: string
+          p_message_id: string
+          p_template_version: string
+          p_worker: string
+        }
+        Returns: boolean
+      }
+      mark_email_skipped: {
+        Args: { p_id: string; p_reason: string; p_worker: string }
+        Returns: boolean
       }
       mark_transfer_submitted: {
         Args: { p_job_id: string; p_poll_after_seconds?: number }
@@ -1715,6 +1971,10 @@ export type Database = {
         Args: { p_expires_at: string; p_job_id: string }
         Returns: string
       }
+      note_sign_in: {
+        Args: { p_device: string; p_user_id: string }
+        Returns: boolean
+      }
       orders_to_check: {
         Args: { p_limit: number; p_test_mode: boolean }
         Returns: {
@@ -1728,8 +1988,26 @@ export type Database = {
       }
       payment_record: { Args: { p_raw: Json }; Returns: Json }
       public_status: { Args: never; Returns: Json }
+      purge_email_records: { Args: never; Returns: number }
       purge_stale_carts: { Args: { p_older_than?: string }; Returns: number }
       purge_test_orders: { Args: { p_user_id: string }; Returns: undefined }
+      queue_account_email: {
+        Args: { p_kind: string; p_user_id: string }
+        Returns: string
+      }
+      queue_email: {
+        Args: {
+          p_category: string
+          p_data?: Json
+          p_dedupe_key: string
+          p_domain_id?: string
+          p_kind: string
+          p_order_id?: string
+          p_test_mode?: boolean
+          p_user_id: string
+        }
+        Returns: string
+      }
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: boolean
@@ -1743,6 +2021,10 @@ export type Database = {
           p_job_id: string
         }
         Returns: undefined
+      }
+      record_email_delivery: {
+        Args: { p_id: string; p_status: string }
+        Returns: boolean
       }
       record_heartbeat: {
         Args: { p_detail: Json; p_name: string; p_test_mode: boolean }

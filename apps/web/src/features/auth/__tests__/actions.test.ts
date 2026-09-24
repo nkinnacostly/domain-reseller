@@ -8,9 +8,13 @@ import { FALLBACK_MESSAGE } from '../lib/messages'
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/supabase/service', () => ({ createServiceClient: vi.fn() }))
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn() }))
-vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ 'user-agent': 'Mozilla/5.0 (Macintosh) Chrome/140.0' }),
+}))
+vi.mock('../queries/notices', () => ({ noteSignIn: vi.fn(), queueAccountNotice: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
+const { noteSignIn, queueAccountNotice } = await import('../queries/notices')
 const { signIn, signUp, sendMagicLink, requestPasswordReset, resendConfirmation, signOut } =
   await import('../actions/session')
 const { completePasswordReset, changePassword } = await import('../actions/password')
@@ -92,6 +96,7 @@ describe('signIn', () => {
     } as never)
     const result = await signIn({ email: 'ada@example.com', password: 'nope' })
     expect(result?.data).toEqual({ error: expect.stringMatching(/don't match/) })
+    expect(noteSignIn).not.toHaveBeenCalled()
   })
 
   it('goes where the person was headed', async () => {
@@ -101,6 +106,16 @@ describe('signIn', () => {
         signIn({ email: 'ada@example.com', password: 'pw', next: '/app/settings' }),
       ),
     ).toBe('/app/settings')
+  })
+
+  it('notes the device it signed in from, for the new-device notice (SEC-4)', async () => {
+    const { client } = fake()
+    client.auth.signInWithPassword.mockResolvedValueOnce({
+      data: { user: { id: 'user-1' } },
+      error: null,
+    } as never)
+    await redirectTarget(signIn({ email: 'ada@example.com', password: 'pw' }))
+    expect(noteSignIn).toHaveBeenCalledWith('user-1', 'Mozilla/5.0 (Macintosh) Chrome/140.0')
   })
 
   it('ignores a next that points off-site', async () => {
@@ -197,6 +212,7 @@ describe('completePasswordReset (FR-A6)', () => {
 
     expect(client.auth.updateUser).toHaveBeenCalledWith({ password: 'brand-new-pass' })
     expect(service.from).toHaveBeenCalledWith('profiles')
+    expect(queueAccountNotice).toHaveBeenCalledWith('user-1', 'password_changed')
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'others' })
     expect(target).toBe('/app/settings?reset=1')
   })
@@ -427,6 +443,7 @@ describe('changePassword', () => {
       password: 'old-password',
     })
     expect(client.auth.updateUser).toHaveBeenCalledWith({ password: 'brand-new-pass' })
+    expect(queueAccountNotice).toHaveBeenCalledWith('user-1', 'password_changed')
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'others' })
   })
 
@@ -601,6 +618,7 @@ describe('confirmTotpEnrollment', () => {
       factorId: 'factor-1',
       code: '123456',
     })
+    expect(queueAccountNotice).toHaveBeenCalledWith('user-1', 'two_factor_on')
     expect(revalidatePath).toHaveBeenCalledWith('/app/settings')
   })
 
@@ -614,6 +632,7 @@ describe('confirmTotpEnrollment', () => {
     const result = await confirmTotpEnrollment({ factorId: 'factor-1', code: '000000' })
 
     expect(result?.data).toEqual({ error: expect.stringMatching(/Codes change every 30 seconds/) })
+    expect(queueAccountNotice).not.toHaveBeenCalled()
     expect(revalidatePath).not.toHaveBeenCalled()
   })
 
@@ -640,6 +659,7 @@ describe('turning two-factor off', () => {
 
     expect(result?.data).toEqual({ ok: true })
     expect(client.auth.mfa.unenroll).toHaveBeenCalledWith({ factorId: 'factor-1' })
+    expect(queueAccountNotice).toHaveBeenCalledWith('user-1', 'two_factor_off')
     expect(revalidatePath).toHaveBeenCalledWith('/app/settings')
   })
 
