@@ -307,6 +307,32 @@ describe('provisioning worker — registrations', () => {
     })
   })
 
+  it('does not send a registration whose other contacts are broken (FR-A4)', async () => {
+    const register = vi.fn()
+    const { instance, actions } = worker(job({ contacts: { billing: { firstName: 'Bayo' } } }), {
+      ...registrar({}),
+      register,
+    })
+    await instance.tick()
+    expect(register).not.toHaveBeenCalled()
+    expect(actions).toEqual([
+      { type: 'fail', args: ['job-1', 'BAD_JOB', expect.stringContaining('Contacts'), true] },
+    ])
+  })
+
+  it('registers with the order’s other contacts, the registrant in any role left out', async () => {
+    const tunde = { ...REGISTRANT, firstName: 'Tunde', email: 'tunde@example.com' }
+    const register = vi.fn(async () => ({ kind: 'ok', data: DOMAIN }) as const)
+    const { instance } = worker(job({ contacts: { technical: tunde } }), {
+      ...registrar({}),
+      register,
+    })
+    await instance.tick()
+    expect(register).toHaveBeenCalledWith(
+      expect.objectContaining({ contact: REGISTRANT, contacts: { technical: tunde } }),
+    )
+  })
+
   it('leaves a crashed job for its lease to expire', async () => {
     const { instance, actions } = worker(job(), {
       ...registrar({}),
@@ -622,50 +648,209 @@ describe('provisioning worker — registry-side settings (FR-DS1, FR-DS3, FR-DS4
     ])
   })
 
-  it('saves new contacts and records exactly what was asked, once the registry shows it', async () => {
-    const next = { ...REGISTRANT, firstName: 'Bayo', email: 'bayo@example.com' }
-    const all = (contact: typeof REGISTRANT) => {
-      const held = asRegistryContact(contact)
-      return {
-        kind: 'found',
-        data: { registrant: held, administrative: held, technical: held, billing: held },
-      } as const
-    }
-    const { registrar: reg, writes } = settingsRegistry({
-      contacts: [all(REGISTRANT), all(next)],
-    })
-    const { instance, actions } = run(
-      setting({ kind: 'update_contacts', pendingTransferLock: null, pendingRegistrant: next }),
-      reg,
-    )
-    await instance.tick()
-    expect(writes).toEqual([['example.com', next]])
-    expect(actions).toEqual([
-      { type: 'setting', args: ['job-1', { registrant: next }, { registrant: next }, null] },
-    ])
-  })
+  describe('the four contacts (FR-DS1)', () => {
+    const BAYO = { ...REGISTRANT, firstName: 'Bayo', email: 'bayo@example.com' }
+    const TUNDE = { ...REGISTRANT, firstName: 'Tunde', email: 'tunde@example.com' }
+    const CHIOMA = { ...REGISTRANT, firstName: 'Chioma', email: 'chioma@example.com' }
+    type Person = typeof REGISTRANT
 
-  it('holds invalid requested contacts for a person, and sends nothing', async () => {
-    const { registrar: reg, writes } = settingsRegistry()
-    const { instance, actions } = run(
-      setting({
-        kind: 'update_contacts',
-        pendingTransferLock: null,
-        pendingRegistrant: { firstName: 'Bayo' },
-      }),
-      reg,
-    )
-    await instance.tick()
-    expect(writes).toEqual([])
-    expect(actions).toEqual([
-      { type: 'fail', args: ['job-1', 'BAD_JOB', 'Requested registrant is invalid', true] },
-    ])
+    /** The registry showing these four people. */
+    const shows = (
+      registrant: Person,
+      others: { administrative?: Person; technical?: Person; billing?: Person } = {},
+    ) =>
+      ({
+        kind: 'found',
+        data: {
+          registrant: asRegistryContact(registrant),
+          administrative: asRegistryContact(others.administrative ?? registrant),
+          technical: asRegistryContact(others.technical ?? registrant),
+          billing: asRegistryContact(others.billing ?? registrant),
+        },
+      }) as const
+
+    const contactsJob = (over: Partial<ClaimedJob> = {}) =>
+      setting({ kind: 'update_contacts', pendingTransferLock: null, ...over })
+
+    it.each([
+      ['a requested registrant', { pendingRegistrant: { firstName: 'Bayo' } }, 'Registrant'],
+      [
+        'the registrant held, when only other contacts were asked for',
+        { registrant: null, pendingContacts: { technical: TUNDE } },
+        'Registrant',
+      ],
+      ['requested other contacts', { pendingContacts: { technical: { firstName: 'T' } } }, 'Other'],
+      [
+        'the other contacts held, when only the registrant was asked for',
+        { pendingRegistrant: BAYO, contacts: { billing: 'Chioma' } },
+        'Other',
+      ],
+    ])('holds invalid %s for a person, and sends nothing', async (_case, over, what) => {
+      const { registrar: reg, writes } = settingsRegistry()
+      const { instance, actions } = run(contactsJob(over as Partial<ClaimedJob>), reg)
+      await instance.tick()
+      expect(writes).toEqual([])
+      expect(actions).toEqual([
+        { type: 'fail', args: ['job-1', 'BAD_JOB', expect.stringContaining(what), true] },
+      ])
+    })
+
+    it('records a refusal against exactly what was asked, nulls included', async () => {
+      const { registrar: reg } = settingsRegistry({
+        contacts: [shows(REGISTRANT)],
+        write: { kind: 'rejected', code: 'CONTACT_INVALID', message: 'Invalid phone' },
+      })
+      const pendingContacts = { technical: TUNDE }
+      const { instance, actions } = run(contactsJob({ pendingContacts }), reg)
+      await instance.tick()
+      expect(actions).toEqual([
+        {
+          type: 'setting',
+          args: ['job-1', { registrant: null, contacts: pendingContacts }, null, 'CONTACT_INVALID'],
+        },
+      ])
+    })
+
+    it('waits on a write the registry accepted but does not show, and never records it', async () => {
+      const { registrar: reg } = settingsRegistry({
+        contacts: [shows(REGISTRANT), shows(REGISTRANT)],
+      })
+      const { instance, actions } = run(contactsJob({ pendingContacts: { technical: TUNDE } }), reg)
+      await instance.tick()
+      expect(actions).toEqual([
+        { type: 'reschedule', args: ['job-1', 30, 'NOT_YET_VISIBLE', expect.any(String)] },
+      ])
+    })
+
+    it('changes the other three: the registrant stays, and each role gets its own person', async () => {
+      const pendingContacts = { administrative: BAYO, technical: TUNDE, billing: CHIOMA }
+      const { registrar: reg, writes } = settingsRegistry({
+        contacts: [shows(REGISTRANT), shows(REGISTRANT, pendingContacts)],
+      })
+      const { instance, actions } = run(contactsJob({ pendingContacts }), reg)
+      await instance.tick()
+      expect(writes).toEqual([
+        [
+          'example.com',
+          { registrant: REGISTRANT, administrative: BAYO, technical: TUNDE, billing: CHIOMA },
+        ],
+      ])
+      expect(actions).toEqual([
+        {
+          type: 'setting',
+          args: [
+            'job-1',
+            { registrant: null, contacts: pendingContacts },
+            { registrant: REGISTRANT, contacts: pendingContacts },
+            null,
+          ],
+        },
+      ])
+    })
+
+    it('changes the registrant and keeps the other roles the domain holds', async () => {
+      const { registrar: reg, writes } = settingsRegistry({
+        contacts: [shows(REGISTRANT, { technical: TUNDE }), shows(BAYO, { technical: TUNDE })],
+      })
+      const { instance, actions } = run(
+        contactsJob({ pendingRegistrant: BAYO, contacts: { technical: TUNDE } }),
+        reg,
+      )
+      await instance.tick()
+      expect(writes).toEqual([
+        [
+          'example.com',
+          { registrant: BAYO, administrative: BAYO, technical: TUNDE, billing: BAYO },
+        ],
+      ])
+      expect(actions).toEqual([
+        {
+          type: 'setting',
+          args: [
+            'job-1',
+            { registrant: BAYO, contacts: null },
+            { registrant: BAYO, contacts: { technical: TUNDE } },
+            null,
+          ],
+        },
+      ])
+    })
+
+    it('moves every role nobody else holds to a new registrant', async () => {
+      const { registrar: reg, writes } = settingsRegistry({
+        contacts: [shows(REGISTRANT), shows(BAYO)],
+      })
+      const { instance, actions } = run(contactsJob({ pendingRegistrant: BAYO }), reg)
+      await instance.tick()
+      expect(writes).toEqual([
+        ['example.com', { registrant: BAYO, administrative: BAYO, technical: BAYO, billing: BAYO }],
+      ])
+      expect(actions).toEqual([
+        {
+          type: 'setting',
+          args: [
+            'job-1',
+            { registrant: BAYO, contacts: null },
+            { registrant: BAYO, contacts: {} },
+            null,
+          ],
+        },
+      ])
+    })
+
+    it('puts all three back on the registrant when {} is asked for', async () => {
+      const { registrar: reg, writes } = settingsRegistry({
+        contacts: [shows(REGISTRANT, { billing: CHIOMA }), shows(REGISTRANT)],
+      })
+      const { instance, actions } = run(
+        contactsJob({ pendingContacts: {}, contacts: { billing: CHIOMA } }),
+        reg,
+      )
+      await instance.tick()
+      expect(writes).toEqual([
+        [
+          'example.com',
+          {
+            registrant: REGISTRANT,
+            administrative: REGISTRANT,
+            technical: REGISTRANT,
+            billing: REGISTRANT,
+          },
+        ],
+      ])
+      expect(actions.at(-1)?.args).toEqual([
+        'job-1',
+        { registrant: null, contacts: {} },
+        { registrant: REGISTRANT, contacts: {} },
+        null,
+      ])
+    })
+
+    it('records without writing when the registry already holds all four (I1)', async () => {
+      const pendingContacts = { administrative: BAYO }
+      const { registrar: reg, writes } = settingsRegistry({
+        contacts: [shows(REGISTRANT, pendingContacts)],
+      })
+      const { instance, actions } = run(contactsJob({ pendingContacts }), reg)
+      await instance.tick()
+      expect(writes).toEqual([])
+      expect(actions.at(-1)).toEqual({
+        type: 'setting',
+        args: [
+          'job-1',
+          { registrant: null, contacts: pendingContacts },
+          { registrant: REGISTRANT, contacts: pendingContacts },
+          null,
+        ],
+      })
+    })
   })
 
   it.each([
     ['a demo domain', { source: 'demo' }],
     ['a domain that is not active', { localStatus: 'pending' }],
     ['nothing waiting to be applied', { pendingTransferLock: null }],
+    ['contacts with nothing waiting', { kind: 'update_contacts', pendingTransferLock: null }],
   ])('sends nothing for %s', async (_case, over) => {
     const { registrar: reg, writes } = settingsRegistry({ lookups: [locked(true)] })
     const { instance, actions } = run(setting(over as Partial<ClaimedJob>), reg)

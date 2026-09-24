@@ -1,5 +1,6 @@
 import { contactSchema } from '@dr/shared'
 import type { PaymentCheck } from '../payments/charge-check'
+import { contactRoles, parseOtherContacts } from './contacts'
 import type { Registrar, SettingsRegistrar, TransferRegistrar } from './registrar'
 import { runRenewal } from './renewal'
 import { applyNameservers, runRegistration } from './saga'
@@ -121,9 +122,11 @@ export function createWorker(options: WorkerOptions) {
     if (!(await paidFor(job))) return
 
     const contact = contactSchema.safeParse(job.registrant)
-    if (!contact.success || !job.periodYears) {
+    // FR-A4: the other three roles, from the order (migration 29).
+    const contacts = parseOtherContacts(job.contacts)
+    if (!contact.success || !contacts || !job.periodYears) {
       // Our data, not the registry's answer: fix it and retry, don't refund.
-      await store.fail(job.id, 'BAD_JOB', 'Registrant or period missing or invalid', true)
+      await store.fail(job.id, 'BAD_JOB', 'Contacts or period missing or invalid', true)
       log.error({ jobId: job.id }, 'registration job has invalid data')
       return
     }
@@ -133,6 +136,7 @@ export function createWorker(options: WorkerOptions) {
       periodYears: job.periodYears,
       privacy: job.privacy,
       contact: contact.data,
+      contacts,
       nameservers: job.pendingNameservers,
     })
 
@@ -266,8 +270,9 @@ export function createWorker(options: WorkerOptions) {
     if (!submitted && !(await paidFor(job))) return
 
     const contact = contactSchema.safeParse(job.registrant)
-    if (!submitted && (!contact.success || !job.periodYears)) {
-      await store.fail(job.id, 'BAD_JOB', 'Registrant or period missing or invalid', true)
+    const contacts = parseOtherContacts(job.contacts)
+    if (!submitted && (!contact.success || !contacts || !job.periodYears)) {
+      await store.fail(job.id, 'BAD_JOB', 'Contacts or period missing or invalid', true)
       log.error({ jobId: job.id }, 'transfer job has invalid data')
       return
     }
@@ -276,8 +281,9 @@ export function createWorker(options: WorkerOptions) {
       domainName: job.domainName,
       authCode: job.authCode ?? null,
       periodYears: job.periodYears ?? 1,
-      // Only the request uses it; polling needs none.
+      // Only the request uses them; polling needs none.
       contact: contact.success ? contact.data : null,
+      contacts: contacts ?? {},
       submittedAt: job.submittedAt ?? null,
       now: now(),
     })
@@ -377,14 +383,22 @@ export function createWorker(options: WorkerOptions) {
       const requested = job.pendingPrivacy
       return { task: { kind: job.kind, domainName, requested }, attempted: { privacy: requested } }
     }
-    if (job.kind === 'update_contacts' && job.pendingRegistrant) {
-      const contact = contactSchema.safeParse(job.pendingRegistrant)
+    if (job.kind === 'update_contacts' && (job.pendingRegistrant || job.pendingContacts)) {
+      // FR-DS1: the four roles as they should end up. A role nobody asked to
+      // change keeps what the domain holds; one held by nobody is the registrant.
+      const registrant = contactSchema.safeParse(job.pendingRegistrant ?? job.registrant)
+      const others = parseOtherContacts(job.pendingContacts ?? job.contacts)
       // Our data, not the registry's answer: a person fixes it.
-      if (!contact.success) return { refused: 'Requested registrant is invalid', hold: true }
+      if (!registrant.success) return { refused: 'Registrant is invalid', hold: true }
+      if (!others) return { refused: 'Other contacts are invalid', hold: true }
       return {
-        task: { kind: job.kind, domainName, requested: contact.data },
-        // Exactly as stored, so the database can tell it is still the one asked for.
-        attempted: { registrant: job.pendingRegistrant },
+        task: { kind: job.kind, domainName, requested: contactRoles(registrant.data, others) },
+        // Exactly as stored, nulls included, so the database clears each
+        // pending value only while it is still the one asked for.
+        attempted: {
+          registrant: job.pendingRegistrant ?? null,
+          contacts: job.pendingContacts ?? null,
+        },
       }
     }
     return { refused: 'Nothing is waiting to be applied', hold: false }
@@ -406,15 +420,9 @@ export function createWorker(options: WorkerOptions) {
     const outcome = await runSettingChange(registrar, planned.task)
     switch (outcome.kind) {
       case 'applied': {
-        // What the registry holds, read back: the requested value, compared
-        // field by field (settings.ts). Never the write's own answer.
-        const applied =
-          planned.task.kind === 'update_contacts'
-            ? planned.attempted
-            : planned.task.kind === 'set_transfer_lock'
-              ? { transfer_lock: planned.task.requested }
-              : { privacy: planned.task.requested }
-        await store.recordDomainChange(job.id, planned.attempted, applied, null)
+        // What the registry holds, read back and compared field by field
+        // (settings.ts). Never the write's own answer.
+        await store.recordDomainChange(job.id, planned.attempted, outcome.held, null)
         log.info(
           { jobId: job.id, domainId: job.domainId, kind: job.kind, recovered: outcome.recovered },
           'setting applied',

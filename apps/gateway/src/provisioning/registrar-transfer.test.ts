@@ -34,6 +34,12 @@ const CONTACT: Contact = {
   country: 'NG',
 }
 
+/** Who the SDK sent in each role, by the supplier's contact type. */
+function firstNameByRole(body: unknown): Record<string, string> {
+  const contacts = (body as { contacts?: { contactType: string; firstName: string }[] }).contacts
+  return Object.fromEntries((contacts ?? []).map((row) => [row.contactType, row.firstName]))
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -164,10 +170,26 @@ describe('transfer (FR-T2)', () => {
       path: '/api/v1/domains/transfer',
       body: { domainName: 'getpaid.com', authCode: CODE, period: 1 },
     })
-    const body = sent[0]?.body as { contacts?: unknown[] } | undefined
-    expect(body?.contacts).toHaveLength(4)
+    expect(firstNameByRole(sent[0]?.body)).toEqual({
+      Admin: 'Ada',
+      Billing: 'Ada',
+      Registrant: 'Ada',
+      Tech: 'Ada',
+    })
     expect(calls[0]).toMatchObject({ operation: 'Transfer', outcome: 'ok' })
     expect(JSON.stringify(calls)).not.toContain(CODE)
+  })
+
+  it('sends each role its own contact, the registrant where there is none (FR-A4)', async () => {
+    const { registrar, sent } = setup(() => json(200, { domainName: 'getpaid.com' }))
+    const tunde = { ...CONTACT, firstName: 'Tunde', email: 'tunde@example.com' }
+    await registrar.transfer({ ...input, contacts: { administrative: tunde } })
+    expect(firstNameByRole(sent[0]?.body)).toEqual({
+      Admin: 'Tunde',
+      Billing: 'Ada',
+      Registrant: 'Ada',
+      Tech: 'Ada',
+    })
   })
 
   it.each([

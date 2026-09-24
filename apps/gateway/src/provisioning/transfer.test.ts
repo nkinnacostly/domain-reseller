@@ -161,6 +161,15 @@ describe('runTransfer — before the registry has the request', () => {
     })
   })
 
+  it('sends the other three contacts with it (FR-A4)', async () => {
+    const reg = registrar({})
+    const contacts = { billing: { ...CONTACT, firstName: 'Chioma' } }
+    await runTransfer(reg, task({ contacts }))
+    expect(reg.transfer).toHaveBeenCalledWith(
+      expect.objectContaining({ contact: CONTACT, contacts }),
+    )
+  })
+
   it('fails a transfer the registry refuses, with its reason', async () => {
     const reg = registrar({
       transfer: { kind: 'rejected', code: 'TRANSFER_LOCKED', message: 'Domain is locked' },

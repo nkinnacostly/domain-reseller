@@ -1,6 +1,6 @@
 import type { Contact } from '@dr/shared'
 import { describe, expect, it } from 'vitest'
-import type { Lookup, Registrar, RegistryDomain, Write } from './registrar'
+import type { Lookup, RegisterInput, Registrar, RegistryDomain, Write } from './registrar'
 import { applyNameservers, type RegistrationTask, runRegistration, sameNameservers } from './saga'
 
 /** A registrar that answers from a script and remembers what was asked. */
@@ -11,6 +11,7 @@ function scripted(script: {
 }) {
   const lookups = [...(script.lookups ?? [])]
   const log: string[] = []
+  const sent: RegisterInput[] = []
   const registrar: Registrar = {
     async lookup() {
       log.push('lookup')
@@ -18,8 +19,9 @@ function scripted(script: {
       if (!next) throw new Error('unexpected lookup')
       return next
     },
-    async register() {
+    async register(input) {
       log.push('register')
+      sent.push(input)
       if (!script.register) throw new Error('unexpected register')
       return script.register
     },
@@ -32,7 +34,7 @@ function scripted(script: {
       return script.setNameservers
     },
   }
-  return { registrar, log }
+  return { registrar, log, sent }
 }
 
 const DOMAIN: RegistryDomain = {
@@ -67,6 +69,21 @@ describe('runRegistration', () => {
       recovered: false,
     })
     expect(log).toEqual(['lookup', 'register', 'lookup'])
+  })
+
+  it('registers with the other three contacts it was given, and none it was not (FR-A4)', async () => {
+    const tunde = { firstName: 'Tunde' } as Contact
+    const script = {
+      lookups: [{ kind: 'not_found' }, { kind: 'found', domain: DOMAIN }] as Lookup[],
+      register: { kind: 'ok', data: DOMAIN } as const,
+    }
+    const given = scripted(script)
+    await runRegistration(given.registrar, task({ contacts: { technical: tunde } }))
+    expect(given.sent[0]).toMatchObject({ contacts: { technical: tunde } })
+
+    const none = scripted(script)
+    await runRegistration(none.registrar, task())
+    expect(none.sent[0]).not.toHaveProperty('contacts')
   })
 
   it('records the registry’s full record, not the sparse register answer', async () => {
