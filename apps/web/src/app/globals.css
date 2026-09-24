@@ -73,6 +73,23 @@
   --status-neutral: oklch(0.7 0 0);
   --status-neutral-foreground: oklch(0.22 0 0);
 
+  /* Portfolio labels (FR-P3) — the six colours a customer can pick, by name
+     (the database stores the name, never a hex). A pale tint with a deep ink
+     of the same hue: every pair is above 6:1, so the label's name — always
+     shown, colour is never the only signal (S8) — reads at 12px. */
+  --label-blue: oklch(0.95 0.035 255);
+  --label-blue-foreground: oklch(0.42 0.16 262);
+  --label-green: oklch(0.95 0.045 155);
+  --label-green-foreground: oklch(0.41 0.1 155);
+  --label-amber: oklch(0.95 0.055 85);
+  --label-amber-foreground: oklch(0.43 0.09 65);
+  --label-red: oklch(0.95 0.03 22);
+  --label-red-foreground: oklch(0.45 0.16 25);
+  --label-purple: oklch(0.95 0.035 305);
+  --label-purple-foreground: oklch(0.43 0.17 305);
+  --label-slate: oklch(0.95 0.008 250);
+  --label-slate-foreground: oklch(0.41 0.03 255);
+
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -148,6 +165,20 @@
     --status-pending-foreground: oklch(0.98 0.01 255);
     --status-neutral: oklch(0.45 0 0);
     --status-neutral-foreground: oklch(0.95 0 0);
+
+    /* Labels on the dark card: a deep tint with a light ink, above 8:1. */
+    --label-blue: oklch(0.33 0.07 260);
+    --label-blue-foreground: oklch(0.88 0.07 255);
+    --label-green: oklch(0.33 0.06 155);
+    --label-green-foreground: oklch(0.88 0.09 155);
+    --label-amber: oklch(0.34 0.06 75);
+    --label-amber-foreground: oklch(0.9 0.1 85);
+    --label-red: oklch(0.33 0.08 25);
+    --label-red-foreground: oklch(0.88 0.06 22);
+    --label-purple: oklch(0.33 0.08 305);
+    --label-purple-foreground: oklch(0.89 0.07 305);
+    --label-slate: oklch(0.33 0.015 250);
+    --label-slate-foreground: oklch(0.89 0.015 250);
 
     --chart-1: oklch(0.488 0.243 264.376);
     --chart-2: oklch(0.696 0.17 162.48);
@@ -226,6 +257,19 @@
   --color-status-pending-foreground: var(--status-pending-foreground);
   --color-status-neutral: var(--status-neutral);
   --color-status-neutral-foreground: var(--status-neutral-foreground);
+
+  --color-label-blue: var(--label-blue);
+  --color-label-blue-foreground: var(--label-blue-foreground);
+  --color-label-green: var(--label-green);
+  --color-label-green-foreground: var(--label-green-foreground);
+  --color-label-amber: var(--label-amber);
+  --color-label-amber-foreground: var(--label-amber-foreground);
+  --color-label-red: var(--label-red);
+  --color-label-red-foreground: var(--label-red-foreground);
+  --color-label-purple: var(--label-purple);
+  --color-label-purple-foreground: var(--label-purple-foreground);
+  --color-label-slate: var(--label-slate);
+  --color-label-slate-foreground: var(--label-slate-foreground);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

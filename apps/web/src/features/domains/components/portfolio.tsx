@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { DomainName } from '@/components/common/domain-name'
 import { DomainStatusPill } from '@/components/common/domain-status-pill'
 import { cn } from '@/lib/utils'
+import type { DomainLabel } from '../lib/labels'
 import {
   DELEGATION_LABEL,
   daysUntilExpiry,
@@ -10,36 +11,52 @@ import {
   type ExpiryWindow,
   filterPortfolio,
   type PortfolioDomain,
+  portfolioHref,
 } from '../lib/portfolio'
 import { transferExpiryText } from '../lib/registration'
+import type { NameserverPreset } from '../queries/domains'
+import { BulkBar } from './bulk-bar'
+import { BulkSelection, SelectDomain } from './bulk-selection'
 import { PANEL } from './dashboard/panel'
 import { DomainBadges } from './domain-badges'
+import { LabelChip, LabelChips } from './label-chip'
 
 const dateFormat = new Intl.DateTimeFormat('en-NG', {
   dateStyle: 'medium',
   timeZone: 'Africa/Lagos',
 })
 
-function windowHref(query: string, within: ExpiryWindow | null) {
-  const params = new URLSearchParams()
-  if (query) params.set('q', query)
-  if (within) params.set('within', String(within))
-  const search = params.toString()
-  return search ? `/app/domains?${search}` : '/app/domains'
-}
+const FILTER_LINK =
+  'inline-flex h-9 items-center rounded-full border px-3.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]'
+const FILTER_OFF = 'border-border bg-background text-muted-foreground hover:text-foreground'
+const FILTER_ON = 'border-brand bg-brand font-medium text-brand-foreground'
 
-/** FR-P2 table and FR-P5 expiry view in one: the view is a filter, not a separate page. */
+/**
+ * FR-P2 table and FR-P5 expiry view in one: the view is a filter, not a
+ * separate page. FR-P3 labels show on each row and filter the list; FR-P4
+ * bulk actions act on the rows ticked.
+ */
 export function Portfolio({
   domains,
   query,
   within,
+  labelId = null,
+  labels = [],
+  presets = [],
+  hasTwoFactor = false,
 }: {
   domains: PortfolioDomain[]
   query: string
   within: ExpiryWindow | null
+  labelId?: string | null
+  /** Every label on the account, for the filter and the bulk bar. */
+  labels?: DomainLabel[]
+  presets?: NameserverPreset[]
+  hasTwoFactor?: boolean
 }) {
   const now = new Date()
-  const shown = filterPortfolio(domains, { query, expiringWithin: within }, now)
+  const shown = filterPortfolio(domains, { query, expiringWithin: within, labelId }, now)
+  const filteredBy = labels.find((label) => label.id === labelId)
 
   return (
     <section
@@ -59,6 +76,7 @@ export function Portfolio({
                 Search your domains
               </label>
               {within ? <input type="hidden" name="within" value={within} /> : null}
+              {labelId ? <input type="hidden" name="label" value={labelId} /> : null}
               <input
                 id="portfolio-search"
                 name="q"
@@ -79,19 +97,52 @@ export function Portfolio({
             return (
               <Link
                 key={option ?? 'all'}
-                href={windowHref(query, option)}
+                href={portfolioHref({ query, within: option, labelId })}
                 aria-current={current ? 'page' : undefined}
-                className={cn(
-                  'inline-flex h-9 items-center rounded-full border px-3.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]',
-                  current
-                    ? 'border-brand bg-brand font-medium text-brand-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:text-foreground',
-                )}
+                className={cn(FILTER_LINK, current ? FILTER_ON : FILTER_OFF)}
               >
                 {option ? `Expiring in ${option} days` : 'All'}
               </Link>
             )
           })}
+        </nav>
+      ) : null}
+
+      {domains.length > 0 && labels.length > 0 ? (
+        <nav aria-label="Labels" className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <Link
+            href={portfolioHref({ query, within })}
+            aria-current={labelId ? undefined : 'page'}
+            className={cn(FILTER_LINK, labelId ? FILTER_OFF : FILTER_ON)}
+          >
+            Any label
+          </Link>
+          {labels.map((label) => {
+            const current = label.id === labelId
+            return (
+              <Link
+                key={label.id}
+                href={portfolioHref({ query, within, labelId: label.id })}
+                aria-current={current ? 'page' : undefined}
+                className={cn(
+                  FILTER_LINK,
+                  'h-9 px-1.5',
+                  // The current one is ringed, not only recoloured (S13, WCAG 1.4.1).
+                  current
+                    ? 'border-brand ring-2 ring-brand/40'
+                    : 'border-transparent hover:border-border',
+                )}
+              >
+                <LabelChip label={label} />
+              </Link>
+            )
+          })}
+          <Link
+            href="/app/settings/labels"
+            className="inline-flex h-9 items-center rounded-full px-2 text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            Manage labels
+          </Link>
         </nav>
       ) : null}
 
@@ -124,20 +175,32 @@ export function Portfolio({
         <p className="mt-4 rounded-2xl border border-border border-dashed px-6 py-10 text-center text-muted-foreground">
           {within
             ? `Nothing expires in the next ${within} days.`
-            : 'No domain matches that search.'}
+            : filteredBy && !query
+              ? `No domain has the label “${filteredBy.name}” yet.`
+              : 'No domain matches that search.'}
         </p>
       ) : (
-        <>
+        <BulkSelection ids={shown.map((domain) => domain.id)}>
+          <BulkBar
+            domains={shown}
+            labels={labels}
+            presets={presets}
+            hasTwoFactor={hasTwoFactor}
+            returnTo={portfolioHref({ query, within, labelId })}
+            renewAll={within !== null}
+          />
+
           {/* One card per domain until the table has room beside the sidebar. */}
           <ul aria-label="Your domains" className="mt-4 space-y-3 xl:hidden">
             {shown.map((domain) => {
               const days = daysUntilExpiry(domain.expiresAt, now)
               return (
-                <li key={domain.id}>
+                <li key={domain.id} className="flex items-start gap-1">
+                  <SelectDomain id={domain.id} name={domain.domainName} className="mt-2.5" />
                   <Link
                     href={`/app/domains/${domain.domainName}`}
                     data-domain={domain.domainName}
-                    className="block rounded-2xl border border-border bg-background/80 p-4 transition-colors hover:bg-brand-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    className="block min-w-0 flex-1 rounded-2xl border border-border bg-background/80 p-4 transition-colors hover:bg-brand-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold break-all text-foreground">
@@ -162,6 +225,7 @@ export function Portfolio({
                         ? 'Change waiting'
                         : DELEGATION_LABEL[domain.delegationStatus]}
                     </span>
+                    <LabelChips labels={domain.labels} className="mt-2" />
                   </Link>
                 </li>
               )
@@ -169,13 +233,16 @@ export function Portfolio({
           </ul>
 
           <div className="relative mt-4 hidden overflow-x-auto xl:block">
-            <table className="w-full min-w-[44rem] border-collapse text-sm">
+            <table className="w-full min-w-[52rem] border-collapse text-sm">
               <caption className="sr-only">
-                Your domains, soonest expiry first, with status, auto-renew and where each is
-                pointed
+                Your domains, soonest expiry first, with status, auto-renew, where each is pointed
+                and its labels
               </caption>
               <thead>
                 <tr className="bg-muted/70 text-left text-muted-foreground [&>th:first-child]:rounded-l-xl [&>th:last-child]:rounded-r-xl">
+                  <th scope="col" className="w-12 px-1 py-3">
+                    <span className="sr-only">Select</span>
+                  </th>
                   <th scope="col" className="px-4 py-3 text-xs font-medium tracking-wide uppercase">
                     Domain
                   </th>
@@ -191,6 +258,9 @@ export function Portfolio({
                   <th scope="col" className="px-4 py-3 text-xs font-medium tracking-wide uppercase">
                     Nameservers
                   </th>
+                  <th scope="col" className="px-4 py-3 text-xs font-medium tracking-wide uppercase">
+                    Labels
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -201,6 +271,9 @@ export function Portfolio({
                       key={domain.id}
                       className="border-border/60 border-b transition-colors last:border-b-0 focus-within:bg-brand-subtle hover:bg-brand-subtle"
                     >
+                      <td className="px-1 py-1.5">
+                        <SelectDomain id={domain.id} name={domain.domainName} />
+                      </td>
                       <th scope="row" className="px-4 py-3 text-left font-medium">
                         <Link
                           href={`/app/domains/${domain.domainName}`}
@@ -241,13 +314,23 @@ export function Portfolio({
                           ? 'Change waiting'
                           : DELEGATION_LABEL[domain.delegationStatus]}
                       </td>
+                      <td className="px-4 py-3">
+                        {domain.labels.length > 0 ? (
+                          <LabelChips labels={domain.labels} className="max-w-56" />
+                        ) : (
+                          <span className="text-muted-foreground">
+                            <span aria-hidden="true">—</span>
+                            <span className="sr-only">None</span>
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
-        </>
+        </BulkSelection>
       )}
     </section>
   )

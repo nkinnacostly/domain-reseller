@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
  * in the foreground colour: the status hues are too light for 12px text
  * (2:1 against their own tint), so they colour the dot, tint and border.
  */
-const STATUS_LABEL: Record<LocalStatus, string> = {
+export const STATUS_LABEL: Record<LocalStatus, string> = {
   pending: 'Registering',
   active: 'Active',
   expired_grace: 'Expired',

@@ -20,9 +20,11 @@ const domain = (name: string, expiresInDays: number | null): PortfolioDomain => 
   expiresAt: expiresInDays === null ? null : inDays(expiresInDays),
   autoRenew: true,
   privacyEnabled: true,
+  transferLock: true,
   delegationStatus: 'undelegated',
   nameservers: null,
   pendingNameservers: null,
+  labels: [],
 })
 
 describe('portfolio (FR-P2, FR-P5)', () => {

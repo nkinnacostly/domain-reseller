@@ -68,9 +68,11 @@ const PORTFOLIO_ROW = {
   expiresAt: '2027-09-23T08:44:10.000Z',
   autoRenew: true,
   privacyEnabled: true,
+  transferLock: true,
   delegationStatus: 'verified',
   nameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
   pendingNameservers: null,
+  labels: [],
 }
 
 function signedIn(tables: Record<string, unknown>) {

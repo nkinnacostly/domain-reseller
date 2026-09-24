@@ -86,6 +86,22 @@ async function Settings() {
           </Link>
         </Section>
         <Section
+          id="labels"
+          title="Labels"
+          description="Coloured tags to group your domains by client or project, and to filter your domains list by."
+        >
+          <Link
+            href="/app/settings/labels"
+            className={cn(
+              'inline-flex h-11 items-center gap-2 rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground transition hover:bg-muted active:scale-[0.98]',
+              FOCUS,
+            )}
+          >
+            Manage labels
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        </Section>
+        <Section
           id="password"
           title="Password"
           description="Changing it signs you out everywhere else."
@@ -123,7 +139,7 @@ export default function SettingsPage() {
           { label: 'Settings' },
         ]}
         title="Settings"
-        description="Your profile, your saved contacts, your password, two-factor sign-in and your devices — what keeps your account, and your domains, yours."
+        description="Your profile, your saved contacts and labels, your password, two-factor sign-in and your devices — what keeps your account, and your domains, yours."
       />
       <Suspense fallback={<PanelSkeleton height="h-96" />}>
         <Settings />

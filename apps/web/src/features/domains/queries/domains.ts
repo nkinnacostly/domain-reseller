@@ -5,12 +5,16 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { cache } from 'react'
 import { createPublicClient } from '@/lib/supabase/public'
 import { createClient } from '@/lib/supabase/server'
+import { sortLabels, toLabel } from '../lib/labels'
+import { attributeHistory, type HistoryEntry } from '../lib/nameserver-history'
 import type { PortfolioDomain } from '../lib/portfolio'
 
 /** Domains are read as the user — RLS returns only their own (migration 12). */
 
+// FR-P3: a domain's labels come through the link table. RLS shows only
+// links to the account's own labels (migration 32).
 const COLUMNS =
-  'id, domain_name, tld, source, test_mode, local_status, expires_at, registered_at, auto_renew, privacy_enabled, transfer_lock, delegation_status, nameservers, pending_nameservers, nameserver_preset_id, registrant, created_at'
+  'id, domain_name, tld, source, test_mode, local_status, expires_at, registered_at, auto_renew, privacy_enabled, transfer_lock, delegation_status, nameservers, pending_nameservers, nameserver_preset_id, registrant, created_at, domain_label_links(domain_labels(id, name, color))'
 
 type Row = {
   id: string
@@ -22,9 +26,11 @@ type Row = {
   expires_at: string | null
   auto_renew: boolean
   privacy_enabled: boolean
+  transfer_lock: boolean
   delegation_status: string
   nameservers: string[] | null
   pending_nameservers: string[] | null
+  domain_label_links?: { domain_labels: { id: string; name: string; color: string } | null }[]
 }
 
 function toPortfolio(row: Row): PortfolioDomain {
@@ -38,9 +44,15 @@ function toPortfolio(row: Row): PortfolioDomain {
     expiresAt: row.expires_at,
     autoRenew: row.auto_renew,
     privacyEnabled: row.privacy_enabled,
+    transferLock: row.transfer_lock,
     delegationStatus: row.delegation_status as DelegationStatus,
     nameservers: row.nameservers,
     pendingNameservers: row.pending_nameservers,
+    labels: sortLabels(
+      (row.domain_label_links ?? []).flatMap((link) =>
+        link.domain_labels ? [toLabel(link.domain_labels)] : [],
+      ),
+    ),
   }
 }
 
@@ -81,7 +93,7 @@ export const getDomain = cache(async (domainName: string) => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('domains')
-    .select(`${COLUMNS}, order_items(failure_code, renewal_kobo)`)
+    .select(`${COLUMNS}, previous_nameservers, order_items(failure_code, renewal_kobo)`)
     .eq('domain_name', decodeURIComponent(domainName).toLowerCase())
     .order('created_at', { ascending: false })
     .limit(1)
@@ -90,8 +102,9 @@ export const getDomain = cache(async (domainName: string) => {
   return {
     ...toPortfolio(data),
     registeredAt: data.registered_at as string | null,
-    transferLock: data.transfer_lock as boolean,
     presetId: data.nameserver_preset_id as string | null,
+    /** FR-N5 — the set a revert goes back to, kept by a trigger (migration 32). */
+    previousNameservers: data.previous_nameservers as string[] | null,
     registrant: data.registrant as Record<string, string> | null,
     /** Why registration failed, when it did (PRD §13.8 code). */
     failureCode: data.order_items?.failure_code ?? null,
@@ -141,4 +154,45 @@ export async function getNameserverPresets(): Promise<NameserverPreset[]> {
     notes: row.notes,
     sourceUrl: row.source_url,
   }))
+}
+
+/** Events that say where a nameserver change came from (FR-N5). */
+const NAMESERVER_EVENTS = ['nameservers_requested', 'nameservers_synced']
+
+/**
+ * FR-N5 — the domain's nameserver changes, newest first, each with who
+ * asked where the activity log says. Read as the user (RLS: owner only).
+ * Null when the history could not be read, so the page can say so.
+ */
+export async function getNameserverHistory(domainId: string): Promise<HistoryEntry[] | null> {
+  const supabase = await createClient()
+  const [history, events] = await Promise.all([
+    supabase
+      .from('domain_nameserver_history')
+      .select('before, after, changed_at')
+      .eq('domain_id', domainId)
+      .order('changed_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('domain_events')
+      .select('event_type, actor_type, payload, created_at')
+      .eq('domain_id', domainId)
+      .in('event_type', NAMESERVER_EVENTS)
+      .order('created_at', { ascending: false })
+      .limit(100),
+  ])
+  if (history.error) return null
+  return attributeHistory(
+    (history.data ?? []).map((row) => ({
+      before: row.before,
+      after: row.after,
+      changedAt: row.changed_at,
+    })),
+    (events.data ?? []).map((event) => ({
+      type: event.event_type,
+      actorType: event.actor_type,
+      payload: (event.payload ?? {}) as Record<string, unknown>,
+      createdAt: event.created_at,
+    })),
+  )
 }
