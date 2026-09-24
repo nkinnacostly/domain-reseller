@@ -5,6 +5,7 @@ import { createAlertStore } from './alerts/store'
 import { createTelegramNotifier } from './alerts/telegram'
 import { createApp } from './app'
 import { catalogueScheduleFor } from './catalogue/schedule'
+import { delegationCheckerFor } from './delegation/checker'
 import { getDnaWriteClient } from './dna/client'
 import { env } from './env'
 import { logger } from './lib/logger'
@@ -149,6 +150,8 @@ const monitor = target
 
 // N5b: the weekly supplier catalogue sync, here because the supplier allowlists this address.
 const catalogueSync = catalogueScheduleFor(env, logger)
+// FR-D5: live domains' delegation, checked against public resolvers.
+const delegationCheck = delegationCheckerFor(env, logger)
 
 if (worker) {
   worker.start()
@@ -162,6 +165,7 @@ refunder?.start()
 sweeper?.start()
 monitor?.start()
 catalogueSync?.start()
+delegationCheck?.start()
 if (target && !(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID)) {
   logger.warn({ target }, 'no Telegram bot configured: alerts are only logged')
 }
@@ -175,6 +179,7 @@ async function shutdown(signal: string) {
     sweeper?.stop(),
     monitor?.stop(),
     catalogueSync?.stop(),
+    delegationCheck?.stop(),
   ])
   server.close()
   process.exit(0)

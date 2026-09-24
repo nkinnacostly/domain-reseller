@@ -40,6 +40,13 @@ const schema = z
      * (`POST /api/pricing/refresh`); unset, they reach the site within the hour.
      */
     APP_URL: z.url().optional(),
+    /** How often live domains' nameservers are checked against public resolvers (FR-D5). */
+    DELEGATION_CHECK_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(24 * 60)
+      .default(30),
 
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     SUPABASE_SECRET_KEY: z.string().min(1),
