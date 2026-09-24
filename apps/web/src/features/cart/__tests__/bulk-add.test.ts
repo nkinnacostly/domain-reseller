@@ -238,16 +238,28 @@ describe('addDomainsToCart — refusals first (FR-S5)', () => {
 })
 
 describe('addDomainsToCart — adding (FR-S5, FR-S8)', () => {
-  it('asks the registry in one request, at normal priority, never high (PRD V4)', async () => {
+  it('asks the registry one extension a request, at normal priority, never high (PRD V4)', async () => {
     await run(['getpaid.com', 'mybrand.com', 'other.io'])
 
-    expect(checkAvailability).toHaveBeenCalledTimes(1)
-    expect(checkAvailability).toHaveBeenCalledWith(
-      ['getpaid', 'mybrand', 'other'],
-      ['com', 'io'],
-      'normal',
-      { fresh: true },
-    )
+    expect(checkAvailability).toHaveBeenCalledTimes(2)
+    expect(checkAvailability).toHaveBeenCalledWith(['getpaid', 'mybrand'], ['com'], 'normal', {
+      fresh: true,
+    })
+    expect(checkAvailability).toHaveBeenCalledWith(['other'], ['io'], 'normal', { fresh: true })
+  })
+
+  it('keeps every request within the supplier’s 20 checks a call', async () => {
+    const domains = Array.from({ length: 45 }, (_, index) => `name${index}.com`)
+    await run(domains)
+
+    const sizes = vi
+      .mocked(checkAvailability)
+      .mock.calls.map(([names, tlds]) => [names.length, tlds.length])
+    expect(sizes).toEqual([
+      [20, 1],
+      [20, 1],
+      [5, 1],
+    ])
   })
 
   it('re-checks past the 60-second cache before anything goes in (FR-S6)', async () => {

@@ -43,10 +43,10 @@ async function bulkSearch(page: Page, names: string[]) {
   await finished(page)
 }
 
-async function finished(page: Page) {
+async function finished(page: Page, timeout = 30_000) {
   await expect(summary(page)).toBeVisible()
   await expect(summary(page).getByRole('heading', { level: 2 })).not.toHaveText(/^Checking/, {
-    timeout: 30_000,
+    timeout,
   })
 }
 
@@ -75,8 +75,10 @@ test.describe('bulk search', () => {
       '500 of 500 available',
     )
     await expect(summary(page).getByRole('status')).toHaveText('500 of 500 names checked')
-    // 500 names on one extension: ten blocks of fifty.
-    expect(actions).toHaveLength(10)
+    // 500 names on one extension: 25 blocks of twenty, one supplier call each. The mock
+    // refuses a bulk block over the supplier's 20-check ceiling, so every name answering
+    // above also proves no block was too big.
+    expect(actions).toHaveLength(25)
     await expect(results(page)).toHaveCount(100)
     await page.getByRole('button', { name: 'Show 100 more of 400 not shown' }).click()
     await expect(results(page)).toHaveCount(200)
@@ -160,11 +162,11 @@ test.describe('bulk search', () => {
     const names = [`failonce${id}`, ...Array.from({ length: 59 }, (_, index) => `ok${id}n${index}`)]
     await bulkSearch(page, names)
 
-    await expect(unchecked(page)).toHaveAccessibleName('50 names weren’t checked')
+    await expect(unchecked(page)).toHaveAccessibleName('20 names weren’t checked')
     await expect(unchecked(page)).toContainText(`failonce${id}.com`)
-    await expect(summary(page).getByRole('heading')).toHaveText('10 of 60 available')
+    await expect(summary(page).getByRole('heading')).toHaveText('40 of 60 available')
 
-    await unchecked(page).getByRole('button', { name: 'Check these 50 again' }).click()
+    await unchecked(page).getByRole('button', { name: 'Check these 20 again' }).click()
     await finished(page)
     await expect(summary(page).getByRole('heading')).toHaveText('60 of 60 available')
     await expect(unchecked(page)).toHaveCount(0)
@@ -251,17 +253,20 @@ test.describe('bulk search', () => {
 
   test('limits how many names one address checks, and says so', async ({ page }) => {
     test.skip(test.info().project.name !== 'chromium-desktop', 'one device is enough to count')
-    test.setTimeout(180_000)
+    test.setTimeout(300_000)
     const id = unique()
     await openBulk(page)
+    await bulkForm(page).getByRole('checkbox', { name: '.net' }).check()
+    await bulkForm(page).getByRole('checkbox', { name: '.org' }).check()
 
-    // 24 blocks of 50 names per ten minutes: the third 500-name list runs out. The count runs
-    // in fixed windows, so if one closes meanwhile the next fills within three more lists.
-    for (let list = 0; list < 6; list += 1) {
+    // 120 blocks of up to 20 checks per ten minutes; 500 names on three extensions is 75, so
+    // the second list runs out. The count runs in fixed windows, so if one closes meanwhile
+    // the next fills within two more lists.
+    for (let list = 0; list < 5; list += 1) {
       const names = Array.from({ length: 500 }, (_, index) => `limit${id}l${list}n${index}`)
       await bulkForm(page).getByLabel('Names to check').fill(names.join('\n'))
       await bulkForm(page).getByRole('button', { name: 'Check names' }).click()
-      await finished(page)
+      await finished(page, 90_000)
       if ((await unchecked(page).count()) > 0) break
     }
 

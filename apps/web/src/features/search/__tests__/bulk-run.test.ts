@@ -63,6 +63,10 @@ const fail = (run: BulkRun, index: number, reason: 'unavailable' | 'busy' | 'lim
     answer: { ok: false, reason },
   }) as BulkRun
 
+/** Every request of the run answered, `statuses` overriding `available`. */
+const answerAll = (run: BulkRun, statuses: Parameters<typeof answer>[2] = {}) =>
+  run.plan.chunks.reduce((current, _, index) => answer(current, index, statuses), run)
+
 const finish = (run: BulkRun) => reduceRun(run, { type: 'finish', id: run.id }) as BulkRun
 const categories = (run: BulkRun) =>
   Object.fromEntries(resultRows(run).map((row) => [row.display, row.category]))
@@ -71,12 +75,13 @@ describe('a bulk run — failures first (FR-S5)', () => {
   it('leaves every name in a failed block not checked, and the rest answered', () => {
     const names = Array.from({ length: 60 }, (_, index) => `n${index}`)
     let run = newRun(names.join('\n'))
+    expect(run.plan.chunks).toHaveLength(3)
     run = fail(run, 0, 'unavailable')
-    run = finish(answer(run, 1))
+    run = finish(answer(answer(run, 1), 2))
 
-    expect(tally(resultRows(run))).toMatchObject({ unchecked: 50, available: 10, pending: 0 })
+    expect(tally(resultRows(run))).toMatchObject({ unchecked: 20, available: 40, pending: 0 })
     expect(failureReason(run)).toBe('unavailable')
-    expect(uncheckedDomains(run)).toHaveLength(50)
+    expect(uncheckedDomains(run)).toHaveLength(20)
     expect(uncheckedDomains(run)[0]).toBe('n0.com')
   })
 
@@ -110,7 +115,7 @@ describe('a bulk run — failures first (FR-S5)', () => {
       reason: 'limited',
     }) as BulkRun
 
-    expect(tally(resultRows(run))).toMatchObject({ available: 50, unchecked: 70 })
+    expect(tally(resultRows(run))).toMatchObject({ available: 20, unchecked: 100 })
     expect(failureReason(run)).toBe('limited')
   })
 
@@ -153,16 +158,15 @@ describe('a bulk run — failures first (FR-S5)', () => {
 describe('a bulk run — retrying only what was not checked', () => {
   it('asks again about the failed names only, packed afresh', () => {
     const names = Array.from({ length: 60 }, (_, index) => `n${index}`)
-    let run = finish(answer(fail(newRun(names.join('\n')), 0, 'unavailable'), 1))
+    let run = newRun(names.join('\n'))
+    run = finish(answer(fail(answer(run, 0), 1, 'unavailable'), 2))
 
     const chunks = retryChunks(run)
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0]?.names).toHaveLength(50)
-    expect(chunks[0]?.names).not.toContain('n55')
+    expect(chunks).toEqual([{ names: names.slice(20, 40), tlds: ['com'] }])
 
     run = reduceRun(run, { type: 'retry', id: run.id }) as BulkRun
     expect(run.running).toBe(true)
-    expect(tally(resultRows(run))).toMatchObject({ pending: 50, available: 10, unchecked: 0 })
+    expect(tally(resultRows(run))).toMatchObject({ pending: 20, available: 40, unchecked: 0 })
   })
 
   it('has nothing to retry when everything was checked', () => {
@@ -175,7 +179,10 @@ describe('progress — "312 of 500 checked"', () => {
     let run = newRun('getpaid\nother\nnot_a_name', ['com', 'net'])
     expect(progress(run)).toEqual({ total: 3, checked: 1, settled: 1 })
 
-    run = answer(run, 0, {})
+    // A name is checked once every extension it was asked about has answered.
+    run = answer(run, 0)
+    expect(progress(run)).toEqual({ total: 3, checked: 1, settled: 1 })
+    run = answer(run, 1)
     expect(progress(run)).toEqual({ total: 3, checked: 3, settled: 3 })
   })
 
@@ -260,7 +267,7 @@ describe('result rows', () => {
 
 describe('filters and order', () => {
   const run = finish(
-    answer(newRun('zeta\nalpha\ntakenbrand\nhotel\nmid.io\nnot_a_name', ['com']), 0, {
+    answerAll(newRun('zeta\nalpha\ntakenbrand\nhotel\nmid.io\nnot_a_name', ['com']), {
       'takenbrand.com': 'registered',
       'hotel.com': 'premium',
     }),
@@ -291,7 +298,7 @@ describe('filters and order', () => {
   })
 
   it('orders cheapest first, with unpriced rows after, as listed', () => {
-    const io = answer(newRun('zeta\nexpensive.io\nalpha'), 0, {})
+    const io = answerAll(newRun('zeta\nexpensive.io\nalpha'))
     expect(sortRows(resultRows(finish(io)), 'price').map((row) => row.display)).toEqual([
       'zeta.com',
       'alpha.com',
