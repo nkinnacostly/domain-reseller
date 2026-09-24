@@ -37,8 +37,8 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 
 | # | Item | Why it matters | Where |
 |---|---|---|---|
-| F1 | **Submit the sitemap in Google Search Console** | Tells Google every page, including ~690 extension pages, and shows indexing problems. Submit `https://www.mydomainshub.com/sitemap.xml` (Indexing → Sitemaps), then URL Inspection → Request indexing for `/`, `/pricing` and `/domains`. The Generative AI report shows appearances in AI Overviews and AI Mode. | Owner, Search Console (verified by DNS) |
-| F2 | **Add the site to Bing Webmaster Tools** | Bing's index feeds Copilot and, through its search partnership, ChatGPT search; its AI Performance report shows citations. Import the site from Search Console (one click), then submit the sitemap there too. | Owner, https://www.bing.com/webmasters |
+| F1 | ~~Submit the sitemap in Google Search Console~~ | Done 24 Sept 2026: `sitemap.xml` submitted (domain property, verified by DNS). Watch Indexing → Pages for errors; the Generative AI report shows appearances in AI Overviews and AI Mode. | Done |
+| F2 | ~~Add the site to Bing Webmaster Tools~~ | Done 24 Sept 2026: imported from Search Console. Bing's index feeds Copilot and ChatGPT search; its AI Performance report shows citations. All 709 URLs were also sent through IndexNow the same day. | Done |
 | F3 | **Brand profiles elsewhere** | AI assistants recommend what other sites mention. Create the brand's profiles (X, LinkedIn, Instagram, Facebook) and list the site where Nigerian businesses look for services; send the links so the site's Organization data can name them (`sameAs`). Only real profiles — none are claimed today. | Owner |
 
 ## 2. Deferred features
