@@ -64,6 +64,7 @@ describe('organization and site', () => {
     ).toMatchObject({
       '@type': 'ContactPage',
       url: `${SITE}/contact`,
+      isPartOf: { '@type': 'WebSite', '@id': `${SITE}/#website`, url: `${SITE}/` },
       mainEntity: { '@id': `${SITE}/#organization` },
     })
   })

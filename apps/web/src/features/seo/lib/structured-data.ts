@@ -135,7 +135,8 @@ export function aboutPageLd(
     url: siteUrl(site, path),
     name,
     inLanguage: 'en-NG',
-    isPartOf: { '@id': websiteId(site) },
+    // Named in full: the WebSite node itself is only on the home page.
+    isPartOf: { '@type': 'WebSite', '@id': websiteId(site), name: BRAND_NAME, url: siteUrl(site) },
     about: { '@id': organizationId(site) },
     mainEntity: { '@id': organizationId(site) },
   }
