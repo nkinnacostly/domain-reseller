@@ -252,6 +252,7 @@ export type Database = {
       domains: {
         Row: {
           auto_renew: boolean
+          contacts: Json | null
           created_at: string
           delegation_checked_at: string | null
           delegation_status: Database["public"]["Enums"]["delegation_status"]
@@ -262,6 +263,7 @@ export type Database = {
           nameserver_preset_id: string | null
           nameservers: string[] | null
           order_item_id: string | null
+          pending_contacts: Json | null
           pending_nameservers: string[] | null
           pending_privacy: boolean | null
           pending_registrant: Json | null
@@ -281,6 +283,7 @@ export type Database = {
         }
         Insert: {
           auto_renew?: boolean
+          contacts?: Json | null
           created_at?: string
           delegation_checked_at?: string | null
           delegation_status?: Database["public"]["Enums"]["delegation_status"]
@@ -291,6 +294,7 @@ export type Database = {
           nameserver_preset_id?: string | null
           nameservers?: string[] | null
           order_item_id?: string | null
+          pending_contacts?: Json | null
           pending_nameservers?: string[] | null
           pending_privacy?: boolean | null
           pending_registrant?: Json | null
@@ -310,6 +314,7 @@ export type Database = {
         }
         Update: {
           auto_renew?: boolean
+          contacts?: Json | null
           created_at?: string
           delegation_checked_at?: string | null
           delegation_status?: Database["public"]["Enums"]["delegation_status"]
@@ -320,6 +325,7 @@ export type Database = {
           nameserver_preset_id?: string | null
           nameservers?: string[] | null
           order_item_id?: string | null
+          pending_contacts?: Json | null
           pending_nameservers?: string[] | null
           pending_privacy?: boolean | null
           pending_registrant?: Json | null
@@ -660,6 +666,8 @@ export type Database = {
           failure_code: string | null
           id: string
           item_type: string
+          nameserver_preset_id: string | null
+          nameservers: string[] | null
           order_id: string
           period_years: number
           price_kobo: number
@@ -677,6 +685,8 @@ export type Database = {
           failure_code?: string | null
           id?: string
           item_type?: string
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
           order_id: string
           period_years: number
           price_kobo: number
@@ -694,6 +704,8 @@ export type Database = {
           failure_code?: string | null
           id?: string
           item_type?: string
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
           order_id?: string
           period_years?: number
           price_kobo?: number
@@ -704,6 +716,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "order_items_nameserver_preset_id_fkey"
+            columns: ["nameserver_preset_id"]
+            isOneToOne: false
+            referencedRelation: "nameserver_presets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "order_items_order_id_fkey"
             columns: ["order_id"]
@@ -716,6 +735,7 @@ export type Database = {
       orders: {
         Row: {
           contact_profile_id: string | null
+          contacts: Json | null
           created_at: string
           float_check: string
           fx_rate_id: string
@@ -740,6 +760,7 @@ export type Database = {
         }
         Insert: {
           contact_profile_id?: string | null
+          contacts?: Json | null
           created_at?: string
           float_check: string
           fx_rate_id: string
@@ -764,6 +785,7 @@ export type Database = {
         }
         Update: {
           contact_profile_id?: string | null
+          contacts?: Json | null
           created_at?: string
           float_check?: string
           fx_rate_id?: string
