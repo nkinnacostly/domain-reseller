@@ -90,4 +90,25 @@ describe('DomainSearch', () => {
     render(<DomainSearch />)
     expect(screen.getByLabelText('Find your domain')).not.toHaveFocus()
   })
+
+  it('explains why a lookalike name mixing alphabets is refused (FR-S8)', async () => {
+    const user = userEvent.setup()
+    render(<DomainSearch />)
+
+    // The second letter is Cyrillic а.
+    await user.type(screen.getByLabelText('Find your domain'), 'pаypal.com')
+    await user.click(screen.getByRole('button', { name: /search/i }))
+
+    expect(push).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('mixes letters from different alphabets')
+  })
+
+  it('searches an international name by its readable form (FR-S8)', async () => {
+    const user = userEvent.setup()
+    render(<DomainSearch />)
+
+    await user.type(screen.getByLabelText('Find your domain'), 'Café.com{Enter}')
+
+    expect(push).toHaveBeenCalledWith(`/search?q=${encodeURIComponent('café.com')}`)
+  })
 })

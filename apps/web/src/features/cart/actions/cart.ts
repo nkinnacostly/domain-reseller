@@ -1,12 +1,18 @@
 'use server'
 
+import type { TldPricing } from '@dr/shared'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { BULK_MAX_EXTENSIONS, BULK_MAX_NAMES, chunkChecks } from '@/features/search/lib/bulk'
+import { toUnicodeHost } from '@/features/search/lib/idn'
+import { describeLengthIssue, lengthIssue } from '@/features/search/lib/length'
 import { parseSearchQuery } from '@/features/search/lib/query'
 import { checkAvailability } from '@/features/search/queries/availability'
+import { getLengthRules } from '@/features/search/queries/length-rules'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
 import { clampPeriod, MAX_CART_ITEMS, quoteFor } from '../lib/lines'
 import {
@@ -123,6 +129,123 @@ export const addToCart = actionClient
       return { error: FAILED }
     }
   })
+
+/** A name "add all" could not add, and why — in words for the page. */
+export type NotAdded = { domain: string; reason: string }
+
+/**
+ * "Add all available" from a bulk search (FR-S5). Every name is re-checked
+ * first, like a single add — grouped by extension into as few gateway
+ * requests as the search itself used, and at normal priority, so a bulk add
+ * never jumps ahead of someone waiting on their exact match (PRD V4).
+ * Only names the person was shown as available are sent; nothing is ticked
+ * for them (N9).
+ */
+export const addDomainsToCart = actionClient
+  .inputSchema(
+    z.object({
+      domains: z
+        .array(z.string().min(3).max(253))
+        .min(1)
+        .max(BULK_MAX_NAMES * BULK_MAX_EXTENSIONS),
+    }),
+  )
+  .action(
+    async ({
+      parsedInput,
+    }): Promise<Failure | { count: number; added: string[]; notAdded: NotAdded[] }> => {
+      if (!(await withinLimit(await addressKey('bulk_add'), LIMITS.bulkAddToCart))) {
+        return { error: "You've added a lot in the last few minutes. Wait a little and try again." }
+      }
+      const [priced, lengthRules] = await Promise.all([getPricedCatalogue(), getLengthRules()])
+      if (!priced) return { error: 'Prices are unavailable right now, so nothing can be added.' }
+      const byTld = new Map(priced.tlds.map((tld) => [tld.tld, tld]))
+
+      const notAdded: NotAdded[] = []
+      const wanted: { name: string; tld: string; domain: string; pricing: TldPricing }[] = []
+      for (const raw of new Set(parsedInput.domains)) {
+        const { stem, tld, isValid } = parseSearchQuery(raw)
+        const shown = toUnicodeHost(raw.toLowerCase())
+        if (!isValid || !tld) {
+          notAdded.push({ domain: shown, reason: 'Not a domain we can add' })
+          continue
+        }
+        const pricing = byTld.get(tld)
+        if (!pricing) {
+          notAdded.push({ domain: shown, reason: `We don't sell .${toUnicodeHost(tld)}` })
+          continue
+        }
+        // FR-S9: a name the extension refuses is never sent to the supplier.
+        const issue = lengthIssue(stem, lengthRules[tld])
+        if (issue) {
+          notAdded.push({ domain: shown, reason: describeLengthIssue(issue, stem, tld) })
+          continue
+        }
+        if (!wanted.some((entry) => entry.domain === `${stem}.${tld}`)) {
+          wanted.push({ name: stem, tld, domain: `${stem}.${tld}`, pricing })
+        }
+      }
+
+      const outcomes = await Promise.all(
+        chunkChecks(wanted).map((chunk) => checkAvailability(chunk.names, chunk.tlds)),
+      )
+      const statusOf = new Map(
+        outcomes.flatMap((outcome) =>
+          outcome.ok
+            ? outcome.results.map((result) => [result.domain, result.status] as const)
+            : [],
+        ),
+      )
+
+      try {
+        const cartId = await findOrCreateCartId(await ownerForWrite())
+        const inCart = new Set((await loadLines(cartId)).map((line) => line.domain))
+        let count = inCart.size
+        const added: string[] = []
+
+        for (const entry of wanted) {
+          const shown = toUnicodeHost(entry.domain)
+          const status = statusOf.get(entry.domain)
+          if (inCart.has(entry.domain)) {
+            added.push(shown)
+            continue
+          }
+          if (status === undefined || status === 'unknown') {
+            notAdded.push({ domain: shown, reason: "We couldn't confirm it's still free" })
+            continue
+          }
+          if (status !== 'available') {
+            notAdded.push({ domain: shown, reason: 'Taken while you were looking' })
+            continue
+          }
+          if (count >= MAX_CART_ITEMS) {
+            notAdded.push({ domain: shown, reason: `A cart holds up to ${MAX_CART_ITEMS} domains` })
+            continue
+          }
+
+          const years = clampPeriod(entry.pricing.minPeriod, entry.pricing)
+          const quote = quoteFor(entry.pricing, years)
+          await insertLine(cartId, {
+            domain: entry.domain,
+            tld: entry.tld,
+            periodYears: years,
+            quotedTotalKobo: quote.totalKobo,
+            quotedRenewalKobo: quote.renewalKobo,
+            quotedFxRateId: priced.rateId,
+          })
+          count += 1
+          added.push(shown)
+        }
+
+        const after = await countLines(cartId)
+        await setCountCookie(after)
+        return { count: after, added, notAdded }
+      } catch (err) {
+        logger.error({ err }, 'bulk add to cart failed')
+        return { error: FAILED }
+      }
+    },
+  )
 
 export const updateCartLine = actionClient
   .inputSchema(

@@ -4,7 +4,7 @@ import { ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { parseSearchQuery, searchHref } from '../lib/query'
+import { describeProblem, parseSearchQuery, searchHref } from '../lib/query'
 
 /**
  * Hero search (PRD FR-S1). One pill: a quiet label, the input, and the CTA.
@@ -57,9 +57,11 @@ export function DomainSearch({
 
     if (!parsed.isValid) {
       setError(
-        submitted.trim()
-          ? 'Use letters, numbers and hyphens — for example getpaid.com'
-          : 'Type a name to search for',
+        parsed.problem
+          ? describeProblem(parsed.problem)
+          : submitted.trim()
+            ? 'Use letters, numbers and hyphens — for example getpaid.com'
+            : 'Type a name to search for',
       )
       return
     }
@@ -130,7 +132,7 @@ export function DomainSearch({
         id={errorId}
         role={error ? 'alert' : undefined}
         hidden={!error}
-        className="mt-2 w-fit rounded-full bg-background px-4 py-1.5 text-sm font-medium text-destructive"
+        className="mt-2 w-fit rounded-2xl bg-background px-4 py-1.5 text-pretty text-sm font-medium text-destructive"
       >
         {error}
       </p>

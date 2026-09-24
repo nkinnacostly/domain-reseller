@@ -1,10 +1,18 @@
 import { type PricingInputs, priceCatalogue, type TldPricing, type TldRecord } from '@dr/shared'
 import { render, screen, within } from '@testing-library/react'
+import { HttpResponse, http } from 'msw'
 import { cloneElement, isValidElement, type ReactNode } from 'react'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue, type PricedCatalogue } from '@/features/pricing/queries/pricing'
-import { SearchHeading, SearchHeadingSkeleton, SearchResults } from '../components/search-results'
+import { server } from '../../../../tests/mocks/server'
+import {
+  BulkSearchLink,
+  SearchHeading,
+  SearchHeadingSkeleton,
+  SearchResults,
+} from '../components/search-results'
+import { getLengthRules } from '../queries/length-rules'
 
 // env.ts reads process.env once, at import: point it at a test gateway first.
 vi.hoisted(() => {
@@ -15,6 +23,7 @@ afterAll(() => vi.unstubAllEnvs())
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
+vi.mock('../queries/length-rules', () => ({ getLengthRules: vi.fn() }))
 
 // Fixed inputs so expectations do not move with the live rate.
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
@@ -76,7 +85,28 @@ async function renderResults(q: Q) {
 beforeEach(() => {
   vi.mocked(getPricedCatalogue).mockReset()
   vi.mocked(getPricedCatalogue).mockResolvedValue(CATALOGUE)
+  vi.mocked(getLengthRules).mockResolvedValue({})
 })
+
+/** Records every availability request the gateway receives. */
+function recordGateway() {
+  const asked: { names: string[]; tlds: string[] }[] = []
+  server.use(
+    http.post('*/v1/availability', async ({ request }) => {
+      const body = (await request.json()) as { names: string[]; tlds: string[] }
+      asked.push(body)
+      return HttpResponse.json({
+        ok: true,
+        data: {
+          results: body.names.flatMap((name) =>
+            body.tlds.map((tld) => ({ name, tld, domain: `${name}.${tld}`, status: 'available' })),
+          ),
+        },
+      })
+    }),
+  )
+  return asked
+}
 
 describe('SearchHeading', () => {
   it('names what was searched for, normalised', async () => {
@@ -162,5 +192,74 @@ describe('SearchResults', () => {
     const grid = screen.getByRole('list', { name: 'getpaid on other extensions' })
     expect(within(grid).getAllByRole('listitem')).toHaveLength(3)
     expect(screen.queryByRole('article')).not.toBeInTheDocument()
+  })
+
+  it('explains a lookalike name mixing alphabets, rather than searching it (FR-S8)', async () => {
+    // The second letter is Cyrillic а.
+    await renderResults('pаypal.com')
+
+    expect(screen.getByText('That name mixes alphabets')).toBeInTheDocument()
+    expect(screen.getByText(/different alphabets \(Latin and Cyrillic\)/)).toBeInTheDocument()
+    expect(getPricedCatalogue).not.toHaveBeenCalled()
+  })
+
+  it('shows an international name as people read it, with the ASCII form beside it (FR-S8)', async () => {
+    await renderResults('café.com')
+
+    const exact = screen.getByRole('article', { name: 'café.com' })
+    expect(exact).toHaveTextContent('xn--caf-dma.com')
+    expect(screen.getByRole('button', { name: 'Add café.com to cart' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'café on other extensions' })).toBeInTheDocument()
+  })
+
+  it('answers a name its extension is too short for without asking the supplier (FR-S9)', async () => {
+    vi.mocked(getLengthRules).mockResolvedValue({ africa: { min: 3, max: 63 } })
+    const asked = recordGateway()
+
+    await renderResults('ab.africa')
+
+    const exact = screen.getByRole('article', { name: 'ab.africa' })
+    expect(exact).toHaveTextContent('Not available')
+    expect(exact).toHaveTextContent('Too short for .africa (3–63 characters).')
+    expect(asked.some((body) => body.tlds.includes('africa') && body.names.includes('ab'))).toBe(
+      false,
+    )
+  })
+
+  it('shows a too-long extension in the grid without asking about it (FR-S9)', async () => {
+    vi.mocked(getLengthRules).mockResolvedValue({ net: { min: null, max: 5 } })
+    const asked = recordGateway()
+
+    await renderResults('getpaid.com')
+
+    const grid = screen.getByRole('list', { name: 'getpaid on other extensions' })
+    expect(within(grid).getByText('getpaid.net').closest('li')).toHaveTextContent(
+      'Too long for .net (at most 5 characters)',
+    )
+    expect(asked.flatMap((body) => body.tlds)).not.toContain('net')
+  })
+
+  it('asks nothing for the grid when every other extension refuses the name (FR-S9)', async () => {
+    vi.mocked(getLengthRules).mockResolvedValue({
+      africa: { min: 9, max: null },
+      net: { min: 9, max: null },
+    })
+    const asked = recordGateway()
+
+    await renderResults('getpaid.com')
+
+    const grid = screen.getByRole('list', { name: 'getpaid on other extensions' })
+    expect(within(grid).getAllByRole('listitem')).toHaveLength(2)
+    expect(asked.flatMap((body) => body.tlds)).toEqual(['com', 'com', 'africa'])
+  })
+})
+
+describe('BulkSearchLink', () => {
+  it('points to bulk search from the search page (FR-S5)', () => {
+    render(<BulkSearchLink />)
+    expect(screen.getByRole('link', { name: 'Search many at once' })).toHaveAttribute(
+      'href',
+      '/search/bulk',
+    )
   })
 })

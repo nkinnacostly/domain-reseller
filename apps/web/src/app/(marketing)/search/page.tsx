@@ -5,6 +5,7 @@ import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
 import {
+  BulkSearchLink,
   SearchHeading,
   SearchHeadingSkeleton,
   SearchResults,
@@ -43,6 +44,7 @@ export default function SearchPage({
           <Suspense fallback={<SearchHeadingSkeleton />}>
             <SearchHeading searchParams={searchParams} />
           </Suspense>
+          <BulkSearchLink />
         </PageHero>
 
         <Container className="py-12 sm:py-16">

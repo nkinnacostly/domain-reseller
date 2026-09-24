@@ -31,7 +31,9 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
           <p>
             Type the name you want into the search on the <Link href="/">home page</Link>. You see
             straight away whether your exact name is free, then the same name across other
-            extensions, and suggestions if it is taken.
+            extensions, and suggestions if it is taken. To check a list, use{' '}
+            <Link href="/search/bulk">bulk search</Link> — up to 20 names at once. Names in other
+            scripts, like café.com, work too.
           </p>
         ),
       },

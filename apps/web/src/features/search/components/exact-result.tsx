@@ -2,7 +2,8 @@ import { ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { AddToCartButton } from '@/features/cart/components/add-to-cart-button'
 import { transferCheckHref } from '@/features/transfers/lib/href'
-import type { SearchRow } from '../lib/rows'
+import { refusalNote, type SearchRow } from '../lib/rows'
+import { AsciiForm, LookalikeWarning } from './idn-notes'
 import { ResultStatus } from './result-status'
 
 /**
@@ -11,6 +12,7 @@ import { ResultStatus } from './result-status'
  * floor FR-S2 sets, so the second year is never the small print.
  */
 export function ExactResult({ row }: { row: SearchRow }) {
+  const refusal = refusalNote(row)
   return (
     <article
       aria-labelledby="exact-domain"
@@ -26,8 +28,10 @@ export function ExactResult({ row }: { row: SearchRow }) {
         id="exact-domain"
         className="mt-4 text-3xl font-bold tracking-tight break-all text-foreground sm:text-4xl"
       >
-        {row.domain}
+        {row.display}
       </h2>
+      <AsciiForm domain={row.domain} display={row.display} className="mt-1 block" />
+      <LookalikeWarning stem={row.name} className="mt-4" />
 
       {row.status === 'available' && row.price ? (
         <div className="mt-6">
@@ -62,7 +66,7 @@ export function ExactResult({ row }: { row: SearchRow }) {
             {row.price.includesIcannFee ? ' · includes the ICANN fee' : ''} · register for up to{' '}
             {row.price.maxPeriod} years
           </p>
-          <AddToCartButton domain={row.domain} size="large" className="mt-6" />
+          <AddToCartButton domain={row.domain} label={row.display} size="large" className="mt-6" />
         </div>
       ) : null}
 
@@ -75,7 +79,7 @@ export function ExactResult({ row }: { row: SearchRow }) {
       {row.status === 'registered' ? (
         <div className="mt-4 space-y-4">
           <p className="text-pretty text-muted-foreground">
-            Someone already holds {row.domain}. The alternatives below are free right now.
+            Someone already holds {row.display}. The alternatives below are free right now.
           </p>
           <Link
             href={transferCheckHref(row.domain)}
@@ -94,7 +98,11 @@ export function ExactResult({ row }: { row: SearchRow }) {
         </p>
       ) : null}
 
-      {row.status === 'restricted' ? (
+      {row.status === 'restricted' && refusal ? (
+        <p className="mt-4 text-pretty text-muted-foreground">{refusal}.</p>
+      ) : null}
+
+      {row.status === 'restricted' && !refusal ? (
         <p className="mt-4 text-pretty text-muted-foreground">
           This name cannot be registered. The registry reserves it, or it breaks the rules for{' '}
           {`.${row.tld}`} — most often the minimum length.

@@ -7,6 +7,7 @@
  *   hotel                → premium
  *   x                    → restricted
  *   flakycheck on .app   → unknown
+ *   xn--* on .app        → restricted (an extension refusing international names)
  *   allgone*             → every name registered, so no alternatives
  *   gatewaydown          → the whole request fails (502)
  *   busysearch           → rate limited (429)
@@ -26,6 +27,7 @@ function statusFor(name, tld) {
   if (name === 'hotel') return 'premium'
   if (name === 'x') return 'restricted'
   if (name === 'flakycheck' && tld === 'app') return 'unknown'
+  if (name.startsWith('xn--') && tld === 'app') return 'restricted'
   return 'available'
 }
 

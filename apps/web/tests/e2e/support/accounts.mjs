@@ -140,6 +140,20 @@ export async function deleteTestCarts() {
   if (empty.length) await client.from('carts').delete().in('id', empty)
 }
 
+/**
+ * Removes the carts holding any of these domains — a test's own clean-up,
+ * for runs that skip the global sweep (E2E_KEEP_OTHERS=1).
+ *
+ * @param {string[]} domains
+ */
+export async function deleteCartsHolding(domains) {
+  const client = admin()
+  const { data, error } = await client.from('cart_items').select('cart_id').in('domain', domains)
+  if (error) throw error
+  const ids = [...new Set((data ?? []).map((item) => item.cart_id))]
+  if (ids.length) await client.from('carts').delete().in('id', ids)
+}
+
 const DAY_MS = 86_400_000
 
 /**

@@ -1,10 +1,13 @@
-import { Search as SearchIcon, ShieldCheck } from 'lucide-react'
+import { ListChecks, Search as SearchIcon, ShieldCheck } from 'lucide-react'
+import Link from 'next/link'
 import { Suspense } from 'react'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
 import { toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { toUnicodeHost } from '../lib/idn'
 import { planSearch } from '../lib/plan'
-import { parseSearchQuery } from '../lib/query'
+import { describeProblem, displayQuery, parseSearchQuery } from '../lib/query'
+import { getLengthRules } from '../queries/length-rules'
 import {
   ExactSection,
   ExactSkeleton,
@@ -21,7 +24,8 @@ async function readQuery(searchParams: SearchParams) {
   const { q: raw } = await searchParams
   const q = (Array.isArray(raw) ? raw[0] : raw) ?? ''
   const parsed = parseSearchQuery(q)
-  const shown = parsed.isValid ? (parsed.tld ? `${parsed.stem}.${parsed.tld}` : parsed.stem) : ''
+  // What people read: `café.com` for an international name (FR-S8).
+  const shown = parsed.isValid ? displayQuery(parsed) : ''
   return { q, parsed, shown }
 }
 
@@ -50,6 +54,22 @@ export async function SearchHeading({ searchParams }: { searchParams: SearchPara
   )
 }
 
+/** FR-S5 — the way to bulk search, under the search box. Static, so it prerenders. */
+export function BulkSearchLink() {
+  return (
+    <p className="mt-3 text-sm text-brand-muted-foreground">
+      Checking a list of names?{' '}
+      <Link
+        href="/search/bulk"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-sm font-medium text-brand-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-foreground"
+      >
+        <ListChecks className="size-4" aria-hidden="true" />
+        Search many at once
+      </Link>
+    </p>
+  )
+}
+
 export function SearchHeadingSkeleton() {
   return (
     <div aria-hidden="true" className="animate-pulse">
@@ -75,18 +95,24 @@ export async function SearchResults({ searchParams }: { searchParams: SearchPara
           <SearchIcon className="size-5" aria-hidden="true" />
         </span>
         <p className="mt-4 font-semibold text-foreground">
-          {q.trim() ? "That doesn't look like a domain" : 'Type a name above to get started'}
+          {parsed.problem
+            ? 'That name mixes alphabets'
+            : q.trim()
+              ? "That doesn't look like a domain"
+              : 'Type a name above to get started'}
         </p>
         <p className="mx-auto mt-2 max-w-md text-pretty text-sm/6 text-muted-foreground">
-          {q.trim()
-            ? 'Use letters, numbers and hyphens — for example getpaid or getpaid.com.'
-            : 'Search any extension we sell, from .com to .africa.'}
+          {parsed.problem
+            ? describeProblem(parsed.problem)
+            : q.trim()
+              ? 'Use letters, numbers and hyphens — for example getpaid or getpaid.com. Names in other scripts, like café.com, work too.'
+              : 'Search any extension we sell, from .com to .africa.'}
         </p>
       </div>
     )
   }
 
-  const priced = await getPricedCatalogue()
+  const [priced, lengthRules] = await Promise.all([getPricedCatalogue(), getLengthRules()])
 
   // No catalogue, no prices — and a result without a price breaks N8.
   if (!priced) {
@@ -102,6 +128,7 @@ export async function SearchResults({ searchParams }: { searchParams: SearchPara
     tld: parsed.tld,
     sold: new Set(priced.tlds.map((tld) => tld.tld)),
     featured: priced.featured.map((tld) => tld.tld),
+    lengthRules,
   })
   const prices = new Map(priced.tlds.map((tld) => [tld.tld, toPublicRow(tld)]))
 
@@ -114,10 +141,11 @@ export async function SearchResults({ searchParams }: { searchParams: SearchPara
         {plan.unsoldTld ? (
           <div className="rounded-[2rem] border border-border bg-background p-6 sm:p-8">
             <h2 className="text-2xl font-bold tracking-tight text-foreground">
-              We don't sell .{plan.unsoldTld}
+              We don't sell .{toUnicodeHost(plan.unsoldTld)}
             </h2>
             <p className="mt-3 text-pretty text-muted-foreground">
-              Here is {plan.stem} on the extensions we do sell. The pricing page lists every one.
+              Here is {displayQuery({ stem: plan.stem, tld: null })} on the extensions we do sell.
+              The pricing page lists every one.
             </p>
           </div>
         ) : (
