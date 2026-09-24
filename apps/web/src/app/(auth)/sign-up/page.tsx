@@ -3,8 +3,12 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { AuthCard, AuthCardSkeleton } from '@/features/auth/components/auth-card'
 import { SignUpForm } from '@/features/auth/components/sign-up-form'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 
-export const metadata: Metadata = { title: 'Create an account' }
+export const metadata: Metadata = pageMetadata({
+  title: 'Create an account',
+  path: '/sign-up',
+})
 
 type Params = Promise<{ next?: string }>
 

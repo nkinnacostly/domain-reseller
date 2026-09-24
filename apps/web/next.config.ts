@@ -1,4 +1,21 @@
 import type { NextConfig } from 'next'
+import { HTML_LIMITED_BOT_UA_RE } from 'next/dist/shared/lib/router/utils/html-bots'
+
+/**
+ * Crawlers that read the HTML without running it get every page's metadata
+ * in <head>, never streamed in after it (Next 15.2+ streams dynamic metadata
+ * to everyone else). Next's own list covers the search engines and link
+ * previewers but no AI crawler, so theirs are added: an assistant that misses
+ * the title and description reads a page with no name. Extending Next's list,
+ * not copying it, keeps its entries current across upgrades.
+ */
+export const AI_CRAWLER_UA =
+  /GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-SearchBot|Claude-User|PerplexityBot|Perplexity-User|meta-externalagent|meta-externalfetcher|meta-webindexer|Amazonbot|Amzn-SearchBot|Amzn-User|DuckAssistBot|MistralAI|CCBot|YouBot|cohere-ai|Bytespider/
+
+export const HTML_LIMITED_BOTS = new RegExp(
+  `${HTML_LIMITED_BOT_UA_RE.source}|${AI_CRAWLER_UA.source}`,
+  'i',
+)
 
 /**
  * Content Security Policy (PRD SEC-15). Scripts, styles and fonts come only
@@ -46,6 +63,8 @@ const nextConfig: NextConfig = {
 
   // Cache Components: nothing is cached unless we opt in with `use cache`.
   cacheComponents: true,
+
+  htmlLimitedBots: HTML_LIMITED_BOTS,
 
   experimental: {
     typedEnv: true,

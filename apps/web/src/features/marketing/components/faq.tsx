@@ -1,15 +1,11 @@
 import { TRANSFER_LOCK_DAYS } from '@dr/shared'
 import Link from 'next/link'
+import { FaqItem } from '@/components/common/faq-item'
 import { Container } from '@/components/layout/site-shell'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
+import { Accordion } from '@/components/ui/accordion'
 import { BUSINESS } from '@/lib/business'
 
-const FAQS = [
+export const HOME_FAQS = [
   {
     q: 'Do I need hosting before I buy a domain?',
     a: "No. You can register a domain and point it somewhere later. Until you do, it simply won't resolve to a website — we'll show you exactly how to fix that whenever you're ready.",
@@ -73,15 +69,15 @@ export function Faq() {
             collapsible
             className="w-full rounded-[2rem] border border-brand-subtle-border bg-brand-subtle px-6 py-2 sm:px-8"
           >
-            {FAQS.map((faq) => (
-              <AccordionItem key={faq.q} value={faq.q} className="border-brand-subtle-border">
-                <AccordionTrigger className="text-left text-base font-medium">
-                  {faq.q}
-                </AccordionTrigger>
-                <AccordionContent className="text-pretty text-sm/6 text-muted-foreground">
-                  {faq.a}
-                </AccordionContent>
-              </AccordionItem>
+            {HOME_FAQS.map((faq) => (
+              <FaqItem
+                key={faq.q}
+                question={faq.q}
+                className="border-brand-subtle-border"
+                answerClassName="text-pretty text-sm/6 text-muted-foreground"
+              >
+                {faq.a}
+              </FaqItem>
             ))}
           </Accordion>
         </div>

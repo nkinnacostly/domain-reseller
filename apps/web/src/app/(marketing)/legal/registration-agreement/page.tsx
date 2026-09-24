@@ -7,12 +7,14 @@ import {
   LegalSection,
   PolicyLink,
 } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS, POLICY_LINKS, SPONSORING_REGISTRAR } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Registration agreement',
   description: `The terms for registering and managing a domain with ${BUSINESS.brand}, including who your registrar is.`,
-}
+  path: '/legal/registration-agreement',
+})
 
 /**
  * The registration agreement (PRD CMP-1, FR-PUB4). It must identify the
@@ -26,6 +28,7 @@ export const metadata: Metadata = {
 export default function RegistrationAgreementPage() {
   return (
     <LegalPage
+      path="/legal/registration-agreement"
       title="Registration agreement"
       intro={
         <p>

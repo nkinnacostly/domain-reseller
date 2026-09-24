@@ -12,7 +12,9 @@ on:
       job:
         description: Which job to run
         type: choice
-        options: [fx]
+        # indexnow-all: tell search engines about every page — after launch,
+        # or a change that touches the whole site.
+        options: [fx, indexnow-all]
         default: fx
 
 concurrency:
@@ -27,6 +29,9 @@ jobs:
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       FX_PARALLEL_API_KEY: ${{ secrets.FX_PARALLEL_API_KEY }}
     steps:
+      - name: Note the start time
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
@@ -43,6 +48,7 @@ jobs:
           } > .env
 
       - name: Update exchange rate
+        if: inputs.job != 'indexnow-all'
         # Exit 3 means the rate moved too far and is waiting for review — a
         # working outcome, not a failure. Anything else fails the run, so a
         # broken feed or key shows up red instead of hiding behind green.
@@ -59,8 +65,25 @@ jobs:
       # L8: new prices reach the site now rather than within the hour. The
       # route acts only if prices really changed, so it needs no secret.
       - name: Refresh prices on the site
+        id: refresh
+        if: inputs.job != 'indexnow-all'
         continue-on-error: true
-        run: curl -fsS --max-time 30 -X POST https://www.mydomainshub.com/api/pricing/refresh
+        run: |
+          out=$(curl -fsS --max-time 30 -X POST https://www.mydomainshub.com/api/pricing/refresh)
+          echo "$out"
+          echo "refreshed=$(echo "$out" | jq -r '.refreshed // false')" >> "$GITHUB_OUTPUT"
+
+      # IndexNow: when prices really changed, tell Bing (and through it
+      # Copilot), Yandex and the other participants which pages did — the
+      # sitemap entries dated since this job began. Google reads the sitemap.
+      - name: Announce changed pages to search engines
+        if: steps.refresh.outputs.refreshed == 'true'
+        continue-on-error: true
+        run: pnpm --filter @dr/web seo:indexnow -- --since="$JOB_STARTED" --wait
+
+      - name: Announce every page to search engines
+        if: inputs.job == 'indexnow-all'
+        run: pnpm --filter @dr/web seo:indexnow -- --all
 
       - name: Report held rates
         run: |

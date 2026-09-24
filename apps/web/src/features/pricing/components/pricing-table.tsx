@@ -102,7 +102,13 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
                 className="scroll-mt-8 border-border/60 border-b transition-colors hover:bg-muted/50 focus-within:bg-muted/50 target:bg-brand-subtle"
               >
                 <th scope="row" className="py-3 pr-4 text-left font-medium">
-                  {`.${row.tld}`}
+                  {/* Each row names its extension's own page (FR-PUB1). */}
+                  <Link
+                    href={`/domains/${row.tld}`}
+                    className="rounded-sm underline-offset-4 hover:text-brand-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {`.${row.tld}`}
+                  </Link>
                   {row.isCountryCode ? null : (
                     <span className="ml-2 text-muted-foreground text-xs">incl. ICANN fee</span>
                   )}
@@ -125,8 +131,10 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
                   {row.transfer ?? '—'}
                 </td>
                 <td className="py-3 text-right">
+                  {/* nofollow: a search calls the supplier, so crawlers are kept off (robots.ts). */}
                   <Link
                     href={`/search?q=yourbrand.${row.tld}`}
+                    rel="nofollow"
                     className="inline-flex items-center gap-1 text-accent text-sm hover:underline"
                   >
                     Search

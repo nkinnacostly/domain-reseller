@@ -21,6 +21,8 @@ export const BUSINESS = {
   /** Promise for refunding a paid line that fails to register (the owner's choice). */
   refundBusinessDays: 5,
   lastUpdated: '23 September 2026',
+  /** The same date for machines (the sitemap's lastmod). */
+  lastUpdatedOn: '2026-09-23',
 } as const
 
 /**

@@ -3,16 +3,19 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalPage } from '@/features/legal/components/legal-page'
 import { LEGAL_DOCUMENTS } from '@/features/legal/lib/documents'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Legal',
   description: `The agreements and policies that apply when you register a domain with ${BUSINESS.brand}.`,
-}
+  path: '/legal',
+})
 
 export default function LegalIndexPage() {
   return (
     <LegalPage
+      path="/legal"
       title="Legal"
       nav="none"
       intro={<p>The agreements and policies that apply when you register a domain with us.</p>}

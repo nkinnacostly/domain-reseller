@@ -14,6 +14,10 @@ import {
 } from '@/features/extensions/lib/extension'
 import { extensionStaticParams, getExtensionPage } from '@/features/extensions/queries/extension'
 import { DomainSearch } from '@/features/search/components/domain-search'
+import { PageJsonLd } from '@/features/seo/components/breadcrumb-json-ld'
+import { pageMetadata } from '@/features/seo/lib/metadata'
+import { extensionServiceLd, faqPageLd } from '@/features/seo/lib/structured-data'
+import { env } from '@/lib/env'
 
 type Params = Promise<{ tld: string }>
 
@@ -39,11 +43,12 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   // N8 — a price in a search snippet still comes with its renewal price.
   const price = prices ? `${prices.register} for the first year, then ${prices.renew} a year. ` : ''
   const description = `Register a .${tld} domain in naira. ${price}${describeKind(tld, page.facts.isCountryCode)}`
-  return {
-    title: `.${tld} domains`,
+  return pageMetadata({
+    // The words people search with: the extension, buying it, Nigeria, naira.
+    title: `Buy a .${tld} domain in Nigeria — naira prices`,
     description,
-    openGraph: { title: `.${tld} domains`, description },
-  }
+    path: `/domains/${tld}`,
+  })
 }
 
 export default async function ExtensionPage({ params }: { params: Params }) {
@@ -61,9 +66,27 @@ export default async function ExtensionPage({ params }: { params: Params }) {
 
   const { facts, pricing, vatPct } = page
   const prices = extensionPrices(pricing, facts.isTransferable)
+  const faqs = extensionFaqs({ facts, prices, vatPct })
 
   return (
     <>
+      <PageJsonLd
+        trail={[
+          { name: 'Domain extensions', path: '/domains' },
+          { name: `.${tld}`, path: `/domains/${tld}` },
+        ]}
+        extra={[
+          pricing && prices
+            ? extensionServiceLd(env.NEXT_PUBLIC_APP_URL, {
+                tld,
+                registerKobo: pricing.registration.priceKobo,
+                renewKobo: pricing.renewal.priceKobo,
+                priceText: `${prices.register} for the first year, then ${prices.renew} a year to renew, before VAT.`,
+              })
+            : null,
+          faqPageLd(faqs),
+        ]}
+      />
       <SiteHeader />
 
       <main id="main">
@@ -93,7 +116,7 @@ export default async function ExtensionPage({ params }: { params: Params }) {
           isCountryCode={facts.isCountryCode}
         />
         <ExtensionDetails facts={facts} prices={prices} />
-        <ExtensionFaq tld={tld} faqs={extensionFaqs({ facts, prices, vatPct })} />
+        <ExtensionFaq tld={tld} faqs={faqs} />
       </main>
 
       <SiteFooter />

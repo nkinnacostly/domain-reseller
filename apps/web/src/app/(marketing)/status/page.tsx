@@ -5,14 +5,17 @@ import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
+import { PageJsonLd } from '@/features/seo/components/breadcrumb-json-ld'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { ServiceStatus, ServiceStatusSkeleton } from '@/features/status/components/service-status'
 import { BUSINESS } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Service status',
   description:
     'Whether registrations, renewals, nameserver changes and registry checks are running right now, read live on every visit.',
-}
+  path: '/status',
+})
 
 /**
  * Service status. The hero and the notes prerender; the status itself is read
@@ -22,6 +25,7 @@ export default function StatusPage() {
   return (
     <>
       <SiteHeader />
+      <PageJsonLd trail={[{ name: 'Service status', path: '/status' }]} />
 
       <main id="main">
         <PageHero

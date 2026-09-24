@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmailLink, LegalPage, LegalSection } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS, SPONSORING_REGISTRAR } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Report abuse',
   description: `How to report a domain registered through ${BUSINESS.brand} that is used for phishing, malware, spam or other abuse.`,
-}
+  path: '/abuse',
+})
 
 /**
  * Abuse contact (PRD CMP-4). Registrars must publish one and act on reports;
@@ -16,6 +18,7 @@ export const metadata: Metadata = {
 export default function AbusePage() {
   return (
     <LegalPage
+      path="/abuse"
       title="Report abuse"
       nav="none"
       icons={['🚩', '🛡️', '✉️']}

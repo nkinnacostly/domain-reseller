@@ -1,19 +1,32 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmailLink, LegalPage, LegalSection } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
+import { aboutPageLd, organizationLd } from '@/features/seo/lib/structured-data'
 import { BUSINESS } from '@/lib/business'
+import { env } from '@/lib/env'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Contact us',
   description: `How to reach ${BUSINESS.brand}.`,
-}
+  path: '/contact',
+})
 
 export default function ContactPage() {
   return (
     <LegalPage
+      path="/contact"
       title="Contact us"
       nav="none"
       icons={['✉️', '💬', '🤝']}
+      structuredData={[
+        organizationLd(env.NEXT_PUBLIC_APP_URL),
+        aboutPageLd(env.NEXT_PUBLIC_APP_URL, {
+          type: 'ContactPage',
+          path: '/contact',
+          name: 'Contact us',
+        }),
+      ]}
       intro={
         <p>
           Email is the way to reach us: <EmailLink />. The <Link href="/help">help centre</Link> may

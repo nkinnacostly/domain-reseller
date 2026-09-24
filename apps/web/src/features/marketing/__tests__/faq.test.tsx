@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest'
 import { BUSINESS } from '@/lib/business'
 import { Faq } from '../components/faq'
 
+/** The answer's panel: closed ones stay in the page, hidden by CSS (FaqItem). */
+const panelOf = (text: RegExp) => screen.getByText(text).closest('[data-slot="accordion-content"]')
+
 describe('Faq', () => {
   it('points people who are still stuck to the help centre and the contact address', () => {
     render(<Faq />)
@@ -19,7 +22,7 @@ describe('Faq', () => {
     )
   })
 
-  it('keeps answers closed until a question is opened', async () => {
+  it('keeps answers closed until a question is opened — but in the page, for crawlers', async () => {
     const user = userEvent.setup()
     render(<Faq />)
 
@@ -27,12 +30,12 @@ describe('Faq', () => {
       name: 'Do I need hosting before I buy a domain?',
     })
     expect(question).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText(/point it somewhere later/)).not.toBeInTheDocument()
+    expect(panelOf(/point it somewhere later/)).toHaveAttribute('data-state', 'closed')
 
     await user.click(question)
 
     expect(question).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/point it somewhere later/)).toBeVisible()
+    expect(panelOf(/point it somewhere later/)).toHaveAttribute('data-state', 'open')
   })
 
   it('shows one answer at a time', async () => {
@@ -43,8 +46,11 @@ describe('Faq', () => {
     expect(screen.getByText(/We always show both numbers/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Can I move my domain away later?' }))
-    expect(screen.getByText(/never withhold it over an unpaid invoice/)).toBeInTheDocument()
-    expect(screen.queryByText(/We always show both numbers/)).not.toBeInTheDocument()
+    expect(panelOf(/never withhold it over an unpaid invoice/)).toHaveAttribute(
+      'data-state',
+      'open',
+    )
+    expect(panelOf(/We always show both numbers/)).toHaveAttribute('data-state', 'closed')
   })
 
   it('states the transfer lock from the shared rule, and how a transfer is started (N9b)', async () => {

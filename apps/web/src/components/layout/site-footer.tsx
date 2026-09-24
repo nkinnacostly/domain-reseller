@@ -34,12 +34,14 @@ const COLUMNS = [
       { href: '/domains/net', label: '.net' },
       { href: '/domains/org', label: '.org' },
       { href: '/domains/africa', label: '.africa' },
+      { href: '/domains', label: 'All extensions' },
     ],
   },
   {
     heading: 'Support',
     links: [
       { href: '/help', label: 'Help centre' },
+      { href: '/about', label: 'About us' },
       { href: '/contact', label: 'Contact us' },
       { href: '/abuse', label: 'Report abuse' },
       { href: '/status', label: 'Service status' },

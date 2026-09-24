@@ -3,16 +3,19 @@ import { Suspense } from 'react'
 import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
+import { PageJsonLd } from '@/features/seo/components/breadcrumb-json-ld'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { WhoisForm } from '@/features/whois/components/whois-form'
 import { WhoisGuide } from '@/features/whois/components/whois-guide'
 import { WhoisPending } from '@/features/whois/components/whois-pending'
 import { WhoisResult } from '@/features/whois/components/whois-result'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'WHOIS lookup',
   description:
     'Look up any domain: whether it is registered, its registrar, when it expires, its status codes and nameservers — from the registry’s own public record.',
-}
+  path: '/whois',
+})
 
 /**
  * Public WHOIS lookup (PRD FR-PUB2, ADR-003).
@@ -29,6 +32,7 @@ export default function WhoisPage({
   return (
     <>
       <SiteHeader />
+      <PageJsonLd trail={[{ name: 'WHOIS lookup', path: '/whois' }]} />
 
       <main id="main">
         <PageHero

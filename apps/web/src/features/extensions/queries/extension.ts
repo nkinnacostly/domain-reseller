@@ -98,3 +98,27 @@ export async function extensionStaticParams(): Promise<{ tld: string }[]> {
   const tlds = [...new Set(wanted)].filter((tld) => sold.has(tld))
   return (tlds.length > 0 ? tlds : ['com']).map((tld) => ({ tld }))
 }
+
+export type DirectoryEntry = { tld: string; isCountryCode: boolean }
+
+/**
+ * Every extension that has a page, for the A–Z directory and the sitemap.
+ * The catalogue read is the full list; if it fails the priced list stands in.
+ * Null only when neither can be read — a caller then shows no list rather
+ * than a short one.
+ */
+export async function listExtensionPages(): Promise<DirectoryEntry[] | null> {
+  const facts = await loadCatalogueFacts().catch((err: unknown) => {
+    logger.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      'extension list could not be read',
+    )
+    return null
+  })
+  if (facts && facts.length > 0) {
+    return facts.map((entry) => ({ tld: entry.tld, isCountryCode: entry.isCountryCode }))
+  }
+  const priced = await getPricedCatalogue()
+  if (!priced || priced.tlds.length === 0) return null
+  return priced.tlds.map((entry) => ({ tld: entry.tld, isCountryCode: entry.isCountryCode }))
+}

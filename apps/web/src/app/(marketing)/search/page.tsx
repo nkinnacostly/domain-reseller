@@ -10,11 +10,13 @@ import {
   SearchHeadingSkeleton,
   SearchResults,
 } from '@/features/search/components/search-results'
+import { NOT_INDEXED, pageMetadata } from '@/features/seo/lib/metadata'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Search results',
-  robots: { index: false },
-}
+  path: '/search',
+  robots: NOT_INDEXED,
+})
 
 /**
  * Reading `searchParams` is request-time data. Under Cache Components it must

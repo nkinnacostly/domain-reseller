@@ -139,6 +139,24 @@ which uses Brevo's API: from `no-reply@notify.mydomainshub.com`, replies to
 - Brevo's free plan sends 300 a day. Its delivery log is under Transactional →
   Logs.
 
+## 5d. Search engines and AI assistants
+
+Built into the site (`apps/web/src/features/seo`), nothing to configure:
+
+- `/robots.txt` welcomes search engines and AI crawlers by name and keeps
+  them off the panel and live lookups (a crawled search spends supplier
+  capacity). `/sitemap.xml` lists every public page and extension page.
+- Every public page has a canonical address and structured data; `/llms.txt`
+  and `/llms-full.txt` give language models the site in Markdown.
+- **IndexNow** tells Bing, Yandex and the others which pages changed. The
+  daily pricing job announces the price pages whenever prices move; run
+  **Actions → Pricing data → Run workflow → `indexnow-all`** after a change
+  that touches the whole site. The key file is `public/{key}.txt`; the key is
+  public by design.
+
+The owner's steps (Search Console, Bing Webmaster Tools, brand profiles) are
+in `docs/BACKLOG.md` §1b.
+
 ## 6. Refunds and alerts (L15, L16)
 
 The gateway sends refunds for failed registrations, second charges and short

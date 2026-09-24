@@ -4,9 +4,14 @@ import { Suspense } from 'react'
 import { AuthCard, AuthCardSkeleton } from '@/features/auth/components/auth-card'
 import { ResetPasswordForm } from '@/features/auth/components/recovery-forms'
 import { startedFromEmailLink } from '@/features/auth/lib/security'
+import { NOT_INDEXED, pageMetadata } from '@/features/seo/lib/metadata'
 import { createClient } from '@/lib/supabase/server'
 
-export const metadata: Metadata = { title: 'Choose a new password' }
+export const metadata: Metadata = pageMetadata({
+  title: 'Choose a new password',
+  path: '/reset-password',
+  robots: NOT_INDEXED,
+})
 
 /** Only reachable with a session (proxy); only useful with one from a reset link. */
 async function ResetPassword() {

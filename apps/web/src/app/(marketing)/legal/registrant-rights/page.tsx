@@ -1,13 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalPage, LegalSection, PolicyLink } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS, POLICY_LINKS, SPONSORING_REGISTRAR } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Registrants’ benefits and responsibilities',
   description:
     'Your rights and responsibilities as a domain name registrant, under ICANN’s specification.',
-}
+  path: '/legal/registrant-rights',
+})
 
 /**
  * CMP-2: publish, or link to, ICANN's Registrants' Benefits and
@@ -17,6 +19,7 @@ export const metadata: Metadata = {
 export default function RegistrantRightsPage() {
   return (
     <LegalPage
+      path="/legal/registrant-rights"
       title="Registrants’ benefits and responsibilities"
       intro={
         <p>

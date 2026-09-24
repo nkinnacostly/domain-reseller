@@ -6,13 +6,15 @@ import {
   LegalSection,
   PolicyLink,
 } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { POLICY_LINKS } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Transfer disputes',
   description:
     'Your right to move a domain to another registrar, and how transfer disputes are resolved under ICANN policy.',
-}
+  path: '/legal/transfer-disputes',
+})
 
 /**
  * CMP-5 and PRD §7.3: link the Transfer Dispute Resolution Policy and state the
@@ -22,6 +24,7 @@ export const metadata: Metadata = {
 export default function TransferDisputesPage() {
   return (
     <LegalPage
+      path="/legal/transfer-disputes"
       title="Transfer disputes"
       intro={
         <p>

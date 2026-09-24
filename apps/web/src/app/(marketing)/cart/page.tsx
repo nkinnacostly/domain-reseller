@@ -5,8 +5,13 @@ import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
 import { CartContents, CartSkeleton } from '@/features/cart/components/cart-contents'
+import { NOT_INDEXED, pageMetadata } from '@/features/seo/lib/metadata'
 
-export const metadata: Metadata = { title: 'Your cart', robots: { index: false } }
+export const metadata: Metadata = pageMetadata({
+  title: 'Your cart',
+  path: '/cart',
+  robots: NOT_INDEXED,
+})
 
 /**
  * The cart (PRD E3). Public, not under /app: anyone can fill a cart, and it

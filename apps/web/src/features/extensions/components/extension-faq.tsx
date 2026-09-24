@@ -1,10 +1,6 @@
+import { FaqItem } from '@/components/common/faq-item'
 import { Container } from '@/components/layout/site-shell'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
+import { Accordion } from '@/components/ui/accordion'
 import type { Faq } from '../lib/extension'
 
 /** Short FAQ for one extension (FR-PUB1). Every answer is built from its data. */
@@ -26,14 +22,14 @@ export function ExtensionFaq({ tld, faqs }: { tld: string; faqs: Faq[] }) {
             className="w-full rounded-[2rem] border border-brand-subtle-border bg-brand-subtle px-6 py-2 sm:px-8"
           >
             {faqs.map((faq) => (
-              <AccordionItem key={faq.q} value={faq.q} className="border-brand-subtle-border">
-                <AccordionTrigger className="text-left text-base font-medium">
-                  {faq.q}
-                </AccordionTrigger>
-                <AccordionContent className="text-pretty text-sm/6 text-muted-foreground">
-                  {faq.a}
-                </AccordionContent>
-              </AccordionItem>
+              <FaqItem
+                key={faq.q}
+                question={faq.q}
+                className="border-brand-subtle-border"
+                answerClassName="text-pretty text-sm/6 text-muted-foreground"
+              >
+                {faq.a}
+              </FaqItem>
             ))}
           </Accordion>
         </div>

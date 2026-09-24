@@ -5,10 +5,15 @@ import { AuthCard, AuthCardSkeleton } from '@/features/auth/components/auth-card
 import { SignOutButton } from '@/features/auth/components/sign-out-button'
 import { VerifyForm } from '@/features/auth/components/verify-form'
 import { safeNext } from '@/features/auth/lib/redirect'
+import { NOT_INDEXED, pageMetadata } from '@/features/seo/lib/metadata'
 import { env } from '@/lib/env'
 import { createClient } from '@/lib/supabase/server'
 
-export const metadata: Metadata = { title: 'Two-factor code' }
+export const metadata: Metadata = pageMetadata({
+  title: 'Two-factor code',
+  path: '/verify',
+  robots: NOT_INDEXED,
+})
 
 type Params = Promise<{ next?: string }>
 

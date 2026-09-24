@@ -31,6 +31,16 @@ back here. Each item says why it waited and what unblocks it.
 | L19 | **A payment card on the Fly account** | Without one, the trial stops the gateway machine after five minutes, so paid orders wait in the queue until someone wakes it. It stalled a nameserver change on 23 Sept 2026. | Owner, https://fly.io/trial |
 | L20 | ~~Receive mail at `hello@mydomainshub.com`~~ | Done 24 Sept 2026: a Spaceship mailbox (MX, SPF, DKIM, autodiscover and DMARC `p=none` in Cloudflare). Automated email comes from `no-reply@notify.mydomainshub.com` with Reply-To hello@. | Done |
 
+## 1b. Being found — owner steps
+
+The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, sitemap, canonical addresses, structured data, `/llms.txt`, the extension directory, the About page and IndexNow. These need the owner's accounts:
+
+| # | Item | Why it matters | Where |
+|---|---|---|---|
+| F1 | **Submit the sitemap in Google Search Console** | Tells Google every page, including ~690 extension pages, and shows indexing problems. Submit `https://www.mydomainshub.com/sitemap.xml` (Indexing → Sitemaps), then URL Inspection → Request indexing for `/`, `/pricing` and `/domains`. The Generative AI report shows appearances in AI Overviews and AI Mode. | Owner, Search Console (verified by DNS) |
+| F2 | **Add the site to Bing Webmaster Tools** | Bing's index feeds Copilot and, through its search partnership, ChatGPT search; its AI Performance report shows citations. Import the site from Search Console (one click), then submit the sitemap there too. | Owner, https://www.bing.com/webmasters |
+| F3 | **Brand profiles elsewhere** | AI assistants recommend what other sites mention. Create the brand's profiles (X, LinkedIn, Instagram, Facebook) and list the site where Nigerian businesses look for services; send the links so the site's Organization data can name them (`sameAs`). Only real profiles — none are claimed today. | Owner |
+
 ## 2. Deferred features
 
 ### Catalogue
@@ -79,7 +89,7 @@ back here. Each item says why it waited and what unblocks it.
 - **Cancelling a pending transfer** (FR-T4) — *owner decision first:* when a customer cancels a transfer the registry already has, do they get their money back? Transfers in are built (24 Sept 2026); they open per extension once the gateway's catalogue sync marks it transferable.
 
 ### Pages
-- Built: `/domains/{tld}`, `/whois`, `/status` (24 Sept 2026), and the legal, help, contact and abuse pages (23 Sept 2026). Facts they state live in `apps/web/src/lib/business.ts`.
+- Built: `/domains/{tld}`, `/whois`, `/status` (24 Sept 2026), `/domains` (the A–Z directory) and `/about` (24 Sept 2026), and the legal, help, contact and abuse pages (23 Sept 2026). Facts they state live in `apps/web/src/lib/business.ts`.
 
 ### Legal follow-ups
 - **Business identity on the legal pages** — add the CAC registration number and a business address when the owner provides them.

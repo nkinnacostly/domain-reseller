@@ -6,12 +6,14 @@ import {
   LegalSection,
   PolicyLink,
 } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS, POLICY_LINKS, SPONSORING_REGISTRAR } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Privacy notice',
   description: `What personal data ${BUSINESS.brand} collects, why, who receives it, and your rights under the Nigeria Data Protection Act 2023.`,
-}
+  path: '/legal/privacy',
+})
 
 /**
  * Privacy notice (PRD CMP-14, §7.7; NDPA 2023). Every statement matches the
@@ -22,6 +24,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <LegalPage
+      path="/legal/privacy"
       title="Privacy notice"
       intro={
         <p>

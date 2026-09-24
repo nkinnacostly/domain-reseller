@@ -10,13 +10,15 @@ import {
   BulkSearchPanel,
   BulkSearchPanelSkeleton,
 } from '@/features/search/components/bulk-search-panel'
+import { PageJsonLd } from '@/features/seo/components/breadcrumb-json-ld'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Bulk domain search',
   description:
     'Check up to 500 domain names at once, pasted or from a CSV file, each with its first-year and renewal price.',
-  robots: { index: false },
-}
+  path: '/search/bulk',
+})
 
 /**
  * Bulk search (PRD FR-S5). The form reads the query (`?names=`, `?tld=`), so
@@ -32,6 +34,7 @@ export default function BulkSearchPage({
   return (
     <>
       <SiteHeader />
+      <PageJsonLd trail={[{ name: 'Bulk domain search', path: '/search/bulk' }]} />
 
       <main id="main">
         <BulkRunProvider>

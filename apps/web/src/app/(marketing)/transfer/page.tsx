@@ -3,17 +3,20 @@ import { Suspense } from 'react'
 import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
+import { PageJsonLd } from '@/features/seo/components/breadcrumb-json-ld'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { TransferCheckForm } from '@/features/transfers/components/transfer-check-form'
 import { TransferFaq } from '@/features/transfers/components/transfer-faq'
 import { TransferGuide } from '@/features/transfers/components/transfer-guide'
 import { TransferPrices } from '@/features/transfers/components/transfer-prices'
 import { TransferResult } from '@/features/transfers/components/transfer-result'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Transfer a domain',
   description:
     'Check whether your domain can move. We look it up at the registry and tell you exactly what, if anything, is in the way.',
-}
+  path: '/transfer',
+})
 
 /**
  * Transfer-in landing and eligibility check (PRD §14 route map, FR-T1).
@@ -30,6 +33,7 @@ export default function TransferPage({
   return (
     <>
       <SiteHeader />
+      <PageJsonLd trail={[{ name: 'Transfer a domain', path: '/transfer' }]} />
 
       <main id="main">
         <PageHero

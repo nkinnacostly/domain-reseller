@@ -6,18 +6,21 @@ import {
   LegalSection,
   PolicyLink,
 } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { POLICY_LINKS } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Domain name disputes (UDRP)',
   description:
     'How disputes over who should hold a domain name are resolved under ICANN’s Uniform Domain-Name Dispute-Resolution Policy.',
-}
+  path: '/legal/udrp',
+})
 
 /** CMP-5: link the UDRP. The policy and its rules are ICANN's; this explains them. */
 export default function UdrpPage() {
   return (
     <LegalPage
+      path="/legal/udrp"
       title="Domain name disputes (UDRP)"
       intro={
         <p>

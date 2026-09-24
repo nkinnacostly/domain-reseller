@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmailLink, LegalPage, LegalSection } from '@/features/legal/components/legal-page'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS } from '@/lib/business'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Refund policy',
   description: `When ${BUSINESS.brand} refunds a payment, and why a registered domain cannot be refunded.`,
-}
+  path: '/legal/refunds',
+})
 
 /**
  * Refund policy (FR-PUB4). The timescale is the owner's commitment. Refunds
@@ -18,6 +20,7 @@ export default function RefundsPage() {
   const days = BUSINESS.refundBusinessDays
   return (
     <LegalPage
+      path="/legal/refunds"
       title="Refund policy"
       intro={
         <p>

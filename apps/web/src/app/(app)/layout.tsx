@@ -1,7 +1,12 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { AppSidebar, AppSidebarSkeleton } from '@/components/layout/app-sidebar'
+import { PRIVATE } from '@/features/seo/lib/metadata'
 import { BUSINESS } from '@/lib/business'
+
+/** Behind sign-in: nothing here to index or follow (robots.txt also closes /app/). */
+export const metadata: Metadata = { robots: PRIVATE }
 
 /**
  * The signed-in panel (PRD §15.1, /app/*): a sidebar and the page, on the

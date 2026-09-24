@@ -3,8 +3,13 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { AuthCard, AuthCardSkeleton } from '@/features/auth/components/auth-card'
 import { ForgotPasswordForm } from '@/features/auth/components/recovery-forms'
+import { NOT_INDEXED, pageMetadata } from '@/features/seo/lib/metadata'
 
-export const metadata: Metadata = { title: 'Reset your password' }
+export const metadata: Metadata = pageMetadata({
+  title: 'Reset your password',
+  path: '/forgot-password',
+  robots: NOT_INDEXED,
+})
 
 type Params = Promise<{ error?: string }>
 

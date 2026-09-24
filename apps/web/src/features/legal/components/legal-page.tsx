@@ -1,9 +1,12 @@
+import { JsonLd } from '@/components/common/json-ld'
 import { NavLink } from '@/components/layout/nav-link'
 import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Container } from '@/components/layout/site-shell'
+import { breadcrumbLd, graph, type JsonLdNode } from '@/features/seo/lib/structured-data'
 import { BUSINESS } from '@/lib/business'
+import { env } from '@/lib/env'
 import { cn } from '@/lib/utils'
 import { LEGAL_DOCUMENTS } from '../lib/documents'
 
@@ -24,21 +27,35 @@ const PROSE = cn(
 
 export function LegalPage({
   title,
+  path,
   intro,
   children,
   nav = 'legal',
   icons = ['📜', '⚖️', '🔒'],
+  structuredData = [],
 }: {
   title: string
+  /** The page's own address, for its breadcrumb trail in structured data. */
+  path: string
   intro?: React.ReactNode
   children: React.ReactNode
   /** Legal documents list the others beside them; help pages do not. */
   nav?: 'legal' | 'none'
   /** Emoji floating beside the heading on wide screens. */
   icons?: string[]
+  /** More structured data for this page (an FAQ, the organization). */
+  structuredData?: (JsonLdNode | null)[]
 }) {
+  const site = env.NEXT_PUBLIC_APP_URL
+  const underLegal = nav === 'legal' && path !== '/legal'
+  const crumbs = [
+    { name: 'Home', path: '/' },
+    ...(underLegal ? [{ name: 'Legal', path: '/legal' }] : []),
+    { name: title, path },
+  ]
   return (
     <>
+      <JsonLd data={graph(breadcrumbLd(site, crumbs), ...structuredData)} />
       <SiteHeader />
       <main id="main">
         <PageHero

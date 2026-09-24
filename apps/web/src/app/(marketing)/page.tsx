@@ -1,9 +1,10 @@
 import { formatNaira, vatKobo } from '@dr/shared'
 import type { Metadata } from 'next'
+import { JsonLd } from '@/components/common/json-ld'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { getNameserverPresets } from '@/features/domains/queries/domains'
-import { Faq } from '@/features/marketing/components/faq'
+import { Faq, HOME_FAQS } from '@/features/marketing/components/faq'
 import { FinalCta } from '@/features/marketing/components/final-cta'
 import { Hero } from '@/features/marketing/components/hero'
 import { HowItWorks } from '@/features/marketing/components/how-it-works'
@@ -12,15 +13,19 @@ import { StatsStrip } from '@/features/marketing/components/stats-strip'
 import { WhyUs } from '@/features/marketing/components/why-us'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { PopularExtensions } from '@/features/search/components/popular-extensions'
+import { pageMetadata } from '@/features/seo/lib/metadata'
+import { faqPageLd, graph, organizationLd, websiteLd } from '@/features/seo/lib/structured-data'
 import { env } from '@/lib/env'
 
 export async function generateMetadata(): Promise<Metadata> {
   const priced = await getPricedCatalogue()
   const count = priced ? `${priced.tlds.length.toLocaleString('en-NG')} ` : ''
-  return {
-    title: 'Domain names, priced in naira',
+  return pageMetadata({
+    // What people type: buying a domain, in Nigeria, in naira.
+    title: 'Buy domain names in Nigeria, priced in naira',
     description: `Search ${count}domain extensions. Renewal price shown upfront, pay with your Nigerian card, point it at your host in seconds.`,
-  }
+    path: '/',
+  })
 }
 
 export default async function HomePage() {
@@ -49,8 +54,17 @@ export default async function HomePage() {
   const hosts = presets.map((preset) => preset.provider)
   const extensionCount = priced?.tlds.length ?? null
 
+  const site = env.NEXT_PUBLIC_APP_URL
+
   return (
     <>
+      <JsonLd
+        data={graph(
+          organizationLd(site),
+          websiteLd(site),
+          faqPageLd(HOME_FAQS.map((faq) => ({ q: faq.q, a: faq.a }))),
+        )}
+      />
       <SiteHeader />
 
       <main id="main">

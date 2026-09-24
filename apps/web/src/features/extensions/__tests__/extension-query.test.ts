@@ -10,9 +10,8 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 const { createPublicClient } = await import('@/lib/supabase/public')
 const { getPricedCatalogue } = await import('@/features/pricing/queries/pricing')
 const { cacheTag } = await import('next/cache')
-const { extensionStaticParams, getExtensionPage, loadCatalogueFacts } = await import(
-  '../queries/extension'
-)
+const { extensionStaticParams, getExtensionPage, listExtensionPages, loadCatalogueFacts } =
+  await import('../queries/extension')
 
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
 const record = (name: string): TldRecord => ({
@@ -174,5 +173,26 @@ describe('extensionStaticParams', () => {
   it('still names one extension when prices cannot be read, as Cache Components requires', async () => {
     vi.mocked(getPricedCatalogue).mockResolvedValue(null)
     expect(await extensionStaticParams()).toEqual([{ tld: 'com' }])
+  })
+})
+
+describe('listExtensionPages', () => {
+  it('lists every extension in the catalogue, whether or not it is priced', async () => {
+    catalogue({ data: ROWS, error: null })
+    expect(await listExtensionPages()).toEqual(
+      ROWS.map((row) => ({ tld: row.name, isCountryCode: row.is_country_code })),
+    )
+  })
+
+  it('falls back to the priced list when the catalogue cannot be read', async () => {
+    catalogue({ data: null, error: { message: 'fetch failed' } })
+    const pages = await listExtensionPages()
+    expect(pages?.map((page) => page.tld)).toEqual(tlds.map((entry) => entry.tld))
+  })
+
+  it('lists nothing rather than a short list when neither can be read', async () => {
+    catalogue({ data: null, error: { message: 'fetch failed' } })
+    vi.mocked(getPricedCatalogue).mockResolvedValue(null)
+    expect(await listExtensionPages()).toBeNull()
   })
 })

@@ -8,13 +8,16 @@ import { PricingTable } from '@/features/pricing/components/pricing-table'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
 import { sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { PageJsonLd } from '@/features/seo/components/breadcrumb-json-ld'
+import { pageMetadata } from '@/features/seo/lib/metadata'
 import { env } from '@/lib/env'
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Domain pricing',
   description:
     'Every extension we sell, with the first-year price and the renewal price side by side. Naira, VAT and ICANN fees explained in full.',
-}
+  path: '/pricing',
+})
 
 const PARTS = [
   {
@@ -46,6 +49,7 @@ export default async function PricingPage() {
     return (
       <>
         <SiteHeader />
+        <PageJsonLd trail={[{ name: 'Pricing', path: '/pricing' }]} />
         <main id="main">
           <PageHero eyebrow="Pricing" title="Domain pricing" />
           <Container className="py-16">
@@ -71,6 +75,7 @@ export default async function PricingPage() {
   return (
     <>
       <SiteHeader />
+      <PageJsonLd trail={[{ name: 'Pricing', path: '/pricing' }]} />
 
       <main id="main">
         <PageHero

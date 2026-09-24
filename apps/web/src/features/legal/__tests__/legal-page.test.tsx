@@ -25,7 +25,7 @@ beforeEach(() => {
 describe('LegalPage', () => {
   it('heads the page with the title and when the text last changed', () => {
     render(
-      <LegalPage title="Privacy notice" intro="What we collect and why.">
+      <LegalPage path="/legal/privacy" title="Privacy notice" intro="What we collect and why.">
         <p>Body text.</p>
       </LegalPage>,
     )
@@ -38,7 +38,7 @@ describe('LegalPage', () => {
 
   it('lists every legal document beside the text, marking the one being read', () => {
     render(
-      <LegalPage title="Privacy notice">
+      <LegalPage path="/legal/privacy" title="Privacy notice">
         <p>Body text.</p>
       </LegalPage>,
     )
@@ -57,10 +57,33 @@ describe('LegalPage', () => {
     )
   })
 
+  it('tells search engines where the page sits: Home, Legal, then the document', () => {
+    const { container } = render(
+      <LegalPage path="/legal/privacy" title="Privacy notice">
+        <p>Body text.</p>
+      </LegalPage>,
+    )
+    const data = JSON.parse(
+      container.querySelector('script[type="application/ld+json"]')?.textContent ?? '{}',
+    )
+    const trail = data['@graph'][0]
+    expect(trail['@type']).toBe('BreadcrumbList')
+    expect(
+      trail.itemListElement.map((item: { name: string; item: string }) => [
+        item.name,
+        new URL(item.item).pathname,
+      ]),
+    ).toEqual([
+      ['Home', '/'],
+      ['Legal', '/legal'],
+      ['Privacy notice', '/legal/privacy'],
+    ])
+  })
+
   it('leaves the document list off help pages', () => {
     pathname.current = '/help'
     render(
-      <LegalPage title="Help centre" nav="none" icons={[]}>
+      <LegalPage path="/help" title="Help centre" nav="none" icons={[]}>
         <p>Answers.</p>
       </LegalPage>,
     )
@@ -71,7 +94,7 @@ describe('LegalPage', () => {
 
   it('keeps the site header and the compliance footer around the text', () => {
     render(
-      <LegalPage title="Refund policy">
+      <LegalPage path="/legal/refunds" title="Refund policy">
         <p>Body text.</p>
       </LegalPage>,
     )
