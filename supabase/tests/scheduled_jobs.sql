@@ -121,6 +121,44 @@ begin
   end if;
   v_passed := v_passed + 1;
 
+  -- 8. Closing an unpaid transfer order deletes its transfer code (migration 28);
+  --    a code on an order still awaiting payment stays.
+  declare
+    v_transfer_old   uuid;
+    v_transfer_young uuid;
+    v_line_old       uuid;
+    v_line_young     uuid;
+  begin
+    insert into public.orders (user_id, subtotal_kobo, vat_pct, vat_kobo, total_kobo, fx_rate_id,
+                               tx_ref, registrant, float_check, test_mode, created_at)
+    values (v_user, 100000, 7.5, 7500, 107500, v_rate, 'MDH-jobs-transfer-old', '{}', 'covered', true,
+            now() - interval '2 days')
+    returning id into v_transfer_old;
+    insert into public.orders (user_id, subtotal_kobo, vat_pct, vat_kobo, total_kobo, fx_rate_id,
+                               tx_ref, registrant, float_check, test_mode, created_at)
+    values (v_user, 100000, 7.5, 7500, 107500, v_rate, 'MDH-jobs-transfer-young', '{}', 'covered', true,
+            now() - interval '1 hour')
+    returning id into v_transfer_young;
+    insert into public.order_items (order_id, item_type, domain, tld, period_years, privacy,
+                                    auto_renew, price_kobo, renewal_kobo)
+    values (v_transfer_old, 'transfer', 'jobscheck-old.com', 'com', 1, false, true, 100000, 100000)
+    returning id into v_line_old;
+    insert into public.order_items (order_id, item_type, domain, tld, period_years, privacy,
+                                    auto_renew, price_kobo, renewal_kobo)
+    values (v_transfer_young, 'transfer', 'jobscheck-young.com', 'com', 1, false, true, 100000, 100000)
+    returning id into v_line_young;
+    insert into public.transfer_secrets (order_item_id, auth_code)
+    values (v_line_old, 'CHECK-OLD'), (v_line_young, 'CHECK-YOUNG');
+
+    perform public.expire_unpaid_orders();
+
+    if exists (select 1 from public.transfer_secrets where order_item_id = v_line_old)
+       or not exists (select 1 from public.transfer_secrets where order_item_id = v_line_young) then
+      raise exception 'FAILED: transfer codes kept or deleted wrongly when unpaid orders closed';
+    end if;
+  end;
+  v_passed := v_passed + 1;
+
   raise notice 'scheduled jobs: % checks passed', v_passed;
 end;
 $$;
