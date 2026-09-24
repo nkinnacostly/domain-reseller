@@ -5,8 +5,10 @@ import { defineConfig, devices } from '@playwright/test'
  * dev server on 3000 talks to the real gateway — which talks to the live
  * supplier. Tests get their own server, wired to a mock gateway (N12).
  */
-const PORT = 3100
-const MOCK_GATEWAY = 'http://127.0.0.1:8788'
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3100)
+// Both ports can move, so two checkouts of the repo can run e2e side by side.
+const MOCK_GATEWAY_PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 8788)
+const MOCK_GATEWAY = `http://127.0.0.1:${MOCK_GATEWAY_PORT}`
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`
 
 export default defineConfig({
@@ -40,6 +42,7 @@ export default defineConfig({
     {
       command: 'node tests/e2e/support/mock-gateway.mjs',
       url: `${MOCK_GATEWAY}/health`,
+      env: { MOCK_GATEWAY_PORT: String(MOCK_GATEWAY_PORT) },
       reuseExistingServer: !process.env.CI,
     },
     {

@@ -263,6 +263,9 @@ export type Database = {
           nameservers: string[] | null
           order_item_id: string | null
           pending_nameservers: string[] | null
+          pending_privacy: boolean | null
+          pending_registrant: Json | null
+          pending_transfer_lock: boolean | null
           privacy_enabled: boolean
           registered_at: string | null
           registrant: Json | null
@@ -289,6 +292,9 @@ export type Database = {
           nameservers?: string[] | null
           order_item_id?: string | null
           pending_nameservers?: string[] | null
+          pending_privacy?: boolean | null
+          pending_registrant?: Json | null
+          pending_transfer_lock?: boolean | null
           privacy_enabled?: boolean
           registered_at?: string | null
           registrant?: Json | null
@@ -315,6 +321,9 @@ export type Database = {
           nameservers?: string[] | null
           order_item_id?: string | null
           pending_nameservers?: string[] | null
+          pending_privacy?: boolean | null
+          pending_registrant?: Json | null
+          pending_transfer_lock?: boolean | null
           privacy_enabled?: boolean
           registered_at?: string | null
           registrant?: Json | null
@@ -429,6 +438,7 @@ export type Database = {
           order_item_id: string | null
           run_after: string
           status: Database["public"]["Enums"]["job_status"]
+          submitted_at: string | null
           test_mode: boolean
           updated_at: string
         }
@@ -448,6 +458,7 @@ export type Database = {
           order_item_id?: string | null
           run_after?: string
           status?: Database["public"]["Enums"]["job_status"]
+          submitted_at?: string | null
           test_mode: boolean
           updated_at?: string
         }
@@ -467,6 +478,7 @@ export type Database = {
           order_item_id?: string | null
           run_after?: string
           status?: Database["public"]["Enums"]["job_status"]
+          submitted_at?: string | null
           test_mode?: boolean
           updated_at?: string
         }
@@ -708,6 +720,8 @@ export type Database = {
           float_check: string
           fx_rate_id: string
           id: string
+          invoice_number: string | null
+          nameserver_preset_id: string | null
           nameservers: string[] | null
           order_number: string
           paid_at: string | null
@@ -730,6 +744,8 @@ export type Database = {
           float_check: string
           fx_rate_id: string
           id?: string
+          invoice_number?: string | null
+          nameserver_preset_id?: string | null
           nameservers?: string[] | null
           order_number?: string
           paid_at?: string | null
@@ -752,6 +768,8 @@ export type Database = {
           float_check?: string
           fx_rate_id?: string
           id?: string
+          invoice_number?: string | null
+          nameserver_preset_id?: string | null
           nameservers?: string[] | null
           order_number?: string
           paid_at?: string | null
@@ -781,6 +799,13 @@ export type Database = {
             columns: ["fx_rate_id"]
             isOneToOne: false
             referencedRelation: "fx_rates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_nameserver_preset_id_fkey"
+            columns: ["nameserver_preset_id"]
+            isOneToOne: false
+            referencedRelation: "nameserver_presets"
             referencedColumns: ["id"]
           },
           {
@@ -1323,7 +1348,10 @@ export type Database = {
           is_country_code: boolean
           is_paused: boolean
           is_sellable: boolean
+          is_transferable: boolean | null
+          max_chars: number | null
           max_period: number
+          min_chars: number | null
           min_period: number
           name: string
           paused_reason: string | null
@@ -1341,7 +1369,10 @@ export type Database = {
           is_country_code?: boolean
           is_paused?: boolean
           is_sellable?: boolean
+          is_transferable?: boolean | null
+          max_chars?: number | null
           max_period?: number
+          min_chars?: number | null
           min_period?: number
           name: string
           paused_reason?: string | null
@@ -1359,7 +1390,10 @@ export type Database = {
           is_country_code?: boolean
           is_paused?: boolean
           is_sellable?: boolean
+          is_transferable?: boolean | null
+          max_chars?: number | null
           max_period?: number
+          min_chars?: number | null
           min_period?: number
           name?: string
           paused_reason?: string | null
@@ -1372,6 +1406,32 @@ export type Database = {
           transfer_usd?: number | null
         }
         Relationships: []
+      }
+      transfer_secrets: {
+        Row: {
+          auth_code: string
+          created_at: string
+          order_item_id: string
+        }
+        Insert: {
+          auth_code: string
+          created_at?: string
+          order_item_id: string
+        }
+        Update: {
+          auth_code?: string
+          created_at?: string
+          order_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_secrets_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1499,6 +1559,18 @@ export type Database = {
         Args: { p_expires_at: string; p_job_id: string; p_recovered: boolean }
         Returns: undefined
       }
+      complete_transfer: {
+        Args: {
+          p_expires_at: string
+          p_job_id: string
+          p_nameservers: string[]
+          p_privacy: boolean
+          p_recovered: boolean
+          p_registered_at: string
+          p_transfer_lock: boolean
+        }
+        Returns: undefined
+      }
       current_alert_conditions: {
         Args: { p_test_mode: boolean }
         Returns: {
@@ -1507,6 +1579,22 @@ export type Database = {
           severity: string
           summary: string
         }[]
+      }
+      domains_for_delegation_check: {
+        Args: { p_every_hours?: number; p_limit?: number }
+        Returns: {
+          delegation_status: Database["public"]["Enums"]["delegation_status"]
+          domain_id: string
+          domain_name: string
+          nameservers: string[]
+        }[]
+      }
+      enqueue_domain_change: {
+        Args: {
+          p_domain_id: string
+          p_kind: Database["public"]["Enums"]["job_kind"]
+        }
+        Returns: undefined
       }
       enqueue_line_refund: {
         Args: { p_order_item_id: string }
@@ -1565,6 +1653,10 @@ export type Database = {
         Args: { p_alert_ids: number[]; p_resolved_ids: number[] }
         Returns: undefined
       }
+      mark_transfer_submitted: {
+        Args: { p_job_id: string; p_poll_after_seconds?: number }
+        Returns: undefined
+      }
       merge_anonymous_cart: {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: number
@@ -1579,6 +1671,18 @@ export type Database = {
           refunded_at: string
           state: string
           test_mode: boolean
+        }[]
+      }
+      my_sessions: {
+        Args: never
+        Returns: {
+          aal: string
+          created_at: string
+          id: string
+          ip: string
+          is_current: boolean
+          last_used_at: string
+          user_agent: string
         }[]
       }
       note_refund_provider_call: {
@@ -1601,11 +1705,22 @@ export type Database = {
         }[]
       }
       payment_record: { Args: { p_raw: Json }; Returns: Json }
+      public_status: { Args: never; Returns: Json }
       purge_stale_carts: { Args: { p_older_than?: string }; Returns: number }
       purge_test_orders: { Args: { p_user_id: string }; Returns: undefined }
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: boolean
+      }
+      record_delegation_checks: { Args: { p_results: Json }; Returns: number }
+      record_domain_change: {
+        Args: {
+          p_applied: Json
+          p_attempted: Json
+          p_code?: string
+          p_job_id: string
+        }
+        Returns: undefined
       }
       record_heartbeat: {
         Args: { p_detail: Json; p_name: string; p_test_mode: boolean }
@@ -1720,6 +1835,7 @@ export type Database = {
         Args: { p_by: string; p_refund_id: string }
         Returns: undefined
       }
+      revoke_my_session: { Args: { p_session_id: string }; Returns: boolean }
       settle_order: { Args: { p_order_id: string }; Returns: undefined }
       sync_alerts: { Args: { p_test_mode: boolean }; Returns: Json }
     }
@@ -1748,7 +1864,14 @@ export type Database = {
         | "er-api"
         | "currency-api"
       fx_status: "active" | "pending_review" | "superseded" | "rejected"
-      job_kind: "register_domain" | "apply_nameservers" | "renew_domain"
+      job_kind:
+        | "register_domain"
+        | "apply_nameservers"
+        | "renew_domain"
+        | "transfer_domain"
+        | "set_transfer_lock"
+        | "set_privacy"
+        | "update_contacts"
       job_status:
         | "queued"
         | "running"
@@ -1776,6 +1899,7 @@ export type Database = {
         | "underpayment"
         | "empty_order"
         | "renewal_failed"
+        | "transfer_failed"
       refund_status:
         | "queued"
         | "held"
@@ -1941,7 +2065,15 @@ export const Constants = {
         "currency-api",
       ],
       fx_status: ["active", "pending_review", "superseded", "rejected"],
-      job_kind: ["register_domain", "apply_nameservers", "renew_domain"],
+      job_kind: [
+        "register_domain",
+        "apply_nameservers",
+        "renew_domain",
+        "transfer_domain",
+        "set_transfer_lock",
+        "set_privacy",
+        "update_contacts",
+      ],
       job_status: [
         "queued",
         "running",
@@ -1972,6 +2104,7 @@ export const Constants = {
         "underpayment",
         "empty_order",
         "renewal_failed",
+        "transfer_failed",
       ],
       refund_status: [
         "queued",
