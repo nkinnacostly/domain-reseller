@@ -56,7 +56,8 @@ back here. Each item says why it waited and what unblocks it.
 - **Wallet and mixed payment** (FR-C9, FR-W1/W2).
 
 ### Domain management (PRD E5 – E8, E10)
-- **Ask DomainNameAPI** (*owner*) — does it apply ICANN's 60-day lock after a registrant change, and is there an opt-out (FR-DS2)? How is a restore from redemption ordered (FR-RN6)? Does a transfer in add a year (PRD V19)? The self-serve controls, transfers in and renewals are built (24 Sept 2026).
+- **Ask DomainNameAPI** (*owner*) — does it apply ICANN's 60-day lock after a registrant change, and is there an opt-out (FR-DS2)? How is a restore from redemption ordered (FR-RN6)? Does a transfer in add a year (PRD V19)? Why does SaveContacts answer 204 in the sandbox without changing anything? The self-serve controls, transfers in and renewals are built (24 Sept 2026).
+- **Try a contact change on a live domain** (*owner*) — change one detail (e.g. the billing contact's phone) on `mydomainshub.com`'s Contacts tab and check the DomainNameAPI panel shows it. Contact changes could not be confirmed in the sandbox (above); until one is seen on live, each goes to a person (`CONTACTS_NOT_VISIBLE`).
 - **Privacy default** — the sandbox turned contact privacy on for a line bought without it. We record what the registry reports; confirm on live whether the flag we send is honoured.
 - **Domain deep sync and drift review** (§13.5) — the hourly portfolio reconcile is built; a per-domain `GetDetails` deep sync, and a screen to review and close `registry_drift`, are not. The sandbox holds two test domains we no longer track, so it reports two `unknown_domain` rows by design.
 - **`supplier_calls` retention** — rows accumulate; decide how long to keep them.
