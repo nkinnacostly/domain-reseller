@@ -259,8 +259,8 @@ test.describe('bulk search', () => {
     await bulkForm(page).getByRole('checkbox', { name: '.net' }).check()
     await bulkForm(page).getByRole('checkbox', { name: '.org' }).check()
 
-    // 120 blocks of up to 20 checks per ten minutes; 500 names on three extensions is 75, so
-    // the second list runs out. The count runs in fixed windows, so if one closes meanwhile
+    // 180 blocks of up to 20 checks per ten minutes; 500 names on three extensions is 75, so
+    // the third list runs out. The count runs in fixed windows, so if one closes meanwhile
     // the next fills within two more lists.
     for (let list = 0; list < 5; list += 1) {
       const names = Array.from({ length: 500 }, (_, index) => `limit${id}l${list}n${index}`)

@@ -5,6 +5,7 @@ vi.mock('next/headers', () => ({ headers: async () => requestHeaders.current }))
 vi.mock('@/lib/supabase/service', () => ({ createServiceClient: vi.fn() }))
 
 const { addressKey, LIMITS } = await import('../rate-limit')
+const { BULK_MAX_EXTENSIONS } = await import('@/features/search/lib/bulk')
 
 const { clientKey } = await import('../client-ip')
 /** Keyed with the server's secret, so a table of hashes cannot be reversed by trying every IPv4. */
@@ -43,14 +44,14 @@ describe('addressKey', () => {
 
 describe('bulk limits (FR-S5)', () => {
   it('limit bulk searches and bulk adds per address, over minutes', () => {
-    expect(LIMITS.bulkSearch).toEqual({ max: 120, windowSeconds: 600 })
+    expect(LIMITS.bulkSearch).toEqual({ max: 180, windowSeconds: 600 })
     expect(LIMITS.bulkAddToCart).toEqual({ max: 20, windowSeconds: 600 })
   })
 
-  it('let a 500-name list on four extensions through, with room to retry, but not two', () => {
+  it('let one full list through — 500 names on all seven extensions — but not two', () => {
     // Counted per block: 20 names on one extension, one supplier call (actions/bulk.ts).
-    const blocksPerList = (500 / 20) * 4
-    expect(LIMITS.bulkSearch.max).toBeGreaterThan(blocksPerList)
+    const blocksPerList = (500 / 20) * BULK_MAX_EXTENSIONS
+    expect(LIMITS.bulkSearch.max).toBeGreaterThanOrEqual(blocksPerList)
     expect(LIMITS.bulkSearch.max).toBeLessThan(blocksPerList * 2)
   })
 })

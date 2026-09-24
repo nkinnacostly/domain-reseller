@@ -35,10 +35,11 @@ export const LIMITS = {
   whoisAll: { max: 600, windowSeconds: 600 },
   // FR-S5 — per address, counted per block (one gateway request and one
   // supplier call of at most 20 checks), so the count follows the checks
-  // made, not the searches run. A 500-name list on four extensions is 100
-  // blocks: room for it and a retry in ten minutes. The supplier allows two
-  // calls at a time for everyone (PRD V4), and the gateway lets bulk use one.
-  bulkSearch: { max: 120, windowSeconds: 600 },
+  // made, not the searches run. The largest list — 500 names on all seven
+  // extensions — is 175 blocks, so one full list fits in ten minutes and a
+  // second does not. The supplier allows two calls at a time for everyone
+  // (PRD V4), and the gateway lets bulk use one.
+  bulkSearch: { max: 180, windowSeconds: 600 },
   // Adding every available name re-checks them all with the registry first.
   bulkAddToCart: { max: 20, windowSeconds: 600 },
   // A transfer check confirms or denies a code (FR-T1). Counted per domain, so
