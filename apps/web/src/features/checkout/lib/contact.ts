@@ -1,4 +1,4 @@
-import { type Contact, contactSchema } from '@dr/shared'
+import { type Contact, contactSchema, isCountryCode } from '@dr/shared'
 import { z } from 'zod'
 
 /**
@@ -53,11 +53,13 @@ export const registrantFormSchema = z.object({
   city: z.string().trim().min(1, 'Enter a city').max(64),
   state: z.string().trim().min(1, 'Enter a state').max(64),
   zipCode: z.string().trim().min(1, 'Enter a postcode').max(16),
+  // Exactly the codes the form offers (REGISTRANT_COUNTRIES): every ISO
+  // 3166-1 country, and nothing a registry would refuse after payment.
   country: z
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z]{2}$/, 'Choose a country'),
+    .refine((value): boolean => isCountryCode(value), 'Choose a country'),
 })
 export type RegistrantForm = z.input<typeof registrantFormSchema>
 

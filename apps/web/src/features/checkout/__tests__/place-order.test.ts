@@ -64,7 +64,9 @@ const INPUT = {
 /** A chainable double: a real promise, with the query methods the action calls. */
 function chain(result: unknown) {
   const node = Object.assign(Promise.resolve(result), {} as Record<string, unknown>)
-  for (const method of ['select', 'eq', 'in', 'update', 'insert']) node[method] = () => node
+  for (const method of ['select', 'eq', 'neq', 'not', 'in', 'update', 'insert']) {
+    node[method] = () => node
+  }
   node.single = async () => result
   node.maybeSingle = async () => result
   return node
@@ -85,16 +87,30 @@ let answers: {
 /** Every `nameserver_presets` lookup, as [column, value]. */
 let presetLookups: unknown[][]
 
-/** The signed-in user's own client: their saved contact, read and written under RLS. */
+/**
+ * The signed-in user's own client: their saved contact, read and written
+ * under RLS, and — for FR-A2 — how many domains they hold and whether they
+ * have an authenticator.
+ */
 function userClient({
   email = 'ada@example.com' as string | null,
   existing = { id: 'contact-1' } as unknown,
   saved = { data: { id: 'contact-1' }, error: null } as unknown,
+  held = { count: 0, error: null } as { count: number | null; error: unknown },
+  factors = { data: { totp: [] as { status: string }[] }, error: null } as {
+    data: unknown
+    error: unknown
+  },
 } = {}) {
   const writes: { op: 'insert' | 'update'; row: unknown }[] = []
+  listFactors = vi.fn(async () => factors)
   const client = {
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email } } }) },
-    from: () => {
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1', email } } }),
+      mfa: { listFactors },
+    },
+    from: (table: string) => {
+      if (table === 'domains') return chain(held)
       const read = chain({ data: existing, error: null })
       read.insert = (row: unknown) => {
         writes.push({ op: 'insert', row })
@@ -110,6 +126,21 @@ function userClient({
   vi.mocked(createClient).mockResolvedValue(client as never)
   return writes
 }
+/** The user's authenticator lookup, from the last userClient(). */
+let listFactors: ReturnType<typeof vi.fn>
+
+/** account_domain_allowance() for an established account (migration 32). */
+const allowance = (over: Record<string, unknown> = {}) => ({
+  ordered: 0,
+  max: 20,
+  tier: 'standard',
+  paid_orders: 1,
+  account_days: 12,
+  standard_after_days: 7,
+  trusted_after_days: 30,
+  trusted_after_paid_orders: 3,
+  ...over,
+})
 
 type RpcAnswer = { data: unknown; error: { message: string } | null }
 let rpcAnswers: Record<string, RpcAnswer> = {}
@@ -152,7 +183,7 @@ beforeEach(() => {
 
   rpcAnswers = {
     rate_limit_hit: { data: true, error: null },
-    account_domain_allowance: { data: { ordered: 0, max: 20 }, error: null },
+    account_domain_allowance: { data: allowance(), error: null },
   }
   const service = {
     rpc: vi.fn(async (name: string) => {
@@ -216,13 +247,49 @@ describe('placeOrder — nothing is created or charged when a check fails', () =
   })
 
   it('caps the domains one account orders in a day (SEC-11)', async () => {
-    rpcAnswers.account_domain_allowance = { data: { ordered: 20, max: 20 }, error: null }
+    rpcAnswers.account_domain_allowance = { data: allowance({ ordered: 20 }), error: null }
     const result = await placeOrder(INPUT)
     expect(result?.data).toEqual({
-      error: expect.stringMatching(/up to 20 domains a day, and this would take you to 21/),
+      error: expect.stringMatching(
+        /^Your account can order up to 20 domains a day, and you have ordered 20 in the last 24 hours\. That rises once your account is 30 days old and has 3 paid orders\. You haven't been charged\./,
+      ),
     })
     expect(checkAvailability).not.toHaveBeenCalled()
     expect(inserted.orders).toEqual([])
+  })
+
+  it('tells a new account its own cap and how it rises — every number from the database', async () => {
+    rpcAnswers.account_domain_allowance = {
+      data: allowance({ tier: 'new', max: 5, ordered: 5, paid_orders: 0, account_days: 2 }),
+      error: null,
+    }
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({
+      error: expect.stringMatching(
+        /^New accounts can order up to 5 domains a day.*That rises after your first paid order, or once your account is a week old\. You haven't been charged\..*email hello@mydomainshub\.com to raise your limit\.$/,
+      ),
+    })
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('counts the order against the side it is paid on (test against test)', async () => {
+    const service = createServiceClient() as unknown as { rpc: ReturnType<typeof vi.fn> }
+    await placeOrder(INPUT)
+    expect(service.rpc).toHaveBeenCalledWith('account_domain_allowance', {
+      p_user_id: 'user-1',
+      p_test_mode: true,
+    })
+    vi.mocked(requirePaymentEnv).mockReturnValue({
+      secretKey: 'FLWSECK-x-X',
+      publicKey: 'FLWPUBK-x-X',
+      webhookHash: 'hash',
+      testMode: false,
+    })
+    await placeOrder(INPUT)
+    expect(service.rpc).toHaveBeenCalledWith('account_domain_allowance', {
+      p_user_id: 'user-1',
+      p_test_mode: false,
+    })
   })
 
   it('refuses when the day’s allowance cannot be read', async () => {
@@ -388,7 +455,7 @@ describe('placeOrder — the cart must be ready to buy', () => {
 
 describe('placeOrder — more checks that stop it before money moves', () => {
   it('refuses when the allowance answer is not what it expects — fails closed', async () => {
-    rpcAnswers.account_domain_allowance = { data: { ordered: '3', max: 20 }, error: null }
+    rpcAnswers.account_domain_allowance = { data: allowance({ ordered: '3' }), error: null }
     const result = await placeOrder(INPUT)
     expect(result?.data).toEqual({ error: expect.stringMatching(/couldn't complete checkout/) })
     expect(checkAvailability).not.toHaveBeenCalled()
@@ -694,5 +761,65 @@ describe('placeOrder — a host preset at checkout (FR-C10, FR-D2, N11)', () => 
       expect.objectContaining({ nameservers: null, nameserver_preset_id: null }),
     ])
     expect(presetLookups).toEqual([])
+  })
+})
+
+describe('placeOrder — two-factor is mandatory above ten domains (FR-A2)', () => {
+  const ELEVEN = { count: 11, error: null }
+  const VERIFIED = { data: { totp: [{ status: 'verified' }] }, error: null }
+
+  it('refuses an account holding eleven domains without two-factor, before anything else', async () => {
+    userClient({ held: ELEVEN })
+    const result = await placeOrder(INPUT)
+
+    expect(result?.data).toEqual({
+      error:
+        "Accounts holding more than 10 domains need two-factor authentication before ordering more domains. You haven't been charged. Turn it on in Settings, under Two-factor authentication, then try again.",
+      twoFactor: true,
+    })
+    const service = createServiceClient() as unknown as { rpc: ReturnType<typeof vi.fn> }
+    expect(service.rpc).not.toHaveBeenCalled()
+    expect(getCartView).not.toHaveBeenCalled()
+    expect(checkAvailability).not.toHaveBeenCalled()
+    expect(inserted.orders).toEqual([])
+    expect(createPaymentLink).not.toHaveBeenCalled()
+  })
+
+  it('counts an authenticator that was never confirmed as none', async () => {
+    userClient({
+      held: ELEVEN,
+      factors: { data: { totp: [{ status: 'unverified' }] }, error: null },
+    })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toMatchObject({ twoFactor: true })
+  })
+
+  it('lets the same account order once two-factor is on', async () => {
+    userClient({ held: ELEVEN, factors: VERIFIED })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+  })
+
+  it('leaves an account at ten domains as it was, without reading its factors', async () => {
+    userClient({ held: { count: 10, error: null } })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(listFactors).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the domains cannot be counted — a check nobody made is not passed', async () => {
+    userClient({ held: { count: null, error: { message: 'db down' } } })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({
+      error: "We couldn't complete checkout just now. You haven't been charged. Try again shortly.",
+    })
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('refuses when the factors cannot be read for an account that needs them', async () => {
+    userClient({ held: ELEVEN, factors: { data: null, error: { message: 'auth down' } } })
+    const result = await placeOrder(INPUT)
+    expect(result?.data).toEqual({ error: expect.stringMatching(/couldn't complete checkout/) })
+    expect(inserted.orders).toEqual([])
   })
 })

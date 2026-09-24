@@ -14,6 +14,7 @@ import {
   SubmitButton,
 } from '@/components/common/form-parts'
 import { FOCUS, PANEL } from '@/components/layout/panel'
+import { TWO_FACTOR_SETTINGS_HREF } from '@/features/auth/lib/security'
 import { RegistrantFields } from '@/features/checkout/components/registrant-fields'
 import { type RegistrantForm, registrantFromForm } from '@/features/checkout/lib/contact'
 import { PROCESSING_FEE_NOTE } from '@/features/checkout/lib/fees'
@@ -193,7 +194,20 @@ export function TransferCheckoutForm({
         </p>
 
         {failure && failure.field !== 'authCode' ? (
-          <FormMessage tone="error">{failure.error}</FormMessage>
+          <FormMessage tone="error">
+            {failure.error}
+            {failure.twoFactor ? (
+              <>
+                {' '}
+                <Link
+                  href={TWO_FACTOR_SETTINGS_HREF}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Turn on two-factor
+                </Link>
+              </>
+            ) : null}
+          </FormMessage>
         ) : null}
         {place.result.serverError ? (
           <FormMessage tone="error">{place.result.serverError}</FormMessage>

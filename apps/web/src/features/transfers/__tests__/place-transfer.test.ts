@@ -66,7 +66,7 @@ const found = (over: Record<string, unknown> = {}): RdapLookup => ({
 /** A chainable double: a real promise, with the query methods the action calls. */
 function chain(result: unknown) {
   const node = Object.assign(Promise.resolve(result), {} as Record<string, unknown>)
-  for (const method of ['select', 'eq', 'neq', 'in', 'limit', 'order', 'update']) {
+  for (const method of ['select', 'eq', 'neq', 'not', 'in', 'limit', 'order', 'update']) {
     node[method] = () => node
   }
   node.single = async () => result
@@ -90,6 +90,25 @@ let orderUpdates: unknown[]
 let secretDeletes: unknown[]
 let limits: Record<string, { data: unknown; error: unknown }>
 let limitKeys: string[]
+/** account_domain_allowance(), and what it was asked. */
+let allowance: { data: unknown; error: unknown }
+let allowanceArgs: unknown[]
+/** FR-A2: the domains the account holds (as the user), and its authenticators. */
+let held: { count: number | null; error: unknown }
+let factors: { data: unknown; error: unknown }
+
+/** account_domain_allowance() for an established account (migration 32). */
+const established = (over: Record<string, unknown> = {}) => ({
+  ordered: 0,
+  max: 20,
+  tier: 'standard',
+  paid_orders: 1,
+  account_days: 12,
+  standard_after_days: 7,
+  trusted_after_days: 30,
+  trusted_after_paid_orders: 3,
+  ...over,
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -98,6 +117,10 @@ beforeEach(() => {
   secretDeletes = []
   limits = {}
   limitKeys = []
+  allowance = { data: established(), error: null }
+  allowanceArgs = []
+  held = { count: 1, error: null }
+  factors = { data: { totp: [] }, error: null }
   answers = {
     tld: { transfer_usd: 10.61, is_country_code: false, is_transferable: true },
     domains: { data: [], error: null },
@@ -139,8 +162,10 @@ beforeEach(() => {
   vi.mocked(createClient).mockResolvedValue({
     auth: {
       getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }),
+      mfa: { listFactors: async () => factors },
     },
     from: (table: string) => {
+      if (table === 'domains') return chain(held)
       if (table === 'contact_profiles') {
         const node = chain({ data: null, error: null })
         node.insert = () => chain({ data: { id: 'contact-1' }, error: null })
@@ -152,6 +177,10 @@ beforeEach(() => {
 
   vi.mocked(createServiceClient).mockReturnValue({
     rpc: vi.fn(async (name: string, args: { p_key: string }) => {
+      if (name === 'account_domain_allowance') {
+        allowanceArgs.push(args)
+        return allowance
+      }
       if (name !== 'rate_limit_hit') throw new Error(`unexpected rpc ${name}`)
       limitKeys.push(args.p_key)
       const key = Object.keys(limits).find((prefix) => args.p_key.startsWith(prefix))
@@ -301,6 +330,88 @@ describe('placeTransfer — nothing is created or charged when a check fails', (
       error: expect.stringMatching(/already paid for and under way/),
     })
     codeNotChecked()
+    nothingCreated()
+  })
+
+  it('counts a transfer against the daily cap, before the registry or the supplier is asked (SEC-11)', async () => {
+    allowance = {
+      data: established({ tier: 'new', max: 5, ordered: 5, paid_orders: 0, account_days: 1 }),
+      error: null,
+    }
+    expect((await placeTransfer(INPUT))?.data).toEqual({
+      error:
+        "New accounts can order up to 5 domains a day, transfers in included, and you have ordered 5 in the last 24 hours. That rises after your first paid order, or once your account is a week old. You haven't been charged. Each order stops counting 24 hours after it was placed, so try again later, or email hello@mydomainshub.com to raise your limit.",
+    })
+    expect(allowanceArgs).toEqual([{ p_user_id: 'user-1', p_test_mode: true }])
+    expect(lookupDomain).not.toHaveBeenCalled()
+    codeNotChecked()
+    nothingCreated()
+  })
+
+  it('lets a transfer land exactly on the cap', async () => {
+    allowance = { data: established({ ordered: 19 }), error: null }
+    expect((await placeTransfer(INPUT))?.data).toEqual({
+      redirectTo: 'https://checkout.test/pay/1',
+    })
+  })
+
+  it('counts a live transfer against live orders only', async () => {
+    vi.mocked(requirePaymentEnv).mockReturnValue({
+      secretKey: 'FLWSECK-x-X',
+      publicKey: 'FLWPUBK-x-X',
+      webhookHash: 'hash',
+      testMode: false,
+    })
+    await placeTransfer(INPUT)
+    expect(allowanceArgs).toEqual([{ p_user_id: 'user-1', p_test_mode: false }])
+  })
+
+  it('fails closed when the daily cap cannot be read, or reads wrongly', async () => {
+    for (const answer of [
+      { data: null, error: { message: 'db down' } },
+      { data: { ordered: 0, max: 20 }, error: null },
+    ]) {
+      allowance = answer
+      expect((await placeTransfer(INPUT))?.data).toEqual({
+        error: "We couldn't complete this just now. You haven't been charged. Try again shortly.",
+      })
+    }
+    codeNotChecked()
+    nothingCreated()
+  })
+
+  it('refuses an account holding more than ten domains until two-factor is on (FR-A2)', async () => {
+    held = { count: 11, error: null }
+    expect((await placeTransfer(INPUT))?.data).toEqual({
+      error:
+        "Accounts holding more than 10 domains need two-factor authentication before transferring more domains in. You haven't been charged. Turn it on in Settings, under Two-factor authentication, then try again.",
+      twoFactor: true,
+    })
+    expect(limitKeys).toEqual([])
+    expect(lookupDomain).not.toHaveBeenCalled()
+    codeNotChecked()
+    nothingCreated()
+
+    factors = { data: { totp: [{ status: 'verified' }] }, error: null }
+    expect((await placeTransfer(INPUT))?.data).toEqual({
+      redirectTo: 'https://checkout.test/pay/1',
+    })
+  })
+
+  it('fails closed when the two-factor rule cannot be checked', async () => {
+    for (const [count, answer] of [
+      [{ count: null, error: { message: 'db down' } }, factors],
+      [
+        { count: 11, error: null },
+        { data: null, error: { message: 'auth down' } },
+      ],
+    ] as const) {
+      held = count as typeof held
+      factors = answer
+      expect((await placeTransfer(INPUT))?.data).toEqual({
+        error: "We couldn't complete this just now. You haven't been charged. Try again shortly.",
+      })
+    }
     nothingCreated()
   })
 

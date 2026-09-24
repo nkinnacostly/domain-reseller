@@ -146,6 +146,39 @@ describe('CheckoutForm — when the order is refused', () => {
     expect(assign).not.toHaveBeenCalled()
   })
 
+  it('links to Settings when the account must turn two-factor on first (FR-A2)', async () => {
+    const user = userEvent.setup()
+    vi.mocked(placeOrder).mockResolvedValue({
+      data: {
+        error:
+          "Accounts holding more than 10 domains need two-factor authentication before ordering more domains. You haven't been charged.",
+        twoFactor: true,
+      },
+    } as never)
+    const form = renderForm()
+
+    await user.click(payButton())
+
+    const alert = await within(form).findByRole('alert')
+    expect(alert).toHaveTextContent('need two-factor authentication before ordering more domains')
+    expect(within(alert).getByRole('link', { name: 'Turn on two-factor' })).toHaveAttribute(
+      'href',
+      '/app/settings#two-factor',
+    )
+    expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('offers no two-factor link for any other refusal', async () => {
+    const user = userEvent.setup()
+    vi.mocked(placeOrder).mockResolvedValue({
+      data: { error: "Checkout isn't open yet. You haven't been charged." },
+    } as never)
+    const form = renderForm()
+    await user.click(payButton())
+    await within(form).findByRole('alert')
+    expect(within(form).queryByRole('link', { name: 'Turn on two-factor' })).not.toBeInTheDocument()
+  })
+
   it('shows a server failure', async () => {
     const user = userEvent.setup()
     vi.mocked(placeOrder).mockResolvedValue({
@@ -286,12 +319,22 @@ describe('CheckoutForm — what the customer checks before paying', () => {
 })
 
 describe('CheckoutForm — the registrant’s country', () => {
-  it('lists countries by name, Nigeria first', () => {
+  it('lists every country by name, Nigeria first, then A to Z', () => {
     renderForm()
     const options = within(screen.getByLabelText('Country')).getAllByRole('option')
     expect(options).toHaveLength(REGISTRANT_COUNTRIES.length)
+    expect(options).toHaveLength(249)
     expect(options[0]).toHaveTextContent('Nigeria')
-    expect(options.map((option) => option.getAttribute('value'))).toContain('GB')
+    expect(options[1]).toHaveTextContent('Afghanistan')
+    expect(options.at(-1)).toHaveTextContent('Zimbabwe')
+    expect(options.map((option) => option.getAttribute('value'))).toEqual(
+      expect.arrayContaining(['GB', 'JP', 'BR', 'NZ']),
+    )
+  })
+
+  it('starts on a saved registrant’s country from anywhere in the world', () => {
+    renderForm({ registrant: { country: 'JP' } })
+    expect(screen.getByLabelText('Country')).toHaveDisplayValue('Japan')
   })
 
   it('suggests the 36 states and the FCT, and explains postcodes, for Nigeria', () => {

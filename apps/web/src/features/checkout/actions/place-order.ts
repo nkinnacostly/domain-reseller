@@ -3,6 +3,8 @@
 import { randomUUID } from 'node:crypto'
 import { accountBalanceSchema, userMessageFor } from '@dr/shared'
 import { z } from 'zod'
+import { purchaseNeedsTwoFactor } from '@/features/auth/lib/security'
+import { mustTurnOnTwoFactor } from '@/features/auth/queries/two-factor'
 import { getCartView } from '@/features/cart/queries/cart'
 import { deleteLine, findCartId } from '@/features/cart/queries/store'
 import { contactRolesInputSchema } from '@/features/contacts/lib/roles'
@@ -17,9 +19,11 @@ import { LIMITS, withinLimit } from '@/lib/rate-limit'
 import { authAction } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
 import { checkoutOpenTo } from '../lib/access'
+import { allowanceRefusal, exceedsAllowance } from '../lib/allowance'
 import { registrantFormSchema, toContact } from '../lib/contact'
 import { type SupplierCost, wholesaleCostUsd } from '../lib/cost'
 import { lineHostsSchema } from '../lib/line-hosts'
+import { readAllowance } from '../queries/allowance'
 import { chooseNameservers, planHosts } from '../queries/hosts'
 import { saveDefaultContact } from '../queries/registrant'
 
@@ -31,7 +35,8 @@ import { saveDefaultContact } from '../queries/registrant'
  */
 
 type Result =
-  | { error: string; field?: string; domain?: string; details?: string[] }
+  // `twoFactor`: refused until two-factor is on (FR-A2) — the form links to it.
+  | { error: string; field?: string; domain?: string; details?: string[]; twoFactor?: true }
   | { redirectTo: string }
   // FR-D4 — hosts that did not answer, shown before paying. Nothing is created yet.
   | { warnings: string[] }
@@ -73,6 +78,16 @@ export const placeOrder = authAction
     if (!checkoutOpenTo(ctx.user.email, env.CHECKOUT_ALLOWLIST)) {
       return { error: `Checkout isn't open yet. ${NOT_CHARGED}` }
     }
+    // FR-A2: above ten domains two-factor is mandatory, so the portfolio does
+    // not grow without it. Renewals (placeRenewal) are never held back here —
+    // they protect what the account already has.
+    const needsTwoFactor = await mustTurnOnTwoFactor(ctx.supabase, ctx.user.id)
+    if (needsTwoFactor === null) {
+      return { error: `We couldn't complete checkout just now. ${NOT_CHARGED} Try again shortly.` }
+    }
+    if (needsTwoFactor) {
+      return { error: purchaseNeedsTwoFactor('order', NOT_CHARGED), twoFactor: true }
+    }
     // SEC-11: an account that keeps placing orders is paused before any
     // supplier or payment call is made on its behalf.
     const [recent, today] = await Promise.all([
@@ -112,18 +127,19 @@ export const placeOrder = authAction
     // ── Velocity (SEC-11) ────────────────────────────────────────────────
     // Stolen cards buy domains in bulk for phishing: a cap on domains per
     // account per day limits what one account can do before a person looks.
-    const { data: allowance, error: allowanceError } = await service.rpc(
-      'account_domain_allowance',
-      { p_user_id: ctx.user.id },
-    )
-    const { ordered, max } = (allowance ?? {}) as { ordered?: number; max?: number }
-    if (allowanceError || typeof ordered !== 'number' || typeof max !== 'number') {
-      logger.error({ err: allowanceError?.message }, 'domain allowance could not be checked')
+    // Counted on the side this order is paid on — test against test.
+    const allowance = await readAllowance(service, ctx.user.id, payment.testMode)
+    if (!allowance) {
       return { error: `We couldn't complete checkout just now. ${NOT_CHARGED} Try again shortly.` }
     }
-    if (ordered + lines.length > max) {
+    if (exceedsAllowance(allowance, lines.length)) {
       return {
-        error: `You can order up to ${max} domains a day, and this would take you to ${ordered + lines.length}. ${NOT_CHARGED} Remove some, or email ${BUSINESS.email} to raise your limit.`,
+        error: allowanceRefusal(allowance, {
+          adding: lines.length,
+          kind: 'order',
+          email: BUSINESS.email,
+          notCharged: NOT_CHARGED,
+        }),
       }
     }
 

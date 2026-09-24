@@ -16,6 +16,7 @@ import { ChangePasswordForm, ProfileForm } from '@/features/auth/components/sett
 import { TwoFactorPanel } from '@/features/auth/components/two-factor-panel'
 import { describeHold, resetHoldUntil } from '@/features/auth/lib/security'
 import { getAccount } from '@/features/auth/queries/account'
+import { getTwoFactorRequirement } from '@/features/auth/queries/two-factor'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Settings' }
@@ -49,7 +50,7 @@ function Section({
 }
 
 async function Settings() {
-  const account = await getAccount()
+  const [account, twoFactor] = await Promise.all([getAccount(), getTwoFactorRequirement()])
   if (!account) return null
   const hold = resetHoldUntil(account.passwordResetAt, new Date())
 
@@ -97,7 +98,10 @@ async function Settings() {
           title="Two-factor authentication"
           description="A code from an app on your phone, needed to sign in and to make changes to your domains."
         >
-          <TwoFactorPanel factorId={account.totpFactor?.id ?? null} />
+          <TwoFactorPanel
+            factorId={account.totpFactor?.id ?? null}
+            requiredFor={twoFactor?.required ? twoFactor.held : null}
+          />
         </Section>
         <Section
           id="sessions"

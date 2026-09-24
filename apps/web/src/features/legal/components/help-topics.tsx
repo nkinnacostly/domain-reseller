@@ -1,5 +1,6 @@
 import { TRANSFER_LOCK_DAYS } from '@dr/shared'
 import Link from 'next/link'
+import { TWO_FACTOR_REQUIRED_ABOVE_DOMAINS } from '@/features/auth/lib/security'
 import { BUSINESS } from '@/lib/business'
 import { EmailLink } from './legal-page'
 
@@ -58,6 +59,20 @@ export const HELP_TOPICS: {
           <p>
             Not to search or fill a cart. You sign in when you check out, and your cart comes with
             you.
+          </p>
+        ),
+      },
+      {
+        q: 'Is there a limit on how many domains I can buy?',
+        a: (
+          <p>
+            Yes, a daily one: registrations and transfers in count, over the last 24 hours, and
+            renewals never do. It stops a stolen card being used to buy domains in bulk. New
+            accounts start with the lowest limit. It rises by itself after your first paid order or
+            once your account has been open a short while, and again as your account gets older and
+            you make more paid orders. If an order would go over it, checkout tells you your limit
+            and what raises it, before you are charged anything. To raise it sooner, email{' '}
+            <EmailLink />.
           </p>
         ),
       },
@@ -157,7 +172,11 @@ export const HELP_TOPICS: {
         a: (
           <p>
             Yes. It protects your account with a code from an app on your phone, and it is required
-            for sensitive changes such as nameservers.
+            for sensitive changes: nameservers, turning the transfer lock off, a domain’s contacts
+            and its transfer code. Once your account holds more than{' '}
+            {TWO_FACTOR_REQUIRED_ABOVE_DOMAINS} domains it is required to add more, too: until it is
+            on, you cannot order new domains or transfer more in. Renewals are never held up. Turn
+            it on in Settings, under Two-factor authentication.
           </p>
         ),
       },

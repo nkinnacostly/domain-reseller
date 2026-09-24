@@ -12,7 +12,11 @@ const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toI
 
 type Session = {
   user?: { id: string } | null
-  aal?: { currentLevel: string; currentAuthenticationMethods?: unknown[] } | null
+  aal?: {
+    currentLevel: string
+    nextLevel?: string
+    currentAuthenticationMethods?: unknown[]
+  } | null
   profile?: { password_reset_at: string | null } | null
 }
 
@@ -117,6 +121,22 @@ describe('elevatedAction (SEC-2)', () => {
     ['an aal2 session that lists no methods', { currentLevel: 'aal2' }],
   ])('asks for the authenticator code on %s', async (_, aal) => {
     session({ aal })
+    expect(await sensitive()).toEqual({ serverError: MFA })
+  })
+
+  it('tells an account with no authenticator to turn two-factor on, not to enter a code (FR-A2)', async () => {
+    session({ aal: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] } })
+    const body = vi.fn()
+    const action = elevatedAction.action(async () => body())
+    expect(await action()).toEqual({
+      serverError:
+        'Changes like this need two-factor authentication on your account. Turn it on in Settings, under Two-factor authentication, then try again.',
+    })
+    expect(body).not.toHaveBeenCalled()
+  })
+
+  it('asks for the code when an authenticator is set up but not used this session', async () => {
+    session({ aal: { currentLevel: 'aal1', nextLevel: 'aal2', currentAuthenticationMethods: [] } })
     expect(await sensitive()).toEqual({ serverError: MFA })
   })
 

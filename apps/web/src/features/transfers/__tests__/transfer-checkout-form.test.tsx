@@ -211,6 +211,28 @@ describe('TransferCheckoutForm — when it is refused', () => {
     expect(review().getByRole('alert')).toHaveTextContent('Some details need fixing')
   })
 
+  it('links to Settings when the account must turn two-factor on first (FR-A2)', async () => {
+    const user = userEvent.setup()
+    vi.mocked(placeTransfer).mockResolvedValue({
+      data: {
+        error:
+          "Accounts holding more than 10 domains need two-factor authentication before transferring more domains in. You haven't been charged.",
+        twoFactor: true,
+      },
+    } as never)
+    renderForm()
+
+    await user.click(payButton())
+
+    const alert = await review().findByRole('alert')
+    expect(alert).toHaveTextContent('before transferring more domains in')
+    expect(within(alert).getByRole('link', { name: 'Turn on two-factor' })).toHaveAttribute(
+      'href',
+      '/app/settings#two-factor',
+    )
+    expect(assign).not.toHaveBeenCalled()
+  })
+
   it('shows any other refusal, and a server failure, in the review', async () => {
     const user = userEvent.setup()
     vi.mocked(placeTransfer).mockResolvedValue({

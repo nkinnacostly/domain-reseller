@@ -1,11 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COUNTRY_CODES,
   contactSchema,
+  countryCode,
   domainNameSchema,
   domainStemSchema,
   nameserverSchema,
   nameserverSetSchema,
 } from './index'
+
+describe('COUNTRY_CODES (ISO 3166-1 alpha-2)', () => {
+  it('lists all 249 assigned codes, once each, in order', () => {
+    expect(COUNTRY_CODES).toHaveLength(249)
+    expect(new Set(COUNTRY_CODES).size).toBe(249)
+    expect([...COUNTRY_CODES].sort()).toEqual([...COUNTRY_CODES])
+  })
+
+  it('holds only two capital letters per code', () => {
+    for (const code of COUNTRY_CODES) expect(code).toMatch(/^[A-Z]{2}$/)
+  })
+
+  it('accepts every code on the list, and nothing else', () => {
+    for (const code of COUNTRY_CODES) expect(countryCode.safeParse(code).success).toBe(true)
+    expect(countryCode.safeParse('NGA').success).toBe(false)
+    expect(countryCode.safeParse('ZZ').success).toBe(false)
+  })
+})
 
 describe('domainNameSchema', () => {
   it.each(['example.com', 'my-site.com.ng', 'a1.io'])('accepts %s', (value) => {
@@ -87,6 +107,19 @@ describe('contactSchema', () => {
 
   it('rejects a lowercase country code', () => {
     expect(contactSchema.safeParse({ ...valid, country: 'ng' }).success).toBe(false)
+  })
+
+  it.each(['GB', 'US', 'CI', 'AX', 'ZW'])('accepts a contact in %s', (country) => {
+    expect(contactSchema.safeParse({ ...valid, country }).success).toBe(true)
+  })
+
+  it.each([
+    ['ZZ', 'unassigned'],
+    ['XK', 'user-assigned, not in the standard'],
+    ['UK', 'reserved — the code is GB'],
+    ['EU', 'reserved'],
+  ])('rejects %s (%s), which a registry would refuse after payment', (country) => {
+    expect(contactSchema.safeParse({ ...valid, country }).success).toBe(false)
   })
 
   it('rejects a phone number containing formatting characters', () => {

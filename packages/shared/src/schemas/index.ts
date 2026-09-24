@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { isCountryCode } from './countries'
+
+export { COUNTRY_CODES, type CountryCode, isCountryCode } from './countries'
 
 /**
  * Validation schemas shared by the web app, the gateway and the tests.
@@ -9,6 +12,10 @@ export const countryCode = z
   .string()
   .length(2, 'Use a two-letter country code')
   .regex(/^[A-Z]{2}$/, 'Country code must be uppercase ISO-3166-1 alpha-2')
+  // Two capital letters is a shape, not a country: "ZZ" would pass the
+  // pattern and fail at the registry, after payment. A plain boolean, not
+  // the type guard, so a Contact read back from the database still types.
+  .refine((value): boolean => isCountryCode(value), 'Not an ISO-3166-1 alpha-2 country code')
 
 export const contactSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(64),

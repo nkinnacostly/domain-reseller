@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { describedBy, Field, inputClass } from '@/components/common/form-parts'
 import type { RegistrantForm } from '../lib/contact'
-import { NIGERIAN_STATES, REGISTRANT_COUNTRIES } from '../lib/countries'
+import { COUNTRY_NAMES, NIGERIAN_STATES, REGISTRANT_COUNTRIES } from '../lib/countries'
 
 /**
  * The registrant's fields (PRD FR-A4), as checkout asks for them and as a
@@ -29,7 +29,6 @@ export function RegistrantFields({
 }) {
   const id = idPrefix
   const [country, setCountry] = useState(registrant.country ?? 'NG')
-  const countryNames = useMemo(() => new Intl.DisplayNames(['en'], { type: 'region' }), [])
 
   const field = (name: keyof RegistrantForm) => {
     const error = errorFor(name)
@@ -138,7 +137,7 @@ export function RegistrantFields({
         >
           {REGISTRANT_COUNTRIES.map((code) => (
             <option key={code} value={code}>
-              {countryNames.of(code) ?? code}
+              {COUNTRY_NAMES[code]}
             </option>
           ))}
         </select>

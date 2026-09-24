@@ -10,10 +10,15 @@ import {
   vatKobo,
 } from '@dr/shared'
 import { z } from 'zod'
+import { purchaseNeedsTwoFactor } from '@/features/auth/lib/security'
+import { mustTurnOnTwoFactor } from '@/features/auth/queries/two-factor'
 import { checkoutOpenTo } from '@/features/checkout/lib/access'
+import { allowanceRefusal, exceedsAllowance } from '@/features/checkout/lib/allowance'
 import { registrantFormSchema, toContact } from '@/features/checkout/lib/contact'
+import { readAllowance } from '@/features/checkout/queries/allowance'
 import { saveDefaultContact } from '@/features/checkout/queries/registrant'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { BUSINESS } from '@/lib/business'
 import { env, requirePaymentEnv } from '@/lib/env'
 import { createPaymentLink } from '@/lib/flutterwave'
 import { callGateway } from '@/lib/gateway'
@@ -37,16 +42,18 @@ import { lookupDomain } from '../queries/rdap-lookup'
  * Starts a transfer in (PRD FR-T1, FR-T2): an order with one transfer line,
  * paid on Flutterwave's page. Every check that can stop it runs before any
  * money moves — the extension takes transfers at a price we hold, the name
- * is not already here, the registry shows nothing in the way, the supplier
- * accepts the code (N4), the price is the one the customer saw, and the float
- * covers it (I3). The transfer itself is queued when the payment is
- * confirmed, and sent by the gateway, which reads the registry first (I1).
+ * is not already here, the account is within its daily cap (SEC-11), the
+ * registry shows nothing in the way, the supplier accepts the code (N4), the
+ * price is the one the customer saw, and the float covers it (I3). The
+ * transfer itself is queued when the payment is confirmed, and sent by the
+ * gateway, which reads the registry first (I1).
  *
  * The code is written only to `transfer_secrets`, which nobody but the
  * service can read, and never to a log line (N13).
  */
 
-type Result = { error: string; field?: 'authCode' } | { redirectTo: string }
+// `twoFactor`: refused until two-factor is on (FR-A2) — the form links to it.
+type Result = { error: string; field?: 'authCode'; twoFactor?: true } | { redirectTo: string }
 
 const NOT_CHARGED = "You haven't been charged."
 
@@ -69,6 +76,14 @@ export const placeTransfer = authAction
   .action(async ({ parsedInput, ctx }): Promise<Result> => {
     if (!checkoutOpenTo(ctx.user.email, env.CHECKOUT_ALLOWLIST)) {
       return { error: `Payments aren't open yet. ${NOT_CHARGED}` }
+    }
+    // FR-A2: as at checkout — above ten domains, two-factor comes first.
+    const needsTwoFactor = await mustTurnOnTwoFactor(ctx.supabase, ctx.user.id)
+    if (needsTwoFactor === null) {
+      return { error: `We couldn't complete this just now. ${NOT_CHARGED} Try again shortly.` }
+    }
+    if (needsTwoFactor) {
+      return { error: purchaseNeedsTwoFactor('transfer', NOT_CHARGED), twoFactor: true }
     }
     // SEC-11: the same limits as checkout — each attempt checks a code with
     // the supplier and opens a payment.
@@ -128,6 +143,25 @@ export const placeTransfer = authAction
     }
     if (here.some((row) => row.user_id === ctx.user.id)) {
       return { error: `A transfer of ${domain} is already paid for and under way. ${NOT_CHARGED}` }
+    }
+
+    // ── Velocity (SEC-11) ────────────────────────────────────────────────
+    // A transfer line counts against the same daily cap as a registration
+    // (migration 32) — otherwise a stolen card could move domains in without
+    // limit. Checked before the registry or the supplier is asked anything.
+    const allowance = await readAllowance(service, ctx.user.id, payment.testMode)
+    if (!allowance) {
+      return { error: `We couldn't complete this just now. ${NOT_CHARGED} Try again shortly.` }
+    }
+    if (exceedsAllowance(allowance, 1)) {
+      return {
+        error: allowanceRefusal(allowance, {
+          adding: 1,
+          kind: 'transfer',
+          email: BUSINESS.email,
+          notCharged: NOT_CHARGED,
+        }),
+      }
     }
 
     // ── What the registry shows (FR-T1, FR-T7) ───────────────────────────

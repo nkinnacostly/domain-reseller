@@ -1,11 +1,18 @@
+import { LOCAL_STATUS } from '@dr/shared'
 import { describe, expect, it } from 'vitest'
 import {
   describeHold,
   hasFreshSecondFactor,
+  NOT_HELD_STATUSES,
+  purchaseNeedsTwoFactor,
   RESET_HOLD_HOURS,
   resetHoldUntil,
+  SENSITIVE_CHANGE_NEEDS_TWO_FACTOR,
   startedFromEmailLink,
   startedWithPassword,
+  TWO_FACTOR_REQUIRED_ABOVE_DOMAINS,
+  TWO_FACTOR_SETTINGS_HREF,
+  twoFactorRequired,
 } from '../lib/security'
 
 const NOW = new Date('2026-09-22T12:00:00Z')
@@ -65,5 +72,43 @@ describe('hasFreshSecondFactor (FR-A3)', () => {
 
   it('does not count a password as a second factor', () => {
     expect(hasFreshSecondFactor([{ method: 'password', timestamp: seconds(NOW) }], NOW)).toBe(false)
+  })
+})
+
+describe('mandatory two-factor (FR-A2)', () => {
+  it('is required above ten domains, not at ten', () => {
+    expect(TWO_FACTOR_REQUIRED_ABOVE_DOMAINS).toBe(10)
+    expect(twoFactorRequired(0)).toBe(false)
+    expect(twoFactorRequired(10)).toBe(false)
+    expect(twoFactorRequired(11)).toBe(true)
+    expect(twoFactorRequired(250)).toBe(true)
+  })
+
+  it('stops counting a domain once it has left: released, moved away, never registered or closed', () => {
+    expect([...NOT_HELD_STATUSES].sort()).toEqual(
+      ['closed', 'registration_failed', 'released', 'transferred_away'].sort(),
+    )
+    for (const status of NOT_HELD_STATUSES) expect(LOCAL_STATUS).toContain(status)
+  })
+
+  it('keeps counting a domain that is registering, expiring, in redemption or moving in', () => {
+    for (const status of ['pending', 'active', 'expired_grace', 'redemption', 'transfer_pending']) {
+      expect(NOT_HELD_STATUSES).not.toContain(status)
+    }
+  })
+
+  it('says why an order is refused, that nothing was charged, and where to turn it on', () => {
+    expect(purchaseNeedsTwoFactor('order', 'Nothing was charged.')).toBe(
+      'Accounts holding more than 10 domains need two-factor authentication before ordering more domains. Nothing was charged. Turn it on in Settings, under Two-factor authentication, then try again.',
+    )
+    expect(purchaseNeedsTwoFactor('transfer', 'Nothing was charged.')).toMatch(
+      /before transferring more domains in\. Nothing was charged\./,
+    )
+  })
+
+  it('never asks an account with no authenticator for a code', () => {
+    expect(SENSITIVE_CHANGE_NEEDS_TWO_FACTOR).not.toMatch(/code/)
+    expect(SENSITIVE_CHANGE_NEEDS_TWO_FACTOR).toMatch(/Turn it on in Settings/)
+    expect(TWO_FACTOR_SETTINGS_HREF).toBe('/app/settings#two-factor')
   })
 })

@@ -51,7 +51,7 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 - **Google sign-in** (FR-A1) — needs Google Cloud OAuth credentials added in Supabase.
 - **Security emails** (SEC-4) — built 24 Sept 2026 (migration 31): a new device, a password or two-factor change, and a domain's nameservers, lock, contacts or transfer code. Still to add: "transfer-out requested" once the supplier tells us about one.
 - **MFA recovery codes** (FR-A2) — `supabase-js` supports them (experimental) but the hosted server returns `mfa_recovery_codes_enroll_not_enabled`, and the CLI cannot enable it. Settings currently advises adding a second device.
-- **Mandatory 2FA** above 10 domains or a wallet threshold (FR-A2) — needs the portfolio and wallet.
+- **Mandatory 2FA** (FR-A2) — above 10 domains built 24 Sept 2026: a notice on every panel page, and new orders and transfers in wait until it is on (renewals never do). The wallet-balance trigger waits for the wallet (FR-W1).
 - **Bot protection on sign-up and search** (SEC-9) — Cloudflare Turnstile keys.
 - **Contact profiles** (FR-A4) — the registrant/admin/tech/billing contacts; built with checkout, where registration needs them.
 
@@ -63,7 +63,6 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 ### Checkout and orders (PRD E3, E4)
 - **Receipts by email** (FR-C5) — built 24 Sept 2026: sent when the payment is recorded, every line with its renewal price (N8), linking the printable receipt.
 - **Tax invoices** (CMP-17/18) — *owner:* receipts don't call themselves tax invoices until `apps/web/src/lib/business.ts` has the company's TIN and CAC number. Send them to Claude. FIRS e-invoicing (FR-TAX-1) comes after.
-- **More registrant countries** — the form offers Nigeria, Africa and common diaspora countries; extend when needed.
 - **Wallet and mixed payment** (FR-C9, FR-W1/W2).
 
 ### Domain management (PRD E5 – E8, E10)
@@ -81,7 +80,7 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 
 ### Cart (PRD E3)
 - **Contact privacy on country extensions** — offered on generic extensions only, where ICANN rules allow it. Confirm which ccTLDs the supplier can cover.
-- **Velocity limits** (SEC-11) — carts are capped at 50 domains; per-account daily limits come with checkout.
+- **Velocity limits** (SEC-11) — built 24 Sept 2026 (migration 32): carts are capped at 50 domains, and registrations and transfers in at a tiered daily limit that rises with account age and paid orders; the refusal names the account's own numbers.
 
 ### Search (PRD E1)
 - **Per-extension length rules** (FR-S9) — built, but the supplier's REST catalogue gives no length limits, so none apply; the supplier's refusal is shown instead. Bulk search and international names are built (24 Sept 2026).
