@@ -7,7 +7,7 @@ import { FOCUS, PANEL, PANEL_HEADING, PanelSkeleton } from '@/components/layout/
 import { AutoRenewToggle } from '@/features/domains/components/auto-renew-toggle'
 import { PanelNote } from '@/features/domains/components/domain-badges'
 import { DELEGATION_LABEL, daysUntilExpiry } from '@/features/domains/lib/portfolio'
-import { registrationNote } from '@/features/domains/lib/registration'
+import { isTransferInProgress, registrationNote } from '@/features/domains/lib/registration'
 import { getDomain } from '@/features/domains/queries/domains'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { cn } from '@/lib/utils'
@@ -26,6 +26,8 @@ async function Overview({ params }: { params: Params }) {
   const pricing = priced?.tlds.find((tld) => tld.tld === domain.tld)
   const renewal = pricing ? formatNaira(pricing.renewal.priceKobo) : null
   const note = registrationNote(domain)
+  // Its dates and nameservers are the current registrar's until it lands (FR-T3).
+  const moving = isTransferInProgress(domain.status)
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -43,7 +45,11 @@ async function Overview({ params }: { params: Params }) {
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">Registered</dt>
             <dd className="text-right">
-              {domain.registeredAt ? dateFormat.format(new Date(domain.registeredAt)) : 'Not yet'}
+              {domain.registeredAt
+                ? dateFormat.format(new Date(domain.registeredAt))
+                : moving
+                  ? 'When the transfer completes'
+                  : 'Not yet'}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -56,6 +62,8 @@ async function Overview({ params }: { params: Params }) {
                     {days !== null && days < 0 ? `${-days} days ago` : `in ${days} days`}
                   </span>
                 </>
+              ) : moving ? (
+                'Read from the registry when the transfer completes'
               ) : (
                 'A year after registration'
               )}
@@ -90,7 +98,12 @@ async function Overview({ params }: { params: Params }) {
         <h2 id="pointing-heading" className={PANEL_HEADING}>
           Where it points
         </h2>
-        {(domain.pendingNameservers ?? domain.nameservers)?.length ? (
+        {moving ? (
+          <p className="mt-3 text-sm text-foreground">
+            It keeps the nameservers it has now while it transfers. You can change them here once
+            the transfer completes.
+          </p>
+        ) : (domain.pendingNameservers ?? domain.nameservers)?.length ? (
           <>
             <p className="mt-3 text-sm text-muted-foreground">
               {domain.pendingNameservers

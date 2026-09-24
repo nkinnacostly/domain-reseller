@@ -10,6 +10,7 @@ import {
   filterPortfolio,
   type PortfolioDomain,
 } from '../lib/portfolio'
+import { transferExpiryText } from '../lib/registration'
 import { PANEL } from './dashboard/panel'
 import { DomainBadges } from './domain-badges'
 
@@ -151,7 +152,7 @@ export function Portfolio({
                       <span>
                         {domain.expiresAt
                           ? `Expires ${dateFormat.format(new Date(domain.expiresAt))}`
-                          : 'Expires a year after registration'}
+                          : (transferExpiryText(domain) ?? 'Expires a year after registration')}
                       </span>
                     </span>
                     <span className="mt-1.5 block text-sm text-muted-foreground">
@@ -228,7 +229,7 @@ export function Portfolio({
                             </span>
                           </>
                         ) : (
-                          'After registration'
+                          (transferExpiryText(domain) ?? 'After registration')
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">

@@ -10,8 +10,9 @@ export const metadata: Metadata = {
 
 /**
  * Refund policy (FR-PUB4). The timescale is the owner's commitment. Refunds
- * for failed registrations, second charges and short payments are automatic
- * (FR-R3, migrations 15–16), back to the payment method used — as this says.
+ * for failed registrations, renewals and transfers, second charges and short
+ * payments are automatic (FR-R3, migrations 15–16, 23, 26), back to the
+ * payment method used — as this says.
  */
 export default function RefundsPage() {
   const days = BUSINESS.refundBusinessDays
@@ -38,6 +39,11 @@ export default function RefundsPage() {
             domain keeps its old expiry date, and your order says why.
           </li>
           <li>
+            <strong>The transfer could not be completed</strong> — the transfer code was refused, or
+            the current registrar or the registry turned the transfer down. The domain stays where
+            it was, and your order says why.
+          </li>
+          <li>
             <strong>You were charged twice</strong> for the same order.
           </li>
         </ul>
@@ -53,6 +59,7 @@ export default function RefundsPage() {
           <li>A domain the registry has registered, including if you change your mind.</li>
           <li>A domain with a spelling mistake — it is registered exactly as it was typed.</li>
           <li>A renewal the registry has accepted.</li>
+          <li>A transfer that has completed — the domain is then registered with us.</li>
         </ul>
         <p>
           That is why checkout shows every name in large type and asks you to confirm the spelling
@@ -62,9 +69,9 @@ export default function RefundsPage() {
 
       <LegalSection id="how" title="How to ask">
         <p>
-          Refunds for failed registrations and renewals need no request — if yours has not arrived
-          within {days} business days, or you think you were charged twice, email <EmailLink /> with
-          your order number (it starts with “ND-”). You can find it under{' '}
+          Refunds for failed registrations, renewals and transfers need no request — if yours has
+          not arrived within {days} business days, or you think you were charged twice, email{' '}
+          <EmailLink /> with your order number (it starts with “ND-”). You can find it under{' '}
           <Link href="/app/orders">your orders</Link>.
         </p>
       </LegalSection>

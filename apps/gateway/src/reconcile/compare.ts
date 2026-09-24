@@ -1,4 +1,4 @@
-import type { RegistryListing } from '../provisioning/registrar'
+import { type RegistryListing, transferState } from '../provisioning/registrar'
 import { sameNameservers } from '../provisioning/saga'
 
 /**
@@ -14,6 +14,8 @@ import { sameNameservers } from '../provisioning/saga'
  *   supplier's is on, and expiry is near: act before the supplier does.
  * - `missing_at_registry`, `unknown_domain`, `registered_but_failed`,
  *   `status_mismatch`, `expiry_moved_earlier` — records that disagree.
+ * A transfer in still under way is left to its job; one we failed that the
+ * registry has anyway is `registered_but_failed`, like a failed registration.
  */
 
 export type OurDomain = {
@@ -67,6 +69,10 @@ const HELD = new Set([
   'pending_delete',
   'pending_verification',
 ])
+/** A transfer in that its job still owns (PRD E9): the job reads the registry itself. */
+const TRANSFER_OPEN = new Set(['transfer_requested', 'transfer_pending'])
+/** A transfer in we failed — and refunded. */
+const TRANSFER_FAILED = new Set(['transfer_rejected', 'transfer_cancelled'])
 const DAY_MS = 86_400_000
 /** Expiry differences below this are clock and zone noise, not a renewal. */
 const EXPIRY_TOLERANCE_MS = DAY_MS
@@ -95,9 +101,19 @@ export function compareWithRegistry(
     const held = rows.find((row) => HELD.has(row.localStatus))
 
     if (!held) {
+      // A transfer still moving is its job's to settle — listed as waiting,
+      // or not listed yet, it is not drift.
+      if (rows.some((row) => TRANSFER_OPEN.has(row.localStatus))) continue
       // A line we failed that the registry has anyway: we paid for it, and
-      // the customer may be owed the domain rather than a refund.
-      const failed = rows.find((row) => row.localStatus === 'registration_failed')
+      // the customer may be owed the domain rather than a refund. A failed
+      // transfer the registry shows cancelled or gone is simply over.
+      const failed = rows.find(
+        (row) =>
+          row.localStatus === 'registration_failed' ||
+          (TRANSFER_FAILED.has(row.localStatus) &&
+            listed !== undefined &&
+            transferState(listed.status) !== 'gone'),
+      )
       if (failed && listed) {
         findings.push({
           domainId: failed.id,

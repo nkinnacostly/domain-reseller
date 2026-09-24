@@ -30,7 +30,9 @@ const TRANSITIONS: Record<LocalStatus, readonly LocalStatus[]> = {
   released: [],
   transferred_away: [],
   pending_verification: ['active', 'closed'],
-  transfer_requested: ['transfer_pending', 'transfer_cancelled'],
+  // Straight to active when the first registry read finds it already ours: an
+  // earlier attempt landed before we could record it (migration 26, I1).
+  transfer_requested: ['transfer_pending', 'transfer_cancelled', 'active'],
   transfer_pending: ['active', 'transfer_rejected', 'transfer_cancelled'],
   transfer_rejected: ['transfer_requested'],
   transfer_cancelled: ['transfer_requested'],

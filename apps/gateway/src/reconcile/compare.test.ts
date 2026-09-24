@@ -127,6 +127,46 @@ describe('compareWithRegistry (PRD §13.5)', () => {
     })
   })
 
+  describe('transfers in (PRD E9)', () => {
+    it('leaves a transfer under way to its job, listed as waiting or not listed yet', () => {
+      for (const localStatus of ['transfer_requested', 'transfer_pending']) {
+        for (const listing of [[listed({ status: 'WaitingForIncomingTransfer' })], []]) {
+          expect(compare([ours({ localStatus, expiresAt: null })], listing)).toEqual({
+            updates: [],
+            findings: [],
+          })
+        }
+      }
+    })
+
+    it('does not call a transfer under way a failed registration that landed', () => {
+      const { findings } = compare(
+        [
+          ours({ id: 'old', localStatus: 'registration_failed' }),
+          ours({ id: 'new', localStatus: 'transfer_pending', expiresAt: null }),
+        ],
+        [listed({ status: 'WaitingForIncomingTransfer' })],
+      )
+      expect(findings).toEqual([])
+    })
+
+    it('raises no drift for a failed transfer the registry does not have', () => {
+      for (const localStatus of ['transfer_rejected', 'transfer_cancelled']) {
+        expect(compare([ours({ localStatus })], []).findings).toEqual([])
+        expect(
+          compare([ours({ localStatus })], [listed({ status: 'TransferCancelled' })]).findings,
+        ).toEqual([])
+      }
+    })
+
+    it('reports a failed transfer the registry shows ours after all — it was refunded', () => {
+      const { findings } = compare([ours({ localStatus: 'transfer_rejected' })], [listed()])
+      expect(findings).toEqual([
+        expect.objectContaining({ kind: 'registered_but_failed', domainId: 'd1' }),
+      ])
+    })
+  })
+
   it('checks the held row when a name has a failed and a held row', () => {
     const { findings, updates } = compare(
       [ours({ id: 'old', localStatus: 'registration_failed' }), ours({ id: 'new' })],

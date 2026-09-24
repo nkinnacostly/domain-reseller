@@ -9,10 +9,10 @@ import { PANEL } from '@/components/layout/panel'
 import type { NameserverPreset } from '@/features/domains/queries/domains'
 import { cn } from '@/lib/utils'
 import { placeOrder } from '../actions/place-order'
-import type { RegistrantForm } from '../lib/contact'
+import { type RegistrantForm, registrantFromForm } from '../lib/contact'
 import { nameserverRequest } from '../lib/nameservers'
 import { NameserverChoice } from './nameserver-choice'
-import { RegistrantFields, registrantFrom } from './registrant-fields'
+import { RegistrantFields } from './registrant-fields'
 
 export type CheckoutLine = {
   domain: string
@@ -81,7 +81,7 @@ export function CheckoutForm({
         }
         setNameserverProblem(null)
         place.execute({
-          registrant: registrantFrom(form),
+          registrant: registrantFromForm(form),
           nameservers: delegation.nameservers,
           ...(delegation.presetId ? { presetId: delegation.presetId } : {}),
           confirmed: form.get('confirmed') === 'on' ? true : (false as unknown as true),

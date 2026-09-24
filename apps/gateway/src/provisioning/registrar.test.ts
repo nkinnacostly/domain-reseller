@@ -109,6 +109,7 @@ describe('lookup', () => {
         nameservers: ['ns1.domainnameapi.com', 'ns2.domainnameapi.com'],
         transferLock: true,
         privacy: false,
+        status: 'Active',
       },
     })
   })
@@ -353,6 +354,7 @@ describe('the sandbox’s real answers', () => {
         nameservers: ['ns1.domainnameapi.com', 'ns2.domainnameapi.com'],
         transferLock: true,
         privacy: true,
+        status: 'Active',
       },
     })
   })

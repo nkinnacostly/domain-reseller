@@ -6,8 +6,8 @@
 
 export type OrderNotice = { tone: 'success' | 'error'; text: string }
 
-/** A new registration, or a renewal of a domain already held (FR-RN1). */
-export type OrderKind = 'register' | 'renew'
+/** A new registration, a renewal of a domain already held (FR-RN1), or a transfer in (E9). */
+export type OrderKind = 'register' | 'renew' | 'transfer'
 
 const TEST_NOTE =
   'This was a test payment, so no money moved. Test orders go to the registrar’s test system, never the live registry.'
@@ -17,9 +17,11 @@ const CLOSED: OrderNotice = {
   text: 'This order was closed without payment, so nothing was charged. If a payment for it still comes through, it is applied automatically.',
 }
 
-/** A renewal order carries one line: the domain, and the years added to it. */
+/** A renewal or transfer order carries one line: the domain it is about. */
 export function orderKind(items: { item_type: string }[]): OrderKind {
-  return items.some((item) => item.item_type === 'renew') ? 'renew' : 'register'
+  if (items.some((item) => item.item_type === 'renew')) return 'renew'
+  if (items.some((item) => item.item_type === 'transfer')) return 'transfer'
+  return 'register'
 }
 
 /** Still moving: the page refreshes itself until the order settles. */
@@ -33,6 +35,7 @@ export function orderNotice(
   kind: OrderKind = 'register',
 ): OrderNotice | null {
   if (kind === 'renew') return renewalNotice(status, testMode)
+  if (kind === 'transfer') return transferNotice(status, testMode)
   const test = testMode ? ` ${TEST_NOTE}` : ''
   switch (status) {
     case 'paid':
@@ -111,6 +114,46 @@ function renewalNotice(status: string, testMode: boolean): OrderNotice | null {
   }
 }
 
+/**
+ * A transfer is done when the domain is active in our account, which can take
+ * days: the current registrar may ask the owner to approve, and the registry
+ * completes it after five days if they don't answer (FR-T3). Copy says so,
+ * and says nothing is done before it is.
+ */
+function transferNotice(status: string, testMode: boolean): OrderNotice | null {
+  const test = testMode
+    ? ' This was a test payment, so no money moved. Test transfers go to the registrar’s test system, never the live registry.'
+    : ''
+  switch (status) {
+    case 'paid':
+      return {
+        tone: 'success',
+        text: `Your transfer is paid and queued. We send the request to the registry next, and this page updates as it moves.${test}`,
+      }
+    case 'provisioning':
+      return {
+        tone: 'success',
+        text: `Transferring your domain. Your current registrar may email the domain’s owner to approve it; if they don’t answer, the registry completes it after five days. Transfers usually take up to five days, and this page updates when it lands.${test}`,
+      }
+    case 'completed':
+      return { tone: 'success', text: `Your domain has transferred in.${test}` }
+    case 'failed':
+    case 'partially_failed':
+      return {
+        tone: 'error',
+        text: `We could not transfer this domain — it says why below. ${
+          testMode
+            ? 'No money moved.'
+            : 'What you paid is refunded automatically — see Refunds below.'
+        }`,
+      }
+    case 'cancelled':
+      return CLOSED
+    default:
+      return null
+  }
+}
+
 export const LINE_STATUS: Record<string, string> = {
   pending: 'Queued',
   provisioning: 'Registering',
@@ -125,8 +168,20 @@ const RENEWAL_LINE_STATUS: Record<string, string> = {
   completed: 'Renewed',
 }
 
+const TRANSFER_LINE_STATUS: Record<string, string> = {
+  ...LINE_STATUS,
+  provisioning: 'Transferring',
+  completed: 'Transferred',
+}
+
 export function lineStatus(itemType: string, status: string): string {
-  return (itemType === 'renew' ? RENEWAL_LINE_STATUS : LINE_STATUS)[status] ?? status
+  const labels =
+    itemType === 'renew'
+      ? RENEWAL_LINE_STATUS
+      : itemType === 'transfer'
+        ? TRANSFER_LINE_STATUS
+        : LINE_STATUS
+  return labels[status] ?? status
 }
 
 /**
@@ -141,7 +196,9 @@ export function paymentNotice(
   const retry =
     kind === 'renew'
       ? 'You can try again from the domain’s Renew tab.'
-      : 'Your domains are still in your cart.'
+      : kind === 'transfer'
+        ? 'You can start the transfer again from the transfer page.'
+        : 'Your domains are still in your cart.'
   switch (payment) {
     case 'paid':
       return { tone: 'success', text: 'Payment received — thank you.' }
@@ -151,7 +208,7 @@ export function paymentNotice(
       return {
         tone: 'error',
         text: `The payment did not go through. Nothing was charged. ${
-          kind === 'renew' ? retry : 'You can try again from your cart.'
+          kind === 'register' ? 'You can try again from your cart.' : retry
         }`,
       }
     case 'pending':
@@ -163,7 +220,7 @@ export function paymentNotice(
       return {
         tone: 'error',
         text: `We received less than this order’s total, so it hasn’t been applied and nothing has been ${
-          kind === 'renew' ? 'renewed' : 'registered'
+          kind === 'renew' ? 'renewed' : kind === 'transfer' ? 'transferred' : 'registered'
         }. The full amount is being refunded to the card or account you paid with — nothing is needed from you.`,
       }
     case 'mismatch':

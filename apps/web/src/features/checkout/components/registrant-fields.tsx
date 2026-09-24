@@ -140,22 +140,3 @@ export function RegistrantFields({
     </div>
   )
 }
-
-/** Reads the registrant's fields from a submitted form, as the schema expects them. */
-export function registrantFrom(form: FormData): Record<keyof RegistrantForm, string> {
-  const value = (name: string) => String(form.get(name) ?? '')
-  return {
-    firstName: value('firstName'),
-    lastName: value('lastName'),
-    company: value('company'),
-    email: value('email'),
-    phoneCountryCode: value('phoneCountryCode'),
-    phone: value('phone'),
-    addressLine1: value('addressLine1'),
-    addressLine2: value('addressLine2'),
-    city: value('city'),
-    state: value('state'),
-    zipCode: value('zipCode'),
-    country: value('country'),
-  }
-}

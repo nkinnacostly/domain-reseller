@@ -1,5 +1,5 @@
 import { formatNaira } from '@dr/shared'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowRight, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { Container } from '@/components/layout/site-shell'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
@@ -10,8 +10,10 @@ import {
   formatDate,
   type TransferVerdict,
 } from '../lib/eligibility'
-import { parseTransferQuery, TRANSFER_QUERY_MESSAGES } from '../lib/href'
+import { parseTransferQuery, TRANSFER_QUERY_MESSAGES, transferStartHref } from '../lib/href'
+import { canStartTransfer } from '../lib/start'
 import { lookupDomain } from '../queries/rdap-lookup'
+import { takesTransfersFor } from '../queries/transfer-offer'
 import { TransferChecklist } from './transfer-checklist'
 
 type Offer = { transfer: string; renewal: string }
@@ -113,6 +115,8 @@ export async function TransferResult({
     now: new Date(),
   })
   const { title, summary } = headline(verdict)
+  // The checkout's own gate (N5b): offered only once the catalogue says so.
+  const startable = offer ? await takesTransfersFor(query.tld) : false
 
   return (
     <ResultBand>
@@ -177,12 +181,36 @@ export async function TransferResult({
                 adds one.
               </p>
 
-              <div className="mt-6 rounded-xl bg-muted/60 p-4 text-pretty text-sm/6 text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  Starting a transfer isn't open yet.
-                </span>{' '}
-                The checks on this page are live; paying and submitting the auth code come next.
-              </div>
+              {!startable ? (
+                <div className="mt-6 rounded-xl bg-muted/60 p-4 text-pretty text-sm/6 text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Starting a transfer for .{query.tld} isn't open yet.
+                  </span>{' '}
+                  The checks on this page are live, but a transfer of this extension can’t be paid
+                  for here yet.
+                </div>
+              ) : canStartTransfer(verdict).ok ? (
+                <>
+                  <Link
+                    href={transferStartHref(query.domain)}
+                    className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-accent px-6 text-sm font-medium text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]"
+                  >
+                    Transfer it to us
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  </Link>
+                  <p className="mt-3 text-pretty text-xs/5 text-muted-foreground">
+                    You’ll need the transfer code from your current registrar. We check it with the
+                    registry before you pay.
+                  </p>
+                </>
+              ) : (
+                <div className="mt-6 rounded-xl bg-muted/60 p-4 text-pretty text-sm/6 text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Clear the blocked items first.
+                  </span>{' '}
+                  Once they are sorted, check again here and you can start the transfer.
+                </div>
+              )}
             </aside>
           ) : null}
         </div>

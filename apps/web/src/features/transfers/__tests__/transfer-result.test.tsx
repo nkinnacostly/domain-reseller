@@ -5,9 +5,11 @@ import { getPricedCatalogue, type PricedCatalogue } from '@/features/pricing/que
 import { TransferResult } from '../components/transfer-result'
 import type { RdapLookup } from '../lib/rdap'
 import { lookupDomain } from '../queries/rdap-lookup'
+import { takesTransfersFor } from '../queries/transfer-offer'
 
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
 vi.mock('../queries/rdap-lookup', () => ({ lookupDomain: vi.fn() }))
+vi.mock('../queries/transfer-offer', () => ({ takesTransfersFor: vi.fn() }))
 
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
 
@@ -65,6 +67,7 @@ describe('TransferResult', () => {
     vi.setSystemTime(new Date('2026-09-22T12:00:00Z'))
     vi.mocked(getPricedCatalogue).mockResolvedValue(CATALOGUE)
     vi.mocked(lookupDomain).mockResolvedValue(found())
+    vi.mocked(takesTransfersFor).mockResolvedValue(true)
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -119,8 +122,32 @@ describe('TransferResult', () => {
     const price = within(screen.getByRole('complementary', { name: 'Transfer price for .com' }))
     expect(price.getByText(/^₦[\d,]+$/)).toBeInTheDocument()
     expect(price.getByText(/\/yr$/)).toBeInTheDocument()
-    // Honest about what is not built yet (N9b).
-    expect(price.getByText("Starting a transfer isn't open yet.")).toBeInTheDocument()
+    // FR-T2: the check leads straight to starting the transfer.
+    expect(price.getByRole('link', { name: 'Transfer it to us' })).toHaveAttribute(
+      'href',
+      '/app/transfers/new?domain=getpaid.com',
+    )
+    expect(takesTransfersFor).toHaveBeenCalledWith('com')
+  })
+
+  it('offers the start to a domain the owner must confirm, but not to a blocked one', async () => {
+    vi.mocked(lookupDomain).mockResolvedValue({ kind: 'unavailable' })
+    await renderFor('getpaid.com')
+    expect(screen.getByRole('link', { name: 'Transfer it to us' })).toBeInTheDocument()
+
+    vi.mocked(lookupDomain).mockResolvedValue(found({ statuses: ['client transfer prohibited'] }))
+    await renderFor('locked.com')
+    const price = within(screen.getAllByRole('complementary').at(-1) as HTMLElement)
+    expect(price.queryByRole('link', { name: 'Transfer it to us' })).not.toBeInTheDocument()
+    expect(price.getByText('Clear the blocked items first.')).toBeInTheDocument()
+  })
+
+  it('says a start is not open for an extension the catalogue has not cleared (N9b)', async () => {
+    vi.mocked(takesTransfersFor).mockResolvedValue(false)
+    await renderFor('getpaid.com')
+    const price = within(screen.getByRole('complementary', { name: 'Transfer price for .com' }))
+    expect(price.queryByRole('link', { name: 'Transfer it to us' })).not.toBeInTheDocument()
+    expect(price.getByText("Starting a transfer for .com isn't open yet.")).toBeInTheDocument()
   })
 
   it('still checks the registry when prices are unavailable, but claims nothing about them', async () => {

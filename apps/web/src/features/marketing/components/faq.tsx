@@ -28,7 +28,7 @@ const FAQS = [
   },
   {
     q: 'Can I transfer a domain I already own?',
-    a: `Not yet — starting a transfer is not available. You can already check whether a domain could move: it must be at least ${TRANSFER_LOCK_DAYS} days old, unlocked at your current registrar, and you need its authorisation code. Our transfer checker looks it up and tells you what, if anything, is in the way.`,
+    a: `Yes. It must be at least ${TRANSFER_LOCK_DAYS} days old, unlocked at your current registrar, and you need its authorisation code. Our transfer checker looks it up and tells you what, if anything, is in the way — then you enter the code, we check it with the registry, and you pay. Transfers usually take up to five days.`,
   },
   {
     q: 'Can I move my domain away later?',

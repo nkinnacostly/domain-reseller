@@ -18,6 +18,7 @@ const claimSchema = z.object({
   reason: z.enum([
     'registration_failed',
     'renewal_failed',
+    'transfer_failed',
     'duplicate_charge',
     'overpayment',
     'underpayment',

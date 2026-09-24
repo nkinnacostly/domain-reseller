@@ -30,6 +30,11 @@
  *
  * Registered answers carry a registrant with personal details, as some
  * registries still publish — the pages must never show them.
+ *
+ * POST /v1/transfers/check (PRD FR-T1) answers by the code:
+ *   GOOD-…   → transferable
+ *   LOCKED-… → TRANSFER_LOCKED
+ *   anything else → AUTH_CODE_INVALID
  */
 import { createServer } from 'node:http'
 
@@ -239,6 +244,24 @@ createServer((req, res) => {
     }
     const side = transferCode[2] === 'sandbox' ? 'OTE' : 'LIVE'
     return send(res, 200, { ok: true, data: { authCode: `E2E-${side}-7qX!code` } })
+  }
+
+  if (req.method === 'POST' && req.url === '/v1/transfers/check') {
+    if (!req.headers.authorization?.startsWith('Bearer ')) {
+      return send(res, 401, { ok: false, code: 'SUPPLIER_AUTH', message: 'Unauthorised' })
+    }
+    return void readBody(req).then(({ authCode = '' }) => {
+      const code = String(authCode).toUpperCase()
+      send(res, 200, {
+        ok: true,
+        data: code.startsWith('GOOD-')
+          ? { transferable: true }
+          : {
+              transferable: false,
+              reason: code.startsWith('LOCKED-') ? 'TRANSFER_LOCKED' : 'AUTH_CODE_INVALID',
+            },
+      })
+    })
   }
   if (req.method !== 'POST' || req.url !== '/v1/availability') {
     return send(res, 404, { ok: false, code: 'NOT_FOUND', message: 'Unknown route' })

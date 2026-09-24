@@ -17,6 +17,18 @@ const RENEWAL_LABELS: Record<string, { label: string; tone: string }> = {
   provisioning: { label: 'Renewing', tone: 'bg-accent/10 text-foreground' },
 }
 
+const TRANSFER_LABELS: Record<string, { label: string; tone: string }> = {
+  ...LABELS,
+  paid: { label: 'Paid — transfer queued', tone: 'bg-accent/10 text-foreground' },
+  provisioning: { label: 'Transferring', tone: 'bg-accent/10 text-foreground' },
+}
+
+const BY_KIND: Record<OrderKind, Record<string, { label: string; tone: string }>> = {
+  register: LABELS,
+  renew: RENEWAL_LABELS,
+  transfer: TRANSFER_LABELS,
+}
+
 export function OrderStatus({
   status,
   kind = 'register',
@@ -26,7 +38,7 @@ export function OrderStatus({
   kind?: OrderKind
   className?: string
 }) {
-  const entry = (kind === 'renew' ? RENEWAL_LABELS : LABELS)[status] ?? {
+  const entry = BY_KIND[kind][status] ?? {
     label: status,
     tone: 'bg-muted text-foreground',
   }

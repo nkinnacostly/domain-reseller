@@ -684,6 +684,80 @@ describe('a failed renewal (FR-RN1)', () => {
   })
 })
 
+describe('a failed transfer in (PRD E9)', () => {
+  const transferRefund = (over: Partial<ClaimedRefund> = {}) =>
+    claimed({ reason: 'transfer_failed', ...over })
+  const listedAs = (status: string): Lookup => ({
+    kind: 'found',
+    domain: {
+      registeredAt: null,
+      expiresAt: '2027-03-01T10:00:00.000Z',
+      nameservers: [],
+      transferLock: true,
+      privacy: false,
+      status,
+    },
+  })
+
+  it('never refunds a transfer that landed in our account after all — that would pay twice', async () => {
+    const { refunder, store, flutterwave } = setup(transferRefund(), {
+      lookup: listedAs('Active'),
+    })
+    await refunder.tick()
+    expect(store.fail).toHaveBeenCalledWith(
+      'refund-1',
+      W,
+      'TRANSFERRED_AT_REGISTRY',
+      expect.any(String),
+      true,
+    )
+    expect(flutterwave.createRefund).not.toHaveBeenCalled()
+  })
+
+  it('waits while the registry still shows it moving, or cannot be read', async () => {
+    for (const lookup of [
+      listedAs('WaitingForIncomingTransfer'),
+      listedAs('PendingHold'),
+      { kind: 'unknown', code: 'TIMEOUT', message: 'slow' } as const,
+    ]) {
+      const { refunder, store, flutterwave } = setup(transferRefund(), { lookup })
+      await refunder.tick()
+      expect(store.reschedule).toHaveBeenCalledWith(
+        'refund-1',
+        W,
+        300,
+        expect.stringMatching(/^(TRANSFER_UNSETTLED|REGISTRY_UNREADABLE)$/),
+        expect.any(String),
+        false,
+      )
+      expect(flutterwave.createRefund).not.toHaveBeenCalled()
+    }
+  })
+
+  it('refunds a transfer that never reached our account, or left it', async () => {
+    for (const lookup of [{ kind: 'not_found' } as const, listedAs('TransferCancelled')]) {
+      const { refunder, flutterwave } = setup(transferRefund(), { lookup })
+      await refunder.tick()
+      expect(flutterwave.createRefund).toHaveBeenCalled()
+    }
+  })
+
+  it('refunds when the record is another account’s here, not this line’s', async () => {
+    const { refunder, flutterwave } = setup(transferRefund({ heldByOtherAccount: true }), {
+      lookup: listedAs('Active'),
+    })
+    await refunder.tick()
+    expect(flutterwave.createRefund).toHaveBeenCalled()
+  })
+
+  it('stops a transfer refund that names no domain', async () => {
+    const { refunder, store, lookup } = setup(transferRefund({ domainName: null }))
+    await refunder.tick()
+    expect(store.fail).toHaveBeenCalledWith('refund-1', W, 'NO_DOMAIN', expect.any(String), true)
+    expect(lookup).not.toHaveBeenCalled()
+  })
+})
+
 describe('recovering a refund whose worker stopped mid-send', () => {
   it('sends again when the last attempt never called Flutterwave', async () => {
     const { refunder, store, flutterwave } = setup(

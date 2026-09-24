@@ -39,6 +39,9 @@ export const LIMITS = {
   bulkSearch: { max: 20, windowSeconds: 600 },
   // Adding every available name re-checks them all with the registry first.
   bulkAddToCart: { max: 20, windowSeconds: 600 },
+  // A transfer check confirms or denies a code (FR-T1). Counted per domain, so
+  // many accounts cannot share out guesses at someone else's.
+  transferCheckDomain: { max: 10, windowSeconds: 3600 },
 } as const
 
 /**

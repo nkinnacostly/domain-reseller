@@ -300,6 +300,87 @@ export async function createSandboxDomain(userId, { expiresInDays = 200 } = {}) 
   return { id: data.id, name: data.domain_name, expiresAt: data.expires_at }
 }
 
+/** The expiry the registry "shows" when settleTransfer lands a transfer. */
+export const TRANSFERRED_EXPIRY = '2027-11-30T10:00:00Z'
+
+/**
+ * Moves an order's transfer job the way the gateway worker would, without a
+ * registry (migration 26): 'submitted' is the registry taking the request
+ * (the code is deleted and the job polls); 'transferred' is a poll finding
+ * the domain active in our account; any other outcome is a failure code,
+ * refunded. A job waiting for its next poll is brought forward first — that
+ * stands in for the clock, not for any state change.
+ *
+ * @param {string} orderId
+ * @param {string} outcome
+ */
+export async function settleTransfer(orderId, outcome) {
+  const client = admin()
+  const { data: jobs, error } = await client
+    .from('jobs')
+    .select('id, test_mode, status, order_items!inner(order_id)')
+    .eq('order_items.order_id', orderId)
+    .eq('kind', 'transfer_domain')
+  if (error) throw error
+  if (!jobs?.length) throw new Error(`No transfer jobs for order ${orderId}`)
+  for (const job of jobs) {
+    if (job.status === 'queued') {
+      const due = await client
+        .from('jobs')
+        .update({ run_after: new Date().toISOString() })
+        .eq('id', job.id)
+      if (due.error) throw due.error
+    }
+    const claim = await client.rpc('claim_job', {
+      p_worker: 'e2e',
+      p_test_mode: job.test_mode,
+      p_job_id: job.id,
+    })
+    if (claim.error) throw claim.error
+    const result =
+      outcome === 'submitted'
+        ? await client.rpc('mark_transfer_submitted', {
+            p_job_id: job.id,
+            p_poll_after_seconds: 3600,
+          })
+        : outcome === 'transferred'
+          ? await client.rpc('complete_transfer', {
+              p_job_id: job.id,
+              p_registered_at: '2019-03-01T10:00:00Z',
+              p_expires_at: TRANSFERRED_EXPIRY,
+              p_nameservers: ['ns1.example-host.com', 'ns2.example-host.com'],
+              p_transfer_lock: true,
+              p_privacy: false,
+              p_recovered: false,
+            })
+          : await client.rpc('fail_job', {
+              p_job_id: job.id,
+              p_code: outcome,
+              p_message: 'e2e',
+              p_needs_attention: false,
+            })
+    if (result.error) throw result.error
+  }
+}
+
+/**
+ * The catalogue sync marks an extension as taking transfers when the supplier
+ * prices a transfer for it. This applies that same rule to one extension —
+ * only where it has not been set, and only with a price — so the transfer
+ * checkout can be exercised before a sync has run. It never clears a flag.
+ *
+ * @param {string} tld
+ */
+export async function allowTransfersFor(tld) {
+  const { error } = await admin()
+    .from('tlds')
+    .update({ is_transferable: true })
+    .eq('name', tld)
+    .is('is_transferable', null)
+    .gt('transfer_usd', 0)
+  if (error) throw error
+}
+
 /**
  * Moves an order's renewal jobs the way the gateway worker would, without a
  * registry: 'renewed' records the baseline and the new expiry read back

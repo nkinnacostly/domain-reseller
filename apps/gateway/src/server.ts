@@ -77,6 +77,13 @@ const worker =
             environment: target,
             audit: (call) => store.recordCall(job.id, target, call),
           }),
+        // PRD E9: the same registrar; its transfer calls are recorded without the code.
+        transfersFor: (job) =>
+          createDnaRegistrar({
+            client: getDnaWriteClient(target),
+            environment: target,
+            audit: (call) => store.recordCall(job.id, target, call),
+          }),
       })
     : null
 

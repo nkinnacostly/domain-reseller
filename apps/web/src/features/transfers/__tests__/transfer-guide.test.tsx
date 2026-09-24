@@ -6,13 +6,16 @@ import { TransferFaq } from '../components/transfer-faq'
 import { TransferGuide } from '../components/transfer-guide'
 
 describe('TransferGuide', () => {
-  it('walks through the four steps in order, and says starting one is not open yet (N9b)', () => {
+  it('walks through the four steps in order, starting from the check (N9b)', () => {
     render(<TransferGuide />)
 
     const steps = screen.getByRole('region', {
       name: 'Four steps, most of them at your old registrar',
     })
-    expect(within(steps).getByText(/Starting one with us is not open yet/)).toBeInTheDocument()
+    expect(within(steps).getByText(/start the transfer from the result/)).toBeInTheDocument()
+    expect(
+      within(steps).getByText(/We check the code with the registry before you pay/),
+    ).toBeInTheDocument()
     const list = within(steps).getByRole('list')
     expect(
       within(list)
