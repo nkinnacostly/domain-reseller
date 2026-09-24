@@ -47,7 +47,7 @@ export function ProfileForm({
       <Field
         id={`${id}-email`}
         label="Email"
-        hint="The address you sign in with and where we send receipts."
+        hint="The address you sign in with, and where sign-in and password reset links go."
       >
         <input
           id={`${id}-email`}

@@ -49,6 +49,7 @@ async function Nameservers({ params }: { params: Params }) {
               domainId={domain.id}
               domain={domain.domainName}
               current={requested}
+              currentPresetId={domain.presetId}
               presets={presets}
               hasTwoFactor={Boolean(account?.totpFactor)}
             />

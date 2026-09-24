@@ -126,9 +126,14 @@ export const requestNameservers = elevatedAction
         }
       }
 
+      // N11: the host label is kept only for a preset customers can see — never
+      // a hidden or unverified one the browser sent.
+      const presetId = parsedInput.presetId
+        ? await visiblePresetId(service, parsedInput.presetId)
+        : null
       const { error } = await service
         .from('domains')
-        .update({ pending_nameservers: next, nameserver_preset_id: parsedInput.presetId ?? null })
+        .update({ pending_nameservers: next, nameserver_preset_id: presetId })
         .eq('id', domain.id)
       if (error) {
         logger.error({ err: error }, 'nameserver request failed')
@@ -148,3 +153,15 @@ export const requestNameservers = elevatedAction
       return { ok: true, warnings: verdict.warnings, delivery }
     },
   )
+
+async function visiblePresetId(
+  service: ReturnType<typeof createServiceClient>,
+  presetId: string,
+): Promise<string | null> {
+  const { data } = await service
+    .from('nameserver_presets')
+    .select('id, is_hidden, verified_at')
+    .eq('id', presetId)
+    .maybeSingle()
+  return data && !data.is_hidden && data.verified_at ? data.id : null
+}

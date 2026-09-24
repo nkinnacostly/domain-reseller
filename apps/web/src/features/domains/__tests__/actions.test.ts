@@ -60,6 +60,13 @@ function userClient({
 
 let writes: { table: string; op: string; row: unknown }[]
 let queueError: { message: string } | null
+const VERCEL = '6c4f1a2e-3b5d-4e7f-8a9b-0c1d2e3f4a5b'
+const HIDDEN = '7d5a2b3f-4c6e-4f80-9bac-1d2e3f4a5b6c'
+/** The host presets the action may be sent — one visible, one hidden. */
+const PRESETS: Record<string, { id: string; is_hidden: boolean; verified_at: string | null }> = {
+  [VERCEL]: { id: VERCEL, is_hidden: false, verified_at: '2026-09-23T00:00:00Z' },
+  [HIDDEN]: { id: HIDDEN, is_hidden: true, verified_at: '2026-09-23T00:00:00Z' },
+}
 beforeEach(() => {
   vi.clearAllMocks()
   writes = []
@@ -70,6 +77,11 @@ beforeEach(() => {
       return { error: queueError }
     },
     from: (table: string) => ({
+      select: () => ({
+        eq: (_column: string, id: string) => ({
+          maybeSingle: async () => ({ data: PRESETS[id] ?? null, error: null }),
+        }),
+      }),
       update: (row: unknown) => ({
         eq: async () => {
           writes.push({ table, op: 'update', row })
@@ -148,6 +160,27 @@ describe('requestNameservers (FR-D1, FR-D4, SEC-2)', () => {
       },
       { table: 'enqueue_nameserver_change', op: 'rpc', row: { p_domain_id: DOMAIN_ID } },
     ])
+  })
+
+  it.each([
+    ['keeps a visible host preset', VERCEL, VERCEL],
+    ['drops a hidden host preset (N11)', HIDDEN, null],
+    ['drops a preset that does not exist', '8e6b3c4a-5d7f-4a91-8cbd-2e3f4a5b6c7d', null],
+  ])('%s as the domain’s host label', async (_case, presetId, stored) => {
+    userClient()
+    await requestNameservers({
+      domainId: DOMAIN_ID,
+      nameservers: 'ns1.vercel-dns.com ns2.vercel-dns.com',
+      presetId,
+    })
+    expect(writes[0]).toEqual({
+      table: 'domains',
+      op: 'update',
+      row: {
+        pending_nameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+        nameserver_preset_id: stored,
+      },
+    })
   })
 
   it('sends nothing to a registry for a demo domain', async () => {

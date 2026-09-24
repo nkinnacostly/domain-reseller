@@ -274,3 +274,15 @@ describe('NameserverForm (FR-D1)', () => {
     expect(requestNameservers).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('NameserverForm remembers the host (FR-C10)', () => {
+  it('starts on the host picked before, at checkout or here', () => {
+    renderForm({ current: VERCEL.nameservers, currentPresetId: VERCEL.id })
+    expect(host()).toHaveValue(VERCEL.id)
+  })
+
+  it('starts on no host when the one picked is no longer offered', () => {
+    renderForm({ currentPresetId: '0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f' })
+    expect(host()).toHaveValue('')
+  })
+})

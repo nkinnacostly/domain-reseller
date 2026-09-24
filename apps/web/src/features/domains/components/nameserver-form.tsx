@@ -30,6 +30,7 @@ export function NameserverForm({
   domainId,
   domain,
   current,
+  currentPresetId = null,
   presets,
   hasTwoFactor,
   currentRecords,
@@ -37,6 +38,8 @@ export function NameserverForm({
   domainId: string
   domain: string
   current: string[] | null
+  /** The host picked for the current set — at checkout or here — so the choice shows as made. */
+  currentPresetId?: string | null
   presets: NameserverPreset[]
   hasTwoFactor: boolean
   /** FR-N6 — what the current provider serves, so the customer sees what they would orphan. */
@@ -44,7 +47,9 @@ export function NameserverForm({
 }) {
   const id = useId()
   const box = useRef<HTMLTextAreaElement>(null)
-  const [presetId, setPresetId] = useState<string>('')
+  const [presetId, setPresetId] = useState<string>(
+    presets.some((candidate) => candidate.id === currentPresetId) ? (currentPresetId ?? '') : '',
+  )
   const save = useAction(requestNameservers)
   const preset = presets.find((candidate) => candidate.id === presetId)
   const data = save.result.data

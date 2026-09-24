@@ -59,7 +59,11 @@ async function Settings() {
       ) : null}
 
       <div className="space-y-4">
-        <Section id="profile" title="Profile" description="Who you are on invoices and reminders.">
+        <Section
+          id="profile"
+          title="Profile"
+          description="Your name, and your business details if you buy as a business."
+        >
           <ProfileForm email={account.email} fullName={account.fullName} phone={account.phone} />
         </Section>
         <Section

@@ -23,7 +23,7 @@ describe('ProfileForm', () => {
     const email = screen.getByRole('textbox', { name: 'Email' })
     expect(email).toHaveValue('ada@example.com')
     expect(email).toHaveAttribute('readonly')
-    expect(email).toHaveAccessibleDescription(/where we send receipts/)
+    expect(email).toHaveAccessibleDescription(/where sign-in and password reset links go/)
   })
 
   it('starts from the saved name and phone', () => {
