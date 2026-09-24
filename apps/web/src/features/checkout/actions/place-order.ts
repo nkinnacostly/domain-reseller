@@ -17,7 +17,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { checkoutOpenTo } from '../lib/access'
 import { registrantFormSchema, toContact } from '../lib/contact'
 import { type SupplierCost, wholesaleCostUsd } from '../lib/cost'
-import { parseNameservers } from '../lib/nameservers'
+import { parseNameservers, presetNameservers } from '../lib/nameservers'
 
 /**
  * Places an order and hands the customer to Flutterwave (PRD §13.4 steps
@@ -45,6 +45,9 @@ export const placeOrder = authAction
     z.object({
       registrant: registrantFormSchema,
       nameservers: z.string().max(2000).optional(),
+      // FR-C10 — a host from our presets. Only its id travels: the
+      // nameservers are read back from our table (N11).
+      presetId: z.uuid().nullish(),
       // FR-C6 — the explicit irreversibility confirmation.
       confirmed: z.literal(true, { error: 'Tick the box to confirm the spelling' }),
       // The total the customer saw. If it moved, they see the new one first.
@@ -68,8 +71,9 @@ export const placeOrder = authAction
       }
     }
     const payment = requirePaymentEnv()
-    const nameservers = parseNameservers(parsedInput.nameservers)
-    if (!nameservers.ok) return { error: nameservers.error, field: 'nameservers' }
+    const service = createServiceClient()
+    const nameservers = await chooseNameservers(service, parsedInput)
+    if (!nameservers.ok) return { error: nameservers.error, field: nameservers.field }
     const registrant = toContact(parsedInput.registrant)
 
     // ── Price re-validation (FR-C4) ──────────────────────────────────────
@@ -90,7 +94,6 @@ export const placeOrder = authAction
     // ── Velocity (SEC-11) ────────────────────────────────────────────────
     // Stolen cards buy domains in bulk for phishing: a cap on domains per
     // account per day limits what one account can do before a person looks.
-    const service = createServiceClient()
     const { data: allowance, error: allowanceError } = await service.rpc(
       'account_domain_allowance',
       { p_user_id: ctx.user.id },
@@ -238,6 +241,8 @@ export const placeOrder = authAction
         registrant,
         contact_profile_id: saved.data?.id ?? null,
         nameservers: nameservers.nameservers,
+        // Copied to the domain with the payment (record_order_payment, migration 26).
+        nameserver_preset_id: nameservers.presetId,
         float_check: shortfall ? 'shortfall_test_mode' : 'covered',
         test_mode: payment.testMode,
       })
@@ -290,6 +295,59 @@ export const placeOrder = authAction
       }
     }
   })
+
+type NameserverChoice =
+  | { ok: true; nameservers: string[] | null; presetId: string | null }
+  | { ok: false; error: string; field: 'nameservers' | 'presetId' }
+
+/**
+ * FR-C10 — the registrar's default (nothing sent), a host preset, or
+ * nameservers typed in. A preset is re-read here and hidden or unverified
+ * rows are refused in code (FR-D2), so the browser never decides which
+ * nameservers a preset stands for (N11).
+ */
+async function chooseNameservers(
+  service: ReturnType<typeof createServiceClient>,
+  input: { nameservers?: string | undefined; presetId?: string | null | undefined },
+): Promise<NameserverChoice> {
+  if (!input.presetId) {
+    const typed = parseNameservers(input.nameservers)
+    return typed.ok
+      ? { ok: true, nameservers: typed.nameservers, presetId: null }
+      : { ok: false, error: typed.error, field: 'nameservers' }
+  }
+  if (input.nameservers?.trim()) {
+    return {
+      ok: false,
+      error: 'Choose your host or enter nameservers, not both.',
+      field: 'presetId',
+    }
+  }
+  const { data, error } = await service
+    .from('nameserver_presets')
+    .select('id, provider, nameservers, assigns_per_zone, verified_at, is_hidden')
+    .eq('id', input.presetId)
+    .maybeSingle()
+  if (error) {
+    logger.error(dbError(error), 'nameserver preset could not be read')
+    return {
+      ok: false,
+      error: `We couldn't check that host just now. ${NOT_CHARGED} Try again shortly.`,
+      field: 'presetId',
+    }
+  }
+  const chosen = presetNameservers(data)
+  if (!chosen.ok) {
+    if (chosen.reason === 'invalid') {
+      logger.error(
+        { presetId: input.presetId },
+        'OPS: a visible nameserver preset fails validation',
+      )
+    }
+    return { ok: false, error: chosen.error, field: 'presetId' }
+  }
+  return { ok: true, nameservers: chosen.nameservers, presetId: input.presetId }
+}
 
 async function activeRateId(
   service: ReturnType<typeof createServiceClient>,
