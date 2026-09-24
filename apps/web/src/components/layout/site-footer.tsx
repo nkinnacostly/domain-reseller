@@ -23,16 +23,17 @@ const COLUMNS = [
       { href: '/search', label: 'Search' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/transfer', label: 'Transfer in' },
+      { href: '/whois', label: 'WHOIS lookup' },
     ],
   },
   {
     heading: 'Extensions',
-    // Rows on the pricing page. There are no per-extension pages yet.
+    // Each extension's own page (FR-PUB1).
     links: [
-      { href: '/pricing#tld-com', label: '.com' },
-      { href: '/pricing#tld-net', label: '.net' },
-      { href: '/pricing#tld-org', label: '.org' },
-      { href: '/pricing#tld-africa', label: '.africa' },
+      { href: '/domains/com', label: '.com' },
+      { href: '/domains/net', label: '.net' },
+      { href: '/domains/org', label: '.org' },
+      { href: '/domains/africa', label: '.africa' },
     ],
   },
   {
@@ -41,6 +42,7 @@ const COLUMNS = [
       { href: '/help', label: 'Help centre' },
       { href: '/contact', label: 'Contact us' },
       { href: '/abuse', label: 'Report abuse' },
+      { href: '/status', label: 'Service status' },
     ],
   },
   {
