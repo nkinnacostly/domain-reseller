@@ -10,6 +10,7 @@ import {
 } from '@dr/shared'
 import { cacheLife, cacheTag } from 'next/cache'
 import { logger } from '@/lib/logger'
+import { allRows } from '@/lib/supabase/all-rows'
 import { createServiceClient } from '@/lib/supabase/service'
 
 /**
@@ -97,16 +98,19 @@ export async function readPricedCatalogue(): Promise<PricedCatalogue | null> {
       .eq('status', 'active')
       .maybeSingle(),
     supabase.from('pricing_settings').select('margin_ngn, icann_fee_usd, vat_pct').maybeSingle(),
-    supabase
-      .from('tlds')
-      .select(
-        'name, register_usd, renew_usd, transfer_usd, restore_usd, min_period, max_period, redemption_days, requires_extra_fields, is_country_code, featured_rank, featured_tagline',
-      )
-      .eq('is_sellable', true)
-      // Paused extensions are ours to switch off without a deploy — the .ng
-      // family is paused while we find a competitive source (PRD R17).
-      .eq('is_paused', false)
-      .order('name'),
+    allRows((from, to) =>
+      supabase
+        .from('tlds')
+        .select(
+          'name, register_usd, renew_usd, transfer_usd, restore_usd, min_period, max_period, redemption_days, requires_extra_fields, is_country_code, featured_rank, featured_tagline',
+        )
+        .eq('is_sellable', true)
+        // Paused extensions are ours to switch off without a deploy — the .ng
+        // family is paused while we find a competitive source (PRD R17).
+        .eq('is_paused', false)
+        .order('name')
+        .range(from, to),
+    ),
   ])
 
   // The error message only: it names the table or the network fault, never a

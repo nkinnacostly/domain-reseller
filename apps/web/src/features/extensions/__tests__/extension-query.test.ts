@@ -73,6 +73,7 @@ function catalogue(result: { data: unknown; error: { message: string } | null })
     const query = Object.assign(Promise.resolve(result), {
       select: () => query,
       order: () => query,
+      range: () => query,
     })
     return query
   })

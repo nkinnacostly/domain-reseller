@@ -49,6 +49,7 @@ function client(results: Record<'fx_rates' | 'pricing_settings' | 'tlds', Result
       select: () => query,
       eq: () => query,
       order: () => query,
+      range: () => query,
       maybeSingle: () => query,
     })
     return query
@@ -217,6 +218,7 @@ describe('what the catalogue says about each extension', () => {
         select: () => query,
         eq: () => query,
         order: () => query,
+        range: () => query,
         maybeSingle: () => query,
       })
       return { from: () => query } as never

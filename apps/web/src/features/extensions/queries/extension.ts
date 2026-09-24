@@ -5,6 +5,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { POPULAR_TLDS } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { logger } from '@/lib/logger'
+import { allRows } from '@/lib/supabase/all-rows'
 import { createPublicClient } from '@/lib/supabase/public'
 import { type ExtensionFacts, factsFromPricing } from '../lib/extension'
 
@@ -22,12 +23,16 @@ export async function loadCatalogueFacts(): Promise<ExtensionFacts[]> {
   cacheTag('pricing')
   cacheLife('hours')
 
-  const { data, error } = await createPublicClient()
-    .from('tlds')
-    .select(
-      'name, is_country_code, min_period, max_period, requires_extra_fields, min_chars, max_chars, is_transferable, featured_tagline',
-    )
-    .order('name')
+  const client = createPublicClient()
+  const { data, error } = await allRows((from, to) =>
+    client
+      .from('tlds')
+      .select(
+        'name, is_country_code, min_period, max_period, requires_extra_fields, min_chars, max_chars, is_transferable, featured_tagline',
+      )
+      .order('name')
+      .range(from, to),
+  )
   if (error) throw new Error(`tlds: ${error.message}`)
 
   return (data ?? []).map((row) => ({
