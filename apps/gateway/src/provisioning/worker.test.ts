@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Lookup, Registrar, RegistryDomain, Write } from './registrar'
+import {
+  asRegistryContact,
+  type Lookup,
+  type Reading,
+  type Registrar,
+  type RegistryContacts,
+  type RegistryDomain,
+  type SettingsRegistrar,
+  type SettingWrite,
+  type Write,
+} from './registrar'
 import type { ClaimedJob, Completion, JobStore } from './store'
 import { createWorker, defaultBackoff } from './worker'
 
@@ -76,6 +86,7 @@ function fakeStore(claimed: ClaimedJob | null) {
     },
     completeRenewal: record('renewed') as JobStore['completeRenewal'],
     recordNameserverChange: record('nameservers') as JobStore['recordNameserverChange'],
+    recordDomainChange: record('setting') as JobStore['recordDomainChange'],
     reschedule: record('reschedule') as JobStore['reschedule'],
     fail: record('fail') as JobStore['fail'],
   }
@@ -506,6 +517,210 @@ describe('provisioning worker — renewals (FR-RN1)', () => {
       {
         type: 'fail',
         args: ['job-1', 'UNKNOWN_JOB_KIND', 'No handler for transfer_domain', true],
+      },
+    ])
+  })
+})
+
+describe('provisioning worker — registry-side settings (FR-DS1, FR-DS3, FR-DS4)', () => {
+  const setting = (over: Partial<ClaimedJob> = {}) =>
+    job({
+      kind: 'set_transfer_lock',
+      localStatus: 'active',
+      source: 'registration',
+      pendingTransferLock: false,
+      payment: null,
+      ...over,
+    })
+
+  /** A registry for settings that answers reads in order and records writes. */
+  function settingsRegistry(
+    script: {
+      lookups?: Lookup[]
+      contacts?: Reading<RegistryContacts>[]
+      write?: SettingWrite
+    } = {},
+  ) {
+    const lookups = [...(script.lookups ?? [])]
+    const contacts = [...(script.contacts ?? [])]
+    const writes: unknown[][] = []
+    const write = async (...args: unknown[]) => {
+      writes.push(args)
+      return script.write ?? ({ kind: 'ok' } as const)
+    }
+    const registrar: SettingsRegistrar = {
+      lookup: async () => lookups.shift() ?? { kind: 'not_found' },
+      contacts: async () => contacts.shift() ?? { kind: 'not_found' },
+      setTransferLock: write,
+      setPrivacy: write,
+      updateContacts: write,
+    }
+    return { registrar, writes }
+  }
+
+  const locked = (transferLock: boolean, privacy = false): Lookup => ({
+    kind: 'found',
+    domain: { ...DOMAIN, transferLock, privacy },
+  })
+
+  function run(claimed: ClaimedJob, settings: SettingsRegistrar) {
+    return worker(claimed, registrar({}), { settingsFor: () => settings })
+  }
+
+  it('turns the lock off, reads it back, and records what the registry holds', async () => {
+    const { registrar: reg, writes } = settingsRegistry({ lookups: [locked(true), locked(false)] })
+    const { instance, actions } = run(setting(), reg)
+    await instance.tick()
+    expect(writes).toEqual([['example.com', false]])
+    expect(actions).toEqual([
+      {
+        type: 'setting',
+        args: ['job-1', { transfer_lock: false }, { transfer_lock: false }, null],
+      },
+    ])
+  })
+
+  it('records it applied without writing when the registry already holds it (I1)', async () => {
+    const { registrar: reg, writes } = settingsRegistry({ lookups: [locked(false)] })
+    const { instance, actions } = run(setting(), reg)
+    await instance.tick()
+    expect(writes).toEqual([])
+    expect(actions.at(-1)?.type).toBe('setting')
+  })
+
+  it('records a refusal with its code', async () => {
+    const { registrar: reg } = settingsRegistry({
+      lookups: [locked(true, false)],
+      write: { kind: 'rejected', code: 'REGISTRY_REFUSED', message: 'Not allowed' },
+    })
+    const { instance, actions } = run(
+      setting({ kind: 'set_privacy', pendingTransferLock: null, pendingPrivacy: true }),
+      reg,
+    )
+    await instance.tick()
+    expect(actions).toEqual([
+      { type: 'setting', args: ['job-1', { privacy: true }, null, 'REGISTRY_REFUSED'] },
+    ])
+  })
+
+  it('turns privacy on and records it', async () => {
+    const { registrar: reg } = settingsRegistry({
+      lookups: [locked(true, false), locked(true, true)],
+    })
+    const { instance, actions } = run(
+      setting({ kind: 'set_privacy', pendingTransferLock: null, pendingPrivacy: true }),
+      reg,
+    )
+    await instance.tick()
+    expect(actions).toEqual([
+      { type: 'setting', args: ['job-1', { privacy: true }, { privacy: true }, null] },
+    ])
+  })
+
+  it('saves new contacts and records exactly what was asked, once the registry shows it', async () => {
+    const next = { ...REGISTRANT, firstName: 'Bayo', email: 'bayo@example.com' }
+    const all = (contact: typeof REGISTRANT) => {
+      const held = asRegistryContact(contact)
+      return {
+        kind: 'found',
+        data: { registrant: held, administrative: held, technical: held, billing: held },
+      } as const
+    }
+    const { registrar: reg, writes } = settingsRegistry({
+      contacts: [all(REGISTRANT), all(next)],
+    })
+    const { instance, actions } = run(
+      setting({ kind: 'update_contacts', pendingTransferLock: null, pendingRegistrant: next }),
+      reg,
+    )
+    await instance.tick()
+    expect(writes).toEqual([['example.com', next]])
+    expect(actions).toEqual([
+      { type: 'setting', args: ['job-1', { registrant: next }, { registrant: next }, null] },
+    ])
+  })
+
+  it('holds invalid requested contacts for a person, and sends nothing', async () => {
+    const { registrar: reg, writes } = settingsRegistry()
+    const { instance, actions } = run(
+      setting({
+        kind: 'update_contacts',
+        pendingTransferLock: null,
+        pendingRegistrant: { firstName: 'Bayo' },
+      }),
+      reg,
+    )
+    await instance.tick()
+    expect(writes).toEqual([])
+    expect(actions).toEqual([
+      { type: 'fail', args: ['job-1', 'BAD_JOB', 'Requested registrant is invalid', true] },
+    ])
+  })
+
+  it.each([
+    ['a demo domain', { source: 'demo' }],
+    ['a domain that is not active', { localStatus: 'pending' }],
+    ['nothing waiting to be applied', { pendingTransferLock: null }],
+  ])('sends nothing for %s', async (_case, over) => {
+    const { registrar: reg, writes } = settingsRegistry({ lookups: [locked(true)] })
+    const { instance, actions } = run(setting(over as Partial<ClaimedJob>), reg)
+    await instance.tick()
+    expect(writes).toEqual([])
+    expect(actions).toEqual([
+      { type: 'fail', args: ['job-1', 'NOT_APPLICABLE', expect.any(String), false] },
+    ])
+  })
+
+  it('waits on a timeout the read cannot settle, and never writes again blind (I2)', async () => {
+    const { registrar: reg } = settingsRegistry({
+      lookups: [locked(true), timedOut],
+      write: timedOut,
+    })
+    const { instance, actions } = run(setting(), reg)
+    await instance.tick()
+    expect(actions).toEqual([{ type: 'reschedule', args: ['job-1', 30, 'TIMEOUT', 'No answer'] }])
+  })
+
+  it('holds for a person once retries of an unknown answer run out', async () => {
+    const { registrar: reg } = settingsRegistry({ lookups: [timedOut] })
+    const { instance, actions } = run(setting({ attempts: 4 }), reg)
+    await instance.tick()
+    expect(actions).toEqual([{ type: 'fail', args: ['job-1', 'TIMEOUT', 'No answer', true] }])
+  })
+
+  it('tries again when an unclear write is known not to have landed, then gives up', async () => {
+    const script = { lookups: [locked(true), locked(true)], write: timedOut }
+    const first = run(setting(), settingsRegistry(script).registrar)
+    await first.instance.tick()
+    expect(first.actions).toEqual([
+      { type: 'reschedule', args: ['job-1', 30, 'TIMEOUT', 'No answer'] },
+    ])
+
+    const last = run(setting({ attempts: 4 }), settingsRegistry(script).registrar)
+    await last.instance.tick()
+    expect(last.actions).toEqual([
+      { type: 'fail', args: ['job-1', 'SUPPLIER_UNAVAILABLE', 'No answer', false] },
+    ])
+  })
+
+  it('treats refused credentials like any unsettled answer', async () => {
+    const { registrar: reg } = settingsRegistry({
+      lookups: [{ kind: 'blocked', code: 'SUPPLIER_AUTH', message: 'HTTP 401' }],
+    })
+    const { instance, actions } = run(setting(), reg)
+    await instance.tick()
+    expect(actions).toEqual([
+      { type: 'reschedule', args: ['job-1', 30, 'SUPPLIER_AUTH', 'HTTP 401'] },
+    ])
+  })
+
+  it('holds a settings job for a person when this build has no settings registrar', async () => {
+    const { instance, actions } = worker(setting(), registrar({}))
+    await instance.tick()
+    expect(actions).toEqual([
+      {
+        type: 'fail',
+        args: ['job-1', 'UNKNOWN_JOB_KIND', 'No handler for set_transfer_lock', true],
       },
     ])
   })

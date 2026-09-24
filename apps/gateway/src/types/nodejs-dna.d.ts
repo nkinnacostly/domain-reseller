@@ -99,7 +99,15 @@ declare module 'nodejs-dna' {
      * client's `_axios` so TLS is verified and outcomes are recorded
      * (see src/dna/transport.ts). Absent fields mean the SOAP client.
      */
-    readonly client: { _axios?: (config: DnaHttpRequest) => Promise<DnaHttpResponse> }
+    readonly client: {
+      _axios?: (config: DnaHttpRequest) => Promise<DnaHttpResponse>
+      /**
+       * The REST client's own POST, through `_axios`: the answer's body on a
+       * 2xx, a throw otherwise. Used where the SDK's method is wrong (the
+       * transfer lock — see provisioning/registrar.ts).
+       */
+      post?: (endpoint: string, body?: Record<string, unknown>) => Promise<unknown>
+    }
 
     getActiveTransport(): 'REST' | 'SOAP'
     setErrorReportingEnabled(enabled: boolean): void
