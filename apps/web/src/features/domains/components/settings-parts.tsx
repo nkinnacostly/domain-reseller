@@ -53,7 +53,7 @@ export function ActionError({ message, returnTo }: { message: string | null; ret
 }
 
 type Answer = { data?: { error: string } | object | undefined }
-type Failure = { error: { serverError?: string | undefined } }
+type Failure = { error: { serverError?: string | undefined; validationErrors?: unknown } }
 
 /**
  * One request's outcome for a settings control: the error to show, or that
@@ -74,8 +74,12 @@ export function useOutcome() {
         if (data && 'error' in data) setError(data.error)
         else setSent(true)
       },
-      onError: ({ error: failure }: Failure) =>
-        setError(failure.serverError ?? 'That did not go through. Please try again.'),
+      // next-safe-action reports validation errors here too; the form marks
+      // those beside their fields, so they are not also a failed request.
+      onError: ({ error: failure }: Failure) => {
+        if (failure.validationErrors && !failure.serverError) return
+        setError(failure.serverError ?? 'That did not go through. Please try again.')
+      },
     },
   }
 }
