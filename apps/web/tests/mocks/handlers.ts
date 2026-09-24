@@ -68,6 +68,12 @@ export const handlers = [
     ),
   ),
 
+  // Registrar gateway — a domain's transfer code (FR-DS5). A made-up code;
+  // tests override for the refusals.
+  http.get('*/v1/domains/:name/auth-code', () =>
+    HttpResponse.json({ ok: true, data: { authCode: 'test-transfer-code' } }),
+  ),
+
   // Gateway health
   http.get('*/health', () => HttpResponse.json({ ok: true, data: { status: 'healthy' } })),
 ]
