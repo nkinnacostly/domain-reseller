@@ -1,18 +1,17 @@
 'use server'
 
 import { randomUUID } from 'node:crypto'
-import { accountBalanceSchema, renewalTotalKobo, userMessageFor, vatKobo } from '@dr/shared'
+import { renewalTotalKobo, userMessageFor, vatKobo } from '@dr/shared'
 import { z } from 'zod'
 import { checkoutOpenTo } from '@/features/checkout/lib/access'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { env, requirePaymentEnv } from '@/lib/env'
-import { createPaymentLink } from '@/lib/flutterwave'
-import { callGateway } from '@/lib/gateway'
 import { logger } from '@/lib/logger'
 import { LIMITS, withinLimit } from '@/lib/rate-limit'
 import { authAction } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
-import { renewability, renewalCostUsd } from '../lib/renewal'
+import { paymentCustomer, renewability, renewalCostUsd } from '../lib/renewal'
+import { checkFloat, startRenewalPayment } from '../queries/renewal-order'
 
 /**
  * Renews a domain for the years chosen (PRD FR-RN1, FR-RN5): an order with
@@ -141,28 +140,15 @@ export const placeRenewal = authAction
       parsedInput.years,
       Number(settings?.icann_fee_usd ?? 0),
     )
-    let balanceUsd: number
-    try {
-      balanceUsd = accountBalanceSchema.parse(
-        await callGateway<unknown>({
-          path: 'account/balance',
-          signal: AbortSignal.timeout(15_000),
-        }),
-      ).balanceUsd
-    } catch (err) {
-      logger.error({ err }, 'renewal float pre-flight failed')
-      return {
-        error: `We couldn't complete this just now. ${NOT_CHARGED} Try again in a few minutes.`,
-      }
+    const float = await checkFloat(costUsd, payment.testMode)
+    if (!float.ok) {
+      return float.reason === 'insufficient'
+        ? { error: userMessageFor('SUPPLIER_INSUFFICIENT_FUNDS') }
+        : {
+            error: `We couldn't complete this just now. ${NOT_CHARGED} Try again in a few minutes.`,
+          }
     }
-    const shortfall = balanceUsd < costUsd
-    if (shortfall && !payment.testMode) {
-      logger.error({ costUsd, balanceUsd }, 'OPS: supplier float too low to accept a renewal')
-      return { error: userMessageFor('SUPPLIER_INSUFFICIENT_FUNDS') }
-    }
-    if (shortfall) {
-      logger.warn({ costUsd, balanceUsd }, 'test mode: float shortfall recorded, renewal allowed')
-    }
+    const shortfall = float.shortfall
 
     // ── The order, and its one line ──────────────────────────────────────
     // `MDH-` routes Flutterwave's notices here through Paidly (see placeOrder).
@@ -207,30 +193,12 @@ export const placeRenewal = authAction
     }
 
     // ── Hand over to Flutterwave ─────────────────────────────────────────
-    try {
-      const registrant = (domain.registrant ?? {}) as Record<string, string | undefined>
-      const redirectUrl = new URL('/app/checkout/complete', env.NEXT_PUBLIC_APP_URL)
-      redirectUrl.searchParams.set('order', order.id)
-      const name = [registrant.firstName, registrant.lastName].filter(Boolean).join(' ')
-      const link = await createPaymentLink({
-        txRef,
-        amountKobo: total,
-        redirectUrl: redirectUrl.toString(),
-        customer: {
-          email: ctx.user.email ?? registrant.email ?? '',
-          name: name || (ctx.user.email ?? 'Customer'),
-          ...(registrant.phone
-            ? { phone: `+${registrant.phoneCountryCode ?? ''}${registrant.phone}` }
-            : {}),
-        },
-        orderNumber: order.order_number,
-      })
-      return { redirectTo: link }
-    } catch (err) {
-      logger.error({ err, orderId: order.id }, 'could not start renewal payment')
-      await service.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
-      return {
-        error: `We couldn't reach our payment provider. ${NOT_CHARGED} Try again in a moment.`,
-      }
-    }
+    return startRenewalPayment(service, order, {
+      txRef,
+      totalKobo: total,
+      customer: paymentCustomer(
+        domain.registrant as Record<string, string | undefined> | null,
+        ctx.user.email,
+      ),
+    })
   })

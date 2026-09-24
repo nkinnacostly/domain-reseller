@@ -17,7 +17,11 @@ const CLOSED: OrderNotice = {
   text: 'This order was closed without payment, so nothing was charged. If a payment for it still comes through, it is applied automatically.',
 }
 
-/** A renewal or transfer order carries one line: the domain it is about. */
+/**
+ * A transfer order carries one line; a renewal order one line per domain
+ * renewed — one from a domain's Renew tab, several from the portfolio
+ * (FR-P4). Neither is ever mixed with registrations.
+ */
 export function orderKind(items: { item_type: string }[]): OrderKind {
   if (items.some((item) => item.item_type === 'renew')) return 'renew'
   if (items.some((item) => item.item_type === 'transfer')) return 'transfer'
@@ -33,8 +37,11 @@ export function orderNotice(
   status: string,
   testMode: boolean,
   kind: OrderKind = 'register',
+  /** How many lines the order has — a renewal of several domains says so. */
+  lines = 1,
 ): OrderNotice | null {
-  if (kind === 'renew') return renewalNotice(status, testMode)
+  if (kind === 'renew')
+    return lines > 1 ? bulkRenewalNotice(status, testMode) : renewalNotice(status, testMode)
   if (kind === 'transfer') return transferNotice(status, testMode)
   const test = testMode ? ` ${TEST_NOTE}` : ''
   switch (status) {
@@ -102,6 +109,49 @@ function renewalNotice(status: string, testMode: boolean): OrderNotice | null {
       return {
         tone: 'error',
         text: `We could not renew this domain — it says why below. ${
+          testMode
+            ? 'No money moved.'
+            : 'What you paid is refunded automatically — see Refunds below.'
+        }`,
+      }
+    case 'cancelled':
+      return CLOSED
+    default:
+      return null
+  }
+}
+
+/** Several domains renewed in one order (FR-P4): each line settles on its own. */
+function bulkRenewalNotice(status: string, testMode: boolean): OrderNotice | null {
+  const test = testMode
+    ? ' This was a test payment, so no money moved. Test renewals go to the registrar’s test system, never the live registry.'
+    : ''
+  switch (status) {
+    case 'paid':
+      return {
+        tone: 'success',
+        text: `Your renewals are paid and queued. This page updates as the registry shows each new expiry date.${test}`,
+      }
+    case 'provisioning':
+      return {
+        tone: 'success',
+        text: `Renewing your domains. This page updates as the registry shows each new expiry date.${test}`,
+      }
+    case 'completed':
+      return { tone: 'success', text: `Every domain in this order is renewed.${test}` }
+    case 'partially_failed':
+      return {
+        tone: 'error',
+        text: `Some domains could not be renewed — each one says why below. ${
+          testMode
+            ? 'No money moved.'
+            : 'What you paid for those is refunded automatically — see Refunds below.'
+        }`,
+      }
+    case 'failed':
+      return {
+        tone: 'error',
+        text: `We could not renew the domains in this order — each one says why below. ${
           testMode
             ? 'No money moved.'
             : 'What you paid is refunded automatically — see Refunds below.'
@@ -192,10 +242,13 @@ export function paymentNotice(
   payment: string,
   kind: OrderKind,
   email: string,
+  lines = 1,
 ): OrderNotice | undefined {
   const retry =
     kind === 'renew'
-      ? 'You can try again from the domain’s Renew tab.'
+      ? lines > 1
+        ? 'You can try again from your domains list.'
+        : 'You can try again from the domain’s Renew tab.'
       : kind === 'transfer'
         ? 'You can start the transfer again from the transfer page.'
         : 'Your domains are still in your cart.'

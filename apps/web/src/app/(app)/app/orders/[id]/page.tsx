@@ -47,11 +47,22 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
 
   const registrant = order.registrant as Contact
   const kind = orderKind(order.order_items)
-  const notice = payment ? paymentNotice(payment, kind, BUSINESS.email) : undefined
+  const lines = order.order_items.length
+  const notice = payment ? paymentNotice(payment, kind, BUSINESS.email, lines) : undefined
   // The return from Flutterwave already says a cancelled payment charged nothing.
   const progress =
-    notice && order.status === 'cancelled' ? null : orderNotice(order.status, order.test_mode, kind)
-  const linesHeading = kind === 'renew' ? 'Renewal' : kind === 'transfer' ? 'Transfer' : 'Domains'
+    notice && order.status === 'cancelled'
+      ? null
+      : orderNotice(order.status, order.test_mode, kind, lines)
+  // FR-P4: a renewal of several domains is one order with a line each.
+  const linesHeading =
+    kind === 'renew'
+      ? lines > 1
+        ? 'Renewals'
+        : 'Renewal'
+      : kind === 'transfer'
+        ? 'Transfer'
+        : 'Domains'
   // FR-C10 — some domains were given their own host; the order's covers the rest.
   const ownHosts = order.order_items.some((item) =>
     ownNameservers(item.nameservers, order.nameservers),
