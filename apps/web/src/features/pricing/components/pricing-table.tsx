@@ -96,8 +96,8 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
             {shown.map((row) => (
               <tr
                 key={row.tld}
-                // Linked from the home page and the footer (/pricing#tld-com);
-                // the row lights up when it is the link's target.
+                // Deep-linkable (/pricing#tld-com): the row lights up when it
+                // is the link's target.
                 id={`tld-${row.tld}`}
                 className="scroll-mt-8 border-border/60 border-b transition-colors hover:bg-muted/50 focus-within:bg-muted/50 target:bg-brand-subtle"
               >

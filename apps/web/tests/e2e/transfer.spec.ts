@@ -4,14 +4,15 @@ import { expect, type Page, test } from '@playwright/test'
 /**
  * Transfer-in landing and eligibility check (PRD FR-T1).
  *
- * The checks run against live registry RDAP servers — public, read-only and
- * free, so this is not the supplier or payment traffic N12 forbids. The
- * domains are chosen for answers that do not change: google.com is locked at
- * both registrar and registry, .co has no RDAP service, .edu is not an
- * extension we sell.
+ * The checks ask the mock registries in support/mock-gateway.mjs
+ * (RDAP_BOOTSTRAP_URL), never live ones — a live registry once took over 10 s
+ * and failed the suite at random. Its fixed answers: lockedbrand.com is locked
+ * at registrar and registry, readytomove.com is ready, brandnew.com was
+ * registered 10 days ago, anything else is unregistered. .co has no RDAP
+ * service, as in IANA's real file; .edu is not an extension we sell.
  */
 
-const LOOKUP_TIMEOUT = 20_000
+const LOOKUP_TIMEOUT = 10_000
 
 async function check(page: Page, domain: string) {
   const form = page.getByRole('form', { name: 'Transfer check', exact: true })
@@ -40,7 +41,7 @@ test.describe('transfer page', () => {
   })
 
   test('has no detectable accessibility violations', async ({ page }) => {
-    await page.goto('/transfer?domain=google.com')
+    await page.goto('/transfer?domain=lockedbrand.com')
     await expect(result(page)).toBeVisible({ timeout: LOOKUP_TIMEOUT })
 
     const results = await new AxeBuilder({ page })
@@ -67,21 +68,39 @@ test.describe('transfer page', () => {
 test.describe('transfer check', () => {
   test('a locked domain is blocked, with the reason and who to ask', async ({ page }) => {
     await page.goto('/transfer')
-    await check(page, 'https://www.Google.com/')
+    await check(page, 'https://www.LockedBrand.com/')
 
-    await expect(page).toHaveURL(/\/transfer\?domain=google\.com#check$/)
+    await expect(page).toHaveURL(/\/transfer\?domain=lockedbrand\.com#check$/)
     await expect(result(page).getByRole('heading', { level: 2 })).toHaveText(
-      "google.com can't be transferred yet",
+      "lockedbrand.com can't be transferred yet",
       { timeout: LOOKUP_TIMEOUT },
     )
 
     const lock = result(page).getByRole('listitem').filter({ hasText: 'Transfer lock is off' })
     await expect(lock).toContainText('Blocked')
-    await expect(lock).toContainText('MarkMonitor')
+    await expect(lock).toContainText('Example Registrar, Inc.')
+  })
+
+  test('an unlocked domain registered years ago is ready to go', async ({ page }) => {
+    await page.goto('/transfer?domain=readytomove.com')
+    await expect(result(page).getByRole('heading', { level: 2 })).toHaveText(
+      'readytomove.com is ready to transfer',
+      { timeout: LOOKUP_TIMEOUT },
+    )
+    const lock = result(page).getByRole('listitem').filter({ hasText: 'Transfer lock is off' })
+    await expect(lock).toContainText('Done')
+  })
+
+  test('a domain registered days ago names the day it can move', async ({ page }) => {
+    await page.goto('/transfer?domain=brandnew.com')
+    await expect(result(page).getByRole('heading', { level: 2 })).toHaveText(
+      /^brandnew\.com can move from \d{1,2} [A-Z][a-z]+ \d{4}$/,
+      { timeout: LOOKUP_TIMEOUT },
+    )
   })
 
   test('shows the transfer price with its renewal price (N8)', async ({ page }) => {
-    await page.goto('/transfer?domain=google.com')
+    await page.goto('/transfer?domain=lockedbrand.com')
     const price = page.getByRole('complementary', { name: 'Transfer price for .com' })
     await expect(price).toContainText(/₦[\d,]+/, { timeout: LOOKUP_TIMEOUT })
     await expect(price).toContainText(/Then renews at ₦[\d,]+\/yr/)
@@ -133,9 +152,9 @@ test.describe('transfer check', () => {
     await page.locator('form[data-enhanced="true"]').waitFor()
     const field = page.getByLabel('Domain to transfer')
     await field.click()
-    await field.pressSequentially('google.com')
+    await field.pressSequentially('lockedbrand.com')
     await field.press('Enter')
-    await expect(page).toHaveURL(/\/transfer\?domain=google\.com#check$/)
+    await expect(page).toHaveURL(/\/transfer\?domain=lockedbrand\.com#check$/)
   })
 })
 
@@ -184,9 +203,9 @@ test.describe('progressive enhancement', () => {
    */
   test('a submit before hydration still reaches the check', async ({ page }) => {
     await page.goto('/transfer')
-    await page.getByLabel('Domain to transfer').fill('google.com')
+    await page.getByLabel('Domain to transfer').fill('lockedbrand.com')
     await page.getByRole('button', { name: /check domain/i }).click()
 
-    await expect(page).toHaveURL(/\/transfer\?domain=google\.com$/)
+    await expect(page).toHaveURL(/\/transfer\?domain=lockedbrand\.com$/)
   })
 })

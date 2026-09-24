@@ -27,7 +27,10 @@ export default defineConfig({
   },
   resolve: {
     // Array form so order is explicit: subpath imports (`@dr/shared/errors`)
-    // must match before the bare package name swallows them.
+    // must match before the bare package name swallows them. When they did
+    // not, Vite could not transform an untested file that imported one
+    // (lib/gateway.ts, 22 Sept 2026), and the coverage provider fell back to
+    // parsing its raw TypeScript — the PARSE_ERROR it printed was that.
     alias: [
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       {

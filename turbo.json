@@ -14,6 +14,7 @@
         "GATEWAY_SHARED_SECRET",
         "FLUTTERWAVE_*",
         "CHECKOUT_ALLOWLIST",
+        "RDAP_BOOTSTRAP_URL",
         "FX_BUFFER_PCT",
         "PRICE_LOCK_MINUTES",
         "RESEND_API_KEY",

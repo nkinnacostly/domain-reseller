@@ -77,11 +77,11 @@ describe('PopularExtensions', () => {
     expect(card('com')).toHaveTextContent('The one everybody types first')
   })
 
-  it("opens each extension's row on the pricing page", async () => {
+  it("opens each extension's own page (FR-PUB1)", async () => {
     vi.mocked(getPricedCatalogue).mockResolvedValue(catalogue([['com', null]]))
     render(await PopularExtensions())
 
-    expect(card('com')).toHaveAttribute('href', '/pricing#tld-com')
+    expect(card('com')).toHaveAttribute('href', '/domains/com')
     expect(screen.getByRole('link', { name: `See all ${tlds.length} prices` })).toHaveAttribute(
       'href',
       '/pricing',

@@ -11,6 +11,9 @@ const PAGES = [
   '/pricing',
   '/search?q=getpaid',
   '/transfer',
+  '/domains/com',
+  '/whois',
+  '/status',
   '/cart',
   '/legal',
   '/help',
@@ -66,28 +69,43 @@ for (const path of PAGES) {
   }
 }
 
-test('extension links land on that extension’s row on the pricing page', async ({ page }) => {
+test('extension cards on the home page open that extension’s page', async ({ page }) => {
   await page.goto('/')
   const card = page
     .locator('section', { has: page.getByRole('heading', { name: 'Popular extensions' }) })
     .getByRole('link')
     .first()
   const href = await card.getAttribute('href')
-  expect(href).toMatch(/^\/pricing#tld-[a-z.]+$/)
+  expect(href).toMatch(/^\/domains\/[a-z.]+$/)
 
   await card.click()
-  await expect(page).toHaveURL(/\/pricing#tld-/)
-  await expect(page.locator(`[id="${href?.split('#')[1]}"]`)).toBeInViewport()
+  await expect(page).toHaveURL(new RegExp(`${href}$`))
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    `Register a .${href?.split('/')[2]} domain`,
+  )
 })
 
-test('the footer’s extension links point at real pricing rows', async ({ page }) => {
-  await page.goto('/pricing')
+test('the footer’s extension links lead to real extension pages', async ({ page }) => {
+  await page.goto('/')
   const hrefs = await page
     .getByRole('contentinfo')
-    .locator('a[href^="/pricing#tld-"]')
+    .locator('a[href^="/domains/"]')
     .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''))
   expect(hrefs.length).toBeGreaterThan(0)
   for (const href of hrefs) {
-    await expect(page.locator(`[id="${href.split('#')[1]}"]`), href).toBeAttached()
+    await page.goto(href)
+    await expect(page.getByRole('heading', { level: 1 }), href).toHaveText(
+      `Register a .${href.split('/')[2]} domain`,
+    )
   }
+})
+
+test('the footer links the WHOIS lookup and the service status', async ({ page }) => {
+  await page.goto('/')
+  const footer = page.getByRole('contentinfo')
+  await expect(footer.getByRole('link', { name: 'WHOIS lookup' })).toHaveAttribute('href', '/whois')
+  await expect(footer.getByRole('link', { name: 'Service status' })).toHaveAttribute(
+    'href',
+    '/status',
+  )
 })

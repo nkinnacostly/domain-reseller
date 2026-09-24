@@ -22,9 +22,17 @@ export function DomainSearch({
    * navigating by form hear which is which.
    */
   formLabel = 'Domain search',
+  extension,
 }: {
   autoFocus?: boolean
   formLabel?: string
+  /**
+   * Scopes the box to one extension, as on /domains/{tld} (FR-PUB1): a bare
+   * name is searched as `name.extension`. A name typed with its own extension
+   * is searched as typed. Before hydration the native submit sends the bare
+   * name, which the search page checks across the featured extensions instead.
+   */
+  extension?: string
 }) {
   const router = useRouter()
   const inputId = useId()
@@ -58,14 +66,14 @@ export function DomainSearch({
     if (!parsed.isValid) {
       setError(
         submitted.trim()
-          ? 'Use letters, numbers and hyphens — for example getpaid.com'
+          ? `Use letters, numbers and hyphens — for example ${extension ? 'getpaid' : 'getpaid.com'}`
           : 'Type a name to search for',
       )
       return
     }
 
     setError(null)
-    router.push(searchHref(submitted))
+    router.push(searchHref(extension && !parsed.tld ? `${parsed.stem}.${extension}` : submitted))
   }
 
   return (
@@ -87,33 +95,41 @@ export function DomainSearch({
       <div className="flex flex-col gap-2 rounded-3xl bg-background p-2 shadow-[0_18px_40px_-18px_rgb(0_0_0/0.25)] sm:flex-row sm:items-center sm:gap-3 sm:rounded-full sm:p-2 sm:pl-7">
         <div className="min-w-0 flex-1 px-4 pt-3 sm:px-0 sm:pt-0">
           <label htmlFor={inputId} className="block text-xs text-muted-foreground">
-            Find your domain
+            {extension ? `Find your .${extension} domain` : 'Find your domain'}
           </label>
-          <input
-            id={inputId}
-            name="q"
-            type="text"
-            inputMode="url"
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            // biome-ignore lint/a11y/noAutofocus: opt-in only, used on the search page where the field is the page's purpose
-            autoFocus={autoFocus}
-            /**
-             * Deliberately uncontrolled. A controlled value is reset by React
-             * whenever something sets the field without firing onChange —
-             * browser autofill, password managers, and some automation all do.
-             * The submit handler reads FormData, so React never needs to own
-             * this value; onChange exists only to clear a stale error.
-             */
-            onChange={() => {
-              if (error) setError(null)
-            }}
-            placeholder="yourbrand.com"
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-            className="w-full bg-transparent py-1 text-base text-foreground outline-none placeholder:text-muted-foreground/60"
-          />
+          <div className="flex items-baseline">
+            <input
+              id={inputId}
+              name="q"
+              type="text"
+              inputMode="url"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              // biome-ignore lint/a11y/noAutofocus: opt-in only, used on the search page where the field is the page's purpose
+              autoFocus={autoFocus}
+              /**
+               * Deliberately uncontrolled. A controlled value is reset by React
+               * whenever something sets the field without firing onChange —
+               * browser autofill, password managers, and some automation all do.
+               * The submit handler reads FormData, so React never needs to own
+               * this value; onChange exists only to clear a stale error.
+               */
+              onChange={() => {
+                if (error) setError(null)
+              }}
+              placeholder={extension ? 'yourbrand' : 'yourbrand.com'}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
+              className="w-full min-w-0 bg-transparent py-1 text-base text-foreground outline-none placeholder:text-muted-foreground/60"
+            />
+            {/* The label already names the extension; this is the visual cue. */}
+            {extension ? (
+              <span aria-hidden="true" className="shrink-0 text-base text-muted-foreground">
+                .{extension}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         <Button

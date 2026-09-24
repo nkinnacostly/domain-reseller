@@ -15,6 +15,20 @@
  * It also stands in for Flutterwave (under /flw): the payments API, a hosted
  * checkout page with "Pay (test)" and "Cancel", and transaction verification —
  * plus GET /v1/account/balance, reporting an empty float like the real one.
+ *
+ * And for the registries' RDAP servers (under /rdap), so transfer checks and
+ * WHOIS lookups never wait on a live registry — Verisign has taken over 10 s.
+ * RDAP_BOOTSTRAP_URL points the app at /rdap/dns.json, which lists .com, .net
+ * and .org here and, like IANA's real file, has no .co:
+ *
+ *   lockedbrand.com   → registered, locked by its registrar and the registry
+ *   readytomove.com   → registered years ago, unlocked: ready to transfer
+ *   brandnew.com      → registered 10 days ago, inside the 60-day window
+ *   registrydown.com  → the registry fails (503)
+ *   anything else     → not registered (404)
+ *
+ * Registered answers carry a registrant with personal details, as some
+ * registries still publish — the pages must never show them.
  */
 import { createServer } from 'node:http'
 
@@ -106,11 +120,103 @@ async function flutterwave(req, res) {
   return send(res, 404, { status: 'error' })
 }
 
+/** Mock RDAP (RFC 9083): IANA's bootstrap file and one registry per extension. */
+const DAY_MS = 86_400_000
+const RDAP_REGISTERED = {
+  lockedbrand: {
+    status: [
+      'client delete prohibited',
+      'client transfer prohibited',
+      'client update prohibited',
+      'server transfer prohibited',
+    ],
+    registeredAt: () => '2010-04-12T09:30:00Z',
+    expiresAt: () => '2031-04-12T09:30:00Z',
+  },
+  readytomove: {
+    status: ['active'],
+    registeredAt: () => '2015-03-01T10:00:00Z',
+    expiresAt: () => '2027-03-01T10:00:00Z',
+  },
+  brandnew: {
+    status: ['active'],
+    registeredAt: () => new Date(Date.now() - 10 * DAY_MS).toISOString(),
+    expiresAt: () => new Date(Date.now() + 355 * DAY_MS).toISOString(),
+  },
+}
+
+function rdap(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`)
+  if (url.pathname === '/rdap/dns.json') {
+    const base = `http://127.0.0.1:${PORT}/rdap`
+    return send(res, 200, {
+      version: '1.0',
+      publication: '2026-09-24T00:00:00Z',
+      services: [
+        [['com', 'net'], [`${base}/verisign/`]],
+        [['org'], [`${base}/pir/`]],
+      ],
+    })
+  }
+
+  const match = url.pathname.match(/^\/rdap\/[a-z]+\/domain\/([^/]+)$/)
+  if (!match) return send(res, 404, { errorCode: 404, title: 'Not Found' })
+
+  const domain = decodeURIComponent(match[1]).toLowerCase()
+  const [name] = domain.split('.')
+  if (name === 'registrydown') return send(res, 503, { errorCode: 503, title: 'Unavailable' })
+
+  const fixture = RDAP_REGISTERED[name]
+  if (!fixture) return send(res, 404, { errorCode: 404, title: 'Not Found' })
+
+  return send(res, 200, {
+    objectClassName: 'domain',
+    ldhName: domain.toUpperCase(),
+    status: fixture.status,
+    events: [
+      { eventAction: 'registration', eventDate: fixture.registeredAt() },
+      { eventAction: 'expiration', eventDate: fixture.expiresAt() },
+      { eventAction: 'last changed', eventDate: '2026-01-05T08:00:00Z' },
+    ],
+    entities: [
+      {
+        objectClassName: 'entity',
+        roles: ['registrar'],
+        vcardArray: [
+          'vcard',
+          [
+            ['version', {}, 'text', '4.0'],
+            ['fn', {}, 'text', 'Example Registrar, Inc.'],
+          ],
+        ],
+      },
+      {
+        objectClassName: 'entity',
+        roles: ['registrant'],
+        vcardArray: [
+          'vcard',
+          [
+            ['version', {}, 'text', '4.0'],
+            ['fn', {}, 'text', 'Adaeze Placeholder'],
+            ['email', {}, 'text', 'adaeze.placeholder@example.net'],
+            ['tel', {}, 'uri', 'tel:+234-800-000-0000'],
+          ],
+        ],
+      },
+    ],
+    nameservers: [
+      { objectClassName: 'nameserver', ldhName: 'NS1.EXAMPLE-DNS.NET' },
+      { objectClassName: 'nameserver', ldhName: 'NS2.EXAMPLE-DNS.NET' },
+    ],
+  })
+}
+
 createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     return send(res, 200, { ok: true, data: { status: 'healthy' } })
   }
   if (req.url?.startsWith('/flw/')) return void flutterwave(req, res)
+  if (req.method === 'GET' && req.url?.startsWith('/rdap/')) return rdap(req, res)
   if (req.method === 'GET' && req.url === '/v1/account/balance') {
     // Like the real account today: an empty float, so test mode records a shortfall.
     return send(res, 200, { ok: true, data: { balanceUsd: 0 } })
