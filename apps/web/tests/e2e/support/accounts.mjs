@@ -255,3 +255,86 @@ export async function settleRegistration(orderId, outcome) {
     if (result.error) throw result.error
   }
 }
+
+/**
+ * A domain registered in the registrar's sandbox from a test payment — the
+ * state a settled test order leaves behind — without buying it first.
+ *
+ * @param {string} userId
+ * @param {{ expiresInDays?: number }} [options]
+ */
+export async function createSandboxDomain(userId, { expiresInDays = 200 } = {}) {
+  const client = admin()
+  const domainName = `${TEST_DOMAIN_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}.com`
+  const { data, error } = await client
+    .from('domains')
+    .insert({
+      user_id: userId,
+      domain_name: domainName,
+      tld: 'com',
+      source: 'registration',
+      test_mode: true,
+      local_status: 'active',
+      registered_at: new Date(Date.now() - (365 - expiresInDays) * DAY_MS).toISOString(),
+      expires_at: new Date(Date.now() + expiresInDays * DAY_MS).toISOString(),
+      auto_renew: true,
+      privacy_enabled: false,
+    })
+    .select('id, domain_name, expires_at')
+    .single()
+  if (error) throw error
+  return { id: data.id, name: data.domain_name, expiresAt: data.expires_at }
+}
+
+/**
+ * Moves an order's renewal jobs the way the gateway worker would, without a
+ * registry: 'renewed' records the baseline and the new expiry read back
+ * (migration 23); any other outcome is a refusal code, refunded.
+ */
+export async function settleRenewal(orderId, outcome) {
+  const client = admin()
+  const { data: jobs, error } = await client
+    .from('jobs')
+    .select('id, test_mode, domain_id, order_items!inner(order_id, period_years)')
+    .eq('order_items.order_id', orderId)
+    .eq('kind', 'renew_domain')
+  if (error) throw error
+  if (!jobs?.length) throw new Error(`No renewal jobs for order ${orderId}`)
+  for (const job of jobs) {
+    const claim = await client.rpc('claim_job', {
+      p_worker: 'e2e',
+      p_test_mode: job.test_mode,
+      p_job_id: job.id,
+    })
+    if (claim.error) throw claim.error
+    if (outcome !== 'renewed') {
+      const failed = await client.rpc('fail_job', {
+        p_job_id: job.id,
+        p_code: outcome,
+        p_message: 'e2e',
+        p_needs_attention: false,
+      })
+      if (failed.error) throw failed.error
+      continue
+    }
+    const { data: domain, error: domainError } = await client
+      .from('domains')
+      .select('expires_at')
+      .eq('id', job.domain_id)
+      .single()
+    if (domainError) throw domainError
+    const baseline = await client.rpc('note_renewal_baseline', {
+      p_job_id: job.id,
+      p_expires_at: domain.expires_at,
+    })
+    if (baseline.error) throw baseline.error
+    const renewed = new Date(domain.expires_at)
+    renewed.setUTCFullYear(renewed.getUTCFullYear() + job.order_items.period_years)
+    const done = await client.rpc('complete_renewal', {
+      p_job_id: job.id,
+      p_expires_at: renewed.toISOString(),
+      p_recovered: false,
+    })
+    if (done.error) throw done.error
+  }
+}

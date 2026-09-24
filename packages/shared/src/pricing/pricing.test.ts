@@ -7,6 +7,7 @@ import {
   periodTotalKobo,
   priceCatalogue,
   priceFor,
+  renewalTotalKobo,
   roundUpToHundred,
   type TldCost,
   type TldRecord,
@@ -231,5 +232,17 @@ describe('vatKobo', () => {
 
   it('refuses a negative rate', () => {
     expect(() => vatKobo(100, -1)).toThrow(RangeError)
+  })
+})
+
+describe('renewalTotalKobo (FR-RN1)', () => {
+  it('charges every year at the renewal price', () => {
+    expect(renewalTotalKobo({ renewal: { priceKobo: 1_860_000 } }, 1)).toBe(1_860_000)
+    expect(renewalTotalKobo({ renewal: { priceKobo: 1_860_000 } }, 3)).toBe(5_580_000)
+  })
+
+  it('refuses a period that is not a whole number of years', () => {
+    expect(() => renewalTotalKobo({ renewal: { priceKobo: 100 } }, 0)).toThrow(RangeError)
+    expect(() => renewalTotalKobo({ renewal: { priceKobo: 100 } }, 1.5)).toThrow(RangeError)
   })
 })

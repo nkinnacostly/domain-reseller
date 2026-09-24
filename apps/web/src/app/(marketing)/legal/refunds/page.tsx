@@ -34,6 +34,10 @@ export default function RefundsPage() {
             domain failed and why.
           </li>
           <li>
+            <strong>The renewal could not be completed</strong> — the registry refused it. The
+            domain keeps its old expiry date, and your order says why.
+          </li>
+          <li>
             <strong>You were charged twice</strong> for the same order.
           </li>
         </ul>
@@ -58,9 +62,9 @@ export default function RefundsPage() {
 
       <LegalSection id="how" title="How to ask">
         <p>
-          Refunds for failed registrations need no request — if yours has not arrived within {days}{' '}
-          business days, or you think you were charged twice, email <EmailLink /> with your order
-          number (it starts with “ND-”). You can find it under{' '}
+          Refunds for failed registrations and renewals need no request — if yours has not arrived
+          within {days} business days, or you think you were charged twice, email <EmailLink /> with
+          your order number (it starts with “ND-”). You can find it under{' '}
           <Link href="/app/orders">your orders</Link>.
         </p>
       </LegalSection>

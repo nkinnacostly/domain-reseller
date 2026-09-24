@@ -57,6 +57,8 @@ export interface PortfolioReader {
 export interface Registrar {
   lookup(domainName: string): Promise<Lookup>
   register(input: RegisterInput): Promise<Write<RegistryDomain>>
+  /** Adds `years` to the registration. The answer's date is a hint: read the record back. */
+  renew(domainName: string, years: number): Promise<Write<{ expiresAt: string | null }>>
   setNameservers(domainName: string, nameservers: string[]): Promise<Write<string[]>>
 }
 
@@ -340,6 +342,28 @@ export function createDnaRegistrar(deps: {
         return { kind: 'rejected', code: verdict.code, message: verdict.message }
       if (verdict.outcome === 'not_found') {
         return { kind: 'rejected', code: 'REGISTRATION_FAILED', message: verdict.message }
+      }
+      return unsettled(verdict) as Unsettled
+    },
+
+    async renew(domainName, years) {
+      const { result, verdict, body } = await call('Renew', domainName, () =>
+        deps.client.Renew(domainName, years),
+      )
+      if (verdict.outcome === 'ok') {
+        const raw = (body ?? {}) as { expirationDate?: unknown }
+        const sdk = result && result.result === 'OK' ? result.data?.ExpirationDate : undefined
+        return {
+          kind: 'ok',
+          data: {
+            expiresAt: supplierDate(raw.expirationDate, typeof sdk === 'string' ? sdk : undefined),
+          },
+        }
+      }
+      if (verdict.outcome === 'rejected')
+        return { kind: 'rejected', code: verdict.code, message: verdict.message }
+      if (verdict.outcome === 'not_found') {
+        return { kind: 'rejected', code: 'DOMAIN_NOT_FOUND', message: verdict.message }
       }
       return unsettled(verdict) as Unsettled
     },

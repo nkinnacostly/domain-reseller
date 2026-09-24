@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 /**
  * Help centre. Every answer describes what the product does today (N9b) —
- * where something is not built (online renewal, starting a transfer), it says
+ * where something is not built (automatic renewal, starting a transfer), it says
  * so and gives the way that works now.
  */
 const TOPICS: { id: string; title: string; questions: { q: string; a: React.ReactNode }[] }[] = [
@@ -184,9 +184,12 @@ const TOPICS: { id: string; title: string; questions: { q: string; a: React.Reac
         q: 'How do I renew?',
         a: (
           <p>
-            Online renewal is not available yet. Email <EmailLink /> before the expiry date and we
-            will renew the domain at the renewal price shown in your account. The auto-renew switch
-            records what you want; automatic renewal is not active yet.
+            Open the domain in your account and choose Renew. Pick how many years to add, check the
+            total, and pay on Flutterwave’s page. The years are added to the current expiry date,
+            and the domain’s page shows the new date once the registry confirms it. The auto-renew
+            switch records what you want; automatic renewal is not switched on yet, so nothing is
+            charged unless you pay for it. A domain already in redemption needs a restore — email{' '}
+            <EmailLink /> for its cost.
           </p>
         ),
       },

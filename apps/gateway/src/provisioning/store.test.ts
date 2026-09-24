@@ -118,3 +118,66 @@ describe('Supabase job store', () => {
     await expect(store.claim('w', true, 300)).rejects.toThrow('permission denied')
   })
 })
+
+describe('Supabase job store — renewals (migration 23)', () => {
+  it('reads a renewal’s baseline and the charge behind it from the claim', () => {
+    const job = toClaimedJob({
+      ...ROW,
+      kind: 'renew_domain',
+      expires_at: '2027-09-23T10:00:00+00:00',
+      baseline_expiry: '2027-09-23T07:00:00+00:00',
+      payment: {
+        order_tx_ref: 'MDH-1',
+        order_total_kobo: '1978000',
+        reference: '4242',
+        amount_kobo: 1_978_000,
+        currency: 'NGN',
+        status: 'successful',
+      },
+    })
+    expect(job).toMatchObject({
+      kind: 'renew_domain',
+      expiresAt: '2027-09-23T10:00:00+00:00',
+      baselineExpiry: '2027-09-23T07:00:00+00:00',
+      payment: { orderTotalKobo: 1_978_000, amountKobo: 1_978_000, reference: '4242' },
+    })
+  })
+
+  it('leaves the renewal fields empty for other jobs', () => {
+    expect(toClaimedJob(ROW)).toMatchObject({
+      expiresAt: null,
+      baselineExpiry: null,
+      payment: null,
+    })
+  })
+
+  it('records the baseline, and returns the one the database kept', async () => {
+    const { client, calls } = fakeClient({ data: '2027-09-23T07:00:00+00:00' })
+    const kept = await createSupabaseStore(client).noteRenewalBaseline('j1', '2027-09-23T07:00:00Z')
+    expect(kept).toBe('2027-09-23T07:00:00+00:00')
+    expect(calls).toEqual([
+      {
+        fn: 'note_renewal_baseline',
+        args: { p_job_id: 'j1', p_expires_at: '2027-09-23T07:00:00Z' },
+      },
+    ])
+  })
+
+  it('records a renewal with the registry’s new expiry', async () => {
+    const { client, calls } = fakeClient()
+    await createSupabaseStore(client).completeRenewal('j1', '2028-09-23T07:00:00Z', true)
+    expect(calls).toEqual([
+      {
+        fn: 'complete_renewal',
+        args: { p_job_id: 'j1', p_expires_at: '2028-09-23T07:00:00Z', p_recovered: true },
+      },
+    ])
+  })
+
+  it('throws what the database refused', async () => {
+    const { client } = fakeClient({ error: { message: 'job j1 is not a renewal' } })
+    const store = createSupabaseStore(client)
+    await expect(store.noteRenewalBaseline('j1', 'x')).rejects.toThrow('not a renewal')
+    await expect(store.completeRenewal('j1', 'x', false)).rejects.toThrow('not a renewal')
+  })
+})

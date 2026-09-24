@@ -112,8 +112,8 @@ export function CartLine({ line }: { line: LineView }) {
                     Renew automatically
                   </span>
                   <span id={`${id}-renew-note`} className="block text-muted-foreground">
-                    At {line.renewal}/yr, charged before it expires. We email you first, and you can
-                    turn this off any time.
+                    At {line.renewal}/yr. Automatic renewal isn’t switched on yet — this records
+                    what you want, and you renew from your account.
                   </span>
                 </span>
               </label>

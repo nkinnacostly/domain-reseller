@@ -164,6 +164,18 @@ export function periodTotalKobo(
   return pricing.registration.priceKobo + pricing.renewal.priceKobo * (years - 1)
 }
 
+/**
+ * The price of renewing for `years` (FR-RN1): every year at the renewal
+ * price, the same figure shown beside every price we list (N8).
+ */
+export function renewalTotalKobo(
+  pricing: { renewal: { priceKobo: number } },
+  years: number,
+): number {
+  if (!Number.isInteger(years) || years < 1) throw new RangeError(`Invalid period: ${years}`)
+  return pricing.renewal.priceKobo * years
+}
+
 /** VAT on an amount in kobo, rounded half-up to the kobo. */
 export function vatKobo(amountKobo: number, vatPct: number): number {
   if (vatPct < 0) throw new RangeError('VAT cannot be negative')

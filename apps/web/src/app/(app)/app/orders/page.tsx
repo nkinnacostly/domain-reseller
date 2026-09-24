@@ -13,6 +13,7 @@ import {
   ROUND_LINK,
 } from '@/components/layout/panel'
 import { OrderStatus } from '@/features/checkout/components/order-status'
+import { orderKind } from '@/features/checkout/lib/progress'
 import { getOrders } from '@/features/checkout/queries/orders'
 import { cn } from '@/lib/utils'
 
@@ -54,6 +55,11 @@ async function Orders() {
                 <div className="min-w-0">
                   <p className="font-medium text-foreground">
                     {order.order_number}
+                    {orderKind(order.order_items) === 'renew' ? (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        renewal
+                      </span>
+                    ) : null}
                     {order.test_mode ? (
                       <span className="ml-2 text-xs font-normal text-muted-foreground">test</span>
                     ) : null}
@@ -63,7 +69,7 @@ async function Orders() {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:text-right">
-                  <OrderStatus status={order.status} />
+                  <OrderStatus status={order.status} kind={orderKind(order.order_items)} />
                   <span className="font-medium text-foreground tabular-nums">
                     {formatNaira(Number(order.total_kobo))}
                   </span>

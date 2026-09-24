@@ -48,8 +48,9 @@ export function AutoRenewToggle({
             Renew automatically
           </span>
           <span id={`${id}-note`} className="block text-pretty text-muted-foreground">
-            {renewal ? `At ${renewal}/yr, 30 days before it expires. ` : ''}
-            Renewals are not switched on yet — this records what you want to happen.
+            {renewal ? `At ${renewal}/yr. ` : ''}
+            Automatic renewal isn’t switched on yet — this records what you want. Until it is, renew
+            from the Renew tab.
           </span>
         </span>
       </label>

@@ -83,6 +83,9 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
         ? { kind: 'rejected', code: 'DOMAIN_TAKEN', message: 'Domain exists' }
         : { kind: 'ok', data: REGISTERED }
     },
+    async renew() {
+      return { kind: 'rejected', code: 'DOMAIN_NOT_FOUND', message: 'Not renewed in this suite' }
+    },
     async setNameservers(_name, nameservers) {
       return { kind: 'ok', data: nameservers }
     },

@@ -196,6 +196,46 @@ describe('register', () => {
   })
 })
 
+describe('renew', () => {
+  it('asks for the years paid for, and reports the new expiry on the supplier’s clock', async () => {
+    const { registrar, sent } = setup(() => json(200, { expirationDate: '2028-09-23T10:00:00' }))
+    await expect(registrar.renew('example.com', 1)).resolves.toEqual({
+      kind: 'ok',
+      data: { expiresAt: '2028-09-23T07:00:00.000Z' },
+    })
+    expect(sent[0]).toMatchObject({
+      method: 'POST',
+      path: expect.stringMatching(/domains\/renew$/),
+      body: { domainName: 'example.com', period: 1 },
+    })
+  })
+
+  it('never reads a timeout as failed — it may have landed', async () => {
+    const { registrar } = setup(timeout)
+    await expect(registrar.renew('example.com', 1)).resolves.toMatchObject({ kind: 'unknown' })
+  })
+
+  it('reads a domain not in our account as a refusal', async () => {
+    const { registrar } = setup(() => json(404, NOT_FOUND))
+    await expect(registrar.renew('example.com', 1)).resolves.toMatchObject({
+      kind: 'rejected',
+      code: 'DOMAIN_NOT_FOUND',
+    })
+  })
+
+  it('classifies a refusal from the supplier’s own message', async () => {
+    const { registrar } = setup(() =>
+      json(400, { error: { message: 'Domain can not be renewed for the given period' } }),
+    )
+    await expect(registrar.renew('example.com', 9)).resolves.toMatchObject({ kind: 'rejected' })
+  })
+
+  it('reports refused credentials as blocked, for operations', async () => {
+    const { registrar } = setup(() => json(401, {}))
+    await expect(registrar.renew('example.com', 1)).resolves.toMatchObject({ kind: 'blocked' })
+  })
+})
+
 describe('setNameservers', () => {
   it('applies the set', async () => {
     const { registrar, sent } = setup(() =>

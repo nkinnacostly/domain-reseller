@@ -15,6 +15,11 @@ describe('refund copy (FR-R3)', () => {
     expect(refundLabel({ reason: 'something_new', domain: null })).toBe('Refund')
   })
 
+  it('names the domain a failed renewal refunds, as a renewal', () => {
+    expect(refundLabel({ reason: 'renewal_failed', domain: 'x.com' })).toBe('Renewal of x.com')
+    expect(refundLabel({ reason: 'renewal_failed', domain: null })).toBe('Refund')
+  })
+
   it('says where the money goes and that nothing is needed', () => {
     expect(
       refundDetail({ state: 'processing', refundedAt: null, testMode: false }, format),

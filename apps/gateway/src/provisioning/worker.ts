@@ -1,6 +1,7 @@
 import { contactSchema } from '@dr/shared'
 import type { PaymentCheck } from '../payments/charge-check'
 import type { Registrar } from './registrar'
+import { runRenewal } from './renewal'
 import { applyNameservers, runRegistration } from './saga'
 import type { ClaimedJob, JobStore } from './store'
 
@@ -69,20 +70,25 @@ export function createWorker(options: WorkerOptions) {
     log.error({ jobId: job.id, kind: job.kind, code }, 'job needs attention: outcome unknown')
   }
 
-  async function register(job: ClaimedJob, registrar: Registrar) {
-    // Nothing is registered — not even read from the registry — for a charge
-    // Flutterwave does not confirm. A refusal goes to a person, never to a
-    // refund: refunding a charge that is not real would pay out twice.
+  /**
+   * Nothing is registered or renewed — not even read from the registry — for
+   * a charge Flutterwave does not confirm. A refusal goes to a person, never
+   * to a refund: refunding a charge that is not real would pay out twice.
+   */
+  async function paidFor(job: ClaimedJob): Promise<boolean> {
     const paid = await checkPayment(job)
+    if (paid.kind === 'verified') return true
     if (paid.kind === 'unknown') {
       await unsettled(job, paid.code, paid.message)
-      return
+      return false
     }
-    if (paid.kind === 'refused') {
-      await store.fail(job.id, paid.code, paid.message, true)
-      log.error({ jobId: job.id, code: paid.code }, 'registration stopped: payment not verified')
-      return
-    }
+    await store.fail(job.id, paid.code, paid.message, true)
+    log.error({ jobId: job.id, kind: job.kind, code: paid.code }, 'stopped: payment not verified')
+    return false
+  }
+
+  async function register(job: ClaimedJob, registrar: Registrar) {
+    if (!(await paidFor(job))) return
 
     const contact = contactSchema.safeParse(job.registrant)
     if (!contact.success || !job.periodYears) {
@@ -145,6 +151,58 @@ export function createWorker(options: WorkerOptions) {
     }
   }
 
+  async function renew(job: ClaimedJob, registrar: Registrar) {
+    if (!(await paidFor(job))) return
+    if (!job.periodYears) {
+      await store.fail(job.id, 'BAD_JOB', 'Renewal period missing', true)
+      log.error({ jobId: job.id }, 'renewal job has invalid data')
+      return
+    }
+
+    const outcome = await runRenewal(registrar, {
+      domainName: job.domainName,
+      years: job.periodYears,
+      baseline: job.baselineExpiry,
+      noteBaseline: (expiresAt) => store.noteRenewalBaseline(job.id, expiresAt),
+    })
+
+    switch (outcome.kind) {
+      case 'renewed':
+        await store.completeRenewal(job.id, outcome.domain.expiresAt, outcome.recovered)
+        log.info(
+          { jobId: job.id, domainId: job.domainId, recovered: outcome.recovered },
+          'domain renewed',
+        )
+        return
+      case 'rejected':
+        await store.fail(job.id, outcome.code, outcome.message, false)
+        log.warn({ jobId: job.id, code: outcome.code }, 'renewal refused')
+        return
+      case 'not_renewed':
+        if (job.attempts < maxAttempts) {
+          await store.reschedule(
+            job.id,
+            backoffSeconds(job.attempts),
+            outcome.code,
+            outcome.message,
+          )
+          log.warn({ jobId: job.id, attempt: job.attempts }, 'renewal not made; retrying')
+        } else {
+          // Known not renewed, retries spent: the line fails and is refunded.
+          await store.fail(job.id, 'SUPPLIER_UNAVAILABLE', outcome.message, false)
+          log.error({ jobId: job.id }, 'renewal failed after retries')
+        }
+        return
+      case 'unknown':
+      case 'blocked':
+        if (outcome.kind === 'blocked') {
+          log.error({ jobId: job.id, code: outcome.code }, 'supplier refused our credentials')
+        }
+        await unsettled(job, outcome.code, outcome.message)
+        return
+    }
+  }
+
   async function changeNameservers(job: ClaimedJob, registrar: Registrar) {
     const requested = job.pendingNameservers
     if (!requested || job.localStatus !== 'active') {
@@ -170,8 +228,19 @@ export function createWorker(options: WorkerOptions) {
 
   async function run(job: ClaimedJob) {
     const registrar = registrarFor(job)
-    if (job.kind === 'register_domain') await register(job, registrar)
-    else await changeNameservers(job, registrar)
+    switch (job.kind) {
+      case 'register_domain':
+        return register(job, registrar)
+      case 'renew_domain':
+        return renew(job, registrar)
+      case 'apply_nameservers':
+        return changeNameservers(job, registrar)
+      default:
+        // A kind this build does not know: hold it for a person — never fail
+        // it as something else, which could refund a line that is fine.
+        await store.fail(job.id, 'UNKNOWN_JOB_KIND', `No handler for ${String(job.kind)}`, true)
+        log.error({ jobId: job.id, kind: job.kind }, 'job of an unknown kind held')
+    }
   }
 
   /** Claims and runs one job. False when the queue had nothing due. */

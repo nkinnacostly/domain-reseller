@@ -23,6 +23,9 @@ function scripted(script: {
       if (!script.register) throw new Error('unexpected register')
       return script.register
     },
+    async renew() {
+      throw new Error('a registration never renews')
+    },
     async setNameservers() {
       log.push('setNameservers')
       if (!script.setNameservers) throw new Error('unexpected setNameservers')

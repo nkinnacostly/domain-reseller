@@ -38,6 +38,22 @@ describe('toClaimedRefund', () => {
     })
   })
 
+  it('reads what a renewal refund needs, and leaves it empty for others', () => {
+    expect(
+      toClaimedRefund({
+        ...ROW,
+        reason: 'renewal_failed',
+        renewal_baseline: '2027-09-23T07:00:00+00:00',
+        renewal_years: 2,
+      }),
+    ).toMatchObject({
+      reason: 'renewal_failed',
+      renewalBaseline: '2027-09-23T07:00:00+00:00',
+      renewalYears: 2,
+    })
+    expect(toClaimedRefund(ROW)).toMatchObject({ renewalBaseline: null, renewalYears: null })
+  })
+
   it('refuses anything it does not recognise rather than guessing', () => {
     expect(() => toClaimedRefund({ ...ROW, action: 'refund_everything' })).toThrow()
     expect(() => toClaimedRefund({ ...ROW, amount_kobo: -1 })).toThrow()

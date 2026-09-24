@@ -21,6 +21,9 @@ const FAILURE_REASON: Record<string, string> = {
   DOMAIN_TAKEN: 'Someone else registered this name before we could.',
   TLD_UNSUPPORTED: 'The registry would not accept this extension from us.',
   CONTACT_INVALID: 'The registry rejected the contact details.',
+  // Renewals (migration 23): the line named a domain this account does not hold.
+  NOT_RENEWABLE: 'This domain is not one this account can renew.',
+  DOMAIN_NOT_FOUND: 'The registry does not list this domain in our account.',
 }
 const FAILURE_FALLBACK = 'The registry could not complete it.'
 

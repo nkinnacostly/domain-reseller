@@ -38,6 +38,8 @@ function claimed(overrides: Partial<ClaimedRefund> = {}): ClaimedRefund {
     orderNumber: 'ND-001050',
     domainName: 'getpaid.com',
     heldByOtherAccount: false,
+    renewalBaseline: null,
+    renewalYears: null,
     knownProviderRefundIds: [],
     otherRefundsKobo: 0,
     ...overrides,
@@ -602,6 +604,81 @@ describe('checks that stop a refund before money moves', () => {
   it('still sends when the balance cannot be read — Flutterwave refuses what it cannot cover', async () => {
     const { refunder, flutterwave } = setup(claimed())
     flutterwave.availableBalanceKobo.mockResolvedValueOnce(unknown)
+    await refunder.tick()
+    expect(flutterwave.createRefund).toHaveBeenCalled()
+  })
+})
+
+describe('a failed renewal (FR-RN1)', () => {
+  const renewalRefund = (over: Partial<ClaimedRefund> = {}) =>
+    claimed({
+      reason: 'renewal_failed',
+      renewalBaseline: '2027-09-23T10:00:00.000Z',
+      renewalYears: 1,
+      ...over,
+    })
+  const registryAt = (expiresAt: string | null): Lookup => ({
+    kind: 'found',
+    domain: {
+      registeredAt: null,
+      expiresAt,
+      nameservers: [],
+      transferLock: true,
+      privacy: false,
+    },
+  })
+
+  it('refunds when the registry’s expiry has not moved on', async () => {
+    const { refunder, flutterwave } = setup(renewalRefund(), {
+      lookup: registryAt('2027-09-23T10:00:00.000Z'),
+    })
+    await refunder.tick()
+    expect(flutterwave.createRefund).toHaveBeenCalled()
+  })
+
+  it('never refunds a renewal the registry shows made — that would pay twice', async () => {
+    const { refunder, store, flutterwave } = setup(renewalRefund(), {
+      lookup: registryAt('2028-09-23T10:00:00.000Z'),
+    })
+    await refunder.tick()
+    expect(store.fail).toHaveBeenCalledWith(
+      'refund-1',
+      W,
+      'RENEWED_AT_REGISTRY',
+      expect.any(String),
+      true,
+    )
+    expect(flutterwave.createRefund).not.toHaveBeenCalled()
+  })
+
+  it('waits when the expiry cannot be read', async () => {
+    for (const lookup of [
+      { kind: 'unknown', code: 'TIMEOUT', message: 'slow' } as const,
+      registryAt(null),
+    ]) {
+      const { refunder, store, flutterwave } = setup(renewalRefund(), { lookup })
+      await refunder.tick()
+      expect(store.reschedule).toHaveBeenCalledWith(
+        'refund-1',
+        W,
+        300,
+        'REGISTRY_UNREADABLE',
+        expect.any(String),
+        false,
+      )
+      expect(flutterwave.createRefund).not.toHaveBeenCalled()
+    }
+  })
+
+  it('refunds straight away when no Renew call was ever made', async () => {
+    const { refunder, lookup, flutterwave } = setup(renewalRefund({ renewalBaseline: null }))
+    await refunder.tick()
+    expect(lookup).not.toHaveBeenCalled()
+    expect(flutterwave.createRefund).toHaveBeenCalled()
+  })
+
+  it('refunds a renewal of a domain no longer in our account', async () => {
+    const { refunder, flutterwave } = setup(renewalRefund(), { lookup: { kind: 'not_found' } })
     await refunder.tick()
     expect(flutterwave.createRefund).toHaveBeenCalled()
   })

@@ -55,6 +55,13 @@ describe('failureReason (N10)', () => {
     expect(failureReason('SUPPLIER_INSUFFICIENT_FUNDS')).toBe('The registry could not complete it.')
     expect(failureReason(undefined)).toBe('The registry could not complete it.')
   })
+
+  it('explains a renewal the registry would not make, in plain words', () => {
+    expect(failureReason('NOT_RENEWABLE')).toBe('This domain is not one this account can renew.')
+    expect(failureReason('DOMAIN_NOT_FOUND')).toBe(
+      'The registry does not list this domain in our account.',
+    )
+  })
 })
 
 describe('nameserverNote', () => {

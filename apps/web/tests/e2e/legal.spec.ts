@@ -124,7 +124,7 @@ test.describe('compliance statements', () => {
     await page.goto('/help')
     const question = page.getByRole('button', { name: 'How do I renew?' })
     await question.click()
-    await expect(page.getByText('Online renewal is not available yet.')).toBeVisible()
+    await expect(page.getByText(/Open the domain in your account and choose Renew\./)).toBeVisible()
   })
 })
 

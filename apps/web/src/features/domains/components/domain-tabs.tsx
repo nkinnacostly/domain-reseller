@@ -7,6 +7,7 @@ export function DomainTabs({ domain }: { domain: string }) {
   const base = `/app/domains/${domain}`
   const tabs = [
     { href: base, label: 'Overview', exact: true },
+    { href: `${base}/renew`, label: 'Renew' },
     { href: `${base}/nameservers`, label: 'Nameservers' },
     { href: `${base}/contacts`, label: 'Contacts' },
     { href: `${base}/security`, label: 'Security' },

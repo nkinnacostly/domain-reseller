@@ -415,6 +415,7 @@ export type Database = {
       jobs: {
         Row: {
           attempts: number
+          baseline_expiry: string | null
           created_at: string
           domain_id: string
           finished_at: string | null
@@ -433,6 +434,7 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          baseline_expiry?: string | null
           created_at?: string
           domain_id: string
           finished_at?: string | null
@@ -451,6 +453,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          baseline_expiry?: string | null
           created_at?: string
           domain_id?: string
           finished_at?: string | null
@@ -641,6 +644,7 @@ export type Database = {
           auto_renew: boolean
           created_at: string
           domain: string
+          domain_id: string | null
           failure_code: string | null
           id: string
           item_type: string
@@ -657,6 +661,7 @@ export type Database = {
           auto_renew: boolean
           created_at?: string
           domain: string
+          domain_id?: string | null
           failure_code?: string | null
           id?: string
           item_type?: string
@@ -673,6 +678,7 @@ export type Database = {
           auto_renew?: boolean
           created_at?: string
           domain?: string
+          domain_id?: string | null
           failure_code?: string | null
           id?: string
           item_type?: string
@@ -1489,6 +1495,10 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["domain_status"]
       }
+      complete_renewal: {
+        Args: { p_expires_at: string; p_job_id: string; p_recovered: boolean }
+        Returns: undefined
+      }
       current_alert_conditions: {
         Args: { p_test_mode: boolean }
         Returns: {
@@ -1517,6 +1527,7 @@ export type Database = {
         }
         Returns: string
       }
+      expire_unpaid_orders: { Args: { p_older_than?: string }; Returns: number }
       fail_job: {
         Args: {
           p_code: string
@@ -1574,6 +1585,10 @@ export type Database = {
         Args: { p_refund_id: string; p_worker: string }
         Returns: undefined
       }
+      note_renewal_baseline: {
+        Args: { p_expires_at: string; p_job_id: string }
+        Returns: string
+      }
       orders_to_check: {
         Args: { p_limit: number; p_test_mode: boolean }
         Returns: {
@@ -1586,6 +1601,7 @@ export type Database = {
         }[]
       }
       payment_record: { Args: { p_raw: Json }; Returns: Json }
+      purge_stale_carts: { Args: { p_older_than?: string }; Returns: number }
       purge_test_orders: { Args: { p_user_id: string }; Returns: undefined }
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
@@ -1732,7 +1748,7 @@ export type Database = {
         | "er-api"
         | "currency-api"
       fx_status: "active" | "pending_review" | "superseded" | "rejected"
-      job_kind: "register_domain" | "apply_nameservers"
+      job_kind: "register_domain" | "apply_nameservers" | "renew_domain"
       job_status:
         | "queued"
         | "running"
@@ -1759,6 +1775,7 @@ export type Database = {
         | "overpayment"
         | "underpayment"
         | "empty_order"
+        | "renewal_failed"
       refund_status:
         | "queued"
         | "held"
@@ -1924,7 +1941,7 @@ export const Constants = {
         "currency-api",
       ],
       fx_status: ["active", "pending_review", "superseded", "rejected"],
-      job_kind: ["register_domain", "apply_nameservers"],
+      job_kind: ["register_domain", "apply_nameservers", "renew_domain"],
       job_status: [
         "queued",
         "running",
@@ -1954,6 +1971,7 @@ export const Constants = {
         "overpayment",
         "underpayment",
         "empty_order",
+        "renewal_failed",
       ],
       refund_status: [
         "queued",

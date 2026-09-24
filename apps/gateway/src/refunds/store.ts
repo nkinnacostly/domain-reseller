@@ -17,6 +17,7 @@ const claimSchema = z.object({
   action: z.enum(['send', 'recover', 'poll']),
   reason: z.enum([
     'registration_failed',
+    'renewal_failed',
     'duplicate_charge',
     'overpayment',
     'underpayment',
@@ -36,6 +37,8 @@ const claimSchema = z.object({
   order_number: z.string(),
   domain_name: z.string().nullable(),
   held_by_other_account: z.boolean(),
+  renewal_baseline: z.string().nullable().optional(),
+  renewal_years: z.number().int().positive().nullable().optional(),
   known_provider_refund_ids: z.array(z.string()),
   other_refunds_kobo: z.coerce.number().int().nonnegative(),
 })
@@ -63,6 +66,9 @@ export type ClaimedRefund = {
   domainName: string | null
   /** Another account here holds the name — so the registry's record is theirs, not this line's. */
   heldByOtherAccount: boolean
+  /** A renewal refund: the registry's expiry before our Renew call, or null if none was made. */
+  renewalBaseline: string | null
+  renewalYears: number | null
   /** Refunds at Flutterwave that our rows account for: other rows', and every failed one. */
   knownProviderRefundIds: string[]
   /** What our other refunds on this charge add up to. */
@@ -89,6 +95,8 @@ export function toClaimedRefund(raw: unknown): ClaimedRefund {
     orderNumber: row.order_number,
     domainName: row.domain_name,
     heldByOtherAccount: row.held_by_other_account,
+    renewalBaseline: row.renewal_baseline ?? null,
+    renewalYears: row.renewal_years ?? null,
     knownProviderRefundIds: row.known_provider_refund_ids,
     otherRefundsKobo: row.other_refunds_kobo,
   }

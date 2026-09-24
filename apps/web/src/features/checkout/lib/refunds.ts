@@ -13,6 +13,7 @@ const REASONS: Record<string, string> = {
 
 export function refundLabel(refund: { reason: string; domain: string | null }): string {
   if (refund.reason === 'registration_failed' && refund.domain) return refund.domain
+  if (refund.reason === 'renewal_failed' && refund.domain) return `Renewal of ${refund.domain}`
   return REASONS[refund.reason] ?? 'Refund'
 }
 

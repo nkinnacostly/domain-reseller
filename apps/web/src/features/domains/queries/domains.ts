@@ -81,7 +81,7 @@ export const getDomain = cache(async (domainName: string) => {
   const supabase = await createClient()
   const { data } = await supabase
     .from('domains')
-    .select(`${COLUMNS}, order_items(failure_code)`)
+    .select(`${COLUMNS}, order_items(failure_code, renewal_kobo)`)
     .eq('domain_name', decodeURIComponent(domainName).toLowerCase())
     .order('created_at', { ascending: false })
     .limit(1)
@@ -95,6 +95,11 @@ export const getDomain = cache(async (domainName: string) => {
     registrant: data.registrant as Record<string, string> | null,
     /** Why registration failed, when it did (PRD §13.8 code). */
     failureCode: data.order_items?.failure_code ?? null,
+    /** The renewal price quoted when it was bought (N8) — FR-RN7 compares with it. */
+    promisedRenewalKobo:
+      data.order_items?.renewal_kobo === undefined || data.order_items?.renewal_kobo === null
+        ? null
+        : Number(data.order_items.renewal_kobo),
   }
 })
 export type DomainDetail = NonNullable<Awaited<ReturnType<typeof getDomain>>>

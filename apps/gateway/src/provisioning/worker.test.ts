@@ -38,6 +38,8 @@ const job = (over: Partial<ClaimedJob> = {}): ClaimedJob => ({
   registrant: REGISTRANT,
   pendingNameservers: null,
   periodYears: 1,
+  expiresAt: null,
+  baselineExpiry: null,
   payment: {
     orderTxRef: 'MDH-2f1c1a3e-8d7b-4c55-9a0e-1f2d3c4b5a69',
     orderTotalKobo: 1_978_000,
@@ -68,6 +70,11 @@ function fakeStore(claimed: ClaimedJob | null) {
     },
     recordCall: record('recordCall'),
     completeRegistration: record('complete') as JobStore['completeRegistration'],
+    noteRenewalBaseline: async (...args: [string, string]) => {
+      actions.push({ type: 'baseline', args })
+      return args[1]
+    },
+    completeRenewal: record('renewed') as JobStore['completeRenewal'],
     recordNameserverChange: record('nameservers') as JobStore['recordNameserverChange'],
     reschedule: record('reschedule') as JobStore['reschedule'],
     fail: record('fail') as JobStore['fail'],
@@ -78,12 +85,14 @@ function fakeStore(claimed: ClaimedJob | null) {
 function registrar(script: {
   lookups?: Lookup[]
   register?: Write<RegistryDomain>
+  renew?: Write<{ expiresAt: string | null }>
   setNameservers?: Write<string[]>
 }): Registrar {
   const lookups = [...(script.lookups ?? [])]
   return {
     lookup: async () => lookups.shift() ?? { kind: 'not_found' },
     register: async () => script.register ?? { kind: 'ok', data: DOMAIN },
+    renew: async () => script.renew ?? { kind: 'ok', data: { expiresAt: null } },
     setNameservers: async () => script.setNameservers ?? { kind: 'ok', data: VERCEL },
   }
 }
@@ -115,6 +124,9 @@ describe('provisioning worker — the charge comes first (SEC-7)', () => {
     },
     register: async () => {
       throw new Error('registered without a confirmed payment')
+    },
+    renew: async () => {
+      throw new Error('renewed without a confirmed payment')
     },
     setNameservers: async () => {
       throw new Error('nameservers set without a confirmed payment')
@@ -353,5 +365,148 @@ describe('the loop', () => {
     await new Promise((resolve) => setTimeout(resolve, 30))
     await instance.stop()
     expect(claim.mock.calls.length).toBeGreaterThan(1)
+  })
+})
+
+describe('provisioning worker — renewals (FR-RN1)', () => {
+  const renewal = (over: Partial<ClaimedJob> = {}) =>
+    job({ kind: 'renew_domain', localStatus: 'active', periodYears: 2, ...over })
+  const found = (expiresAt: string): Lookup => ({ kind: 'found', domain: { ...DOMAIN, expiresAt } })
+
+  it('records the baseline before renewing, then the registry’s new expiry', async () => {
+    const { instance, actions } = worker(
+      renewal(),
+      registrar({
+        lookups: [found('2027-09-23T10:00:00.000Z'), found('2029-09-23T10:00:00.000Z')],
+      }),
+    )
+    await instance.tick()
+    expect(actions).toEqual([
+      { type: 'baseline', args: ['job-1', '2027-09-23T10:00:00.000Z'] },
+      { type: 'renewed', args: ['job-1', '2029-09-23T10:00:00.000Z', false] },
+    ])
+  })
+
+  it('never renews for a charge Flutterwave does not confirm', async () => {
+    const renew = vi.fn()
+    const { instance, actions } = worker(
+      renewal(),
+      { ...registrar({}), renew },
+      {
+        checkPayment: async () => ({
+          kind: 'refused',
+          code: 'PAYMENT_NOT_VERIFIED',
+          message: 'The charge is for another amount',
+        }),
+      },
+    )
+    await instance.tick()
+    expect(renew).not.toHaveBeenCalled()
+    expect(actions).toEqual([
+      {
+        type: 'fail',
+        args: ['job-1', 'PAYMENT_NOT_VERIFIED', 'The charge is for another amount', true],
+      },
+    ])
+  })
+
+  it('finishes without renewing again when an earlier attempt already landed', async () => {
+    const renew = vi.fn()
+    const { instance, actions } = worker(renewal({ baselineExpiry: '2027-09-23T10:00:00.000Z' }), {
+      ...registrar({ lookups: [found('2029-09-23T10:00:00.000Z')] }),
+      renew,
+    })
+    await instance.tick()
+    expect(renew).not.toHaveBeenCalled()
+    expect(actions).toEqual([
+      { type: 'renewed', args: ['job-1', '2029-09-23T10:00:00.000Z', true] },
+    ])
+  })
+
+  it('refunds a refusal: the line fails, not for a person', async () => {
+    const { instance, actions } = worker(
+      renewal(),
+      registrar({
+        lookups: [found('2027-09-23T10:00:00.000Z')],
+        renew: { kind: 'rejected', code: 'DOMAIN_NOT_FOUND', message: 'Cannot renew' },
+      }),
+    )
+    await instance.tick()
+    expect(actions.at(-1)).toEqual({
+      type: 'fail',
+      args: ['job-1', 'DOMAIN_NOT_FOUND', 'Cannot renew', false],
+    })
+  })
+
+  it('waits on an unknown answer, and never renews again blind (I2)', async () => {
+    const { instance, actions } = worker(
+      renewal(),
+      registrar({
+        lookups: [found('2027-09-23T10:00:00.000Z'), timedOut],
+        renew: timedOut,
+      }),
+    )
+    await instance.tick()
+    expect(actions.at(-1)).toEqual({
+      type: 'reschedule',
+      args: ['job-1', 30, 'TIMEOUT', 'No answer'],
+    })
+  })
+
+  it('holds for a person once retries of an unknown answer run out', async () => {
+    const { instance, actions } = worker(
+      renewal({ attempts: 4, baselineExpiry: '2027-09-23T10:00:00.000Z' }),
+      registrar({ lookups: [found('2028-03-23T10:00:00.000Z')] }),
+    )
+    await instance.tick()
+    expect(actions.at(-1)).toEqual({
+      type: 'fail',
+      args: ['job-1', 'EXPIRY_MOVED', expect.any(String), true],
+    })
+  })
+
+  it('tries again when a failed attempt is known not to have renewed, then fails for a refund', async () => {
+    const script = {
+      lookups: [found('2027-09-23T10:00:00.000Z'), found('2027-09-23T10:00:00.000Z')],
+      renew: timedOut,
+    }
+    const first = worker(renewal(), registrar(script))
+    await first.instance.tick()
+    expect(first.actions.at(-1)).toEqual({
+      type: 'reschedule',
+      args: ['job-1', 30, 'TIMEOUT', 'No answer'],
+    })
+
+    const last = worker(
+      renewal({ attempts: 4 }),
+      registrar({ ...script, lookups: [...script.lookups] }),
+    )
+    await last.instance.tick()
+    expect(last.actions.at(-1)).toEqual({
+      type: 'fail',
+      args: ['job-1', 'SUPPLIER_UNAVAILABLE', 'No answer', false],
+    })
+  })
+
+  it('holds a renewal with no period for a person', async () => {
+    const { instance, actions } = worker(renewal({ periodYears: null }), registrar({}))
+    await instance.tick()
+    expect(actions).toEqual([
+      { type: 'fail', args: ['job-1', 'BAD_JOB', 'Renewal period missing', true] },
+    ])
+  })
+
+  it('holds a job of a kind it does not know, rather than failing it as something else', async () => {
+    const { instance, actions } = worker(
+      job({ kind: 'transfer_domain' as ClaimedJob['kind'] }),
+      registrar({}),
+    )
+    await instance.tick()
+    expect(actions).toEqual([
+      {
+        type: 'fail',
+        args: ['job-1', 'UNKNOWN_JOB_KIND', 'No handler for transfer_domain', true],
+      },
+    ])
   })
 })

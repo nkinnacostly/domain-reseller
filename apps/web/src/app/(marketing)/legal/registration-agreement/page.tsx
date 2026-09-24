@@ -18,8 +18,9 @@ export const metadata: Metadata = {
  * The registration agreement (PRD CMP-1, FR-PUB4). It must identify the
  * sponsoring registrar and carry the registrant provisions ICANN's 2013 RAA
  * (§3.7.7) requires in every registration agreement. Copy states only what
- * the service does today (N9b): online renewal and self-serve contact edits
- * are not built, so the agreement says to email instead.
+ * the service does today (N9b): renewal is online and paid by the customer;
+ * automatic renewal, restores and self-serve contact edits are not built, so
+ * the agreement says so and gives the way that works now.
  */
 export default function RegistrationAgreementPage() {
   return (
@@ -149,8 +150,12 @@ export default function RegistrationAgreementPage() {
           Your account shows each domain’s expiry date. Renewing on time is your responsibility.
         </p>
         <p>
-          Online renewal is not available yet. To renew, email <EmailLink /> before the expiry date
-          and we will renew the domain at the renewal price shown in your account.
+          To renew, open the domain in your account, choose Renew, pick how many years to add and
+          pay the total shown. The years are added to the current expiry date. We treat a renewal as
+          done only once the registry shows the new expiry date; if the registry refuses it, what
+          you paid is refunded. Automatic renewal is not switched on yet: the auto-renew setting
+          records what you want, and nothing is charged without you paying for it. A domain in
+          redemption cannot be renewed online — email <EmailLink /> for the cost of restoring it.
         </p>
         <p>
           If a domain expires, it usually stops working. Most generic extensions then allow a

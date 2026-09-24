@@ -13,7 +13,7 @@ import type { CallRecord, RegistryDomain } from './registrar'
 
 export type ClaimedJob = {
   id: string
-  kind: 'register_domain' | 'apply_nameservers'
+  kind: 'register_domain' | 'apply_nameservers' | 'renew_domain'
   /** Including this one. */
   attempts: number
   testMode: boolean
@@ -24,7 +24,11 @@ export type ClaimedJob = {
   registrant: unknown
   pendingNameservers: string[] | null
   periodYears: number | null
-  /** For a registration: the charge that paid for it, confirmed with Flutterwave first. */
+  /** Our record of the expiry; the registry's is read before anything is renewed. */
+  expiresAt: string | null
+  /** Renewals: the registry's expiry just before this job's first Renew call (migration 23). */
+  baselineExpiry: string | null
+  /** For a registration or renewal: the charge that paid for it, confirmed with Flutterwave first. */
   payment: PaymentFacts | null
 }
 
@@ -46,6 +50,9 @@ export interface JobStore {
   /** `jobId` is null for calls that belong to no job, such as a portfolio read. */
   recordCall(jobId: string | null, environment: WriteTarget, call: CallRecord): Promise<void>
   completeRegistration(jobId: string, completion: Completion): Promise<void>
+  /** Records a renewal's baseline before its first Renew call; returns the one stored. */
+  noteRenewalBaseline(jobId: string, expiresAt: string): Promise<string>
+  completeRenewal(jobId: string, expiresAt: string, recovered: boolean): Promise<void>
   /** `applied` null means the registry refused `attempted`. */
   recordNameserverChange(
     jobId: string,
@@ -69,6 +76,8 @@ type Row = {
   registrant: unknown
   pending_nameservers: string[] | null
   period_years: number | null
+  expires_at?: string | null
+  baseline_expiry?: string | null
   payment?: {
     order_tx_ref: string | null
     order_total_kobo: number | string | null
@@ -95,6 +104,8 @@ export function toClaimedJob(row: Row): ClaimedJob {
     registrant: row.registrant,
     pendingNameservers: row.pending_nameservers,
     periodYears: row.period_years,
+    expiresAt: row.expires_at ?? null,
+    baselineExpiry: row.baseline_expiry ?? null,
     payment: row.payment
       ? {
           orderTxRef: row.payment.order_tx_ref ?? '',
@@ -163,6 +174,25 @@ export function createSupabaseStore(
           p_recovered: recovered,
           p_nameserver_result: nameserverResult,
           p_nameserver_code: nullable(nameserverCode),
+        }),
+      )
+    },
+
+    async noteRenewalBaseline(jobId, expiresAt) {
+      const { data, error } = await client.rpc('note_renewal_baseline', {
+        p_job_id: jobId,
+        p_expires_at: expiresAt,
+      })
+      if (error) throw new Error(error.message)
+      return String(data)
+    },
+
+    async completeRenewal(jobId, expiresAt, recovered) {
+      await rpc(
+        client.rpc('complete_renewal', {
+          p_job_id: jobId,
+          p_expires_at: expiresAt,
+          p_recovered: recovered,
         }),
       )
     },

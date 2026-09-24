@@ -24,7 +24,7 @@ const FAQS = [
   },
   {
     q: 'What happens if I forget to renew?',
-    a: 'Most extensions give you a grace period after expiry — often 30 days — when you can still renew at the normal price. After that the domain enters redemption, where it can be recovered only by paying the registry’s restore fee as well. Your account shows every domain’s expiry date; online renewal is not available yet, so email us before that date and we renew it at the renewal price shown.',
+    a: 'Most extensions give you a grace period after expiry — often 30 days — when you can still renew at the normal price. After that the domain enters redemption, where it can be recovered only by paying the registry’s restore fee as well. Your account shows every domain’s expiry date, and you can renew any domain there before that date at the renewal price shown.',
   },
   {
     q: 'Can I transfer a domain I already own?',

@@ -8,6 +8,7 @@ import {
   refundState,
 } from '../payments/flutterwave'
 import type { Lookup } from '../provisioning/registrar'
+import { renewedSince } from '../provisioning/renewal'
 import type { ClaimedRefund, RefundStore } from './store'
 
 /**
@@ -23,7 +24,9 @@ import type { ClaimedRefund, RefundStore } from './store'
  *      shared with other apps: a wrong row (or a stolen service key) must not
  *      be able to point a refund at someone else's charge;
  *   3. for a failed registration, the registry confirms the domain is not
- *      ours after all — refunding a registered domain pays twice;
+ *      ours after all — refunding a registered domain pays twice; for a
+ *      failed renewal, that the registry's expiry has not moved on by the
+ *      years paid for;
  *   4. no chargeback on the charge — Flutterwave warns a refund on a disputed
  *      charge can pay the customer twice;
  *   5. Flutterwave's own list of refunds on the charge matches ours, and
@@ -232,6 +235,28 @@ export function createRefunder(options: RefunderOptions) {
           'REGISTRY_UNREADABLE',
           'Could not confirm the domain is unregistered',
         )
+      }
+    }
+
+    // A renewal that reached the registry may have landed after all: the
+    // expiry says. With no Renew call made (no baseline), nothing could have.
+    if (refund.reason === 'renewal_failed' && refund.renewalBaseline) {
+      if (!refund.domainName) return stop(refund, 'NO_DOMAIN', 'Refund for a line with no domain')
+      const registry = await lookup(refund.domainName)
+      if (registry.kind === 'found') {
+        const { expiresAt } = registry.domain
+        if (!expiresAt) {
+          return notSent(refund, 'REGISTRY_UNREADABLE', 'The registry gave no expiry date')
+        }
+        if (renewedSince(refund.renewalBaseline, expiresAt, refund.renewalYears ?? 1)) {
+          return stop(
+            refund,
+            'RENEWED_AT_REGISTRY',
+            'The registry shows this renewal made: refunding would pay twice',
+          )
+        }
+      } else if (registry.kind !== 'not_found') {
+        return notSent(refund, 'REGISTRY_UNREADABLE', 'Could not read the domain’s expiry')
       }
     }
 

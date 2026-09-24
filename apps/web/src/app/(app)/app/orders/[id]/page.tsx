@@ -14,7 +14,13 @@ import {
 import { OrderRefunds } from '@/features/checkout/components/order-refunds'
 import { OrderStatus } from '@/features/checkout/components/order-status'
 import { RefreshWhile } from '@/features/checkout/components/refresh-while'
-import { isSettling, LINE_STATUS, orderNotice } from '@/features/checkout/lib/progress'
+import {
+  isSettling,
+  lineStatus,
+  orderKind,
+  orderNotice,
+  paymentNotice,
+} from '@/features/checkout/lib/progress'
 import { getOrder, getOrderRefunds } from '@/features/checkout/queries/orders'
 import { failureReason } from '@/features/domains/lib/registration'
 import { BUSINESS } from '@/lib/business'
@@ -30,38 +36,17 @@ const placedFormat = new Intl.DateTimeFormat('en-GB', {
 })
 type Search = Promise<{ payment?: string }>
 
-const PAYMENT_NOTICES: Record<string, { tone: 'success' | 'error'; text: string }> = {
-  paid: { tone: 'success', text: 'Payment received — thank you.' },
-  cancelled: {
-    tone: 'error',
-    text: 'Payment cancelled. Nothing was charged. Your domains are still in your cart.',
-  },
-  failed: {
-    tone: 'error',
-    text: 'The payment did not go through. Nothing was charged. You can try again from your cart.',
-  },
-  pending: {
-    tone: 'error',
-    text: "We're still waiting for Flutterwave to confirm this payment. This page updates when it does — nothing is charged twice.",
-  },
-  underpaid: {
-    tone: 'error',
-    text: 'We received less than this order’s total, so it hasn’t been applied and nothing has been registered. The full amount is being refunded to the card or account you paid with — nothing is needed from you.',
-  },
-  mismatch: {
-    tone: 'error',
-    text: `That payment doesn't match this order, so it hasn't been applied. We've recorded it to look into. If you were charged, email ${BUSINESS.email} with your order number.`,
-  },
-}
-
 async function Order({ params, searchParams }: { params: Params; searchParams: Search }) {
   const [{ id }, { payment }] = await Promise.all([params, searchParams])
   const [order, refunds] = await Promise.all([getOrder(id), getOrderRefunds(id)])
   if (!order) notFound()
 
   const registrant = order.registrant as Contact
-  const notice = payment ? PAYMENT_NOTICES[payment] : undefined
-  const progress = orderNotice(order.status, order.test_mode)
+  const kind = orderKind(order.order_items)
+  const notice = payment ? paymentNotice(payment, kind, BUSINESS.email) : undefined
+  // The return from Flutterwave already says a cancelled payment charged nothing.
+  const progress =
+    notice && order.status === 'cancelled' ? null : orderNotice(order.status, order.test_mode, kind)
 
   return (
     <>
@@ -73,7 +58,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
           { label: order.order_number },
         ]}
         title={`Order ${order.order_number}`}
-        titleAside={<OrderStatus status={order.status} />}
+        titleAside={<OrderStatus status={order.status} kind={kind} />}
         description={`Placed ${placedFormat.format(new Date(order.created_at))} · ${formatNaira(Number(order.total_kobo))}${order.test_mode ? ' · test payment' : ''}`}
       >
         {notice || progress ? (
@@ -88,7 +73,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
       <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
         <Panel labelledBy="items-heading">
           <h2 id="items-heading" className={PANEL_HEADING}>
-            Domains
+            {kind === 'renew' ? 'Renewal' : 'Domains'}
           </h2>
           <ul className="mt-4 space-y-2">
             {order.order_items.map((item) => (
@@ -98,7 +83,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
               >
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2">
-                    {item.status === 'completed' ? (
+                    {item.status === 'completed' || item.item_type === 'renew' ? (
                       <Link
                         href={`/app/domains/${item.domain}`}
                         className="font-medium break-all text-foreground underline-offset-4 hover:underline"
@@ -116,15 +101,16 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                           item.status === 'failed' ? 'bg-destructive/10' : 'bg-muted',
                         )}
                       >
-                        {LINE_STATUS[item.status] ?? item.status}
+                        {lineStatus(item.item_type, item.status)}
                       </span>
                     ) : null}
                   </p>
                   <p className="text-sm text-muted-foreground">
+                    {item.item_type === 'renew' ? 'Renewal · ' : ''}
                     {item.period_years} {item.period_years === 1 ? 'year' : 'years'} · renews at{' '}
                     {formatNaira(Number(item.renewal_kobo))}/yr
-                    {item.auto_renew ? ' · auto-renew on' : ''}
-                    {item.privacy ? ' · privacy on' : ''}
+                    {item.item_type !== 'renew' && item.auto_renew ? ' · auto-renew on' : ''}
+                    {item.item_type !== 'renew' && item.privacy ? ' · privacy on' : ''}
                   </p>
                   {item.status === 'failed' ? (
                     <p className="mt-1 text-sm text-foreground">
@@ -141,7 +127,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
 
           <dl className="mt-5 max-w-sm space-y-2 text-sm sm:ml-auto">
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Domains</dt>
+              <dt className="text-muted-foreground">{kind === 'renew' ? 'Renewal' : 'Domains'}</dt>
               <dd className="tabular-nums">{formatNaira(Number(order.subtotal_kobo))}</dd>
             </div>
             <div className="flex justify-between">
@@ -157,28 +143,40 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
           <OrderRefunds refunds={refunds} />
         </Panel>
 
-        <Panel labelledBy="owner-heading" className="h-fit text-sm/6">
-          <h2 id="owner-heading" className={PANEL_HEADING}>
-            Registrant
-          </h2>
-          <p className="mt-2 text-muted-foreground">
-            {registrant.firstName} {registrant.lastName}
-            {registrant.company ? `, ${registrant.company}` : ''}
-            <br />
-            {registrant.email}
-            <br />
-            {registrant.addressLine1}, {registrant.city}, {registrant.state} {registrant.zipCode},{' '}
-            {registrant.country}
-          </p>
-          {order.nameservers?.length ? (
-            <>
-              <h2 className="mt-4 font-medium text-foreground">Nameservers</h2>
-              <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
-                {order.nameservers.join(', ')}
-              </p>
-            </>
-          ) : null}
-        </Panel>
+        {kind === 'renew' ? (
+          <Panel labelledBy="about-heading" className="h-fit text-sm/6">
+            <h2 id="about-heading" className={PANEL_HEADING}>
+              About renewals
+            </h2>
+            <p className="mt-2 text-pretty text-muted-foreground">
+              The years are added to the domain’s current expiry date. We call it renewed only once
+              the registry shows the new date, and the domain’s page shows it from then on.
+            </p>
+          </Panel>
+        ) : (
+          <Panel labelledBy="owner-heading" className="h-fit text-sm/6">
+            <h2 id="owner-heading" className={PANEL_HEADING}>
+              Registrant
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              {registrant.firstName} {registrant.lastName}
+              {registrant.company ? `, ${registrant.company}` : ''}
+              <br />
+              {registrant.email}
+              <br />
+              {registrant.addressLine1}, {registrant.city}, {registrant.state} {registrant.zipCode},{' '}
+              {registrant.country}
+            </p>
+            {order.nameservers?.length ? (
+              <>
+                <h2 className="mt-4 font-medium text-foreground">Nameservers</h2>
+                <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
+                  {order.nameservers.join(', ')}
+                </p>
+              </>
+            ) : null}
+          </Panel>
+        )}
       </div>
     </>
   )

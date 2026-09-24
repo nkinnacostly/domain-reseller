@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import type { OrderKind } from '../lib/progress'
 
 const LABELS: Record<string, { label: string; tone: string }> = {
   awaiting_payment: { label: 'Awaiting payment', tone: 'bg-muted text-foreground' },
@@ -10,8 +11,25 @@ const LABELS: Record<string, { label: string; tone: string }> = {
   cancelled: { label: 'Cancelled', tone: 'bg-muted text-foreground' },
 }
 
-export function OrderStatus({ status, className }: { status: string; className?: string }) {
-  const entry = LABELS[status] ?? { label: status, tone: 'bg-muted text-foreground' }
+const RENEWAL_LABELS: Record<string, { label: string; tone: string }> = {
+  ...LABELS,
+  paid: { label: 'Paid — renewal queued', tone: 'bg-accent/10 text-foreground' },
+  provisioning: { label: 'Renewing', tone: 'bg-accent/10 text-foreground' },
+}
+
+export function OrderStatus({
+  status,
+  kind = 'register',
+  className,
+}: {
+  status: string
+  kind?: OrderKind
+  className?: string
+}) {
+  const entry = (kind === 'renew' ? RENEWAL_LABELS : LABELS)[status] ?? {
+    label: status,
+    tone: 'bg-muted text-foreground',
+  }
   return (
     <span
       className={cn(

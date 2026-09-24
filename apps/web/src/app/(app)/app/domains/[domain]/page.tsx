@@ -69,6 +69,18 @@ async function Overview({ params }: { params: Params }) {
             </dd>
           </div>
         </dl>
+        {domain.source !== 'demo' &&
+        (domain.status === 'active' || domain.status === 'expired_grace') ? (
+          <Link
+            href={`/app/domains/${domain.domainName}/renew`}
+            className={cn(
+              'mt-5 inline-flex h-10 items-center rounded-full bg-accent px-5 text-sm font-medium text-accent-foreground transition hover:bg-accent/90 active:scale-[0.98]',
+              FOCUS,
+            )}
+          >
+            Renew now
+          </Link>
+        ) : null}
         <div className="mt-5 border-border border-t pt-5">
           <AutoRenewToggle domainId={domain.id} autoRenew={domain.autoRenew} renewal={renewal} />
         </div>
