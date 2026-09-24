@@ -166,6 +166,12 @@ test.describe('contact profiles and the four contacts', () => {
     await saving
     await expect(page.getByRole('main').getByRole('status')).toContainText('Deleted “Accounts”.')
     await expect(list.getByRole('listitem')).toHaveCount(1)
+
+    // S3: the dark theme is designed too, and passes the same checks.
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.reload()
+    await expect(list.getByRole('listitem')).toHaveCount(1)
+    expect((await axe(page)).violations).toEqual([])
   })
 
   test('checkout with a separate billing contact carries it to the domain (FR-C5)', async ({
@@ -264,6 +270,11 @@ test.describe('contact profiles and the four contacts', () => {
     await expect(roles.getByRole('definition').nth(1)).toContainText('Chi Obi')
     expect((await axe(page)).violations).toEqual([])
     await noOverflow(page)
+    // S3: and in the dark theme, which later reloads keep.
+    await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await page.reload()
+    await expect(roles).toContainText('Waiting for the registry')
+    expect((await axe(page)).violations).toEqual([])
 
     await settleDomainChange(domain.id, 'update_contacts')
     await page.reload()
