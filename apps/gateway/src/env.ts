@@ -47,6 +47,22 @@ const schema = z
       .min(5)
       .max(24 * 60)
       .default(30),
+    /**
+     * How often host presets' nameservers are looked up in public DNS
+     * (FR-D2). A preset failing for a day is hidden, so the interval stays
+     * well under a day: four checks a day by default.
+     */
+    PRESET_CHECK_HOURS: z.coerce.number().int().min(1).max(24).default(6),
+    /**
+     * How often a batch of live domains is read one by one with GetDetails
+     * (PRD §13.5 deep sync). 25 a run, hourly, reads 600 domains a day.
+     */
+    DEEP_SYNC_EVERY_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(15)
+      .max(24 * 60)
+      .default(60),
 
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     SUPABASE_SECRET_KEY: z.string().min(1),

@@ -39,7 +39,11 @@ const RETRY_MS = 5 * 60_000
 const MAX_DOMAINS = 100_000
 
 /** Kinds that mean money or a customer's domain is at stake. */
-const URGENT = new Set(['supplier_renewed', 'registered_but_failed', 'missing_at_registry'])
+export const URGENT_FINDINGS: ReadonlySet<string> = new Set([
+  'supplier_renewed',
+  'registered_but_failed',
+  'missing_at_registry',
+])
 
 export function createReconciler(options: ReconcilerOptions) {
   const {
@@ -85,7 +89,7 @@ export function createReconciler(options: ReconcilerOptions) {
       for (const finding of comparison.findings) {
         counts[finding.kind] = (counts[finding.kind] ?? 0) + 1
       }
-      const urgent = comparison.findings.some((finding) => URGENT.has(finding.kind))
+      const urgent = comparison.findings.some((finding) => URGENT_FINDINGS.has(finding.kind))
       log[urgent ? 'error' : comparison.findings.length ? 'warn' : 'info'](
         { runId, seen: listing.length, findings: counts },
         'reconcile finished',

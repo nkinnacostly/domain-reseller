@@ -125,10 +125,23 @@ describe('scheduled job settings', () => {
     expect(env.DELEGATION_CHECK_MINUTES).toBe(30)
   })
 
+  it('checks host presets every six hours and deep-syncs a batch hourly by default', () => {
+    const env = parseEnv(BASE)
+    expect(env.PRESET_CHECK_HOURS).toBe(6)
+    expect(env.DEEP_SYNC_EVERY_MINUTES).toBe(60)
+    expect(parseEnv({ ...BASE, PRESET_CHECK_HOURS: '1' }).PRESET_CHECK_HOURS).toBe(1)
+    expect(parseEnv({ ...BASE, DEEP_SYNC_EVERY_MINUTES: '15' }).DEEP_SYNC_EVERY_MINUTES).toBe(15)
+  })
+
   it('keeps the intervals within sense', () => {
     expect(() => parseEnv({ ...BASE, CATALOGUE_SYNC_EVERY_HOURS: '0' })).toThrow()
     expect(() => parseEnv({ ...BASE, CATALOGUE_SYNC_EVERY_HOURS: '1000' })).toThrow()
     expect(() => parseEnv({ ...BASE, DELEGATION_CHECK_MINUTES: '1' })).toThrow()
+    // A preset is hidden after a day of failures: a check at least daily.
+    expect(() => parseEnv({ ...BASE, PRESET_CHECK_HOURS: '0' })).toThrow()
+    expect(() => parseEnv({ ...BASE, PRESET_CHECK_HOURS: '25' })).toThrow()
+    // Each read takes one of the supplier's two slots.
+    expect(() => parseEnv({ ...BASE, DEEP_SYNC_EVERY_MINUTES: '5' })).toThrow()
     expect(parseEnv({ ...BASE, CATALOGUE_SYNC_EVERY_HOURS: '24' }).CATALOGUE_SYNC_EVERY_HOURS).toBe(
       24,
     )

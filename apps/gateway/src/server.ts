@@ -17,9 +17,12 @@ import { checkPayment } from './payments/charge-check'
 import { createFlutterwave } from './payments/flutterwave'
 import { createPaymentStore } from './payments/store'
 import { createPaymentSweeper } from './payments/sweeper'
+import { presetCheckerFor } from './presets/checker'
 import { createDnaRegistrar } from './provisioning/registrar'
 import { createSupabaseStore } from './provisioning/store'
 import { createWorker } from './provisioning/worker'
+import { createDeepSync, createDeepSyncReader } from './reconcile/deep-sync'
+import { createDeepSyncStore } from './reconcile/deep-sync-store'
 import { createReconciler } from './reconcile/reconciler'
 import { createReconcileStore } from './reconcile/store'
 import { createRefunder } from './refunds/refunder'
@@ -107,6 +110,24 @@ const reconciler =
       })
     : null
 
+// §13.5 deep sync: each domain on that side read on its own with GetDetails,
+// daily and soon after a change, and corrected as the reconcile would.
+// Read-only at the supplier, one domain at a time in its low lane.
+const deepSync =
+  target && store
+    ? createDeepSync({
+        store: createDeepSyncStore(),
+        reader: createDeepSyncReader({
+          client: getDnaWriteClient(target),
+          environment: target,
+          audit: (call) => store.recordCall(null, target, call),
+        }),
+        testMode: target === 'ote',
+        everyMs: env.DEEP_SYNC_EVERY_MINUTES * 60_000,
+        log: logger,
+      })
+    : null
+
 // FR-R3 / L15: refunds for this side, with this side's Flutterwave key.
 const refunder =
   target && store && flutterwave
@@ -184,6 +205,8 @@ const emailSender =
 const catalogueSync = catalogueScheduleFor(env, logger)
 // FR-D5: live domains' delegation, checked against public resolvers.
 const delegationCheck = delegationCheckerFor(env, logger)
+// FR-D2: host presets whose nameservers stop resolving are hidden from customers.
+const presetCheck = presetCheckerFor(env, logger)
 
 if (worker) {
   worker.start()
@@ -193,11 +216,13 @@ if (worker) {
   )
 }
 reconciler?.start()
+deepSync?.start()
 refunder?.start()
 sweeper?.start()
 monitor?.start()
 catalogueSync?.start()
 delegationCheck?.start()
+presetCheck?.start()
 emailSender?.start()
 if (target && !env.BREVO_API_KEY) {
   logger.warn({ target }, 'no BREVO_API_KEY: notification emails wait in the outbox')
@@ -211,11 +236,13 @@ async function shutdown(signal: string) {
   await Promise.all([
     worker?.stop(),
     reconciler?.stop(),
+    deepSync?.stop(),
     refunder?.stop(),
     sweeper?.stop(),
     monitor?.stop(),
     catalogueSync?.stop(),
     delegationCheck?.stop(),
+    presetCheck?.stop(),
     emailSender?.stop(),
   ])
   server.close()

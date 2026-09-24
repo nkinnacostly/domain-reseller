@@ -160,6 +160,24 @@ thing that causes them, and sent by the gateway through Brevo.
 - To see what went out: `select kind, status, sent_at, delivery_status from
   email_outbox order by created_at desc limit 20;`
 
+## 5c-3. Preset checks and the deep sync (migration 32)
+
+Both start with the gateway on its next deploy; there is nothing to set. Two
+optional variables tune them — leave them unset on Fly unless there is a
+reason:
+
+- **Host presets (FR-D2)**, on the live gateway only (`DNA_WRITE_ENV=production`):
+  every `PRESET_CHECK_HOURS` (default 6, 1–24) each preset's nameservers are
+  looked up in public DNS. A failing preset raises `preset_failing`; after a
+  day of failures it is hidden from customers and `preset_hidden` is
+  critical; it comes back by itself once it resolves. A preset you hid stays
+  hidden. When the resolvers do not answer at all, nothing is recorded.
+- **Deep sync (§13.5)**, on whichever side writes are on: every
+  `DEEP_SYNC_EVERY_MINUTES` (default 60, at least 15) the gateway reads 25
+  domains with GetDetails — least recently read first, and again soon after
+  a change — and corrects or flags them as the hourly reconcile does. Its reads
+  wait behind searches and appear in `supplier_calls` as `GetDetails`.
+
 ## 5d. Search engines and AI assistants
 
 Built into the site (`apps/web/src/features/seo`), nothing to configure:
@@ -246,6 +264,8 @@ open to the service key, on purpose):
 | Transfer of … needs a person (`TRANSFER_OVERDUE`) | A transfer the registry accepted has not landed or been refused in 10 days | Check the domain at DomainNameAPI. Landed: ask Claude to record it. Refused or stuck: ask the customer, then `fail_job` or `retry_job` with Claude. |
 | Transfer lock / privacy / contact change of … needs a person | The registry's answer to a settings change could not be read after several tries | Read the domain at DomainNameAPI; `select retry_job('<job id>');` once it answers. The customer's newest request stays pending until then. |
 | Contact change of … needs a person (`CONTACTS_NOT_VISIBLE`) | The registry accepted new contacts but does not show them. In the sandbox this always happens; on live it is unconfirmed | Look at the domain's contacts in the DomainNameAPI panel. Showing the new ones: `select retry_job('<job id>');` records them. Not showing: ask DomainNameAPI why SaveContacts did not apply, then retry. |
+| Host preset … is not resolving / is hidden | Its nameservers stopped resolving in public DNS (FR-D2); after a day it is hidden from customers | Read the provider's own documentation. Changed: update the preset's nameservers and `verified_at` in the table editor — it is checked again within 6 hours and shown once it passes. Gone: leave it hidden. |
+| Host preset … was last verified … | 90 days since it was checked against the provider's documentation | Check it again; update `verified_at`, and the nameservers if they changed. |
 | The supplier catalogue sync failed / was refused / hasn't run for 8 days | The weekly sync in the gateway stopped updating costs; prices can drift from the supplier's | `fly logs -a mydomainshub-gateway` for `catalogue`. To run it now, set `CATALOGUE_SYNC_EVERY_HOURS=1` on Fly, wait for it, then unset it. |
 
 `cancel_refund` means "no money went back and none will"; use
