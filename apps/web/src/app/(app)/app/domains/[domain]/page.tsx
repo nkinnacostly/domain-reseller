@@ -6,9 +6,11 @@ import { Suspense } from 'react'
 import { FOCUS, PANEL, PANEL_HEADING, PanelSkeleton } from '@/components/layout/panel'
 import { AutoRenewToggle } from '@/features/domains/components/auto-renew-toggle'
 import { PanelNote } from '@/features/domains/components/domain-badges'
+import { DomainLabels } from '@/features/domains/components/domain-labels'
 import { DELEGATION_LABEL, daysUntilExpiry } from '@/features/domains/lib/portfolio'
 import { isTransferInProgress, registrationNote } from '@/features/domains/lib/registration'
 import { getDomain } from '@/features/domains/queries/domains'
+import { getLabels } from '@/features/domains/queries/labels'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { cn } from '@/lib/utils'
 
@@ -19,7 +21,11 @@ const dateFormat = new Intl.DateTimeFormat('en-NG', { dateStyle: 'long', timeZon
 
 async function Overview({ params }: { params: Params }) {
   const { domain: name } = await params
-  const [domain, priced] = await Promise.all([getDomain(name), getPricedCatalogue()])
+  const [domain, priced, labels] = await Promise.all([
+    getDomain(name),
+    getPricedCatalogue(),
+    getLabels(),
+  ])
   if (!domain) notFound()
 
   const days = daysUntilExpiry(domain.expiresAt, new Date())
@@ -129,6 +135,27 @@ async function Overview({ params }: { params: Params }) {
         >
           Manage nameservers
         </Link>
+      </section>
+
+      {/* FR-P3 — the account's own labels, several to a domain. */}
+      <section aria-labelledby="labels-heading" className={cn(PANEL, 'p-5 sm:p-6 xl:col-span-2')}>
+        <h2 id="labels-heading" className={PANEL_HEADING}>
+          Labels
+        </h2>
+        <div className="mt-3">
+          {labels ? (
+            <DomainLabels
+              domainId={domain.id}
+              domainName={domain.domainName}
+              assigned={domain.labels}
+              labels={labels}
+            />
+          ) : (
+            <p className="text-sm text-foreground">
+              Your labels couldn’t be loaded just now. Reload the page to try again.
+            </p>
+          )}
+        </div>
       </section>
     </div>
   )

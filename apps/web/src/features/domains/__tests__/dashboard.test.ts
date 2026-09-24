@@ -24,9 +24,11 @@ function domain(name: string, overrides: Partial<PortfolioDomain> = {}): Portfol
     expiresAt: new Date(NOW.getTime() + 200 * DAY).toISOString(),
     autoRenew: true,
     privacyEnabled: false,
+    transferLock: true,
     delegationStatus: 'verified',
     nameservers: null,
     pendingNameservers: null,
+    labels: [],
     ...overrides,
   }
 }

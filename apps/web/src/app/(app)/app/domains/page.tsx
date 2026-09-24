@@ -10,8 +10,14 @@ import { PANEL } from '@/features/domains/components/dashboard/panel'
 import { RenewalsChart } from '@/features/domains/components/dashboard/renewals-chart'
 import { Portfolio } from '@/features/domains/components/portfolio'
 import { summarize } from '@/features/domains/lib/dashboard'
+import { parseLabelFilter } from '@/features/domains/lib/labels'
 import { parseExpiryWindow } from '@/features/domains/lib/portfolio'
-import { getPortfolio, getRecentActivity } from '@/features/domains/queries/domains'
+import {
+  getNameserverPresets,
+  getPortfolio,
+  getRecentActivity,
+} from '@/features/domains/queries/domains'
+import { getLabels } from '@/features/domains/queries/labels'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Your domains' }
@@ -19,16 +25,19 @@ export const metadata: Metadata = { title: 'Your domains' }
 /**
  * Portfolio — the authenticated landing page (PRD FR-P1). The top is an
  * overview of the account's own domains and orders; the list below is every
- * domain, soonest expiry first, with the expiry view as a filter (FR-P5).
+ * domain, soonest expiry first, with the expiry view (FR-P5) and labels
+ * (FR-P3) as filters, and bulk actions on the domains ticked (FR-P4).
  */
-type Search = Promise<{ q?: string; within?: string }>
+type Search = Promise<{ q?: string; within?: string; label?: string }>
 
 async function Dashboard({ searchParams }: { searchParams: Search }) {
-  const [account, domains, orders, events, params] = await Promise.all([
+  const [account, domains, orders, events, labels, presets, params] = await Promise.all([
     getAccount(),
     getPortfolio(),
     getOrders(),
     getRecentActivity(),
+    getLabels(),
+    getNameserverPresets(),
     searchParams,
   ])
   const now = new Date()
@@ -43,7 +52,9 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
         now={now}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)]">
+      {/* grid-cols-1, not the implicit auto column: that grows to the widest
+          card's content and pushed a phone's page 30px sideways (S5, S6). */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)]">
         <ComingUp
           upcoming={summary.upcoming}
           orders={orders}
@@ -64,6 +75,10 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
         domains={domains}
         query={params.q ?? ''}
         within={parseExpiryWindow(params.within)}
+        labelId={parseLabelFilter(params.label, labels ?? [])}
+        labels={labels ?? []}
+        presets={presets}
+        hasTwoFactor={Boolean(account?.totpFactor)}
       />
     </div>
   )

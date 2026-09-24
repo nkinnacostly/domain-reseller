@@ -34,9 +34,11 @@ function domain(name: string, overrides: Partial<PortfolioDomain> = {}): Portfol
     expiresAt: inDays(200),
     autoRenew: true,
     privacyEnabled: false,
+    transferLock: true,
     delegationStatus: 'verified',
     nameservers: null,
     pendingNameservers: null,
+    labels: [],
     ...overrides,
   }
 }

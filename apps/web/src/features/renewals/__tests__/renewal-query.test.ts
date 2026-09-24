@@ -35,9 +35,11 @@ const DOMAIN: DomainDetail = {
   registeredAt: '2025-09-24T12:00:00.000Z',
   transferLock: true,
   presetId: null,
+  previousNameservers: null,
   registrant: null,
   failureCode: null,
   promisedRenewalKobo: 1_870_000,
+  labels: [],
 }
 
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }

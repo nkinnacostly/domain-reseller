@@ -19,9 +19,11 @@ function domain(name: string, overrides: Partial<PortfolioDomain> = {}): Portfol
     expiresAt: inDays(200),
     autoRenew: true,
     privacyEnabled: false,
+    transferLock: true,
     delegationStatus: 'verified',
     nameservers: null,
     pendingNameservers: null,
+    labels: [],
     ...overrides,
   }
 }
@@ -72,7 +74,10 @@ function tableRow(name: string) {
     .getByRole('rowheader', { name: new RegExp(`^${name}`) })
     .closest('tr')
   if (!row) throw new Error(`No row for ${name}`)
-  return within(row).getAllByRole('cell')
+  // The row's first cell is its bulk-selection box (FR-P4); the facts follow it.
+  return within(row)
+    .getAllByRole('cell')
+    .filter((cell) => !within(cell).queryByRole('checkbox'))
 }
 
 describe('Portfolio with no domains yet', () => {
