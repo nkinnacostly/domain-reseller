@@ -78,7 +78,10 @@ let answers: {
   fxRate: unknown
   order: { data: unknown; error: unknown }
   itemsError: unknown
+  preset: { data: unknown; error: unknown }
 }
+/** Every `nameserver_presets` lookup, as [column, value]. */
+let presetLookups: unknown[][]
 
 /** The signed-in user's own client: their saved contact, read and written under RLS. */
 function userClient({
@@ -141,7 +144,9 @@ beforeEach(() => {
     fxRate: { id: 'rate-1' },
     order: { data: { id: 'order-1', order_number: 'ND-001001' }, error: null },
     itemsError: null,
+    preset: { data: null, error: null },
   }
+  presetLookups = []
 
   rpcAnswers = {
     rate_limit_hit: { data: true, error: null },
@@ -157,6 +162,14 @@ beforeEach(() => {
       if (table === 'tlds') return chain({ data: answers.tlds })
       if (table === 'pricing_settings') return chain({ data: answers.settings })
       if (table === 'fx_rates') return chain({ data: answers.fxRate })
+      if (table === 'nameserver_presets') {
+        const node = chain(answers.preset)
+        node.eq = (...args: unknown[]) => {
+          presetLookups.push(args)
+          return node
+        }
+        return node
+      }
       if (table === 'orders') {
         const node = chain(answers.order)
         const insert = node.insert as () => unknown
@@ -559,5 +572,123 @@ describe('placeOrder — creating the order', () => {
     })
     expect(inserted.orders).toEqual([])
     expect(createPaymentLink).not.toHaveBeenCalled()
+  })
+})
+
+describe('placeOrder — a host preset at checkout (FR-C10, FR-D2, N11)', () => {
+  const PRESET_ID = '0d8f4d8e-5a8b-4c43-9a0f-3a6b1d2e7f10'
+  const VERCEL = {
+    id: PRESET_ID,
+    provider: 'Vercel',
+    nameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+    assigns_per_zone: false,
+    verified_at: '2026-09-23T09:00:00Z',
+    is_hidden: false,
+  }
+
+  /** Nothing moved: no order row, no supplier call, no payment link. */
+  function expectNothingStarted() {
+    expect(checkAvailability).not.toHaveBeenCalled()
+    expect(inserted.orders).toEqual([])
+    expect(createPaymentLink).not.toHaveBeenCalled()
+  }
+
+  it('refuses a preset it cannot find, before anything else', async () => {
+    const result = await placeOrder({ ...INPUT, presetId: PRESET_ID })
+    expect(result?.data).toEqual({
+      error: expect.stringMatching(/no longer on our list/),
+      field: 'presetId',
+    })
+    expectNothingStarted()
+  })
+
+  it('refuses a hidden preset, even by id', async () => {
+    answers.preset = { data: { ...VERCEL, is_hidden: true }, error: null }
+    const result = await placeOrder({ ...INPUT, presetId: PRESET_ID })
+    expect(result?.data).toMatchObject({ field: 'presetId' })
+    expectNothingStarted()
+  })
+
+  it('refuses a preset nobody has verified', async () => {
+    answers.preset = { data: { ...VERCEL, verified_at: null }, error: null }
+    const result = await placeOrder({ ...INPUT, presetId: PRESET_ID })
+    expect(result?.data).toMatchObject({ field: 'presetId' })
+    expectNothingStarted()
+  })
+
+  it('refuses a per-zone provider, and says where to add its nameservers later (FR-D3)', async () => {
+    answers.preset = {
+      data: { ...VERCEL, provider: 'Cloudflare', nameservers: [], assigns_per_zone: true },
+      error: null,
+    }
+    const result = await placeOrder({ ...INPUT, presetId: PRESET_ID })
+    expect(result?.data).toEqual({
+      error: expect.stringMatching(/^Cloudflare .+Nameservers tab\.$/),
+      field: 'presetId',
+    })
+    expectNothingStarted()
+  })
+
+  it('refuses a preset whose stored nameservers would not validate', async () => {
+    answers.preset = { data: { ...VERCEL, nameservers: ['ns1.vercel-dns.com'] }, error: null }
+    const result = await placeOrder({ ...INPUT, presetId: PRESET_ID })
+    expect(result?.data).toMatchObject({ field: 'presetId' })
+    expectNothingStarted()
+  })
+
+  it('refuses a preset sent with typed nameservers — one or the other', async () => {
+    answers.preset = { data: VERCEL, error: null }
+    const result = await placeOrder({
+      ...INPUT,
+      presetId: PRESET_ID,
+      nameservers: 'ns1.evil.example ns2.evil.example',
+    })
+    expect(result?.data).toEqual({
+      error: 'Choose your host or enter nameservers, not both.',
+      field: 'presetId',
+    })
+    expect(presetLookups).toEqual([])
+    expectNothingStarted()
+  })
+
+  it('charges nothing when the preset cannot be read', async () => {
+    answers.preset = { data: null, error: { code: '08006', message: 'connection lost' } }
+    const result = await placeOrder({ ...INPUT, presetId: PRESET_ID })
+    expect(result?.data).toEqual({
+      error: "We couldn't check that host just now. You haven't been charged. Try again shortly.",
+      field: 'presetId',
+    })
+    expectNothingStarted()
+  })
+
+  it('refuses a preset id that is not a UUID', async () => {
+    const result = await placeOrder({ ...INPUT, presetId: 'vercel' })
+    expect(result?.validationErrors).toBeDefined()
+    expectNothingStarted()
+  })
+
+  it('stores the nameservers our table holds for the preset, with its id', async () => {
+    answers.preset = { data: VERCEL, error: null }
+    const result = await placeOrder({ ...INPUT, presetId: PRESET_ID, nameservers: '  ' })
+
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(presetLookups).toEqual([['id', PRESET_ID]])
+    expect(inserted.orders[0]).toMatchObject({
+      nameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+      nameserver_preset_id: PRESET_ID,
+    })
+  })
+
+  it('records no preset for typed nameservers, or for the registrar’s default', async () => {
+    await placeOrder({ ...INPUT, nameservers: 'ns1.host.com ns2.host.com', presetId: null })
+    await placeOrder(INPUT)
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({
+        nameservers: ['ns1.host.com', 'ns2.host.com'],
+        nameserver_preset_id: null,
+      }),
+      expect.objectContaining({ nameservers: null, nameserver_preset_id: null }),
+    ])
+    expect(presetLookups).toEqual([])
   })
 })

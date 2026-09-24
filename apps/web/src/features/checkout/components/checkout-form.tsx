@@ -13,10 +13,13 @@ import {
   SubmitButton,
 } from '@/components/common/form-parts'
 import { PANEL } from '@/components/layout/panel'
+import type { NameserverPreset } from '@/features/domains/queries/domains'
 import { cn } from '@/lib/utils'
 import { placeOrder } from '../actions/place-order'
 import type { RegistrantForm } from '../lib/contact'
 import { NIGERIAN_STATES, REGISTRANT_COUNTRIES } from '../lib/countries'
+import { nameserverRequest } from '../lib/nameservers'
+import { NameserverChoice } from './nameserver-choice'
 
 export type CheckoutLine = {
   domain: string
@@ -44,14 +47,19 @@ export function CheckoutForm({
   summary,
   registrant,
   testMode,
+  presets = [],
 }: {
   lines: CheckoutLine[]
   summary: Summary
   registrant: RegistrantForm
   testMode: boolean
+  /** FR-C10 — verified, visible host presets (FR-D2). */
+  presets?: NameserverPreset[]
 }) {
   const id = useId()
   const [country, setCountry] = useState(registrant.country ?? 'NG')
+  /** A nameserver choice that cannot work, caught before the order is tried. */
+  const [nameserverProblem, setNameserverProblem] = useState<string | null>(null)
   const place = useAction(placeOrder, {
     onSuccess: ({ data }) => {
       if (data && 'redirectTo' in data) window.location.assign(data.redirectTo)
@@ -88,6 +96,17 @@ export function CheckoutForm({
       className="grid gap-4 xl:grid-cols-[1.6fr_1fr]"
       onSubmit={onSubmitWith((form) => {
         const value = (name: string) => String(form.get(name) ?? '')
+        const delegation = nameserverRequest(
+          value('nameserverMode'),
+          value('presetId'),
+          value('nameservers'),
+          presets,
+        )
+        if (!delegation.ok) {
+          setNameserverProblem(delegation.error)
+          return
+        }
+        setNameserverProblem(null)
         place.execute({
           registrant: {
             firstName: value('firstName'),
@@ -103,7 +122,8 @@ export function CheckoutForm({
             zipCode: value('zipCode'),
             country: value('country'),
           },
-          nameservers: value('nameservers'),
+          nameservers: delegation.nameservers,
+          ...(delegation.presetId ? { presetId: delegation.presetId } : {}),
           confirmed: form.get('confirmed') === 'on' ? true : (false as unknown as true),
           expectedTotalKobo: summary.totalKobo,
         })
@@ -232,34 +252,19 @@ export function CheckoutForm({
           </div>
         </section>
 
-        <details className="group rounded-2xl border border-border bg-background/80 p-5">
-          <summary className="cursor-pointer list-none font-medium text-foreground marker:hidden">
-            Already know where this domain is going?{' '}
-            <span className="font-normal text-muted-foreground">Optional</span>
-          </summary>
-          <div className="mt-4">
-            <Field
-              id={`${id}-nameservers`}
-              label="Nameservers from your host"
-              error={
-                topError(errors, 'nameservers') ??
-                (failure?.field === 'nameservers' ? failure.error : undefined)
-              }
-              hint="Paste the two or more your host gave you, one per line. We apply them the moment the domain is registered — or skip this and do it later."
-            >
-              <textarea
-                id={`${id}-nameservers`}
-                name="nameservers"
-                rows={3}
-                placeholder={'ns1.yourhost.com\nns2.yourhost.com'}
-                spellCheck={false}
-                autoCapitalize="none"
-                aria-describedby={describedBy(`${id}-nameservers`, undefined, 'hint')}
-                className={`${inputClass} h-auto py-2.5 font-mono text-sm`}
-              />
-            </Field>
-          </div>
-        </details>
+        <NameserverChoice
+          presets={presets}
+          nameserverError={
+            topError(errors, 'nameservers') ??
+            (failure?.field === 'nameservers' ? failure.error : undefined)
+          }
+          presetError={
+            nameserverProblem ??
+            topError(errors, 'presetId') ??
+            (failure?.field === 'presetId' ? failure.error : undefined)
+          }
+          onChange={() => setNameserverProblem(null)}
+        />
       </div>
 
       <aside
@@ -320,7 +325,7 @@ export function CheckoutForm({
           </p>
         ) : null}
 
-        {failure && failure.field !== 'nameservers' ? (
+        {failure && failure.field !== 'nameservers' && failure.field !== 'presetId' ? (
           <FormMessage tone="error">{failure.error}</FormMessage>
         ) : null}
         {place.result.serverError ? (

@@ -9,7 +9,7 @@ import { BUSINESS } from '@/lib/business'
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-linear-to-br from-brand-subtle via-background to-brand-subtle">
+    <div className="min-h-dvh bg-linear-to-br from-brand-subtle via-background to-brand-subtle print:min-h-0 print:bg-none">
       <div className="mx-auto flex w-full max-w-[100rem] flex-col lg:flex-row lg:items-start lg:gap-4 lg:p-4">
         <Suspense fallback={<AppSidebarSkeleton />}>
           <AppSidebar />
@@ -18,7 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main id="main" className="min-h-[60dvh] flex-1">
             {children}
           </main>
-          <footer className="px-5 py-6 text-xs text-muted-foreground sm:px-6 lg:px-2 lg:pb-2">
+          <footer className="px-5 py-6 text-xs text-muted-foreground sm:px-6 lg:px-2 lg:pb-2 print:hidden">
             <p className="flex flex-wrap gap-x-4 gap-y-1">
               <span>
                 {BUSINESS.brand} is operated by {BUSINESS.operator}.
