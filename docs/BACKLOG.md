@@ -38,7 +38,6 @@ back here. Each item says why it waited and what unblocks it.
 
 ### Accounts (PRD E2)
 - **Google sign-in** (FR-A1) — needs Google Cloud OAuth credentials added in Supabase.
-- **Active sessions list and revoke** (FR-A5) — needs admin access to `auth.sessions`.
 - **Security emails** (SEC-4): new-device sign-in, password change, 2FA change, contact/nameserver/lock changes — needs L1.
 - **MFA recovery codes** (FR-A2) — `supabase-js` supports them (experimental) but the hosted server returns `mfa_recovery_codes_enroll_not_enabled`, and the CLI cannot enable it. Settings currently advises adding a second device.
 - **Mandatory 2FA** above 10 domains or a wallet threshold (FR-A2) — needs the portfolio and wallet.
@@ -51,17 +50,17 @@ back here. Each item says why it waited and what unblocks it.
 - **Refund emails** (FR-R3) — built once L1 (email sending) is set up.
 
 ### Checkout and orders (PRD E3, E4)
-- **Receipts and invoices** (FR-C5, CMP-17/18) — email needs L1; invoice numbering and e-invoicing are not built.
-- **Nameserver host presets at checkout** (FR-C10, N11) — the `nameserver_presets` catalogue exists (migration 12) and the domain Nameservers tab uses it; checkout still takes pasted nameservers only.
+- **Receipts by email** (FR-C5) — the printable receipt and invoice numbers are built (24 Sept 2026, migration 26); emailing them needs L1.
+- **Tax invoices** (CMP-17/18) — *owner:* receipts don't call themselves tax invoices until `apps/web/src/lib/business.ts` has the company's TIN and CAC number. Send them to Claude. FIRS e-invoicing (FR-TAX-1) comes after.
 - **More registrant countries** — the form offers Nigeria, Africa and common diaspora countries; extend when needed.
 - **Wallet and mixed payment** (FR-C9, FR-W1/W2).
 
 ### Domain management (PRD E5 – E8, E10)
-- **Registry-side controls** — nameserver changes now reach the registry (an `apply_nameservers` job per domain). Transfer lock, auth code reveal, contacts and privacy are still read-only.
+- **Ask DomainNameAPI** (*owner*) — does it apply ICANN's 60-day lock after a registrant change, and is there an opt-out (FR-DS2)? How is a restore from redemption ordered (FR-RN6)? Does a transfer in add a year (PRD V19)? The self-serve controls, transfers in and renewals are built (24 Sept 2026).
 - **Privacy default** — the sandbox turned contact privacy on for a line bought without it. We record what the registry reports; confirm on live whether the flag we send is honoured.
 - **Domain deep sync and drift review** (§13.5) — the hourly portfolio reconcile is built; a per-domain `GetDetails` deep sync, and a screen to review and close `registry_drift`, are not. The sandbox holds two test domains we no longer track, so it reports two `unknown_domain` rows by design.
 - **`supplier_calls` retention** — rows accumulate; decide how long to keep them.
-- **Delegation verification job** (FR-D5) and the one-time undelegated nudge (FR-D8, needs L1).
+- **The one-time undelegated nudge** (FR-D8) — needs L1. Delegation is verified by the gateway every 30 minutes (FR-D5, 24 Sept 2026).
 - **Automatic renewal and dunning** (FR-RN2, FR-RN3) — renewing without the customer present needs a way to charge them: saved cards (Flutterwave tokenisation) or the wallet (FR-W1). The reminder emails before expiry (ERRP, §7.4) need L1. Renew now (FR-RN1, FR-RN5, FR-RN7) is built: `/app/domains/{name}/renew`, migrations 22–24.
 - **Restore from redemption** (FR-RN6) — the SDK has no restore call; ask DomainNameAPI how a restore is ordered. Until then the renew page sends people to email for a quote.
 - **Labels and bulk actions** (FR-P3, FR-P4, FR-N2), **glue records** (FR-N3), **revert to previous nameservers** (FR-N5).
@@ -72,26 +71,23 @@ back here. Each item says why it waited and what unblocks it.
 - **Velocity limits** (SEC-11) — carts are capped at 50 domains; per-account daily limits come with checkout.
 
 ### Search (PRD E1)
-- **Bulk search** (FR-S5), **IDN / Punycode** (FR-S8).
-- **Per-extension length rules** (FR-S9) — the catalogue sync does not store min/max characters yet; the supplier's refusal is shown as "Not available" meanwhile.
+- **Per-extension length rules** (FR-S9) — built, but the supplier's REST catalogue gives no length limits, so none apply; the supplier's refusal is shown instead. Bulk search and international names are built (24 Sept 2026).
 - **Buying premium names** (FR-S3) — the supplier refuses them today ("please contact"); they are flagged, not sold.
 
 ### Transfers (PRD E9)
-- **Starting a transfer** — auth code → `CheckTransfer` → payment → `Transfer`. The eligibility check is live; the rest needs the gateway write routes (L5) and checkout.
+- **Cancelling a pending transfer** (FR-T4) — *owner decision first:* when a customer cancels a transfer the registry already has, do they get their money back? Transfers in are built (24 Sept 2026); they open per extension once the gateway's catalogue sync marks it transferable.
 
-### Pages not built
-- `/domains/{tld}` (FR-PUB1) — per-extension pages. Until they exist, the home page's extension cards and the footer's Extensions links open that extension's row on the pricing page (`/pricing#tld-com`). `/whois` (FR-PUB2) and `/status` were unlinked on 23 Sept 2026 until they exist.
-- Legal, help, contact and abuse pages are built (23 Sept 2026). Facts they state live in `apps/web/src/lib/business.ts`.
+### Pages
+- Built: `/domains/{tld}`, `/whois`, `/status` (24 Sept 2026), and the legal, help, contact and abuse pages (23 Sept 2026). Facts they state live in `apps/web/src/lib/business.ts`.
 
 ### Legal follow-ups
 - **Business identity on the legal pages** — add the CAC registration number and a business address when the owner provides them.
 - **Data protection officer and NDPC registration** (CMP-9, CMP-10) — name a DPO and register with the NDPC once the 200-data-subject threshold approaches.
-- **Keep the agreement in step with the product (N9b)** — renewal is online (24 Sept 2026); contact changes, transfer codes and restores are handled by email. Update the registration agreement, help centre and refund policy when contact editing (FR-DS1), auth-code reveal (FR-DS5) or automatic renewal ship, and when expiry reminders (ERRP, §7.4) are sent.
+- **Keep the agreement in step with the product (N9b)** — renewal, transfers in, the lock, privacy, registrant edits and the transfer code are self-serve (24 Sept 2026); restores are by email. Update the registration agreement, help centre and refund policy when automatic renewal ships and when expiry reminders (ERRP, §7.4) are sent.
 - **Sponsoring registrar for other extensions** — verified for .com only (RDAP, IANA ID 1601). Confirm per TLD before the legal pages name it for others.
 - **Lawyer review** of the registration agreement, privacy notice and refund policy before launch.
 
 ## 3. Quality debt
 
-- **Coverage `PARSE_ERROR`** from the V8 provider on an uncovered file in `apps/web`.
-- **Live dependencies in e2e**: transfer checks hit real registry RDAP servers, and pricing and account tests use the hosted Supabase project. Consider a local Supabase (needs Docker) for isolation. Seen 23 Sept 2026: Verisign's RDAP sometimes takes over 10 s, past our 6 s timeout, so a transfer check shows "couldn't check everything" and one of those tests fails at random.
+- **Hosted database in e2e**: pricing and account tests use the hosted Supabase project; a local Supabase (needs Docker) would isolate them. Registry RDAP is mocked in e2e since 24 Sept 2026.
 - **Node version**: run the dev server and Playwright on Node 22 (`.nvmrc`) or 24. Node 26.8's `fetch` fails parallel TLS requests to Supabase (CLAUDE.md §15).

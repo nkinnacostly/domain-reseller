@@ -104,6 +104,24 @@ provider's own CLI or dashboard — never into a chat, a commit or an issue.
 - `CHECKOUT_ALLOWLIST` stays set until launch; live writes can stay on, since
   only listed accounts can pay.
 
+## 5b. Order of deploys
+
+The gateway always ships **before** a web change that can queue a new kind of
+job (transfers, lock/privacy/contact changes) or call a new gateway route
+(`/v1/domains/:name/auth-code`, `/v1/transfers/check`). An older gateway holds
+a job kind it does not know for a person, and answers 404 to a route it lacks.
+
+```bash
+fly deploy --ha=false -a mydomainshub-gateway   # first
+git push                                         # then the web deploys on Vercel
+```
+
+The gateway's first start after 24 Sept 2026 syncs the supplier catalogue at
+once (no earlier run is recorded) and writes `is_transferable` — until then
+transfers in are closed. `APP_URL` (in `fly.toml`) lets it refresh the site's
+prices afterwards. The pricing workflow no longer needs the `DNA_*` GitHub
+secrets: `gh secret delete DNA_API_KEY` and `gh secret delete DNA_RESELLER_ID`.
+
 ## 6. Refunds and alerts (L15, L16)
 
 The gateway sends refunds for failed registrations, second charges and short
@@ -169,6 +187,9 @@ open to the service key, on purpose):
 | Registration of … needs a person (`PAYMENT_NOT_VERIFIED`) | A line was about to be registered, but Flutterwave does not confirm the charge behind it (no such charge, another reference, another amount). Nothing was registered and nothing refunded | Look at the order and the charge in the Flutterwave dashboard. A real payment the check misread: ask Claude. A payment row nobody can explain: rotate `SUPABASE_SECRET_KEY` (Supabase → API keys, then Vercel, Fly and GitHub). |
 | Order … is still `paid`/`provisioning` (I5) | Paid over 15 minutes ago, not registered | Is the gateway running? `fly status -a mydomainshub-gateway` |
 | The gateway has gone quiet | No heartbeat: nothing is being registered, refunded or alerted | `fly status -a mydomainshub-gateway`; add the card (L19) if the trial stopped it |
+| Transfer of … needs a person (`TRANSFER_OVERDUE`) | A transfer the registry accepted has not landed or been refused in 10 days | Check the domain at DomainNameAPI. Landed: ask Claude to record it. Refused or stuck: ask the customer, then `fail_job` or `retry_job` with Claude. |
+| Transfer lock / privacy / contact change of … needs a person | The registry's answer to a settings change could not be read after several tries | Read the domain at DomainNameAPI; `select retry_job('<job id>');` once it answers. The customer's newest request stays pending until then. |
+| The supplier catalogue sync failed / was refused / hasn't run for 8 days | The weekly sync in the gateway stopped updating costs; prices can drift from the supplier's | `fly logs -a mydomainshub-gateway` for `catalogue`. To run it now, set `CATALOGUE_SYNC_EVERY_HOURS=1` on Fly, wait for it, then unset it. |
 
 `cancel_refund` means "no money went back and none will"; use
 `record_manual_refund` whenever money did go back, so the customer's order
