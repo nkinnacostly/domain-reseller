@@ -48,8 +48,11 @@ jobs:
             echo "FX_PARALLEL_API_KEY=$FX_PARALLEL_API_KEY"
           } > .env
 
+      # On a schedule `inputs.job` is empty, so each job is chosen by its cron.
       - name: Update exchange rate
-        if: github.event.schedule == '0 7 * * *' || inputs.job != 'catalogue'
+        if: >-
+          (github.event_name == 'schedule' && github.event.schedule == '0 7 * * *') ||
+          (github.event_name == 'workflow_dispatch' && inputs.job != 'catalogue')
         # Exit 3 means the rate moved too far and is waiting for review — a
         # working outcome, not a failure. Anything else fails the run, so a
         # broken feed or key shows up red instead of hiding behind green.
@@ -64,8 +67,20 @@ jobs:
           exit $code
 
       - name: Sync supplier catalogue
-        if: github.event.schedule == '0 6 * * 1' || inputs.job != 'fx'
-        run: pnpm --filter @dr/gateway sync:catalogue -- --apply
+        if: >-
+          (github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1') ||
+          (github.event_name == 'workflow_dispatch' && inputs.job != 'fx')
+        # Exit 2 means the catalogue changed and, with --apply, was written —
+        # a working outcome. Anything else non-zero fails the run.
+        run: |
+          set +e
+          pnpm --filter @dr/gateway sync:catalogue -- --apply
+          code=$?
+          if [ "$code" -eq 2 ]; then
+            echo "::notice::Supplier catalogue changed; the new costs were written"
+            exit 0
+          fi
+          exit $code
 
       # L8: new prices reach the site now rather than within the hour. The
       # route acts only if prices really changed, so it needs no secret.
