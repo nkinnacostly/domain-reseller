@@ -1,18 +1,29 @@
 import 'server-only'
 
 import { cacheLife, cacheTag } from 'next/cache'
+import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import {
   parseBootstrap,
   parseRdapDomain,
   type RdapBootstrap,
   type RdapLookup,
+  type RdapRecord,
   rdapBaseFor,
   rdapDomainUrl,
 } from '../lib/rdap'
 
 /** IANA's registry of which server answers for which TLD (RFC 9224). */
-export const RDAP_BOOTSTRAP_URL = 'https://data.iana.org/rdap/dns.json'
+export const IANA_RDAP_BOOTSTRAP_URL = 'https://data.iana.org/rdap/dns.json'
+
+/**
+ * Where lookups start: IANA, unless RDAP_BOOTSTRAP_URL points them at the e2e
+ * mock registry. Read here and nowhere else. Unset only where env validation
+ * is skipped (unit tests), when IANA applies.
+ */
+function bootstrapUrl(): string {
+  return env.RDAP_BOOTSTRAP_URL ?? IANA_RDAP_BOOTSTRAP_URL
+}
 
 /**
  * Registries answer in well under a second (Verisign ~0.4s, PIR ~0.8s,
@@ -31,7 +42,7 @@ export async function getRdapBootstrap(): Promise<RdapBootstrap> {
   cacheTag('rdap-bootstrap')
   cacheLife('days')
 
-  const response = await fetch(RDAP_BOOTSTRAP_URL, {
+  const response = await fetch(bootstrapUrl(), {
     headers: { accept: 'application/json' },
     signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
   })
@@ -45,6 +56,19 @@ export async function getRdapBootstrap(): Promise<RdapBootstrap> {
  * one from a minute ago.
  */
 export async function lookupDomain(domain: string): Promise<RdapLookup> {
+  return lookupRdap<RdapRecord>(domain, parseRdapDomain)
+}
+
+/**
+ * The lookup itself, reading whatever `parse` takes from a found record (null:
+ * not a record we can read). Never logs the name — which registry misbehaved
+ * is what operations needs, and a looked-up name is as private as a search
+ * (FR-S7).
+ */
+export async function lookupRdap<T>(
+  domain: string,
+  parse: (json: unknown) => T | null,
+): Promise<RdapLookup<T>> {
   const tld = domain.slice(domain.indexOf('.') + 1)
 
   let bootstrap: RdapBootstrap
@@ -67,13 +91,11 @@ export async function lookupDomain(domain: string): Promise<RdapLookup> {
 
     if (response.status === 404) return { kind: 'not-found' }
     if (!response.ok) {
-      // Log the extension, not the name: which registry misbehaved is what
-      // operations needs.
       logger.warn({ tld, status: response.status }, 'rdap lookup failed')
       return { kind: 'unavailable' }
     }
 
-    const record = parseRdapDomain(await response.json())
+    const record = parse(await response.json())
     return record ? { kind: 'found', record } : { kind: 'unavailable' }
   } catch (err) {
     logger.warn({ err, tld }, 'rdap lookup failed')

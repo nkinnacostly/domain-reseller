@@ -31,6 +31,10 @@ export const env = createEnv({
     FLUTTERWAVE_WEBHOOK_HASH: z.string().min(1).optional(),
     // Overridable only so e2e tests can point at a local mock (N12).
     FLUTTERWAVE_API_URL: z.url().default('https://api.flutterwave.com/v3'),
+    // Where RDAP lookups learn which registry answers for which extension
+    // (PRD ADR-003). Overridable only so e2e can use a local mock registry
+    // instead of live ones; read in features/transfers/queries/rdap-lookup.ts.
+    RDAP_BOOTSTRAP_URL: z.url().default('https://data.iana.org/rdap/dns.json'),
     FX_BUFFER_PCT: z.coerce.number().min(0).max(25).default(4),
     PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(PRICE_LOCK_DEFAULT_MINUTES),
     RESEND_API_KEY: z.string().optional(),

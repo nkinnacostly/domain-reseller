@@ -54,6 +54,8 @@ export default defineConfig({
       env: {
         GATEWAY_URL: MOCK_GATEWAY,
         FLUTTERWAVE_API_URL: `${MOCK_GATEWAY}/flw/v3`,
+        // Transfer checks and WHOIS ask the mock's registries, never live ones.
+        RDAP_BOOTSTRAP_URL: `${MOCK_GATEWAY}/rdap/dns.json`,
         // Payment return addresses must point back at this server, not :3000.
         NEXT_PUBLIC_APP_URL: baseURL,
       },
