@@ -1,6 +1,8 @@
 import 'server-only'
 
 import type { User } from '@supabase/supabase-js'
+import { SENSITIVE_CHANGE_NEEDS_TWO_FACTOR } from '@/features/auth/lib/security'
+import { mustTurnOnTwoFactor } from '@/features/auth/queries/two-factor'
 import type { createClient } from '@/lib/supabase/server'
 
 /**
@@ -19,8 +21,15 @@ export type GuardContext = {
   user: Pick<User, 'id' | 'email'>
 }
 
+/**
+ * FR-A2: an account holding more than ten domains changes none of them in
+ * bulk until two-factor is on. When the rule cannot be read, nothing starts:
+ * a registry change can wait a minute.
+ */
 export async function guardSensitiveBulkChange(
-  _ctx: GuardContext,
+  ctx: GuardContext,
 ): Promise<{ error: string } | null> {
-  return null
+  const needsTwoFactor = await mustTurnOnTwoFactor(ctx.supabase, ctx.user.id)
+  if (needsTwoFactor === null) return { error: 'That did not go through. Try again in a moment.' }
+  return needsTwoFactor ? { error: SENSITIVE_CHANGE_NEEDS_TWO_FACTOR } : null
 }
