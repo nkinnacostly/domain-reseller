@@ -9,7 +9,7 @@ import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
  * The featured extensions, ranked by `tlds.featured_rank` — what leads is a
  * data change, not a deploy. Every card carries its renewal price (N8); this
  * replaced a "trending" list that showed first-year prices alone. Cards open
- * the extension's row on the pricing page: there are no per-extension pages.
+ * the extension's own page (FR-PUB1).
  */
 export async function PopularExtensions() {
   const priced = await getPricedCatalogue()
@@ -46,7 +46,7 @@ export async function PopularExtensions() {
             {tlds.map((item) => (
               <li key={item.tld}>
                 <Link
-                  href={`/pricing#tld-${item.tld}`}
+                  href={`/domains/${item.tld}`}
                   className="group flex h-full flex-col rounded-[2rem] border border-border bg-card p-7 shadow-[0_18px_40px_-28px_rgb(0_0_0/0.35)] transition-colors hover:border-brand-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                 >
                   <div className="mb-6">

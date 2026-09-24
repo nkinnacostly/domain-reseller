@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
+import { canonicalExtensionPath } from '@/features/extensions/lib/extension'
 import { env } from '@/lib/env'
 
 /**
@@ -23,6 +24,15 @@ const matches = (pathname: string, prefixes: string[]) =>
   prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 
 export async function proxy(request: NextRequest) {
+  // /domains/COM → /domains/com (FR-PUB1), before the page renders: see
+  // canonicalExtensionPath for why the page itself must not redirect.
+  const canonical = canonicalExtensionPath(request.nextUrl.pathname)
+  if (canonical) {
+    const target = request.nextUrl.clone()
+    target.pathname = canonical
+    return NextResponse.redirect(target, 308)
+  }
+
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
