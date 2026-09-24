@@ -25,17 +25,20 @@ const extensionSchema = z
   .regex(/^[a-z0-9-]{2,63}(\.[a-z0-9-]{2,63})*$/)
 
 /**
- * One block of a bulk search (FR-S5): up to fifty names on the extensions
- * they need, asked at low priority so single searches always go first.
+ * One block of a bulk search (FR-S5): up to twenty names on one extension —
+ * one supplier call, inside its 20-check ceiling — asked at low priority so
+ * single searches always go first.
  *
  * The page plans the list and sends the blocks one at a time; this re-checks
- * what it is sent, because anyone can call it: extensions we don't sell and
- * names an extension's length rule refuses are never sent on (FR-S9).
+ * what it is sent, because anyone can call it: a bigger block is refused
+ * here, and extensions we don't sell and names an extension's length rule
+ * refuses are never sent on (FR-S9).
  *
  * Limited per address, counted per block — so what a list costs grows with
- * its length: a 500-name list is ten blocks, and a script cannot keep the
- * supplier busy for everyone (the gateway also keeps bulk to one of its two
- * slots). Nothing is logged: the names are search queries (FR-S7).
+ * the checks it asks for: 500 names on one extension is 25 blocks, on four
+ * 100, and a script cannot keep the supplier busy for everyone (the gateway
+ * also keeps bulk to one of its two slots). Nothing is logged: the names are
+ * search queries (FR-S7).
  */
 export const checkBulkNames = actionClient
   .inputSchema(

@@ -43,14 +43,14 @@ describe('addressKey', () => {
 
 describe('bulk limits (FR-S5)', () => {
   it('limit bulk searches and bulk adds per address, over minutes', () => {
-    expect(LIMITS.bulkSearch).toEqual({ max: 24, windowSeconds: 600 })
+    expect(LIMITS.bulkSearch).toEqual({ max: 120, windowSeconds: 600 })
     expect(LIMITS.bulkAddToCart).toEqual({ max: 20, windowSeconds: 600 })
   })
 
-  it('let one 500-name list through, with room to retry, but not three in ten minutes', () => {
-    // Counted per block of 50 names (actions/bulk.ts).
-    const blocksPerList = 500 / 50
+  it('let a 500-name list on four extensions through, with room to retry, but not two', () => {
+    // Counted per block: 20 names on one extension, one supplier call (actions/bulk.ts).
+    const blocksPerList = (500 / 20) * 4
     expect(LIMITS.bulkSearch.max).toBeGreaterThan(blocksPerList)
-    expect(LIMITS.bulkSearch.max).toBeLessThan(blocksPerList * 3)
+    expect(LIMITS.bulkSearch.max).toBeLessThan(blocksPerList * 2)
   })
 })

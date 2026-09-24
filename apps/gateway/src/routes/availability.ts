@@ -45,7 +45,8 @@ const SUPPLIER_TIMEOUT_MS = 10_000
 const QUEUE_WAIT_MS = 8_000
 /**
  * Bulk waits behind everyone, and for the one slot it may use, so it gets
- * longer — long enough for the other half of its own request to finish first.
+ * longer: its block is one call in a list nobody watches row by row, and the
+ * blocks of other people's lists may be queued ahead of it.
  */
 const LOW_QUEUE_WAIT_MS = 20_000
 const RETRIES_ON_429 = 2

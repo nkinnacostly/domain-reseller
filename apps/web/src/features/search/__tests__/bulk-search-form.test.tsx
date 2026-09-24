@@ -137,8 +137,12 @@ describe('BulkSearchForm — checking a list', () => {
     await user.click(screen.getByRole('checkbox', { name: '.africa' }))
     await user.click(screen.getByRole('button', { name: 'Check names' }))
 
-    await waitFor(() => expect(checkBulkNames).toHaveBeenCalled())
-    expect(asked()).toEqual([{ names: ['getpaid', 'xn--caf-dma'], tlds: ['com', 'africa'] }])
+    // One extension a request: the supplier charges per extension (FR-S5).
+    await waitFor(() => expect(checkBulkNames).toHaveBeenCalledTimes(2))
+    expect(asked()).toEqual([
+      { names: ['getpaid', 'xn--caf-dma'], tlds: ['com'] },
+      { names: ['getpaid'], tlds: ['africa'] },
+    ])
   })
 
   it('reads a CSV into the list, says what it read, and checks it when asked', async () => {
@@ -157,8 +161,11 @@ describe('BulkSearchForm — checking a list', () => {
     expect(checkBulkNames).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'Check names' }))
-    await waitFor(() => expect(checkBulkNames).toHaveBeenCalledOnce())
-    expect(asked()[0]).toEqual({ names: ['getpaid', 'mybrand'], tlds: ['com', 'africa'] })
+    await waitFor(() => expect(checkBulkNames).toHaveBeenCalledTimes(2))
+    expect(asked()).toEqual([
+      { names: ['getpaid'], tlds: ['com'] },
+      { names: ['mybrand'], tlds: ['africa'] },
+    ])
   })
 
   it('checks names that arrived in the address as soon as the page is ready, once', async () => {

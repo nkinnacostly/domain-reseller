@@ -65,8 +65,8 @@ beforeEach(() => {
 })
 
 describe('checkBulkNames — refusals first (FR-S5)', () => {
-  it('refuses a block bigger than one request, before counting or asking', async () => {
-    const names = Array.from({ length: 51 }, (_, index) => `name${index}`)
+  it('refuses a block bigger than one supplier call, before counting or asking', async () => {
+    const names = Array.from({ length: 21 }, (_, index) => `name${index}`)
     const result = await checkBulkNames({ names, tlds: ['com'] })
 
     expect(result?.validationErrors).toBeDefined()
@@ -74,12 +74,10 @@ describe('checkBulkNames — refusals first (FR-S5)', () => {
     expect(checkAvailability).not.toHaveBeenCalled()
   })
 
-  it('refuses more extensions than a bulk search checks', async () => {
-    const result = await checkBulkNames({
-      names: ['getpaid'],
-      tlds: ['com', 'net', 'org', 'io', 'co', 'app', 'dev', 'ai'],
-    })
+  it('refuses more than one extension a block (the supplier charges per extension)', async () => {
+    const result = await checkBulkNames({ names: ['getpaid'], tlds: ['com', 'net'] })
     expect(result?.validationErrors).toBeDefined()
+    expect(checkAvailability).not.toHaveBeenCalled()
   })
 
   it('refuses a name that is not one DNS label', async () => {
@@ -102,12 +100,12 @@ describe('checkBulkNames — refusals first (FR-S5)', () => {
     expect(checkAvailability).not.toHaveBeenCalled()
   })
 
-  it('never sends an extension we do not sell, or a name an extension refuses (FR-S9)', async () => {
+  it('never sends a name its extension refuses (FR-S9)', async () => {
     vi.mocked(getLengthRules).mockResolvedValue({ io: { min: 3, max: 63 } })
 
-    await check(['ab', 'getpaid'], ['com', 'io', 'edu'])
+    await check(['ab', 'getpaid'], ['io'])
 
-    expect(checkAvailability).toHaveBeenCalledWith(['getpaid'], ['com', 'io'], 'low', {
+    expect(checkAvailability).toHaveBeenCalledWith(['getpaid'], ['io'], 'low', {
       timeoutMs: 30_000,
     })
   })
@@ -140,19 +138,16 @@ describe('checkBulkNames — answers', () => {
     expect(withinLimit).toHaveBeenCalledOnce()
   })
 
-  it('answers each pair, with first-year and renewal prices per extension (N8)', async () => {
+  it('answers each name, with first-year and renewal prices for the extension (N8)', async () => {
     const com = tlds.find((tld) => tld.tld === 'com')
-    const io = tlds.find((tld) => tld.tld === 'io')
 
-    const result = await check(['getpaid', 'takenbrand'], ['com', 'io'])
+    const result = await check(['getpaid', 'takenbrand'], ['com'])
 
     expect(result).toEqual({
       ok: true,
       results: [
         { domain: 'getpaid.com', status: 'available' },
-        { domain: 'getpaid.io', status: 'available' },
         { domain: 'takenbrand.com', status: 'registered' },
-        { domain: 'takenbrand.io', status: 'registered' },
       ],
       prices: {
         com: expect.objectContaining({
@@ -161,17 +156,25 @@ describe('checkBulkNames — answers', () => {
           includesIcannFee: true,
           maxPeriod: 10,
         }),
-        io: expect.objectContaining({ includesIcannFee: false }),
       },
     })
     if (!result?.ok) throw new Error('expected an answer')
-    expect(result.prices.io?.register).toMatch(/^₦[\d,]+$/)
-    expect(result.prices.io?.renew).toMatch(/^₦[\d,]+$/)
-    expect(result.prices.io?.registerKobo).toBe(io?.registration.priceKobo)
+    expect(result.prices.com?.register).toMatch(/^₦[\d,]+$/)
+    expect(result.prices.com?.renew).toMatch(/^₦[\d,]+$/)
   })
 
-  it('asks about each name and extension once, however often it was sent', async () => {
-    await check(['getpaid', 'getpaid'], ['com', 'COM'])
+  it('prices a country-code extension without the ICANN fee (FR-S2)', async () => {
+    const io = tlds.find((tld) => tld.tld === 'io')
+    const result = await check(['getpaid'], ['io'])
+    if (!result?.ok) throw new Error('expected an answer')
+    expect(result.prices.io).toMatchObject({
+      includesIcannFee: false,
+      registerKobo: io?.registration.priceKobo,
+    })
+  })
+
+  it('asks about each name once, however often it was sent', async () => {
+    await check(['getpaid', 'GetPaid'], ['com'])
     expect(checkAvailability).toHaveBeenCalledWith(['getpaid'], ['com'], 'low', {
       timeoutMs: 30_000,
     })

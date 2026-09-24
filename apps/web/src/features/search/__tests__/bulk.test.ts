@@ -29,10 +29,17 @@ describe('bulk search limits (FR-S5, PRD V4)', () => {
     expect(BULK_MAX_NAMES).toBe(500)
   })
 
-  it('packs a block of names into one request the gateway accepts', () => {
-    expect(BULK_CHUNK.maxNames).toBe(AVAILABILITY_LIMITS.maxNames)
-    expect(BULK_CHUNK.maxTlds).toBeLessThanOrEqual(AVAILABILITY_LIMITS.maxTlds)
-    expect(BULK_MAX_EXTENSIONS).toBe(BULK_CHUNK.maxTlds)
+  it('sizes a block to one supplier call, within its 20-check ceiling', () => {
+    expect(BULK_CHUNK.maxNames * BULK_CHUNK.maxTlds).toBeLessThanOrEqual(
+      AVAILABILITY_LIMITS.maxChecksPerCall,
+    )
+    expect(BULK_CHUNK.maxNames).toBeLessThanOrEqual(AVAILABILITY_LIMITS.maxNames)
+    // A call costs per extension, not per name: one extension a block, as many names as fit.
+    expect(BULK_CHUNK).toEqual({ maxNames: 20, maxTlds: 1 })
+  })
+
+  it('offers no more extensions for bare names than the featured set', () => {
+    expect(BULK_MAX_EXTENSIONS).toBeLessThanOrEqual(AVAILABILITY_LIMITS.maxTlds)
   })
 })
 
@@ -145,21 +152,40 @@ describe('planBulk — each line gets its own answer (FR-S5)', () => {
     expect(result.skipped).toBe(3)
   })
 
-  it('checks 500 names on three extensions in ten requests, not 1,500 (FR-S5)', () => {
+  it('checks 500 names on one extension in 25 requests, not 500 (FR-S5)', () => {
+    const { chunks, asked } = plan(many(500).join('\n'))
+    expect(asked).toHaveLength(500)
+    expect(chunks).toHaveLength(25)
+    for (const chunk of chunks) expect(chunk).toMatchObject({ tlds: ['com'] })
+    expect(chunks.every((chunk) => chunk.names.length === 20)).toBe(true)
+  })
+
+  it('checks 500 names on three extensions in 75 requests, not 1,500 (FR-S5)', () => {
     const { chunks, asked } = plan(many(500).join('\n'), ['com', 'net', 'africa'])
     expect(asked).toHaveLength(1_500)
-    expect(chunks).toHaveLength(10)
+    expect(chunks).toHaveLength(75)
     for (const chunk of chunks) {
-      expect(chunk.names).toHaveLength(50)
-      expect(chunk.tlds).toEqual(['com', 'net', 'africa'])
+      expect(chunk.names).toHaveLength(20)
+      expect(chunk.tlds).toHaveLength(1)
+      // The supplier refuses a call of more than 20 checks (HTTP 403).
+      expect(chunk.names.length * chunk.tlds.length).toBeLessThanOrEqual(
+        AVAILABILITY_LIMITS.maxChecksPerCall,
+      )
     }
     // Every question is asked exactly once.
     expect(chunks.flatMap((chunk) => checksIn(chunk, asked))).toHaveLength(1_500)
   })
 
-  it('keeps the list order, so rows fill from the top', () => {
-    const { chunks } = plan(many(120).join('\n'))
-    expect(chunks.map((chunk) => chunk.names[0])).toEqual(['name0', 'name50', 'name100'])
+  it('keeps the list order, each block of names on every extension, so rows fill from the top', () => {
+    const { chunks } = plan(many(50).join('\n'), ['com', 'net'])
+    expect(chunks.map((chunk) => [chunk.names[0], chunk.tlds[0], chunk.names.length])).toEqual([
+      ['name0', 'com', 20],
+      ['name0', 'net', 20],
+      ['name20', 'com', 20],
+      ['name20', 'net', 20],
+      ['name40', 'com', 10],
+      ['name40', 'net', 10],
+    ])
   })
 
   it('keeps the rules it was planned with, for a retry', () => {
@@ -173,19 +199,59 @@ describe('chunkChecks — as few gateway requests as the work allows', () => {
     expect(chunkChecks([])).toEqual([])
   })
 
-  it('blocks names wanted on the same extensions together', () => {
+  it('blocks names wanted on the same extensions together, one extension a request', () => {
     const checks = ['a', 'b'].flatMap((name) => ['com', 'net'].map((tld) => ({ name, tld })))
-    expect(chunkChecks(checks)).toEqual([{ names: ['a', 'b'], tlds: ['com', 'net'] }])
+    expect(chunkChecks(checks)).toEqual([
+      { names: ['a', 'b'], tlds: ['com'] },
+      { names: ['a', 'b'], tlds: ['net'] },
+    ])
   })
 
-  it('shares a request between small blocks on different extensions', () => {
+  it('fills a request with names wanted on its extension, from any line', () => {
     expect(
       chunkChecks([
         { name: 'a', tld: 'com' },
+        { name: 'b', tld: 'net' },
         { name: 'b', tld: 'com' },
         { name: 'c', tld: 'io' },
       ]),
-    ).toEqual([{ names: ['a', 'b', 'c'], tlds: ['com', 'io'] }])
+    ).toEqual([
+      { names: ['a', 'b'], tlds: ['com'] },
+      { names: ['b'], tlds: ['net'] },
+      { names: ['c'], tlds: ['io'] },
+    ])
+  })
+
+  it('shares a request between small blocks on different extensions where the limits allow', () => {
+    const checks = [
+      { name: 'a', tld: 'com' },
+      { name: 'b', tld: 'com' },
+      { name: 'c', tld: 'io' },
+    ]
+    expect(chunkChecks(checks, { limits: { maxNames: 20, maxTlds: 12 } })).toEqual([
+      { names: ['a', 'b', 'c'], tlds: ['com', 'io'] },
+    ])
+  })
+
+  it('never shares a request past the supplier’s 20 checks a call', () => {
+    const checks = [
+      ...many(10).map((name) => ({ name, tld: 'com' })),
+      ...many(10, 'x').map((name) => ({ name, tld: 'io' })),
+    ]
+    const chunks = chunkChecks(checks, { limits: { maxNames: 50, maxTlds: 12 } })
+    expect(chunks).toHaveLength(2)
+    for (const chunk of chunks) {
+      expect(chunk.names.length * chunk.tlds.length).toBeLessThanOrEqual(20)
+    }
+  })
+
+  it('fits fewer names in a block the more extensions it carries', () => {
+    const checks = many(12).flatMap((name) => ['com', 'net'].map((tld) => ({ name, tld })))
+    const chunks = chunkChecks(checks, { limits: { maxNames: 50, maxTlds: 2 } })
+    expect(chunks.map((chunk) => [chunk.names.length, chunk.tlds.length])).toEqual([
+      [10, 2],
+      [2, 2],
+    ])
   })
 
   it('starts a new request rather than go over the name limit', () => {
@@ -209,8 +275,8 @@ describe('chunkChecks — as few gateway requests as the work allows', () => {
   })
 
   it('splits many names on one extension into blocks of the limit', () => {
-    const checks = many(120).map((name) => ({ name, tld: 'com' }))
-    expect(chunkChecks(checks).map((chunk) => chunk.names.length)).toEqual([50, 50, 20])
+    const checks = many(50).map((name) => ({ name, tld: 'com' }))
+    expect(chunkChecks(checks).map((chunk) => chunk.names.length)).toEqual([20, 20, 10])
   })
 
   it('never shares a request that would ask about a name an extension refuses (FR-S9)', () => {
@@ -219,19 +285,26 @@ describe('chunkChecks — as few gateway requests as the work allows', () => {
       { name: 'getpaid', tld: 'io' },
     ]
     const canAsk = (name: string, tld: string) => !(tld === 'io' && name.length < 3)
-    expect(chunkChecks(checks, { canAsk })).toEqual([
+    const limits = { maxNames: 20, maxTlds: 12 }
+    expect(chunkChecks(checks, { limits })).toHaveLength(1)
+    expect(chunkChecks(checks, { limits, canAsk })).toEqual([
       { names: ['ab'], tlds: ['com'] },
       { names: ['getpaid'], tlds: ['io'] },
     ])
   })
 
-  it('packs by the length rules it is given', () => {
+  it('packs a bulk list one extension a request, whatever the length rules', () => {
     const checks = [
       { name: 'ab', tld: 'com', domain: 'ab.com', issue: null },
+      { name: 'getpaid', tld: 'com', domain: 'getpaid.com', issue: null },
       { name: 'getpaid', tld: 'io', domain: 'getpaid.io', issue: null },
     ]
-    expect(packChecks(checks, { io: { min: 3, max: 63 } })).toHaveLength(2)
-    expect(packChecks(checks, {})).toHaveLength(1)
+    const expected = [
+      { names: ['ab', 'getpaid'], tlds: ['com'] },
+      { names: ['getpaid'], tlds: ['io'] },
+    ]
+    expect(packChecks(checks, { io: { min: 3, max: 63 } })).toEqual(expected)
+    expect(packChecks(checks, {})).toEqual(expected)
   })
 })
 

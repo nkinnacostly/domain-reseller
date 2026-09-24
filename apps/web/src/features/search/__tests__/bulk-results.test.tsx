@@ -115,14 +115,14 @@ describe('bulk results — failures first (FR-S5)', () => {
     const user = await search(numbered(60))
     await done()
 
-    const notice = screen.getByRole('region', { name: '50 names weren’t checked' })
+    const notice = screen.getByRole('region', { name: '20 names weren’t checked' })
     expect(notice).toHaveTextContent("The registry didn't answer for them this time.")
-    expect(notice).toHaveTextContent('n0.com, n1.com, n2.com and 47 more')
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('10 of 60 available')
+    expect(notice).toHaveTextContent('n0.com, n1.com, n2.com and 17 more')
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('40 of 60 available')
 
-    await user.click(within(notice).getByRole('button', { name: 'Check these 50 again' }))
-    await waitFor(() => expect(checkBulkNames).toHaveBeenCalledTimes(3))
-    expect(asked()[2]).toEqual({ names: numbered(50), tlds: ['com'] })
+    await user.click(within(notice).getByRole('button', { name: 'Check these 20 again' }))
+    await waitFor(() => expect(checkBulkNames).toHaveBeenCalledTimes(4))
+    expect(asked()[3]).toEqual({ names: numbered(20), tlds: ['com'] })
     expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent('60 of 60 available')
     expect(screen.queryByRole('region', { name: /weren’t checked/ })).not.toBeInTheDocument()
   })
@@ -133,11 +133,11 @@ describe('bulk results — failures first (FR-S5)', () => {
     await done()
 
     expect(checkBulkNames).toHaveBeenCalledTimes(2)
-    const notice = screen.getByRole('region', { name: '70 names weren’t checked' })
+    const notice = screen.getByRole('region', { name: '100 names weren’t checked' })
     expect(notice).toHaveTextContent(
       'This connection has checked a lot of names in the last few minutes',
     )
-    expect(screen.getByText('50 of 120 names checked')).toBeInTheDocument()
+    expect(screen.getByText('20 of 120 names checked')).toBeInTheDocument()
   })
 
   it('says the registry is busy when too many bulk searches run at once', async () => {
@@ -184,7 +184,7 @@ describe('bulk results — failures first (FR-S5)', () => {
     await done()
 
     expect(checkBulkNames).toHaveBeenCalledOnce()
-    expect(screen.getByRole('region', { name: '70 names weren’t checked' })).toHaveTextContent(
+    expect(screen.getByRole('region', { name: '100 names weren’t checked' })).toHaveTextContent(
       'You stopped the search before they were checked.',
     )
   })
@@ -216,7 +216,7 @@ describe('bulk results — failures first (FR-S5)', () => {
 })
 
 describe('bulk results — progress and partial results', () => {
-  it('shows "50 of 120 checked" and the first rows while the rest are still coming', async () => {
+  it('shows "20 of 120 checked" and the first rows while the rest are still coming', async () => {
     const releases: (() => void)[] = []
     registry(
       (chunk) =>
@@ -234,15 +234,16 @@ describe('bulk results — progress and partial results', () => {
 
     await waitFor(() => expect(releases).toHaveLength(1))
     releases[0]?.()
-    expect(await screen.findByText('50 of 120 names checked')).toBeInTheDocument()
-    expect(bar).toHaveAttribute('aria-valuenow', '50')
+    expect(await screen.findByText('20 of 120 names checked')).toBeInTheDocument()
+    expect(bar).toHaveAttribute('aria-valuenow', '20')
     expect(row('n0.com')).toHaveTextContent('Available')
     expect(row('n60.com')).toHaveTextContent('Checking')
 
-    await waitFor(() => expect(releases).toHaveLength(2))
-    releases[1]?.()
-    await waitFor(() => expect(releases).toHaveLength(3))
-    releases[2]?.()
+    // Six blocks of twenty, one after another.
+    for (let block = 1; block < 6; block += 1) {
+      await waitFor(() => expect(releases).toHaveLength(block + 1))
+      releases[block]?.()
+    }
     await done()
 
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('120 of 120 available')

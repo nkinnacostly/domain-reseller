@@ -13,6 +13,11 @@
  *   failonce*            → the first request asking about that exact name fails
  *                          (502); every later one is answered — a bulk block
  *                          that fails once and succeeds on retry
+ *
+ * A bulk request (`priority: 'low'`) of more than 20 name × extension checks
+ * is refused with 403, as the supplier refuses such a call (24 Sept 2026).
+ * Bulk search sizes each request to one supplier call, so a bigger one is a
+ * regression. Other requests may be bigger: the real gateway splits them.
  *   busysearch           → rate limited (429)
  *   anything else        → available
  *
@@ -42,6 +47,8 @@
 import { createServer } from 'node:http'
 
 const PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 8788)
+/** The supplier's ceiling per CheckAvailability call (AVAILABILITY_LIMITS.maxChecksPerCall). */
+const MAX_CHECKS_PER_CALL = 20
 const TAKEN = new Set(['takenbrand', 'google'])
 /** `failonce*` names already failed once, so the next request is answered. */
 const FAILED_ONCE = new Set()
@@ -280,7 +287,15 @@ createServer((req, res) => {
     raw += chunk
   })
   req.on('end', () => {
-    const { names = [], tlds = [] } = JSON.parse(raw || '{}')
+    const { names = [], tlds = [], priority } = JSON.parse(raw || '{}')
+    if (priority === 'low' && names.length * tlds.length > MAX_CHECKS_PER_CALL) {
+      return send(res, 403, {
+        ok: false,
+        code: 'SUPPLIER_REFUSED',
+        message: `More than ${MAX_CHECKS_PER_CALL} checks in one call`,
+        retryable: false,
+      })
+    }
     const failOnce = names.filter((name) => name.startsWith('failonce') && !FAILED_ONCE.has(name))
     if (failOnce.length > 0) {
       for (const name of failOnce) FAILED_ONCE.add(name)
