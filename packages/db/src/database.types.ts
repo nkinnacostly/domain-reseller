@@ -39,6 +39,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      bulk_operation_items: {
+        Row: {
+          domain_id: string
+          domain_name: string
+          job_id: string | null
+          operation_id: string
+          outcome: string
+          reason: string | null
+        }
+        Insert: {
+          domain_id: string
+          domain_name: string
+          job_id?: string | null
+          operation_id: string
+          outcome: string
+          reason?: string | null
+        }
+        Update: {
+          domain_id?: string
+          domain_name?: string
+          job_id?: string | null
+          operation_id?: string
+          outcome?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_operation_items_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_operation_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_operation_items_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bulk_operations: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          params: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          params?: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          params?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_operations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cart_items: {
         Row: {
           auto_renew: boolean
@@ -325,11 +406,109 @@ export type Database = {
           },
         ]
       }
+      domain_label_links: {
+        Row: {
+          created_at: string
+          domain_id: string
+          label_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain_id: string
+          label_id: string
+        }
+        Update: {
+          created_at?: string
+          domain_id?: string
+          label_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_label_links_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domain_label_links_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "domain_labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      domain_labels: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          user_id?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_labels_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      domain_nameserver_history: {
+        Row: {
+          after: string[]
+          before: string[] | null
+          changed_at: string
+          domain_id: string
+          id: number
+        }
+        Insert: {
+          after: string[]
+          before?: string[] | null
+          changed_at?: string
+          domain_id: string
+          id?: number
+        }
+        Update: {
+          after?: string[]
+          before?: string[] | null
+          changed_at?: string
+          domain_id?: string
+          id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_nameserver_history_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       domains: {
         Row: {
           auto_renew: boolean
           contacts: Json | null
           created_at: string
+          deep_checked_at: string | null
           delegation_checked_at: string | null
           delegation_status: Database["public"]["Enums"]["delegation_status"]
           domain_name: string
@@ -344,6 +523,7 @@ export type Database = {
           pending_privacy: boolean | null
           pending_registrant: Json | null
           pending_transfer_lock: boolean | null
+          previous_nameservers: string[] | null
           privacy_enabled: boolean
           registered_at: string | null
           registrant: Json | null
@@ -361,6 +541,7 @@ export type Database = {
           auto_renew?: boolean
           contacts?: Json | null
           created_at?: string
+          deep_checked_at?: string | null
           delegation_checked_at?: string | null
           delegation_status?: Database["public"]["Enums"]["delegation_status"]
           domain_name: string
@@ -375,6 +556,7 @@ export type Database = {
           pending_privacy?: boolean | null
           pending_registrant?: Json | null
           pending_transfer_lock?: boolean | null
+          previous_nameservers?: string[] | null
           privacy_enabled?: boolean
           registered_at?: string | null
           registrant?: Json | null
@@ -392,6 +574,7 @@ export type Database = {
           auto_renew?: boolean
           contacts?: Json | null
           created_at?: string
+          deep_checked_at?: string | null
           delegation_checked_at?: string | null
           delegation_status?: Database["public"]["Enums"]["delegation_status"]
           domain_name?: string
@@ -406,6 +589,7 @@ export type Database = {
           pending_privacy?: boolean | null
           pending_registrant?: Json | null
           pending_transfer_lock?: boolean | null
+          previous_nameservers?: string[] | null
           privacy_enabled?: boolean
           registered_at?: string | null
           registrant?: Json | null
@@ -751,9 +935,13 @@ export type Database = {
       nameserver_presets: {
         Row: {
           assigns_per_zone: boolean
+          auto_hidden_at: string | null
+          check_failed_since: string | null
           created_at: string
           id: string
           is_hidden: boolean
+          last_check: Json | null
+          last_checked_at: string | null
           nameservers: string[]
           notes: string | null
           provider: string
@@ -763,9 +951,13 @@ export type Database = {
         }
         Insert: {
           assigns_per_zone?: boolean
+          auto_hidden_at?: string | null
+          check_failed_since?: string | null
           created_at?: string
           id?: string
           is_hidden?: boolean
+          last_check?: Json | null
+          last_checked_at?: string | null
           nameservers?: string[]
           notes?: string | null
           provider: string
@@ -775,9 +967,13 @@ export type Database = {
         }
         Update: {
           assigns_per_zone?: boolean
+          auto_hidden_at?: string | null
+          check_failed_since?: string | null
           created_at?: string
           id?: string
           is_hidden?: boolean
+          last_check?: Json | null
+          last_checked_at?: string | null
           nameservers?: string[]
           notes?: string | null
           provider?: string
@@ -842,6 +1038,11 @@ export type Database = {
           refund_delay_minutes: number
           stuck_order_minutes: number
           updated_at: string
+          velocity_new_max: number
+          velocity_standard_after_days: number
+          velocity_trusted_after_days: number
+          velocity_trusted_after_paid_orders: number
+          velocity_trusted_max: number
         }
         Insert: {
           auto_refund_daily_max_kobo?: number
@@ -852,6 +1053,11 @@ export type Database = {
           refund_delay_minutes?: number
           stuck_order_minutes?: number
           updated_at?: string
+          velocity_new_max?: number
+          velocity_standard_after_days?: number
+          velocity_trusted_after_days?: number
+          velocity_trusted_after_paid_orders?: number
+          velocity_trusted_max?: number
         }
         Update: {
           auto_refund_daily_max_kobo?: number
@@ -862,6 +1068,11 @@ export type Database = {
           refund_delay_minutes?: number
           stuck_order_minutes?: number
           updated_at?: string
+          velocity_new_max?: number
+          velocity_standard_after_days?: number
+          velocity_trusted_after_days?: number
+          velocity_trusted_after_paid_orders?: number
+          velocity_trusted_max?: number
         }
         Relationships: []
       }
@@ -1668,7 +1879,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      account_domain_allowance: { Args: { p_user_id: string }; Returns: Json }
+      account_domain_allowance: {
+        Args: { p_test_mode?: boolean; p_user_id: string }
+        Returns: Json
+      }
       activate_fx_rate: {
         Args: { actor?: string; rate_id: string }
         Returns: {
@@ -1825,6 +2039,20 @@ export type Database = {
           summary: string
         }[]
       }
+      domains_for_deep_sync: {
+        Args: { p_limit?: number; p_test_mode: boolean }
+        Returns: {
+          auto_renew: boolean
+          domain_id: string
+          domain_name: string
+          expires_at: string
+          local_status: string
+          nameservers: string[]
+          pending_nameservers: string[]
+          privacy: boolean
+          transfer_lock: boolean
+        }[]
+      }
       domains_for_delegation_check: {
         Args: { p_every_hours?: number; p_limit?: number }
         Returns: {
@@ -1939,6 +2167,17 @@ export type Database = {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: number
       }
+      my_bulk_operation: {
+        Args: { p_operation_id: string }
+        Returns: {
+          domain_id: string
+          domain_name: string
+          job_error_code: string
+          job_status: string
+          outcome: string
+          reason: string
+        }[]
+      }
       my_order_refunds: {
         Args: { p_order_id: string }
         Returns: {
@@ -1987,9 +2226,18 @@ export type Database = {
         }[]
       }
       payment_record: { Args: { p_raw: Json }; Returns: Json }
+      presets_for_check: {
+        Args: never
+        Returns: {
+          nameservers: string[]
+          preset_id: string
+          provider: string
+        }[]
+      }
       public_status: { Args: never; Returns: Json }
       purge_email_records: { Args: never; Returns: number }
       purge_stale_carts: { Args: { p_older_than?: string }; Returns: number }
+      purge_supplier_calls: { Args: never; Returns: number }
       purge_test_orders: { Args: { p_user_id: string }; Returns: undefined }
       queue_account_email: {
         Args: { p_kind: string; p_user_id: string }
@@ -2011,6 +2259,15 @@ export type Database = {
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: boolean
+      }
+      record_deep_sync: {
+        Args: {
+          p_domain_id: string
+          p_findings?: Json
+          p_test_mode: boolean
+          p_update: Json
+        }
+        Returns: undefined
       }
       record_delegation_checks: { Args: { p_results: Json }; Returns: number }
       record_domain_change: {
@@ -2066,6 +2323,10 @@ export type Database = {
           p_provider_reference: string
         }
         Returns: undefined
+      }
+      record_preset_check: {
+        Args: { p_detail?: Json; p_ok: boolean; p_preset_id: string }
+        Returns: string
       }
       record_reconciliation: {
         Args: {
@@ -2140,7 +2401,20 @@ export type Database = {
         Returns: undefined
       }
       revoke_my_session: { Args: { p_session_id: string }; Returns: boolean }
+      same_nameservers: {
+        Args: { p_a: string[]; p_b: string[] }
+        Returns: boolean
+      }
       settle_order: { Args: { p_order_id: string }; Returns: undefined }
+      start_bulk_change: {
+        Args: {
+          p_domain_ids: string[]
+          p_kind: string
+          p_user_id: string
+          p_value: Json
+        }
+        Returns: string
+      }
       sync_alerts: { Args: { p_test_mode: boolean }; Returns: Json }
     }
     Enums: {
