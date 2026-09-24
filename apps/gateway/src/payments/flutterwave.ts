@@ -64,8 +64,27 @@ export interface Flutterwave {
   availableBalanceKobo(): Promise<FlutterwaveResult<number>>
   /** The charge with this id. `rejected` when Flutterwave has none. */
   verifyTransaction(transactionId: string): Promise<FlutterwaveResult<FlutterwaveCharge>>
-  /** The charge made against one of our references, or null when there is none yet. */
-  verifyByReference(txRef: string): Promise<FlutterwaveResult<FlutterwaveCharge | null>>
+  /**
+   * Every charge made against one of our references between two dates — a
+   * customer can pay one payment link twice. `complete` false: more than one page.
+   */
+  listCharges(
+    txRef: string,
+    from: Date,
+    to: Date,
+  ): Promise<FlutterwaveResult<{ charges: FlutterwaveCharge[]; complete: boolean }>>
+}
+
+/** Charge states that took no money: nothing was paid, and nothing can be refunded. */
+const UNSETTLED = new Set(['failed', 'pending', 'cancelled', 'abandoned', 'error'])
+
+/**
+ * Whether a charge took the customer's money. A refused list rather than an
+ * accepted one: a charge that has since been part-refunded may report a
+ * status other than `successful`, and must still count as paid.
+ */
+export function chargeTookMoney(status: string): boolean {
+  return !UNSETTLED.has(status.toLowerCase())
 }
 
 /** Flutterwave refuses refunds under ₦100. */
@@ -285,21 +304,20 @@ export function createFlutterwave(options: {
       return result
     },
 
-    async verifyByReference(txRef) {
-      const query = new URLSearchParams({ tx_ref: txRef })
-      const result = await call(`/transactions/verify_by_reference?${query}`, {}, (body) =>
-        parseCharge(body.data),
-      )
-      if (result.kind === 'ok') {
-        return result.data.txRef === txRef
-          ? result
-          : { kind: 'unknown', code: 'FLW_WRONG_CHARGE', message: 'Answered for another reference' }
-      }
-      // Flutterwave answers "no transaction" for a reference nobody has paid yet.
-      if (result.kind === 'rejected' && /FLW_HTTP_(400|404)|FLW_NOT_SUCCESS/.test(result.code)) {
-        return { kind: 'ok', data: null }
-      }
-      return result
+    listCharges(txRef, from, to) {
+      const query = new URLSearchParams({ tx_ref: txRef, from: day(from), to: day(to) })
+      return call(`/transactions?${query}`, {}, (body) => {
+        if (!Array.isArray(body.data)) return null
+        const charges = body.data.map(parseCharge)
+        if (charges.some((charge) => charge === null)) return null
+        const pageInfo = metaOf(metaOf(body.meta).page_info)
+        const totalPages = Number(pageInfo.total_pages ?? 1)
+        return {
+          // Should the filter be ignored, another reference's charges are not ours.
+          charges: (charges as FlutterwaveCharge[]).filter((charge) => charge.txRef === txRef),
+          complete: !Number.isFinite(totalPages) || totalPages <= 1,
+        }
+      })
     },
   }
 }

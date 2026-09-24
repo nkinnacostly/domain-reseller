@@ -8,6 +8,10 @@ const BASE = {
   NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
   SUPABASE_SECRET_KEY: 'x',
 }
+const TEST_KEY = 'FLWSECK_TEST-0000000000000000-X'
+const LIVE_KEY = 'FLWSECK-0000000000000000-X'
+/** Dummy keys go through here so the pre-commit secret scan does not mistake them for real ones. */
+const flw = (key: string) => ({ FLUTTERWAVE_SECRET_KEY: key })
 
 describe('supplier write settings', () => {
   it('registers nothing unless asked to', () => {
@@ -15,10 +19,22 @@ describe('supplier write settings', () => {
   })
 
   it('needs the sandbox key to write to the sandbox', () => {
-    expect(() => parseEnv({ ...BASE, DNA_WRITE_ENV: 'ote' })).toThrow(/sandbox key/)
+    expect(() => parseEnv({ ...BASE, ...flw(TEST_KEY), DNA_WRITE_ENV: 'ote' })).toThrow(
+      /sandbox key/,
+    )
     expect(
-      parseEnv({ ...BASE, DNA_WRITE_ENV: 'ote', DNA_API_TEST_KEY: 'ote-key' }).DNA_WRITE_ENV,
+      parseEnv({ ...BASE, ...flw(TEST_KEY), DNA_WRITE_ENV: 'ote', DNA_API_TEST_KEY: 'ote-key' })
+        .DNA_WRITE_ENV,
     ).toBe('ote')
+  })
+
+  it('registers only with a Flutterwave key to confirm each charge first (SEC-7)', () => {
+    expect(() => parseEnv({ ...BASE, DNA_WRITE_ENV: 'ote', DNA_API_TEST_KEY: 'ote-key' })).toThrow(
+      /set FLUTTERWAVE_SECRET_KEY/,
+    )
+    expect(() =>
+      parseEnv({ ...BASE, NODE_ENV: 'production', DNA_WRITE_ENV: 'production' }),
+    ).toThrow(/set FLUTTERWAVE_SECRET_KEY/)
   })
 
   it.each(['development', 'test'])(
@@ -32,7 +48,8 @@ describe('supplier write settings', () => {
 
   it('allows them in a production deployment', () => {
     expect(
-      parseEnv({ ...BASE, NODE_ENV: 'production', DNA_WRITE_ENV: 'production' }).DNA_WRITE_ENV,
+      parseEnv({ ...BASE, ...flw(LIVE_KEY), NODE_ENV: 'production', DNA_WRITE_ENV: 'production' })
+        .DNA_WRITE_ENV,
     ).toBe('production')
   })
 })
@@ -40,13 +57,9 @@ describe('supplier write settings', () => {
 describe('refund and alert settings', () => {
   const OTE = { ...BASE, DNA_WRITE_ENV: 'ote', DNA_API_TEST_KEY: 'ote-key' }
   const LIVE = { ...BASE, NODE_ENV: 'production', DNA_WRITE_ENV: 'production' }
-  const TEST_KEY = 'FLWSECK_TEST-0000000000000000-X'
-  const LIVE_KEY = 'FLWSECK-0000000000000000-X'
-  /** Dummy keys go through here so the pre-commit secret scan does not mistake them for real ones. */
-  const flw = (key: string) => ({ FLUTTERWAVE_SECRET_KEY: key })
 
-  it('sends no refunds without a key', () => {
-    expect(parseEnv(OTE).FLUTTERWAVE_SECRET_KEY).toBeUndefined()
+  it('needs no key while nothing is registered', () => {
+    expect(parseEnv(BASE).FLUTTERWAVE_SECRET_KEY).toBeUndefined()
   })
 
   it('refunds test payments with a test key on the sandbox side', () => {

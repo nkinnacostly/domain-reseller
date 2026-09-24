@@ -1,4 +1,5 @@
 import { contactSchema } from '@dr/shared'
+import type { PaymentCheck } from '../payments/charge-check'
 import type { Registrar } from './registrar'
 import { applyNameservers, runRegistration } from './saga'
 import type { ClaimedJob, JobStore } from './store'
@@ -23,6 +24,8 @@ export type WorkerOptions = {
   store: JobStore
   /** A registrar whose calls are recorded against this job (I7). */
   registrarFor: (job: ClaimedJob) => Registrar
+  /** Confirms with Flutterwave that the charge behind a registration is real (SEC-7). */
+  checkPayment: (job: ClaimedJob) => Promise<PaymentCheck>
   /** Test payments go to the sandbox, real ones to the live registry — never both. */
   testMode: boolean
   workerId: string
@@ -45,6 +48,7 @@ export function createWorker(options: WorkerOptions) {
   const {
     store,
     registrarFor,
+    checkPayment,
     testMode,
     workerId,
     pollMs,
@@ -66,6 +70,20 @@ export function createWorker(options: WorkerOptions) {
   }
 
   async function register(job: ClaimedJob, registrar: Registrar) {
+    // Nothing is registered — not even read from the registry — for a charge
+    // Flutterwave does not confirm. A refusal goes to a person, never to a
+    // refund: refunding a charge that is not real would pay out twice.
+    const paid = await checkPayment(job)
+    if (paid.kind === 'unknown') {
+      await unsettled(job, paid.code, paid.message)
+      return
+    }
+    if (paid.kind === 'refused') {
+      await store.fail(job.id, paid.code, paid.message, true)
+      log.error({ jobId: job.id, code: paid.code }, 'registration stopped: payment not verified')
+      return
+    }
+
     const contact = contactSchema.safeParse(job.registrant)
     if (!contact.success || !job.periodYears) {
       // Our data, not the registry's answer: fix it and retry, don't refund.

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type JsonResponse, NoAnswer } from '../lib/http'
-import { createFlutterwave, parseCharge, parseRefund, refundState } from './flutterwave'
+import {
+  chargeTookMoney,
+  createFlutterwave,
+  parseCharge,
+  parseRefund,
+  refundState,
+} from './flutterwave'
 
 const KEY = 'FLWSECK_TEST-abc123-X'
 
@@ -342,39 +348,75 @@ describe('verifyTransaction', () => {
   })
 })
 
-describe('verifyByReference', () => {
-  it('finds the charge made against one of our references', async () => {
+describe('listCharges', () => {
+  it('lists every charge on one of our references, dated to cover the order', async () => {
+    const second = { ...CHARGE, id: 908791, flw_ref: 'FLW-MOCK-908791' }
     const { request, flutterwave } = withAnswer({
       status: 200,
-      body: { status: 'success', data: CHARGE },
+      body: {
+        status: 'success',
+        data: [CHARGE, second],
+        meta: { page_info: { total: 2, current_page: 1, total_pages: 1 } },
+      },
     })
-    expect(await flutterwave.verifyByReference(CHARGE.tx_ref)).toMatchObject({
-      kind: 'ok',
-      data: { id: '908790', txRef: CHARGE.tx_ref },
-    })
-    expect(request.mock.calls[0]?.[0]).toBe(
-      `https://flw.test/v3/transactions/verify_by_reference?tx_ref=${CHARGE.tx_ref}`,
+    const result = await flutterwave.listCharges(
+      CHARGE.tx_ref,
+      new Date('2026-09-23T10:00:00Z'),
+      new Date('2026-09-25T10:00:00Z'),
     )
-  })
-
-  it('reads "no transaction" as nothing paid yet', async () => {
-    const { flutterwave } = withAnswer({
-      status: 400,
-      body: { status: 'error', message: 'No transaction was found for this id' },
+    expect(request.mock.calls[0]?.[0]).toBe(
+      `https://flw.test/v3/transactions?tx_ref=${CHARGE.tx_ref}&from=2026-09-23&to=2026-09-25`,
+    )
+    expect(result).toMatchObject({
+      kind: 'ok',
+      data: { complete: true, charges: [{ id: '908790' }, { id: '908791' }] },
     })
-    expect(await flutterwave.verifyByReference(CHARGE.tx_ref)).toEqual({ kind: 'ok', data: null })
   })
 
-  it('does not believe an answer about another reference', async () => {
+  it('keeps only charges on this reference, should Flutterwave ignore the filter', async () => {
     const { flutterwave } = withAnswer({
       status: 200,
-      body: { status: 'success', data: { ...CHARGE, tx_ref: 'MDH-other' } },
+      body: { status: 'success', data: [CHARGE, { ...CHARGE, id: 5, tx_ref: 'PAIDLY-5' }] },
     })
-    expect((await flutterwave.verifyByReference(CHARGE.tx_ref)).kind).toBe('unknown')
+    const result = await flutterwave.listCharges(CHARGE.tx_ref, new Date(), new Date())
+    expect(result.kind === 'ok' && result.data.charges.map((charge) => charge.id)).toEqual([
+      '908790',
+    ])
   })
 
-  it('keeps an outage unknown, not "nothing paid"', async () => {
-    const { flutterwave } = withAnswer({ status: 503, body: { message: 'busy' } })
-    expect((await flutterwave.verifyByReference(CHARGE.tx_ref)).kind).toBe('unknown')
+  it('says when there is more than one page', async () => {
+    const { flutterwave } = withAnswer({
+      status: 200,
+      body: { status: 'success', data: [CHARGE], meta: { page_info: { total_pages: 3 } } },
+    })
+    expect(await flutterwave.listCharges(CHARGE.tx_ref, new Date(), new Date())).toMatchObject({
+      kind: 'ok',
+      data: { complete: false },
+    })
+  })
+
+  it('will not read a list with a row it cannot parse, and keeps an outage unknown', async () => {
+    const bad = withAnswer({ status: 200, body: { status: 'success', data: [CHARGE, {}] } })
+    expect((await bad.flutterwave.listCharges(CHARGE.tx_ref, new Date(), new Date())).kind).toBe(
+      'unknown',
+    )
+    const down = withAnswer({ status: 503, body: { message: 'busy' } })
+    expect((await down.flutterwave.listCharges(CHARGE.tx_ref, new Date(), new Date())).kind).toBe(
+      'unknown',
+    )
+  })
+})
+
+describe('chargeTookMoney', () => {
+  it.each(['failed', 'pending', 'cancelled', 'abandoned', 'error', 'FAILED'])(
+    'a %s charge took nothing',
+    (status) => {
+      expect(chargeTookMoney(status)).toBe(false)
+    },
+  )
+
+  it('a successful charge did, and so does one later part-refunded under another name', () => {
+    expect(chargeTookMoney('successful')).toBe(true)
+    expect(chargeTookMoney('partially-refunded')).toBe(true)
   })
 })

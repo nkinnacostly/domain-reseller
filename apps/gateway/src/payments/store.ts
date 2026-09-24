@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { env } from '../env'
 
 /**
- * The payment sweeper's view of the database (migration 18). Recording goes
+ * The payment sweeper's view of the database (migrations 18 and 20). Recording goes
  * through the same functions the web app uses, so a charge is recorded once
  * however many of the redirect, the webhook and the sweeper find it.
  */
@@ -15,9 +15,19 @@ const dueSchema = z.object({
   tx_ref: z.string().min(1),
   total_kobo: z.coerce.number().int().nonnegative(),
   order_number: z.string(),
+  created_at: z.string(),
+  known_references: z.array(z.string()),
 })
 
-export type DueOrder = { id: string; txRef: string; totalKobo: number; orderNumber: string }
+export type DueOrder = {
+  id: string
+  txRef: string
+  totalKobo: number
+  orderNumber: string
+  createdAt: string
+  /** Charges already recorded against the order. */
+  knownReferences: string[]
+}
 
 export type ChargeToRecord = {
   orderId: string
@@ -31,7 +41,7 @@ export type ChargeToRecord = {
 export type PaymentIncident = 'tx_ref_mismatch' | 'currency_mismatch' | 'unrecorded_payment'
 
 export interface PaymentStore {
-  /** Unpaid orders due a look, marked as looked at. */
+  /** Unpaid and recently paid orders due a look, marked as looked at. */
   ordersToCheck(testMode: boolean, limit: number): Promise<DueOrder[]>
   recordPayment(charge: ChargeToRecord): Promise<void>
   recordUnderpayment(charge: ChargeToRecord): Promise<void>
@@ -73,6 +83,8 @@ export function createPaymentStore(
           txRef: row.tx_ref,
           totalKobo: row.total_kobo,
           orderNumber: row.order_number,
+          createdAt: row.created_at,
+          knownReferences: row.known_references,
         }
       })
     },

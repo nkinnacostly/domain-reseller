@@ -1577,12 +1577,15 @@ export type Database = {
       orders_to_check: {
         Args: { p_limit: number; p_test_mode: boolean }
         Returns: {
+          created_at: string
           id: string
+          known_references: string[]
           order_number: string
           total_kobo: number
           tx_ref: string
         }[]
       }
+      payment_record: { Args: { p_raw: Json }; Returns: Json }
       purge_test_orders: { Args: { p_user_id: string }; Returns: undefined }
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }

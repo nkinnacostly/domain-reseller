@@ -3,15 +3,17 @@ import type { Flutterwave, FlutterwaveCharge } from './flutterwave'
 import type { ChargeToRecord, DueOrder, PaymentStore } from './store'
 
 /**
- * Finds payments nobody told us about (PRD §13.4, backlog L15 review).
+ * Finds payments nobody told us about (PRD §13.4, SEC-7).
  *
  * A charge normally reaches us twice: the customer's redirect and
  * Flutterwave's webhook. Both can fail — a closed tab, and a webhook that
  * could not be settled three times running. Then the customer has paid and
- * the order says unpaid. So every few minutes this asks Flutterwave, by the
- * order's own reference, about unpaid orders from the last three days, and
- * records what it finds through the same functions and the same rules as the
- * web app (SEC-7: Flutterwave's answer, never anyone's say-so).
+ * the order says unpaid, or has paid twice and the second charge is never
+ * refunded. So every few minutes this lists, from Flutterwave, every charge
+ * made against the reference of each order from the last three days —
+ * unpaid, or paid — and records any it has not seen, through the same
+ * functions and rules as the web app: the first full charge pays the order,
+ * anything more is refunded.
  */
 
 type Log = {
@@ -63,16 +65,10 @@ export function createPaymentSweeper(options: PaymentSweeperOptions) {
     }
   }
 
-  /** Asks about one order. What it found, for the log and the tests. */
-  async function check(order: DueOrder): Promise<string> {
-    const found = await flutterwave.verifyByReference(order.txRef)
-    if (found.kind !== 'ok') {
-      log.warn({ order: order.orderNumber, code: found.code }, 'could not ask about an order')
-      return 'unknown'
-    }
-    const charge = found.data
-    if (!charge) return 'unpaid'
+  const DAY_MS = 86_400_000
 
+  /** Records one charge we had not seen. What came of it, for the log and the tests. */
+  async function settle(order: DueOrder, charge: FlutterwaveCharge): Promise<string> {
     const verdict = assessTransaction(
       {
         tx_ref: charge.txRef,
@@ -93,6 +89,8 @@ export function createPaymentSweeper(options: PaymentSweeperOptions) {
     }
 
     try {
+      // A full charge on an order already paid is recorded as a second
+      // charge, and refunded, by record_order_payment itself.
       if (verdict === 'underpaid') await store.recordUnderpayment(toRecord(order, charge))
       else await store.recordPayment(toRecord(order, charge))
     } catch (error) {
@@ -108,19 +106,46 @@ export function createPaymentSweeper(options: PaymentSweeperOptions) {
     return verdict
   }
 
+  /** Asks about one order. What it found, charge by charge. */
+  async function check(order: DueOrder): Promise<string[]> {
+    const placed = Date.parse(order.createdAt)
+    const found = await flutterwave.listCharges(
+      order.txRef,
+      new Date((Number.isFinite(placed) ? placed : Date.now()) - DAY_MS),
+      new Date(Date.now() + DAY_MS),
+    )
+    if (found.kind !== 'ok') {
+      log.warn({ order: order.orderNumber, code: found.code }, 'could not ask about an order')
+      return ['unknown']
+    }
+    if (!found.data.complete) {
+      // Recording is safe on any page; the rest are read on the next pass.
+      log.warn({ order: order.orderNumber }, 'more charges on one reference than one page')
+    }
+    const unseen = found.data.charges
+      .filter((charge) => !order.knownReferences.includes(charge.id))
+      // Oldest first, so the first full charge is the one that pays the order.
+      .sort((a, b) => Number(a.id) - Number(b.id))
+    if (unseen.length === 0) return ['nothing_new']
+
+    const outcomes: string[] = []
+    for (const charge of unseen) outcomes.push(await settle(order, charge))
+    return outcomes
+  }
+
   /** One pass over the orders that are due. */
   async function sweep(): Promise<Record<string, number>> {
     const due = await store.ordersToCheck(testMode, batch)
     const tally: Record<string, number> = {}
     for (const order of due) {
-      let outcome: string
+      let outcomes: string[]
       try {
-        outcome = await check(order)
+        outcomes = await check(order)
       } catch (error) {
         log.error({ err: error, order: order.orderNumber }, 'payment check crashed')
-        outcome = 'error'
+        outcomes = ['error']
       }
-      tally[outcome] = (tally[outcome] ?? 0) + 1
+      for (const outcome of outcomes) tally[outcome] = (tally[outcome] ?? 0) + 1
     }
     return tally
   }

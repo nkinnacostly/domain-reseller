@@ -102,8 +102,9 @@ function setup(refund: ClaimedRefund | null, options: { lookup?: Lookup } = {}) 
     verifyTransaction: vi.fn(
       async (): Promise<FlutterwaveResult<FlutterwaveCharge>> => ok(chargeAt()),
     ),
-    verifyByReference: vi.fn(
-      async (): Promise<FlutterwaveResult<FlutterwaveCharge | null>> => ok(null),
+    listCharges: vi.fn(
+      async (): Promise<FlutterwaveResult<{ charges: FlutterwaveCharge[]; complete: boolean }>> =>
+        ok({ charges: [], complete: true }),
     ),
   } satisfies Flutterwave
 

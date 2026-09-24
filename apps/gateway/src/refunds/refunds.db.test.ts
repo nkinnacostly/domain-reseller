@@ -519,15 +519,15 @@ describe.skipIf(!enabled)('refunds and alerts against the database', { timeout: 
     expect(after[0]).toMatchObject({ id: refund?.id, status: 'queued' })
   })
 
-  it('offers each unpaid order to the payment sweeper once per half hour, and only unpaid ones', async () => {
+  it('offers unpaid and recently paid orders to the payment sweeper, with the charges each has', async () => {
     const user = await makeUser('sweep')
     const unpaid = await makeOrder(user.id, [1_830_000], 'swp1')
     const paid = await makeOrder(user.id, [1_830_000], 'swp2')
     await pay(paid.id, `e2e-sweep-${stamp}`, paid.total)
-    // Orders in their first ten minutes are left to the redirect and webhook.
-    const young = async () =>
+    const due = async () =>
       (await db.rpc('orders_to_check', { p_test_mode: true, p_limit: 100 })).data ?? []
-    expect((await young()).map((row) => row.id)).not.toContain(unpaid.id)
+    // Orders in their first ten minutes are left to the redirect and webhook.
+    expect((await due()).map((row) => row.id)).not.toContain(unpaid.id)
 
     // Age both orders past the first ten minutes.
     for (const id of [unpaid.id, paid.id]) {
@@ -537,11 +537,45 @@ describe.skipIf(!enabled)('refunds and alerts against the database', { timeout: 
         .eq('id', id)
       expect(error).toBeNull()
     }
-    const due = (await young()).map((row) => row.id)
-    expect(due).toContain(unpaid.id)
-    expect(due).not.toContain(paid.id)
+    const rows = await due()
+    expect(rows.find((row) => row.id === unpaid.id)?.known_references).toEqual([])
+    // A paid order is looked at too — for a second charge nobody reported.
+    expect(rows.find((row) => row.id === paid.id)?.known_references).toEqual([`e2e-sweep-${stamp}`])
     // Asked about now: not again for half an hour.
-    expect((await young()).map((row) => row.id)).not.toContain(unpaid.id)
+    const again = (await due()).map((row) => row.id)
+    expect(again).not.toContain(unpaid.id)
+    expect(again).not.toContain(paid.id)
+  })
+
+  it('keeps no customer or card details on a payment, whoever records it (N13)', async () => {
+    const user = await makeUser('pii')
+    const order = await makeOrder(user.id, [1_830_000], 'pii')
+    const { error } = await db.rpc('record_order_payment', {
+      p_order_id: order.id,
+      p_provider_reference: `e2e-pii-${stamp}`,
+      p_amount_kobo: order.total,
+      p_currency: 'NGN',
+      p_method: 'card',
+      p_raw: {
+        id: 4242,
+        flw_ref: `FLW-pii-${stamp}`,
+        amount: order.total / 100,
+        status: 'successful',
+        customer: { email: 'ada@example.com', name: 'Ada Obi', phone_number: '0803' },
+        card: { token: 'flw-t1nf-secret', last_4digits: '2950' },
+        ip: '102.89.1.1',
+        device_fingerprint: 'abc',
+        meta: { note: 'x' },
+      },
+    })
+    expect(error).toBeNull()
+    const { data } = await db.from('payments').select('raw').eq('order_id', order.id).single()
+    expect(data?.raw).toEqual({
+      id: 4242,
+      flw_ref: `FLW-pii-${stamp}`,
+      amount: order.total / 100,
+      status: 'successful',
+    })
   })
 
   it('shows people their own refunds, plainly, and nobody else’s', async () => {

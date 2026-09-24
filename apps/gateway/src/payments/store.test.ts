@@ -21,6 +21,8 @@ describe('createPaymentStore', () => {
             tx_ref: 'MDH-1',
             total_kobo: '1978000',
             order_number: 'ND-1',
+            created_at: '2026-09-24T10:00:00+00:00',
+            known_references: ['4242'],
           },
         ],
       },
@@ -31,6 +33,8 @@ describe('createPaymentStore', () => {
         txRef: 'MDH-1',
         totalKobo: 1_978_000,
         orderNumber: 'ND-1',
+        createdAt: '2026-09-24T10:00:00+00:00',
+        knownReferences: ['4242'],
       },
     ])
     expect(rpc).toHaveBeenCalledWith('orders_to_check', { p_test_mode: false, p_limit: 20 })

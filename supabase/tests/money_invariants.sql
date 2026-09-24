@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- The money rules of migrations 15, 16, 18 and 19, tried as the database owner — who
+-- The money rules of migrations 15, 16 and 18–20, tried as the database owner — who
 -- bypasses the grants the service key is held to, so only the triggers stand
 -- in the way. Each check tries something forbidden and fails the script if it
 -- is allowed. Everything is rolled back.
@@ -369,6 +369,18 @@ begin
                   where order_id = v_order2 and kind = 'registered_after_refund'
                     and provider_reference = v_line1::text) then
     raise exception 'FAILED: registered-after-refund raised no incident';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- 23. A payment keeps no customer or card details, whoever writes it.
+  insert into public.payments (order_id, user_id, provider, provider_reference, tx_ref, amount_kobo,
+                               currency, status, method, raw)
+  values (v_order2, v_user, 'flutterwave', 'invariants-pii', 'MDH-invariants-retry', 100,
+          'NGN', 'underpaid', 'card',
+          '{"id": 1, "status": "successful", "customer": {"email": "a@b.co"}, "card": {"token": "t"}, "ip": "1.2.3.4"}');
+  if (select raw from public.payments where provider_reference = 'invariants-pii')
+     is distinct from '{"id": 1, "status": "successful"}'::jsonb then
+    raise exception 'FAILED: a payment kept customer or card details';
   end if;
   v_passed := v_passed + 1;
 

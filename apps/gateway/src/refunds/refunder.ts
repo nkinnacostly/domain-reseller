@@ -1,5 +1,6 @@
 import { ORDER_TX_REF_PREFIX } from '@dr/shared'
 import {
+  chargeTookMoney,
   type Flutterwave,
   type FlutterwaveCharge,
   type FlutterwaveRefund,
@@ -175,9 +176,6 @@ export function createRefunder(options: RefunderOptions) {
       : null
   }
 
-  /** Charge states that took no money: there is nothing to refund. */
-  const UNSETTLED = new Set(['failed', 'pending', 'cancelled', 'abandoned'])
-
   /** Why the charge Flutterwave holds is not the one we recorded, or null when it is. */
   function chargeMismatch(refund: ClaimedRefund, charge: FlutterwaveCharge): string | null {
     if (!refund.orderTxRef.startsWith(ORDER_TX_REF_PREFIX)) return 'the order is not ours'
@@ -185,7 +183,7 @@ export function createRefunder(options: RefunderOptions) {
     if (charge.txRef !== refund.orderTxRef) return 'another reference'
     if (charge.currency !== 'NGN') return 'another currency'
     if (charge.amountKobo !== refund.chargedKobo) return 'another amount'
-    if (UNSETTLED.has(charge.status.toLowerCase())) return `a ${charge.status} charge`
+    if (!chargeTookMoney(charge.status)) return `a ${charge.status} charge`
     return null
   }
 

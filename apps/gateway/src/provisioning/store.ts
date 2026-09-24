@@ -2,12 +2,13 @@ import type { Database } from '@dr/db'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { WriteTarget } from '../dna/client'
 import { env } from '../env'
+import type { PaymentFacts } from '../payments/charge-check'
 import type { CallRecord, RegistryDomain } from './registrar'
 
 /**
  * The job queue, as the worker sees it. Each method is one database function
- * (migration 13), so a job, its order line, its domain and its order change
- * in one transaction or not at all.
+ * (migrations 13 and 20), so a job, its order line, its domain and its order
+ * change in one transaction or not at all.
  */
 
 export type ClaimedJob = {
@@ -23,6 +24,8 @@ export type ClaimedJob = {
   registrant: unknown
   pendingNameservers: string[] | null
   periodYears: number | null
+  /** For a registration: the charge that paid for it, confirmed with Flutterwave first. */
+  payment: PaymentFacts | null
 }
 
 export type Completion = {
@@ -66,7 +69,18 @@ type Row = {
   registrant: unknown
   pending_nameservers: string[] | null
   period_years: number | null
+  payment?: {
+    order_tx_ref: string | null
+    order_total_kobo: number | string | null
+    reference: string | null
+    amount_kobo: number | string | null
+    currency: string | null
+    status: string | null
+  } | null
 }
+
+const kobo = (value: number | string | null | undefined) =>
+  value === null || value === undefined ? null : Number(value)
 
 export function toClaimedJob(row: Row): ClaimedJob {
   return {
@@ -81,6 +95,16 @@ export function toClaimedJob(row: Row): ClaimedJob {
     registrant: row.registrant,
     pendingNameservers: row.pending_nameservers,
     periodYears: row.period_years,
+    payment: row.payment
+      ? {
+          orderTxRef: row.payment.order_tx_ref ?? '',
+          orderTotalKobo: kobo(row.payment.order_total_kobo) ?? 0,
+          reference: row.payment.reference,
+          amountKobo: kobo(row.payment.amount_kobo),
+          currency: row.payment.currency,
+          status: row.payment.status,
+        }
+      : null,
   }
 }
 

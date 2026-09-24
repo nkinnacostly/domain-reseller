@@ -62,6 +62,7 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
   const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const good = `e2ecartgw${stamp}a.com`
   const taken = `e2ecartgw${stamp}b.com`
+  const paymentsSeen: ClaimedJob['payment'][] = []
 
   /** Registers `good` and refuses `taken`, recording each call as the real one does. */
   const registrarFor = (job: ClaimedJob): Registrar => ({
@@ -99,6 +100,11 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
         },
       },
       registrarFor,
+      // The real check asks Flutterwave; here it records what the database handed over.
+      checkPayment: async (job) => {
+        paymentsSeen.push(job.payment)
+        return { kind: 'verified' }
+      },
       testMode: true,
       workerId: 'db-test',
       pollMs: 1_000,
@@ -232,6 +238,20 @@ describe.skipIf(!enabled)('provisioning queue against the database', () => {
 
     const { data: order } = await db.from('orders').select('status').eq('id', orderId).single()
     expect(order?.status).toBe('partially_failed')
+  })
+
+  it('hands each registration the charge that paid for it, to confirm first (SEC-7)', () => {
+    expect(paymentsSeen).toHaveLength(2)
+    for (const payment of paymentsSeen) {
+      expect(payment).toEqual({
+        orderTxRef: `e2e-gw-${stamp}`,
+        orderTotalKobo: 3_225_000,
+        reference: `e2e-gw-${stamp}`,
+        amountKobo: 3_225_000,
+        currency: 'NGN',
+        status: 'successful',
+      })
+    }
   })
 
   it('records every supplier call against its job (I7)', async () => {

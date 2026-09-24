@@ -8,6 +8,7 @@ import { getDnaWriteClient } from './dna/client'
 import { env } from './env'
 import { logger } from './lib/logger'
 import { supplierSlots } from './lib/semaphore'
+import { checkPayment } from './payments/charge-check'
 import { createFlutterwave } from './payments/flutterwave'
 import { createPaymentStore } from './payments/store'
 import { createPaymentSweeper } from './payments/sweeper'
@@ -41,10 +42,22 @@ const server = serve({ fetch: app.fetch, port: env.PORT }, ({ port }) => {
 
 const target = env.DNA_WRITE_ENV === 'off' ? null : env.DNA_WRITE_ENV
 const store = target ? createSupabaseStore() : null
+
+// This side's Flutterwave key: to confirm a charge before registering, to
+// refund, and to find lost payments. env.ts requires it whenever writes are on.
+const flutterwave =
+  target && env.FLUTTERWAVE_SECRET_KEY
+    ? createFlutterwave({
+        secretKey: env.FLUTTERWAVE_SECRET_KEY,
+        baseUrl: env.FLUTTERWAVE_API_URL,
+      })
+    : null
+
 const worker =
-  target && store
+  target && store && flutterwave
     ? createWorker({
         store,
+        checkPayment: (job) => checkPayment(flutterwave, job.payment),
         testMode: target === 'ote',
         workerId: `${hostname()}:${process.pid}`,
         pollMs: env.PROVISION_POLL_MS,
@@ -72,15 +85,6 @@ const reconciler =
         testMode: target === 'ote',
         everyMs: env.RECONCILE_EVERY_MINUTES * 60_000,
         log: logger,
-      })
-    : null
-
-// This side's Flutterwave key, for refunds and for finding lost payments.
-const flutterwave =
-  target && env.FLUTTERWAVE_SECRET_KEY
-    ? createFlutterwave({
-        secretKey: env.FLUTTERWAVE_SECRET_KEY,
-        baseUrl: env.FLUTTERWAVE_API_URL,
       })
     : null
 
@@ -153,12 +157,6 @@ reconciler?.start()
 refunder?.start()
 sweeper?.start()
 monitor?.start()
-if (target && !refunder) {
-  logger.warn(
-    { target },
-    'no FLUTTERWAVE_SECRET_KEY: refunds will wait and raise alerts, lost payments are not swept',
-  )
-}
 if (target && !(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID)) {
   logger.warn({ target }, 'no Telegram bot configured: alerts are only logged')
 }

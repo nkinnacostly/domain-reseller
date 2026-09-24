@@ -29,9 +29,10 @@ const schema = z
     SUPABASE_SECRET_KEY: z.string().min(1),
 
     /**
-     * Refunds (PRD FR-R3, backlog L15). The key for the side this gateway
+     * Payments and refunds (SEC-7, FR-R3). The key for the side this gateway
      * writes to: a test key with DNA_WRITE_ENV=ote, the live key with
-     * production. Unset, no refunds are sent — they wait, and alert.
+     * production. Required whenever writes are on: every registration is
+     * confirmed with Flutterwave first.
      */
     FLUTTERWAVE_SECRET_KEY: z.string().min(1).optional(),
     // Overridable only so tests can point at a local mock (N12).
@@ -59,6 +60,16 @@ const schema = z
         code: 'custom',
         path: ['DNA_API_TEST_KEY'],
         message: 'DNA_WRITE_ENV=ote needs the sandbox key',
+      })
+    }
+    // SEC-7: a registration is made only for a charge Flutterwave confirms,
+    // so a side that registers needs that side's key.
+    if (value.DNA_WRITE_ENV !== 'off' && !value.FLUTTERWAVE_SECRET_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['FLUTTERWAVE_SECRET_KEY'],
+        message:
+          'Registrations are made only for charges the gateway can confirm: set FLUTTERWAVE_SECRET_KEY',
       })
     }
     // N12: a refund goes back with the key its payment came in on. The test

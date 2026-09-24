@@ -38,6 +38,14 @@ const job = (over: Partial<ClaimedJob> = {}): ClaimedJob => ({
   registrant: REGISTRANT,
   pendingNameservers: null,
   periodYears: 1,
+  payment: {
+    orderTxRef: 'MDH-2f1c1a3e-8d7b-4c55-9a0e-1f2d3c4b5a69',
+    orderTotalKobo: 1_978_000,
+    reference: '4242',
+    amountKobo: 1_978_000,
+    currency: 'NGN',
+    status: 'successful',
+  },
   ...over,
 })
 
@@ -87,6 +95,7 @@ function worker(claimed: ClaimedJob | null, reg: Registrar, over = {}) {
   const instance = createWorker({
     store,
     registrarFor: () => reg,
+    checkPayment: async () => ({ kind: 'verified' }),
     testMode: true,
     workerId: 'test-worker',
     pollMs: 10,
@@ -97,6 +106,68 @@ function worker(claimed: ClaimedJob | null, reg: Registrar, over = {}) {
 }
 
 const timedOut = { kind: 'unknown', code: 'TIMEOUT', message: 'No answer' } as const
+
+describe('provisioning worker — the charge comes first (SEC-7)', () => {
+  /** A registrar that fails the test if anything reaches the registry. */
+  const untouchable: Registrar = {
+    lookup: async () => {
+      throw new Error('the registry was read before the payment was confirmed')
+    },
+    register: async () => {
+      throw new Error('registered without a confirmed payment')
+    },
+    setNameservers: async () => {
+      throw new Error('nameservers set without a confirmed payment')
+    },
+  }
+
+  it('asks about the job’s own charge before anything reaches the registry', async () => {
+    const checkPayment = vi.fn(async () => ({ kind: 'verified' }) as const)
+    const { instance, actions } = worker(job(), registrar({}), { checkPayment })
+    await instance.tick()
+    expect(checkPayment).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-1' }))
+    expect(actions[0]?.type).toBe('complete')
+  })
+
+  it('never registers for a charge Flutterwave does not confirm — and never refunds it', async () => {
+    const { instance, actions } = worker(job(), untouchable, {
+      checkPayment: async () => ({
+        kind: 'refused',
+        code: 'PAYMENT_NOT_VERIFIED',
+        message: 'The charge is for another reference',
+      }),
+    })
+    await instance.tick()
+    // Needs a person (true), so the line is not failed and no refund is queued.
+    expect(actions).toEqual([
+      {
+        type: 'fail',
+        args: ['job-1', 'PAYMENT_NOT_VERIFIED', 'The charge is for another reference', true],
+      },
+    ])
+  })
+
+  it('waits when Flutterwave cannot be asked, and touches nothing', async () => {
+    const { instance, actions } = worker(job(), untouchable, {
+      checkPayment: async () => ({ kind: 'unknown', code: 'FLW_NO_ANSWER', message: 'timeout' }),
+    })
+    await instance.tick()
+    expect(actions).toEqual([
+      { type: 'reschedule', args: ['job-1', 30, 'FLW_NO_ANSWER', 'timeout'] },
+    ])
+  })
+
+  it('does not ask about a payment to change nameservers', async () => {
+    const checkPayment = vi.fn()
+    const { instance } = worker(
+      job({ kind: 'apply_nameservers', localStatus: 'active', pendingNameservers: VERCEL }),
+      registrar({}),
+      { checkPayment },
+    )
+    await instance.tick()
+    expect(checkPayment).not.toHaveBeenCalled()
+  })
+})
 
 describe('provisioning worker — registrations', () => {
   it('claims only its own side of the queue', async () => {
