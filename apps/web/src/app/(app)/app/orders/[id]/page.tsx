@@ -13,9 +13,11 @@ import {
   PanelPageSkeleton,
 } from '@/components/layout/panel'
 import { ReceiptLink } from '@/features/billing/components/receipt-link'
+import { LineNameservers } from '@/features/checkout/components/line-nameservers'
 import { OrderRefunds } from '@/features/checkout/components/order-refunds'
 import { OrderStatus } from '@/features/checkout/components/order-status'
 import { RefreshWhile } from '@/features/checkout/components/refresh-while'
+import { ownNameservers } from '@/features/checkout/lib/line-hosts'
 import {
   isSettling,
   lineStatus,
@@ -50,6 +52,10 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
   const progress =
     notice && order.status === 'cancelled' ? null : orderNotice(order.status, order.test_mode, kind)
   const linesHeading = kind === 'renew' ? 'Renewal' : kind === 'transfer' ? 'Transfer' : 'Domains'
+  // FR-C10 — some domains were given their own host; the order's covers the rest.
+  const ownHosts = order.order_items.some((item) =>
+    ownNameservers(item.nameservers, order.nameservers),
+  )
 
   return (
     <>
@@ -126,6 +132,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                       {item.item_type !== 'renew' && item.privacy ? ' · privacy on' : ''}
                     </p>
                   )}
+                  <LineNameservers line={item.nameservers} order={order.nameservers} />
                   {item.status === 'failed' ? (
                     <p className="mt-1 text-sm text-foreground">
                       {failureReason(item.failure_code)}
@@ -201,7 +208,9 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
             </p>
             {order.nameservers?.length ? (
               <>
-                <h2 className="mt-4 font-medium text-foreground">Nameservers</h2>
+                <h2 className="mt-4 font-medium text-foreground">
+                  {ownHosts ? 'Nameservers for the other domains' : 'Nameservers'}
+                </h2>
                 <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
                   {order.nameservers.join(', ')}
                 </p>

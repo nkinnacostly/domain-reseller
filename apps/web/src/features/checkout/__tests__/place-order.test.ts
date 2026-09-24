@@ -12,6 +12,8 @@ vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
 vi.mock('@/features/cart/queries/cart', () => ({ getCartView: vi.fn() }))
 vi.mock('@/features/cart/queries/store', () => ({ findCartId: vi.fn(), deleteLine: vi.fn() }))
 vi.mock('@/features/search/queries/availability', () => ({ checkAvailability: vi.fn() }))
+// FR-D4 looks typed nameservers up in public DNS: the network boundary.
+vi.mock('@/features/domains/queries/dns', () => ({ lookupHost: async () => 'resolves' }))
 vi.mock('@/lib/flutterwave', () => ({ createPaymentLink: vi.fn() }))
 vi.mock('@/lib/gateway', () => ({ callGateway: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
