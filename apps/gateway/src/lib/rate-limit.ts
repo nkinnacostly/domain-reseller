@@ -42,9 +42,16 @@ export class TokenBucket {
  * calls of ~1s each is ~2 calls a second. Availability admits a burst of 24
  * calls (a handful of searches) and then refuses rather than queueing work
  * nobody will wait for.
+ *
+ * Bulk search (FR-S5) draws on its own bucket, so a long list can never spend
+ * the tokens single searches need. It holds one supplier slot at most, and a
+ * call there takes a second or more, so one list checked block by block
+ * stays inside the refill; many lists at once are refused, and retried by
+ * the person, rather than queued behind each other.
  */
 export const buckets = {
   availability: new TokenBucket(24, 2),
+  bulkAvailability: new TokenBucket(12, 1),
   read: new TokenBucket(30, 15),
   write: new TokenBucket(5, 2),
 } as const

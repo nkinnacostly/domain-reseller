@@ -86,6 +86,11 @@ describe('addToCart', () => {
     expect(store.insertLine).not.toHaveBeenCalled()
   })
 
+  it('asks the registry again rather than trust a cached answer (FR-S6)', async () => {
+    await addToCart({ domain: 'getpaid.com' })
+    expect(checkAvailability).toHaveBeenCalledWith(['getpaid'], ['com'], 'high', { fresh: true })
+  })
+
   it('refuses when availability cannot be confirmed, rather than guessing', async () => {
     vi.mocked(checkAvailability).mockResolvedValue({ ok: false, reason: 'unavailable' })
     const result = await addToCart({ domain: 'getpaid.com' })

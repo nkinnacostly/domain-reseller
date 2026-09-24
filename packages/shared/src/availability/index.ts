@@ -7,8 +7,18 @@ import { domainStemSchema } from '../schemas/index'
  * here is a change to the wire format — and the compiler finds every caller.
  */
 
-/** Bounds per request. Each extension is one supplier call, so TLDs are the costly axis. */
-export const AVAILABILITY_LIMITS = { maxNames: 25, maxTlds: 12 } as const
+/**
+ * Bounds per request. A supplier call costs ~0.75s per extension and little
+ * per extra name (PRD V4), so extensions are the costly axis. Names are
+ * bounded for bulk search (FR-S5).
+ *
+ * `maxChecksPerCall` is the supplier's own limit, measured against production
+ * on 24 Sept 2026: a CheckAvailability of 20 name × extension checks is
+ * answered, 21 is refused with HTTP 403 (20×1, 5×4 and 1×20 answered; 21×1,
+ * 7×3 and 11×2 refused). The gateway splits every request into calls under
+ * it; bulk search sizes its blocks to one call each.
+ */
+export const AVAILABILITY_LIMITS = { maxNames: 50, maxTlds: 12, maxChecksPerCall: 20 } as const
 
 const tldSchema = z
   .string()
@@ -16,14 +26,25 @@ const tldSchema = z
   .toLowerCase()
   .regex(/^[a-z0-9-]{2,63}(\.[a-z0-9-]{2,63})*$/, 'Not an extension')
 
+export const AVAILABILITY_PRIORITIES = ['high', 'normal', 'low'] as const
+export type AvailabilityPriority = (typeof AVAILABILITY_PRIORITIES)[number]
+
 export const availabilityRequestSchema = z.object({
   names: z.array(domainStemSchema).min(1).max(AVAILABILITY_LIMITS.maxNames),
   tlds: z.array(tldSchema).min(1).max(AVAILABILITY_LIMITS.maxTlds),
   /**
    * `high` for the one answer a person is watching for — the exact match.
-   * The supplier allows two calls in flight, so this decides who waits.
+   * `low` for bulk search (FR-S5): it waits behind everything else and never
+   * holds both supplier slots. The supplier allows two calls in flight, so
+   * this decides who waits.
    */
-  priority: z.enum(['high', 'normal']).default('normal'),
+  priority: z.enum(AVAILABILITY_PRIORITIES).default('normal'),
+  /**
+   * Ask the supplier even if the 60-second cache has an answer (FR-S6):
+   * cached results are re-validated before a name goes into a cart or is paid
+   * for (FR-C7, N4). The fresh answer replaces the cached one.
+   */
+  fresh: z.boolean().default(false),
 })
 export type AvailabilityRequest = z.input<typeof availabilityRequestSchema>
 

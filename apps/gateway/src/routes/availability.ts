@@ -1,4 +1,5 @@
 import {
+  AVAILABILITY_LIMITS,
   type AvailabilityResult,
   type AvailabilityStatus,
   availabilityRequestSchema,
@@ -19,11 +20,20 @@ import { TtlCache } from '../lib/ttl-cache'
  * POST /v1/availability — names × extensions (PRD FR-S1, FR-S6).
  *
  * Measured against production (PRD V4): a call costs ~0.75s per extension and
- * almost nothing per extra name, and the supplier refuses a third concurrent
- * call with API_429. So a request is split into at most as many batches of
- * extensions as there are supplier slots, and every call waits its turn for a
- * slot. A refused call is retried — availability is a read, so a retry cannot
+ * almost nothing per extra name, the supplier refuses a third concurrent call
+ * with API_429, and a call of more than 20 name × extension checks with HTTP
+ * 403 (24 Sept 2026). So a request's extensions are split into at most as many
+ * groups as there are supplier slots, each group's names into calls of at most
+ * 20 checks, and every call waits its turn for a slot. A refused call is retried — availability is a read, so a retry cannot
  * double-spend anything (ADR-004).
+ *
+ * Bulk search (FR-S5) asks with `priority: 'low'`: it queues behind every
+ * other search, holds one of the two slots at most (see supplierSlots), draws
+ * on its own rate limit and may wait longer for its turn, because nobody is
+ * watching a single row of it.
+ *
+ * `fresh: true` skips the cache read (FR-S6): a cached answer is re-validated
+ * before a name goes into a cart or is paid for.
  *
  * Searches are never logged (FR-S7) — only extensions, counts and timings.
  */
@@ -33,17 +43,25 @@ const CACHE_TTL_MS = 60_000
 const SUPPLIER_TIMEOUT_MS = 10_000
 /** How long a call may wait for a slot before its extensions come back `unknown`. */
 const QUEUE_WAIT_MS = 8_000
+/**
+ * Bulk waits behind everyone, and for the one slot it may use, so it gets
+ * longer — long enough for the other half of its own request to finish first.
+ */
+const LOW_QUEUE_WAIT_MS = 20_000
 const RETRIES_ON_429 = 2
 
 type Deps = {
   client: () => DomainNameApi
   bucket: TokenBucket
+  /** Bulk search's own limit, so it never spends what single searches need. */
+  bulkBucket: TokenBucket
   cache: TtlCache<AvailabilityStatus>
   slots: Semaphore
   /** Batches per request; matches the supplier's concurrency ceiling. */
   batches: number
   timeoutMs: number
   queueWaitMs: number
+  lowQueueWaitMs: number
   /** Backoff before retrying an API_429, in ms. */
   backoff: (attempt: number) => number
 }
@@ -62,6 +80,31 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     timer = setTimeout(() => reject(new SupplierTimeout()), ms)
   })
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
+/**
+ * The supplier calls a request becomes: extensions dealt into `parts` groups
+ * (one per supplier slot, so a search's halves run side by side), then each
+ * group's names split so no call asks more than `maxChecks` name × extension
+ * questions — the supplier refuses a bigger call with HTTP 403.
+ */
+export function toCalls(
+  names: string[],
+  tlds: string[],
+  parts: number,
+  maxChecks: number = AVAILABILITY_LIMITS.maxChecksPerCall,
+): { names: string[]; tlds: string[] }[] {
+  const calls: { names: string[]; tlds: string[] }[] = []
+  for (const group of toBatches(tlds, parts)) {
+    for (let t = 0; t < group.length; t += maxChecks) {
+      const groupTlds = group.slice(t, t + maxChecks)
+      const perCall = Math.max(1, Math.floor(maxChecks / groupTlds.length))
+      for (let n = 0; n < names.length; n += perCall) {
+        calls.push({ names: names.slice(n, n + perCall), tlds: groupTlds })
+      }
+    }
+  }
+  return calls
 }
 
 /** Deals extensions round-robin into `parts` batches, keeping the first one first. */
@@ -103,7 +146,7 @@ async function checkBatch(
         waitedMs = Date.now() - started
         return callSupplier(deps, names, tlds)
       },
-      { waitMs: deps.queueWaitMs, priority },
+      { waitMs: priority === 'low' ? deps.lowQueueWaitMs : deps.queueWaitMs, priority },
     )
 
     if (!Array.isArray(response)) {
@@ -148,11 +191,13 @@ export function createAvailabilityRoute(overrides: Partial<Deps> = {}) {
   const deps: Deps = {
     client: getDnaClient,
     bucket: buckets.availability,
+    bulkBucket: buckets.bulkAvailability,
     cache: new TtlCache<AvailabilityStatus>(CACHE_TTL_MS, 20_000),
     slots: supplierSlots,
     batches: 2,
     timeoutMs: SUPPLIER_TIMEOUT_MS,
     queueWaitMs: QUEUE_WAIT_MS,
+    lowQueueWaitMs: LOW_QUEUE_WAIT_MS,
     backoff: (attempt) => 300 * 2 ** attempt + Math.random() * 200,
     ...overrides,
   }
@@ -166,17 +211,20 @@ export function createAvailabilityRoute(overrides: Partial<Deps> = {}) {
       )
     }
 
+    const { priority, fresh } = parsed.data
     const names = [...new Set(parsed.data.names)]
     const tlds = [...new Set(parsed.data.tlds)]
     const key = (name: string, tld: string) => `${name}.${tld}`
-    const cached = (name: string, tld: string) => deps.cache.get(key(name, tld)) !== undefined
+    const cached = (name: string, tld: string) =>
+      !fresh && deps.cache.get(key(name, tld)) !== undefined
 
     // Only what the cache cannot answer goes to the supplier.
     const uncachedTlds = tlds.filter((tld) => names.some((name) => !cached(name, tld)))
     const uncachedNames = names.filter((name) => uncachedTlds.some((tld) => !cached(name, tld)))
-    const batches = toBatches(uncachedTlds, deps.batches)
+    const calls = uncachedNames.length > 0 ? toCalls(uncachedNames, uncachedTlds, deps.batches) : []
 
-    if (batches.length > 0 && !deps.bucket.tryConsume(batches.length)) {
+    const bucket = priority === 'low' ? deps.bulkBucket : deps.bucket
+    if (calls.length > 0 && !bucket.tryConsume(calls.length)) {
       return c.json(
         {
           ok: false,
@@ -189,23 +237,26 @@ export function createAvailabilityRoute(overrides: Partial<Deps> = {}) {
     }
 
     const outcomes = await Promise.all(
-      batches.map((batch) => checkBatch(deps, uncachedNames, batch, parsed.data.priority)),
+      calls.map((call) => checkBatch(deps, call.names, call.tlds, priority)),
     )
 
+    const answered = new Map<string, AvailabilityStatus>()
     for (const outcome of outcomes) {
       if (!outcome.ok) continue
       // Premium and restricted answers are as stable as available ones;
       // `unknown` is never cached, so the next search asks again.
-      for (const [domain, status] of outcome.statuses) deps.cache.set(domain, status)
+      for (const [domain, status] of outcome.statuses) {
+        answered.set(domain, status)
+        deps.cache.set(domain, status)
+      }
     }
 
+    // A fresh request never falls back to the cache: an answer it could not
+    // get again is `unknown`, not the old one (FR-S6).
+    const statusOf = (domain: string) =>
+      answered.get(domain) ?? (fresh ? undefined : deps.cache.get(domain)) ?? 'unknown'
     const results: AvailabilityResult[] = names.flatMap((name) =>
-      tlds.map((tld) => ({
-        name,
-        tld,
-        domain: key(name, tld),
-        status: deps.cache.get(key(name, tld)) ?? 'unknown',
-      })),
+      tlds.map((tld) => ({ name, tld, domain: key(name, tld), status: statusOf(key(name, tld)) })),
     )
 
     // Every call failed and nothing came from cache: that is an outage, not a

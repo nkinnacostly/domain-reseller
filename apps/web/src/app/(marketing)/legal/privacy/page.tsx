@@ -70,13 +70,15 @@ export default function PrivacyPage() {
           <li>
             <strong>Technical data:</strong> our hosting providers keep standard request logs, which
             include IP addresses and the addresses of pages you visit, for a short time. To stop one
-            connection from overloading bulk search, we count bulk searches, and names added to a
-            cart in one go, against a one-way hash of the IP address — never the address itself.
+            connection from overloading bulk search, we count the names it checks there, and the
+            names it adds to a cart in one go, against a one-way hash of the IP address — never the
+            address itself.
           </li>
         </ul>
         <p>
           We do not keep a record of the domains you search for, and we do not use analytics or
-          advertising trackers.
+          advertising trackers. A CSV file you upload to bulk search is read on your device: only
+          the names in it are sent to us, to be checked, and the file itself never is.
         </p>
       </LegalSection>
 

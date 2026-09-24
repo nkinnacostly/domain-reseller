@@ -171,6 +171,51 @@ describe('addDomainsToCart — refusals first (FR-S5)', () => {
     })
   })
 
+  it('refuses more names than a cart can hold, before anything is asked', async () => {
+    const domains = Array.from({ length: MAX_CART_ITEMS + 1 }, (_, index) => `name${index}.com`)
+    const result = await addDomainsToCart({ domains })
+
+    expect(result?.validationErrors).toBeDefined()
+    expect(withinLimit).not.toHaveBeenCalled()
+    expect(checkAvailability).not.toHaveBeenCalled()
+  })
+
+  it('asks the registry only about as many names as the cart has room for', async () => {
+    vi.mocked(store.loadLines).mockResolvedValue(
+      Array.from({ length: MAX_CART_ITEMS - 2 }, (_, index) => line(`held${index}.com`)),
+    )
+
+    const result = await run(['first.com', 'second.com', 'third.com', 'fourth.io'])
+
+    expect(checkAvailability).toHaveBeenCalledWith(['first', 'second'], ['com'], 'normal', {
+      fresh: true,
+    })
+    expect(result).toMatchObject({
+      added: ['first.com', 'second.com'],
+      notAdded: [
+        { domain: 'third.com', reason: `A cart holds up to ${MAX_CART_ITEMS} domains` },
+        { domain: 'fourth.io', reason: `A cart holds up to ${MAX_CART_ITEMS} domains` },
+      ],
+    })
+  })
+
+  it('says the cart is full, not that it could not check, when a checked name was taken', async () => {
+    registry({ 'first.com': 'registered' })
+    vi.mocked(store.loadLines).mockResolvedValue(
+      Array.from({ length: MAX_CART_ITEMS - 1 }, (_, index) => line(`held${index}.com`)),
+    )
+
+    const result = await run(['first.com', 'second.com'])
+
+    expect(result).toMatchObject({
+      added: [],
+      notAdded: [
+        { domain: 'first.com', reason: 'Taken while you were looking' },
+        { domain: 'second.com', reason: `A cart holds up to ${MAX_CART_ITEMS} domains` },
+      ],
+    })
+  })
+
   it('stops at a full cart and says so for the rest', async () => {
     vi.mocked(store.loadLines).mockResolvedValue(
       Array.from({ length: MAX_CART_ITEMS - 1 }, (_, index) => line(`held${index}.com`)),
@@ -193,11 +238,21 @@ describe('addDomainsToCart — refusals first (FR-S5)', () => {
 })
 
 describe('addDomainsToCart — adding (FR-S5, FR-S8)', () => {
-  it('asks the registry once per extension, at normal priority, never high (PRD V4)', async () => {
+  it('asks the registry in one request, at normal priority, never high (PRD V4)', async () => {
     await run(['getpaid.com', 'mybrand.com', 'other.io'])
 
     expect(checkAvailability).toHaveBeenCalledTimes(1)
-    expect(checkAvailability).toHaveBeenCalledWith(['getpaid', 'mybrand', 'other'], ['com', 'io'])
+    expect(checkAvailability).toHaveBeenCalledWith(
+      ['getpaid', 'mybrand', 'other'],
+      ['com', 'io'],
+      'normal',
+      { fresh: true },
+    )
+  })
+
+  it('re-checks past the 60-second cache before anything goes in (FR-S6)', async () => {
+    await run(['getpaid.com'])
+    expect(vi.mocked(checkAvailability).mock.calls[0]?.[3]).toEqual({ fresh: true })
   })
 
   it('writes each free name at the catalogue price, and sets the cart badge', async () => {

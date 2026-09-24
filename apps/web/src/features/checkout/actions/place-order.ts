@@ -145,7 +145,9 @@ export const placeOrder = authAction
     const taken: string[] = []
     for (const [tld, group] of byTld) {
       const stems = group.map((line) => line.domain.slice(0, -(tld.length + 1)))
-      const outcome = await checkAvailability(stems, [tld], 'high')
+      // Past the gateway's 60-second cache: a cached answer is re-validated
+      // before anyone pays for it (FR-S6, N4).
+      const outcome = await checkAvailability(stems, [tld], 'high', { fresh: true })
       if (!outcome.ok) {
         return {
           error: `We couldn't confirm your domains are still free. ${NOT_CHARGED} Try again in a moment.`,

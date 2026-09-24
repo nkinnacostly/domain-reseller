@@ -415,7 +415,9 @@ describe('placeOrder — more checks that stop it before money moves', () => {
     const result = await placeOrder(INPUT)
 
     expect(checkAvailability).toHaveBeenCalledTimes(1)
-    expect(checkAvailability).toHaveBeenCalledWith(['getpaid', 'paidly'], ['com'], 'high')
+    expect(checkAvailability).toHaveBeenCalledWith(['getpaid', 'paidly'], ['com'], 'high', {
+      fresh: true,
+    })
     expect(deleteLine).toHaveBeenCalledTimes(2)
     expect(result?.data).toEqual({
       error: expect.stringMatching(/^getpaid.com, paidly.com were registered by someone else/),
