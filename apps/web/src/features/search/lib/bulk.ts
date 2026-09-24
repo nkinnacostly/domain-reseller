@@ -3,21 +3,32 @@ import { type LengthIssue, type LengthRules, lengthIssue } from './length'
 import { displayQuery, parseSearchQuery } from './query'
 
 /**
- * Bulk search (PRD FR-S5): many names checked at once, each line answered on
- * its own.
+ * Bulk search (PRD FR-S5): up to 500 names, pasted or read from a CSV file,
+ * each line answered on its own.
  *
- * The supplier allows two calls in flight (PRD V4) and a call costs about the
- * same for one name as for twenty on the same extensions, so a bulk search is
- * packed into as few gateway requests as the contract allows — names grouped
- * by extension, never one request per line. Anything answerable here (not a
- * name, an extension we don't sell, a length the extension refuses — FR-S9)
- * never reaches the supplier.
+ * The supplier allows two calls in flight for the whole account (PRD V4), and
+ * a call costs about the same for one name as for fifty on the same
+ * extensions. So a list is packed into blocks of names — each block one
+ * gateway request, asked about every extension it needs at once — and the
+ * blocks go one after another at low priority. Requests grow with blocks ×
+ * extensions, never with names. Anything answerable here (not a name, an
+ * extension we don't sell, a length the extension refuses — FR-S9) never
+ * reaches the supplier.
  */
 
-/** Names per bulk search. Within the gateway's per-request name limit, so one extension never needs two requests. */
-export const BULK_MAX_NAMES = 20
+/** Names per bulk search. */
+export const BULK_MAX_NAMES = 500
 /** Extensions a name without one can be checked on — the featured set at most. */
 export const BULK_MAX_EXTENSIONS = 7
+/**
+ * One gateway request of a bulk search. Fifty names is the contract's limit;
+ * the extensions are those one name can be checked on, so a request costs at
+ * most what a single search's grid does.
+ */
+export const BULK_CHUNK = {
+  maxNames: AVAILABILITY_LIMITS.maxNames,
+  maxTlds: BULK_MAX_EXTENSIONS,
+} as const
 
 /** One name, one extension — the unit a result row shows. */
 export type BulkCheck = {
@@ -45,7 +56,11 @@ export type BulkPlan = {
   skipped: number
   /** Where names without an extension were checked. */
   defaultTlds: string[]
+  /** Every check the supplier is asked about — those no rule refused here. */
+  asked: BulkCheck[]
   chunks: BulkChunk[]
+  /** Kept so a retry packs its requests by the same rules (FR-S9). */
+  lengthRules: LengthRules
 }
 
 /**
@@ -55,6 +70,11 @@ export type BulkPlan = {
  */
 export function splitNames(text: string): string[] {
   return text.split(/[\s,;]+/).filter(Boolean)
+}
+
+/** How many different names a list holds, as bulk search counts them. */
+export function countNames(text: string): number {
+  return new Set(splitNames(text).map((name) => name.toLowerCase())).size
 }
 
 /**
@@ -132,71 +152,102 @@ export function planBulk({
     })
   }
 
-  const asked = lines.flatMap((line) =>
-    line.kind === 'name' ? line.checks.filter((check) => !check.issue) : [],
+  const asked = uniqueChecks(
+    lines.flatMap((line) =>
+      line.kind === 'name' ? line.checks.filter((check) => !check.issue) : [],
+    ),
   )
-  return { lines, skipped, defaultTlds, chunks: chunkChecks(asked) }
+  return { lines, skipped, defaultTlds, asked, chunks: packChecks(asked, lengthRules), lengthRules }
+}
+
+/** Requests for these checks, never pairing a name with an extension that refuses it (FR-S9). */
+export function packChecks(checks: readonly BulkCheck[], lengthRules: LengthRules): BulkChunk[] {
+  return chunkChecks(checks, { canAsk: (name, tld) => !lengthIssue(name, lengthRules[tld]) })
+}
+
+/** `getpaid` and `getpaid.com` on .com are one question. */
+function uniqueChecks(checks: readonly BulkCheck[]): BulkCheck[] {
+  const byDomain = new Map<string, BulkCheck>()
+  for (const check of checks) if (!byDomain.has(check.domain)) byDomain.set(check.domain, check)
+  return [...byDomain.values()]
 }
 
 /**
- * Packs checks into gateway requests: each extension once, with only the
- * names wanted on it, up to the contract's limits per request. Extensions
- * asked about most go first, so the first answer fills the most lines.
- * The gateway splits each request into at most two supplier calls.
+ * Packs checks into gateway requests.
+ *
+ * Names wanted on the same extensions are blocked together, in the order
+ * they were typed, so the rows fill from the top. Blocks that are not full
+ * then share a request where the limits allow — fewer requests for the same
+ * supplier work, since a call costs per extension, not per name — unless
+ * sharing would ask about a name an extension refuses (FR-S9).
  */
 export function chunkChecks(
   checks: readonly Pick<BulkCheck, 'name' | 'tld'>[],
-  limits: { maxNames: number; maxTlds: number } = AVAILABILITY_LIMITS,
+  {
+    limits = BULK_CHUNK,
+    canAsk = () => true,
+  }: {
+    limits?: { maxNames: number; maxTlds: number }
+    canAsk?: (name: string, tld: string) => boolean
+  } = {},
 ): BulkChunk[] {
-  const namesByTld = new Map<string, Set<string>>()
+  const tldsByName = new Map<string, string[]>()
   for (const { name, tld } of checks) {
-    const names = namesByTld.get(tld) ?? new Set<string>()
-    names.add(name)
-    namesByTld.set(tld, names)
+    const tlds = tldsByName.get(name) ?? []
+    if (!tlds.includes(tld)) tlds.push(tld)
+    tldsByName.set(name, tlds)
   }
-  const tlds = [...namesByTld.keys()].sort(
-    (a, b) => (namesByTld.get(b)?.size ?? 0) - (namesByTld.get(a)?.size ?? 0),
-  )
+
+  const groups = new Map<string, BulkChunk>()
+  for (const [name, tlds] of tldsByName) {
+    const key = [...tlds].sort().join(' ')
+    const group = groups.get(key) ?? { names: [], tlds }
+    group.names.push(name)
+    groups.set(key, group)
+  }
+
+  const blocks: BulkChunk[] = []
+  for (const group of groups.values()) {
+    for (let t = 0; t < group.tlds.length; t += limits.maxTlds) {
+      const tlds = group.tlds.slice(t, t + limits.maxTlds)
+      for (let n = 0; n < group.names.length; n += limits.maxNames) {
+        blocks.push({ names: group.names.slice(n, n + limits.maxNames), tlds })
+      }
+    }
+  }
 
   const chunks: BulkChunk[] = []
-  let names = new Set<string>()
-  let chunkTlds: string[] = []
-  for (const tld of tlds) {
-    const wanted = namesByTld.get(tld) ?? new Set<string>()
-    const merged = new Set([...names, ...wanted])
-    if (
-      chunkTlds.length > 0 &&
-      (chunkTlds.length >= limits.maxTlds || merged.size > limits.maxNames)
-    ) {
-      chunks.push({ names: [...names], tlds: chunkTlds })
-      names = new Set(wanted)
-      chunkTlds = [tld]
+  for (const block of blocks) {
+    const home = chunks.find((chunk) => canShare(chunk, block, limits, canAsk))
+    if (!home) {
+      chunks.push({ names: [...block.names], tlds: [...block.tlds] })
       continue
     }
-    names = merged
-    chunkTlds.push(tld)
+    for (const name of block.names) if (!home.names.includes(name)) home.names.push(name)
+    for (const tld of block.tlds) if (!home.tlds.includes(tld)) home.tlds.push(tld)
   }
-  if (chunkTlds.length > 0) chunks.push({ names: [...names], tlds: chunkTlds })
   return chunks
 }
 
-/** The request that answers a check. Every asked check is in exactly one. */
-export function chunkFor(chunks: readonly BulkChunk[], check: Pick<BulkCheck, 'name' | 'tld'>) {
-  return chunks.find((chunk) => chunk.tlds.includes(check.tld) && chunk.names.includes(check.name))
+function canShare(
+  chunk: BulkChunk,
+  block: BulkChunk,
+  limits: { maxNames: number; maxTlds: number },
+  canAsk: (name: string, tld: string) => boolean,
+): boolean {
+  const names = new Set([...chunk.names, ...block.names])
+  const tlds = new Set([...chunk.tlds, ...block.tlds])
+  if (names.size > limits.maxNames || tlds.size > limits.maxTlds) return false
+  for (const name of names) for (const tld of tlds) if (!canAsk(name, tld)) return false
+  return true
 }
 
-/** The canonical bulk URL: names one per line, readable forms, extensions repeated. */
-export function bulkHref(names: readonly string[], tlds: readonly string[]): string {
-  const params = new URLSearchParams()
-  params.set(
-    'names',
-    names
-      .map((name) => {
-        const parsed = parseSearchQuery(name)
-        return parsed.isValid ? displayQuery(parsed) : name
-      })
-      .join('\n'),
-  )
-  for (const tld of tlds) params.append('tld', tld)
-  return `/search/bulk?${params.toString()}`
+/** The checks a request answers: those wanted, on the names and extensions it asks about. */
+export function checksIn<T extends Pick<BulkCheck, 'name' | 'tld'>>(
+  chunk: BulkChunk,
+  checks: readonly T[],
+): T[] {
+  const names = new Set(chunk.names)
+  const tlds = new Set(chunk.tlds)
+  return checks.filter((check) => names.has(check.name) && tlds.has(check.tld))
 }

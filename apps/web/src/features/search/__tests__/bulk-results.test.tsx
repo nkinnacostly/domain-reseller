@@ -1,320 +1,417 @@
-import { type PricingInputs, priceCatalogue, type TldRecord } from '@dr/shared'
-import { render, screen, within } from '@testing-library/react'
-import { HttpResponse, http } from 'msw'
-import {
-  Children,
-  cloneElement,
-  isValidElement,
-  type ReactElement,
-  type ReactNode,
-  Suspense,
-} from 'react'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toPublicRow } from '@/features/pricing/lib/public-row'
-import { getPricedCatalogue, type PricedCatalogue } from '@/features/pricing/queries/pricing'
-import { server } from '../../../../tests/mocks/server'
-import { BulkResults, BulkSearchPanel, BulkSearchPanelSkeleton } from '../components/bulk-results'
-import { bulkSearchAllowed } from '../queries/bulk-allowance'
-import { getLengthRules } from '../queries/length-rules'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { addDomainsToCart } from '@/features/cart/actions/cart'
+import { checkBulkNames } from '../actions/bulk'
+import { BulkResults } from '../components/bulk-results'
+import { BulkRunProvider } from '../components/bulk-run'
+import { BulkSearchForm } from '../components/bulk-search-form'
+import type { BulkAnswer, BulkPrice } from '../lib/bulk-run'
 
-// env.ts reads process.env once, at import: point it at a test gateway first.
-vi.hoisted(() => {
-  vi.stubEnv('GATEWAY_URL', 'http://gateway.test')
-  vi.stubEnv('GATEWAY_SHARED_SECRET', 'test-secret-value-16')
-})
-afterAll(() => vi.unstubAllEnvs())
+// Server actions are the page's network boundary.
+vi.mock('../actions/bulk', () => ({ checkBulkNames: vi.fn() }))
+vi.mock('@/features/cart/actions/cart', () => ({ addDomainsToCart: vi.fn() }))
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
-vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
-vi.mock('../queries/length-rules', () => ({ getLengthRules: vi.fn() }))
-vi.mock('../queries/bulk-allowance', () => ({ bulkSearchAllowed: vi.fn() }))
-// The cart buttons' server actions are their network boundary.
-vi.mock('@/features/cart/actions/cart', () => ({ addToCart: vi.fn(), addDomainsToCart: vi.fn() }))
+type Chunk = { names: string[]; tlds: string[] }
+type Status = 'available' | 'registered' | 'premium' | 'restricted' | 'unknown'
 
-const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
-const record = (name: string, registerUsd: number, renewUsd: number): TldRecord => ({
-  name,
-  registerUsd,
-  renewUsd,
-  transferUsd: null,
-  restoreUsd: null,
-  isCountryCode: false,
-  minPeriod: 1,
+const price = (registerKobo: number, renewKobo: number): BulkPrice => ({
+  register: `₦${(registerKobo / 100).toLocaleString('en-NG')}`,
+  renew: `₦${(renewKobo / 100).toLocaleString('en-NG')}`,
+  renewalIsHigher: renewKobo > registerKobo,
+  includesIcannFee: true,
   maxPeriod: 10,
-  redemptionDays: 30,
-  requiresExtraFields: false,
+  registerKobo,
+  renewKobo,
 })
-const tlds = priceCatalogue(
-  [record('com', 11.31, 11.51), record('net', 12, 14), record('io', 30, 30)],
-  INPUTS,
-)
-const CATALOGUE: PricedCatalogue = {
-  tlds,
-  featured: tlds.slice(0, 2).map((tld) => ({ ...tld, tagline: null })),
-  effectiveRate: 1334,
-  rateSource: 'test',
-  rateUpdatedAt: new Date('2026-09-22T07:00:00Z'),
-  rateId: 'rate-1',
-  vatPct: 7.5,
-  version: 'test',
-}
-const com = toPublicRow(tlds[0] as (typeof tlds)[number])
-
-type Params = { names?: string | string[]; tld?: string | string[] }
-const params = (value: Params) => Promise.resolve(value)
-
-/** Resolves nested async Server Components the way the server does before it streams them. */
-async function resolveServer(node: ReactNode): Promise<ReactNode> {
-  if (Array.isArray(node)) return Promise.all(node.map(resolveServer))
-  if (!isValidElement<{ children?: ReactNode }>(node)) return node
-  const { type, props } = node
-  if (typeof type === 'function' && type.constructor.name === 'AsyncFunction') {
-    return resolveServer(await (type as (p: unknown) => Promise<ReactNode>)(props))
-  }
-  if (props.children === undefined) return node
-  const children = await resolveServer(props.children)
-  return Array.isArray(children)
-    ? cloneElement(node, undefined, ...children)
-    : cloneElement(node, undefined, children)
+const PRICES: Record<string, BulkPrice> = {
+  com: price(1_820_000, 1_900_000),
+  net: price(2_000_000, 2_000_000),
+  io: price(5_000_000, 5_000_000),
 }
 
-/** The loading placeholders a visitor sees before each boundary resolves. */
-function fallbacksOf(node: ReactNode): ReactNode[] {
-  const found: ReactNode[] = []
-  const walk = (current: ReactNode) => {
-    Children.forEach(current, (child) => {
-      if (!isValidElement<{ children?: ReactNode; fallback?: ReactNode }>(child)) return
-      if (child.type === Suspense) found.push(child.props.fallback)
-      walk(child.props.children)
-    })
-  }
-  walk(node)
-  return found
+/** The fixed answers the tests share: a few names are taken, premium or unanswered. */
+const STATUS: Record<string, Status> = {
+  takenbrand: 'registered',
+  hotel: 'premium',
+  flaky: 'unknown',
+}
+const answerFor = ({ names, tlds }: Chunk): BulkAnswer => ({
+  ok: true,
+  results: names.flatMap((name) =>
+    tlds.map((tld) => ({ domain: `${name}.${tld}`, status: STATUS[name] ?? 'available' })),
+  ),
+  prices: Object.fromEntries(tlds.map((tld) => [tld, PRICES[tld] as BulkPrice])),
+})
+
+/** Answers each request with `reply(chunk, call)`, or the fixed answers. */
+function registry(reply?: (chunk: Chunk, call: number) => BulkAnswer | Promise<BulkAnswer>) {
+  let call = 0
+  vi.mocked(checkBulkNames).mockImplementation(async (input) => {
+    const chunk = input as Chunk
+    const data = await (reply ? reply(chunk, call++) : answerFor(chunk))
+    return { data }
+  })
 }
 
-async function renderResults(value: Params) {
-  return render(await resolveServer(await BulkResults({ searchParams: params(value) })))
-}
-
-/** Answers availability like the gateway: `taken*` names are registered, the rest free. */
-function gateway(status?: number) {
-  const asked: { names: string[]; tlds: string[]; priority?: string }[] = []
-  server.use(
-    http.post('*/v1/availability', async ({ request }) => {
-      const body = (await request.json()) as { names: string[]; tlds: string[] }
-      asked.push(body)
-      if (status) {
-        return HttpResponse.json(
-          { ok: false, code: 'SUPPLIER_UNAVAILABLE', message: 'down', retryable: true },
-          { status },
-        )
-      }
-      return HttpResponse.json({
-        ok: true,
-        data: {
-          results: body.names.flatMap((name) =>
-            body.tlds.map((tld) => ({
-              name,
-              tld,
-              domain: `${name}.${tld}`,
-              status: name.startsWith('taken') ? 'registered' : 'available',
-            })),
-          ),
-        },
-      })
-    }),
-  )
-  return asked
-}
-
-const rows = () => within(screen.getByRole('list', { name: 'Results, one row per name' }))
-const row = (text: string) => rows().getByText(text).closest('li') as HTMLElement
+const asked = () => vi.mocked(checkBulkNames).mock.calls.map(([chunk]) => chunk as Chunk)
+const numbered = (count: number) => Array.from({ length: count }, (_, index) => `n${index}`)
 
 beforeEach(() => {
-  vi.mocked(getPricedCatalogue).mockReset()
-  vi.mocked(getPricedCatalogue).mockResolvedValue(CATALOGUE)
-  vi.mocked(getLengthRules).mockResolvedValue({})
-  vi.mocked(bulkSearchAllowed).mockResolvedValue(true)
+  vi.mocked(checkBulkNames).mockReset()
+  vi.mocked(addDomainsToCart).mockReset()
+  registry()
 })
 
-describe('BulkResults — before anything is asked', () => {
-  it('invites a list when there is none, without reading prices', async () => {
-    await renderResults({ names: ' \n ' })
+function page() {
+  render(
+    <BulkRunProvider>
+      <BulkSearchForm
+        extensions={['com', 'net']}
+        sold={['com', 'net', 'io']}
+        featured={['com', 'net']}
+        lengthRules={{}}
+        defaultPicked={['com']}
+      />
+      <BulkResults />
+    </BulkRunProvider>,
+  )
+}
+
+async function search(names: string[]) {
+  const user = userEvent.setup()
+  page()
+  await user.click(screen.getByLabelText('Names to check'))
+  await user.paste(names.join('\n'))
+  await user.click(screen.getByRole('button', { name: 'Check names' }))
+  return user
+}
+
+const rows = () =>
+  within(screen.getByRole('list', { name: 'Results, one row per name' })).getAllByRole('listitem')
+const row = (name: string) => {
+  const found = rows().find((item) => within(item).queryByText(name, { exact: true }))
+  if (!found) throw new Error(`no row for ${name}`)
+  return found
+}
+const done = () => screen.findByRole('button', { name: 'Check names' })
+
+describe('bulk results — before a search', () => {
+  it('says what bulk search does, and that searches are never shared (FR-S7)', () => {
+    page()
     expect(screen.getByText('Paste a list to check it in one go')).toBeInTheDocument()
-    expect(getPricedCatalogue).not.toHaveBeenCalled()
+    expect(screen.getByText(/Up to 500 names, one per line, or a CSV file/)).toBeInTheDocument()
+    expect(screen.getByText(/We never sell or share what you search for/)).toHaveTextContent(
+      'a CSV file you upload is read on your device',
+    )
+  })
+})
+
+describe('bulk results — failures first (FR-S5)', () => {
+  it('says which names a failed block left unchecked, and retries just those', async () => {
+    registry((chunk, call) =>
+      call === 0 ? { ok: false, reason: 'unavailable' } : answerFor(chunk),
+    )
+    const user = await search(numbered(60))
+    await done()
+
+    const notice = screen.getByRole('region', { name: '50 names weren’t checked' })
+    expect(notice).toHaveTextContent("The registry didn't answer for them this time.")
+    expect(notice).toHaveTextContent('n0.com, n1.com, n2.com and 47 more')
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('10 of 60 available')
+
+    await user.click(within(notice).getByRole('button', { name: 'Check these 50 again' }))
+    await waitFor(() => expect(checkBulkNames).toHaveBeenCalledTimes(3))
+    expect(asked()[2]).toEqual({ names: numbered(50), tlds: ['com'] })
+    expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent('60 of 60 available')
+    expect(screen.queryByRole('region', { name: /weren’t checked/ })).not.toBeInTheDocument()
   })
 
-  it('shows no results when prices are withheld, since a result needs a price (N8)', async () => {
-    vi.mocked(getPricedCatalogue).mockResolvedValue(null)
-    await renderResults({ names: 'getpaid' })
-    expect(screen.getByRole('status')).toHaveTextContent('Prices are briefly unavailable')
+  it('stops at the address limit, and asks nothing more (FR-S5 rate limit)', async () => {
+    registry((chunk, call) => (call === 1 ? { ok: false, reason: 'limited' } : answerFor(chunk)))
+    await search(numbered(120))
+    await done()
+
+    expect(checkBulkNames).toHaveBeenCalledTimes(2)
+    const notice = screen.getByRole('region', { name: '70 names weren’t checked' })
+    expect(notice).toHaveTextContent(
+      'This connection has checked a lot of names in the last few minutes',
+    )
+    expect(screen.getByText('50 of 120 names checked')).toBeInTheDocument()
   })
 
-  it('refuses a search over the per-address limit, and asks the registry nothing', async () => {
-    vi.mocked(bulkSearchAllowed).mockResolvedValue(false)
-    const asked = gateway()
+  it('says the registry is busy when too many bulk searches run at once', async () => {
+    registry(() => ({ ok: false, reason: 'busy' }))
+    await search(['getpaid'])
+    await done()
 
-    await renderResults({ names: 'getpaid\nmybrand' })
-
-    expect(screen.getByRole('status')).toHaveTextContent("That's a lot of bulk searches")
-    expect(asked).toEqual([])
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      "We couldn't check these names",
+    )
+    expect(screen.getByRole('region', { name: '1 name wasn’t checked' })).toHaveTextContent(
+      'A lot of bulk searches are running right now.',
+    )
+    expect(screen.getByRole('button', { name: 'Check it again' })).toBeEnabled()
   })
 
-  it('does not count a list it can answer alone against the limit', async () => {
-    const asked = gateway()
-    await renderResults({ names: 'not_a_name\nschool.edu' })
+  it('treats a request that never arrived as unanswered', async () => {
+    vi.mocked(checkBulkNames).mockRejectedValue(new Error('offline'))
+    await search(['getpaid'])
+    await done()
+    expect(screen.getByRole('region', { name: '1 name wasn’t checked' })).toBeInTheDocument()
+  })
 
-    expect(bulkSearchAllowed).not.toHaveBeenCalled()
-    expect(asked).toEqual([])
+  it('treats an empty answer from the server as unanswered', async () => {
+    vi.mocked(checkBulkNames).mockResolvedValue(undefined as never)
+    await search(['getpaid'])
+    await done()
+    expect(row('getpaid.com')).toHaveTextContent('Not checked')
+  })
+
+  it('stops after the block in flight when asked, leaving the rest to check later', async () => {
+    let release: () => void = () => {}
+    registry(
+      (chunk, call) =>
+        new Promise((resolve) => {
+          if (call === 0) release = () => resolve(answerFor(chunk))
+          else resolve(answerFor(chunk))
+        }),
+    )
+    const user = await search(numbered(120))
+
+    await user.click(await screen.findByRole('button', { name: 'Stop checking' }))
+    release()
+    await done()
+
+    expect(checkBulkNames).toHaveBeenCalledOnce()
+    expect(screen.getByRole('region', { name: '70 names weren’t checked' })).toHaveTextContent(
+      'You stopped the search before they were checked.',
+    )
+  })
+
+  it('says when none of the names checked are free', async () => {
+    registry((chunk, call) =>
+      call === 0
+        ? {
+            ok: true,
+            results: chunk.names.map((name) => ({ domain: `${name}.com`, status: 'registered' })),
+            prices: {},
+          }
+        : { ok: false, reason: 'unavailable' },
+    )
+    await search(numbered(60))
+    await done()
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      'None of the names checked are available',
+    )
+  })
+
+  it('says plainly when nothing is free', async () => {
+    await search(['takenbrand', 'hotel'])
+    await done()
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      'None of these are available',
+    )
+  })
+})
+
+describe('bulk results — progress and partial results', () => {
+  it('shows "50 of 120 checked" and the first rows while the rest are still coming', async () => {
+    const releases: (() => void)[] = []
+    registry(
+      (chunk) =>
+        new Promise((resolve) => {
+          releases.push(() => resolve(answerFor(chunk)))
+        }),
+    )
+    await search(numbered(120))
+
+    expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent(
+      'Checking 120 names…',
+    )
+    const bar = screen.getByRole('progressbar', { name: 'Names checked' })
+    expect(bar).toHaveAttribute('aria-valuenow', '0')
+
+    await waitFor(() => expect(releases).toHaveLength(1))
+    releases[0]?.()
+    expect(await screen.findByText('50 of 120 names checked')).toBeInTheDocument()
+    expect(bar).toHaveAttribute('aria-valuenow', '50')
+    expect(row('n0.com')).toHaveTextContent('Available')
+    expect(row('n60.com')).toHaveTextContent('Checking')
+
+    await waitFor(() => expect(releases).toHaveLength(2))
+    releases[1]?.()
+    await waitFor(() => expect(releases).toHaveLength(3))
+    releases[2]?.()
+    await done()
+
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('120 of 120 available')
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+
+  it('draws a hundred rows at a time', async () => {
+    const user = await search(numbered(120))
+    await done()
+
+    expect(rows()).toHaveLength(100)
+    await user.click(screen.getByRole('button', { name: 'Show 20 more of 20 not shown' }))
+    expect(rows()).toHaveLength(120)
+  })
+
+  it('answers a list with nothing to ask straight away', async () => {
+    await search(['not_a_name'])
+    expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent(
+      'None of these are available',
+    )
     expect(row('not_a_name')).toHaveTextContent('Not a domain')
-    expect(row('school.edu')).toHaveTextContent("We don't sell .edu")
-    expect(screen.getByRole('heading', { name: 'None of these are available' })).toBeVisible()
+    expect(checkBulkNames).not.toHaveBeenCalled()
   })
 })
 
-describe('BulkResults — each line gets its own answer (FR-S5)', () => {
-  it('answers every line in the order typed, with both prices on every free name (N8)', async () => {
-    vi.mocked(getLengthRules).mockResolvedValue({ io: { min: 3, max: 63 } })
-    const asked = gateway()
+describe('bulk results — rows, filters and order', () => {
+  it('shows every free name with its first-year and renewal price (N8)', async () => {
+    await search(['getpaid', 'takenbrand', 'hotel', 'café.com'])
+    await done()
 
-    await renderResults({
-      // The last line has a Cyrillic а.
-      names: 'getpaid\ntakenbrand.net\ncafé.com\nab.io\nnot_a_name\nschool.edu\npаypal.com',
-    })
-
-    const texts = rows()
-      .getAllByRole('listitem')
-      .map((item) => item.querySelector('span')?.textContent)
-    expect(texts).toEqual([
-      'getpaid.com',
-      'takenbrand.net',
-      'café.com',
-      'ab.io',
-      'not_a_name',
-      'school.edu',
-      'pаypal.com',
-    ])
-
-    expect(row('getpaid.com')).toHaveTextContent(com.register)
-    expect(row('getpaid.com')).toHaveTextContent(`then ${com.renew}/yr`)
-    expect(
-      within(row('getpaid.com')).getByRole('button', { name: 'Add getpaid.com to cart' }),
-    ).toBeEnabled()
-    expect(row('takenbrand.net')).toHaveTextContent('Taken')
+    expect(row('getpaid.com')).toHaveTextContent(/₦18,200\s*then ₦19,000\/yr/)
+    expect(row('takenbrand.com')).toHaveTextContent('Taken')
+    expect(row('takenbrand.com')).not.toHaveTextContent('₦')
+    expect(row('hotel.com')).toHaveTextContent('Premium')
+    expect(row('hotel.com')).not.toHaveTextContent('₦')
     expect(row('café.com')).toHaveTextContent('xn--caf-dma.com')
-    expect(
-      within(row('café.com')).getByRole('button', { name: 'Add café.com to cart' }),
-    ).toBeEnabled()
-    expect(row('ab.io')).toHaveTextContent('Too short for .io (3–63 characters)')
-    expect(row('pаypal.com')).toHaveTextContent('Mixes Latin and Cyrillic letters')
-
-    // Never high priority, and never a name the extension refuses (FR-S9).
-    expect(asked.every((body) => body.priority === 'normal')).toBe(true)
-    expect(asked.some((body) => body.names.includes('ab'))).toBe(false)
   })
 
-  it('tallies the answers and offers every free name in one press, nothing pre-ticked (N9)', async () => {
-    vi.mocked(getLengthRules).mockResolvedValue({ io: { min: 3, max: 63 } })
-    gateway()
+  it('filters by available, taken, premium and not checked', async () => {
+    const user = await search(['getpaid', 'takenbrand', 'hotel', 'flaky', 'other'])
+    await done()
 
-    await renderResults({ names: 'getpaid\ntakenbrand.net\ncafé.com\nab.io\nschool.edu' })
-
-    expect(screen.getByRole('heading', { name: '2 of 5 available' })).toBeVisible()
-    expect(screen.getByText('1 taken · 2 not available')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Add all 2 available to cart' })).toBeEnabled()
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: /^Taken/ }))
+    expect(rows().map((item) => item.dataset.status)).toEqual(['taken'])
+    await user.click(screen.getByRole('radio', { name: /^Premium/ }))
+    expect(rows().map((item) => item.dataset.status)).toEqual(['premium'])
+    await user.click(screen.getByRole('radio', { name: /^Not checked/ }))
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]).toHaveTextContent('flaky.com')
+    await user.click(screen.getByRole('radio', { name: /^Available/ }))
+    expect(rows()).toHaveLength(2)
+    await user.click(screen.getByRole('radio', { name: /^All/ }))
+    expect(rows()).toHaveLength(5)
   })
 
-  it('checks a bare name on each extension picked for it', async () => {
-    gateway()
-    await renderResults({ names: 'getpaid', tld: ['com', 'net'] })
-
-    expect(row('getpaid.com')).toHaveTextContent('Available')
-    expect(row('getpaid.net')).toHaveTextContent('Available')
-    expect(screen.getByText('Every name is free to register.')).toBeVisible()
+  it('says so when a filter has nothing in it', async () => {
+    const user = await search(['getpaid'])
+    await done()
+    await user.click(screen.getByRole('radio', { name: /^Premium/ }))
+    expect(screen.getByText('None of these are premium names.')).toBeInTheDocument()
   })
 
-  it('warns that a Cyrillic name can pass for a Latin one (FR-S8)', async () => {
-    gateway()
-    await renderResults({ names: 'аррӏе.com' })
-    expect(row('аррӏе.com')).toHaveTextContent('Can pass for “apple”')
+  it('shows only the names not checked when asked', async () => {
+    const user = await search(['getpaid', 'flaky'])
+    await done()
+    await user.click(screen.getByRole('button', { name: 'Show only these' }))
+    expect(screen.getByRole('radio', { name: /^Not checked/ })).toBeChecked()
+    expect(rows()).toHaveLength(1)
   })
 
-  it('says which names it left out past the limit', async () => {
-    gateway()
-    const names = Array.from({ length: 22 }, (_, index) => `name${index}`).join('\n')
-    await renderResults({ names })
-    expect(
-      screen.getByText('We checked the first 20 names. Search the other 2 separately.'),
-    ).toBeVisible()
-  })
+  it('orders by name or by price', async () => {
+    const user = await search(['zeta.com', 'alpha.io', 'mid.net', 'takenbrand.com'])
+    await done()
+    const order = () =>
+      rows().map((item) => within(item).getByText(/^[a-z]+\.(com|io|net)$/).textContent)
 
-  it('offers a retry, keeping the list, when the registry cannot be reached', async () => {
-    gateway(502)
-    await renderResults({ names: 'getpaid', tld: 'net' })
-
-    expect(row('getpaid.net')).toHaveTextContent("Couldn't check")
-    expect(screen.getByText("1 couldn't be checked")).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Try again' })).toHaveAttribute(
-      'href',
-      '/search/bulk?names=getpaid&tld=net',
-    )
-    expect(screen.queryByRole('button', { name: /Add all/ })).not.toBeInTheDocument()
-  })
-
-  it('says a busy registry is the reason, when it is', async () => {
-    server.use(
-      http.post('*/v1/availability', () =>
-        HttpResponse.json(
-          { ok: false, code: 'RATE_LIMITED', message: 'busy', retryable: true },
-          { status: 429 },
-        ),
-      ),
-    )
-    await renderResults({ names: 'getpaid' })
-    expect(screen.getByText(/A lot of people are searching right now/)).toBeVisible()
-  })
-
-  it('shows each name, and how many it is checking, while the answers are on their way', async () => {
-    const element = await BulkResults({ searchParams: params({ names: 'getpaid\nmybrand.net' }) })
-    const [summary, ...pending] = fallbacksOf(element)
-    render(
-      <>
-        {summary}
-        <ul>{pending}</ul>
-      </>,
-    )
-
-    expect(screen.getByRole('status')).toHaveTextContent('Checking 2 names on 2 extensions…')
-    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
-      'getpaid.comChecking',
-      'mybrand.netChecking',
-    ])
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Order' }), 'name')
+    expect(order()).toEqual(['alpha.io', 'mid.net', 'takenbrand.com', 'zeta.com'])
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Order' }), 'price')
+    expect(order()).toEqual(['zeta.com', 'mid.net', 'alpha.io', 'takenbrand.com'])
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Order' }), 'list')
+    expect(order()).toEqual(['zeta.com', 'alpha.io', 'mid.net', 'takenbrand.com'])
   })
 })
 
-describe('BulkSearchPanel', () => {
-  it('offers the featured extensions, and keeps the list and choices from the last search', async () => {
-    render(
-      (await BulkSearchPanel({
-        searchParams: params({ names: 'getpaid\nmybrand.com', tld: 'net' }),
-      })) as ReactElement,
-    )
+describe('bulk results — to the cart (FR-S5, N9)', () => {
+  it('ticks nothing for anyone, and adds only what was selected', async () => {
+    vi.mocked(addDomainsToCart).mockResolvedValue({
+      data: { count: 1, added: ['getpaid.com'], notAdded: [] },
+    } as never)
+    const user = await search(['getpaid', 'other', 'takenbrand'])
+    await done()
 
-    expect(screen.getByLabelText('Names to check')).toHaveValue('getpaid\nmybrand.com')
-    expect(screen.getByRole('checkbox', { name: '.com' })).not.toBeChecked()
-    expect(screen.getByRole('checkbox', { name: '.net' })).toBeChecked()
+    const boxes = screen.getAllByRole('checkbox', { name: /^Select / })
+    expect(boxes).toHaveLength(2)
+    for (const box of boxes) expect(box).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Add selected to cart' })).toBeDisabled()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select getpaid.com' }))
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Add 1 to cart' }))
+
+    expect(addDomainsToCart).toHaveBeenCalledWith({ domains: ['getpaid.com'] })
+    expect(await screen.findByText('Added 1 name to your cart.')).toBeInTheDocument()
+    // What went in is unticked, so it is not added twice.
+    expect(screen.getByRole('checkbox', { name: 'Select getpaid.com' })).not.toBeChecked()
   })
 
-  it('still offers the form when prices are withheld', async () => {
-    vi.mocked(getPricedCatalogue).mockResolvedValue(null)
-    render((await BulkSearchPanel({ searchParams: params({}) })) as ReactElement)
-    expect(screen.getByLabelText('Names to check')).toHaveValue('')
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  it('selects every available name in one press, and clears them in another', async () => {
+    const user = await search(['getpaid', 'other', 'takenbrand'])
+    await done()
+
+    await user.click(screen.getByRole('button', { name: 'Select all 2 available' }))
+    expect(screen.getByRole('checkbox', { name: 'Select getpaid.com' })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Add 2 to cart' })).toBeEnabled()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select other.com' }))
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Select all 2 available' }))
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }))
+    expect(screen.getByText('0 selected')).toBeInTheDocument()
   })
 
-  it('has a placeholder hidden from assistive tech while it loads', () => {
-    const { container } = render(<BulkSearchPanelSkeleton />)
-    expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true')
+  it('offers no cart when nothing is available', async () => {
+    await search(['takenbrand'])
+    await done()
+    expect(screen.queryByRole('region', { name: 'Add to cart' })).not.toBeInTheDocument()
+  })
+})
+
+describe('bulk results — CSV download (FR-S5, N8)', () => {
+  const created: Blob[] = []
+  beforeEach(() => {
+    created.length = 0
+    URL.createObjectURL = vi.fn((blob: Blob) => {
+      created.push(blob)
+      return 'blob:bulk'
+    })
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  it('downloads the rows shown, with both prices for each free name', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const user = await search(['getpaid', 'takenbrand'])
+    await done()
+
+    await user.click(screen.getByRole('button', { name: 'Download 2 as CSV' }))
+
+    expect(click).toHaveBeenCalledOnce()
+    const link = click.mock.contexts[0] as HTMLAnchorElement
+    expect(link.download).toMatch(/^bulk-search-\d{4}-\d{2}-\d{2}\.csv$/)
+    expect(link.href).toBe('blob:bulk')
+    const text = await created[0]?.text()
+    expect(text?.split('\r\n')).toEqual([
+      expect.stringMatching(/name,extension,status,first_year_price_ngn,renewal_price_ngn/),
+      'getpaid.com,com,available,18200.00,19000.00,getpaid.com',
+      'takenbrand.com,com,taken,,,takenbrand.com',
+      '',
+    ])
+
+    await user.click(screen.getByRole('radio', { name: /^Taken/ }))
+    await user.click(screen.getByRole('button', { name: 'Download 1 as CSV' }))
+    expect(await created[1]?.text()).not.toContain('getpaid.com')
+    click.mockRestore()
+  })
+
+  it('cannot download while names are still being checked', async () => {
+    registry(() => new Promise(() => {}))
+    await search(['getpaid'])
+    expect(await screen.findByRole('button', { name: 'Download 1 as CSV' })).toBeDisabled()
   })
 })

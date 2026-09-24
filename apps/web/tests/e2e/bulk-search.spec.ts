@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page, test } from '@playwright/test'
 import { deleteCartsHolding, TEST_DOMAIN_PREFIX } from './support/accounts.mjs'
@@ -6,13 +7,15 @@ import { deleteCartsHolding, TEST_DOMAIN_PREFIX } from './support/accounts.mjs'
  * Bulk search (PRD FR-S5), international names (FR-S8) and the length rules
  * (FR-S9, unit-tested — the catalogue has no length data to exercise here)
  * against the mock gateway in tests/e2e/support — never the live supplier
- * (N12). Names map to fixed answers there.
+ * (N12). Names map to fixed answers there; `failonce*` fails its first
+ * request only.
  *
  * Bulk searches are limited per address, so each test gets its own made-up
  * one: runs on five devices, and other builders' runs, never share a count.
  */
 const testAddress = () =>
   `198.18.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`
+const unique = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
 test.beforeEach(async ({ context }) => {
   await context.setExtraHTTPHeaders({ 'x-real-ip': testAddress() })
@@ -20,18 +23,31 @@ test.beforeEach(async ({ context }) => {
 
 const results = (page: Page) =>
   page.getByRole('list', { name: 'Results, one row per name' }).getByRole('listitem')
-/** The row for one name — matched on the name itself, not a note that mentions it. */
+/** The row for one name — matched on the name itself, not a note or label that mentions it. */
 const row = (page: Page, name: string) =>
   results(page).filter({ has: page.getByText(name, { exact: true }) })
 const summary = (page: Page) => page.locator('section[aria-labelledby="bulk-summary"]')
+const unchecked = (page: Page) => page.getByRole('region', { name: /(weren|wasn)’t checked$/ })
+const bulkForm = (page: Page) => page.getByRole('form', { name: 'Bulk search' })
 
-async function bulkSearch(page: Page, names: string[]) {
+async function openBulk(page: Page) {
   await page.goto('/search/bulk')
   await page.locator('form[data-enhanced="true"]').waitFor()
-  const form = page.getByRole('form', { name: 'Bulk search' })
-  await form.getByLabel('Names to check').fill(names.join('\n'))
-  await form.getByRole('button', { name: 'Check names' }).click()
+}
+
+/** Checks a list and waits until every block has answered. */
+async function bulkSearch(page: Page, names: string[]) {
+  await openBulk(page)
+  await bulkForm(page).getByLabel('Names to check').fill(names.join('\n'))
+  await bulkForm(page).getByRole('button', { name: 'Check names' }).click()
+  await finished(page)
+}
+
+async function finished(page: Page) {
   await expect(summary(page)).toBeVisible()
+  await expect(summary(page).getByRole('heading', { level: 2 })).not.toHaveText(/^Checking/, {
+    timeout: 30_000,
+  })
 }
 
 test.describe('bulk search', () => {
@@ -41,6 +57,29 @@ test.describe('bulk search', () => {
     await expect(page).toHaveURL(/\/search\/bulk$/)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Search many names at once')
     await expect(page.getByText('Paste a list to check it in one go')).toBeVisible()
+  })
+
+  test('checks 500 pasted names in blocks, not one request per name (FR-S5)', async ({ page }) => {
+    test.setTimeout(60_000)
+    const id = unique()
+    const names = Array.from({ length: 500 }, (_, index) => `bulk${id}n${index}`)
+    const actions: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.headers()['next-action'])
+        actions.push(request.url())
+    })
+
+    await bulkSearch(page, names)
+
+    await expect(summary(page).getByRole('heading', { level: 2 })).toHaveText(
+      '500 of 500 available',
+    )
+    await expect(summary(page).getByRole('status')).toHaveText('500 of 500 names checked')
+    // 500 names on one extension: ten blocks of fifty.
+    expect(actions).toHaveLength(10)
+    await expect(results(page)).toHaveCount(100)
+    await page.getByRole('button', { name: 'Show 100 more of 400 not shown' }).click()
+    await expect(results(page)).toHaveCount(200)
   })
 
   test('every line gets its own answer, with both prices on every free name (N8)', async ({
@@ -58,7 +97,7 @@ test.describe('bulk search', () => {
     const free = row(page, 'getpaid.com')
     await expect(free).toContainText('Available')
     await expect(free).toContainText(/₦[\d,]+\s*then ₦[\d,]+\/yr/)
-    await expect(free.getByRole('button', { name: 'Add getpaid.com to cart' })).toBeVisible()
+    await expect(free.getByRole('checkbox', { name: 'Select getpaid.com' })).not.toBeChecked()
     await expect(row(page, 'takenbrand.net')).toContainText('Taken')
     await expect(row(page, 'hotel.africa')).toContainText('Premium')
     await expect(row(page, 'hotel.africa')).not.toContainText('₦')
@@ -66,53 +105,134 @@ test.describe('bulk search', () => {
     await expect(row(page, 'getpaid.edu')).toContainText("We don't sell .edu")
 
     await expect(summary(page).getByRole('heading')).toHaveText('1 of 5 available')
-    await expect(page).toHaveURL(/\/search\/bulk\?names=getpaid%0Atakenbrand\.net/)
   })
 
   test('names without an extension are checked on each one ticked', async ({ page }) => {
-    await page.goto('/search/bulk')
-    await page.locator('form[data-enhanced="true"]').waitFor()
-    const form = page.getByRole('form', { name: 'Bulk search' })
+    await openBulk(page)
+    const form = bulkForm(page)
     await expect(form.getByRole('checkbox', { name: '.com' })).toBeChecked()
     await form.getByLabel('Names to check').fill('getpaid')
     await form.getByRole('checkbox', { name: '.net' }).check()
     await form.getByRole('button', { name: 'Check names' }).click()
+    await finished(page)
 
     await expect(row(page, 'getpaid.com')).toContainText('Available')
     await expect(row(page, 'getpaid.net')).toContainText('Available')
-    await expect(page).toHaveURL(/tld=com&tld=net$/)
   })
 
   test('a list that is too long is refused before anything is asked', async ({ page }) => {
-    await page.goto('/search/bulk')
-    await page.locator('form[data-enhanced="true"]').waitFor()
-    const form = page.getByRole('form', { name: 'Bulk search' })
-    const names = Array.from({ length: 21 }, (_, index) => `name${index}`)
+    await openBulk(page)
+    const form = bulkForm(page)
+    const names = Array.from({ length: 501 }, (_, index) => `name${index}`)
     await form.getByLabel('Names to check').fill(names.join('\n'))
     await form.getByRole('button', { name: 'Check names' }).click()
 
-    await expect(form.getByRole('alert')).toContainText("That's 21 names")
-    await expect(page).toHaveURL(/\/search\/bulk$/)
+    await expect(form.getByRole('alert')).toContainText("That's 501 names")
+    await expect(page.getByText('Paste a list to check it in one go')).toBeVisible()
   })
 
-  test('a registry outage offers a retry that keeps the list', async ({ page }) => {
+  test('reads a CSV file, says what it skipped, and checks it', async ({ page }) => {
+    await openBulk(page)
+    const form = bulkForm(page)
+    await form.getByLabel('Upload a CSV file').setInputFiles({
+      name: 'clients.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(
+        'client,Domain,notes\nAda,getpaid.com,x\nBola,,\nChi,GETPAID.COM,dup\nDayo,takenbrand.net,y\n',
+      ),
+    })
+
+    await expect(
+      form.getByText(/^Read 2 names from the “Domain” column of clients\.csv\./),
+    ).toContainText('Left out 1 blank row and 1 repeat.')
+    await expect(form.getByLabel('Names to check')).toHaveValue('getpaid.com\ntakenbrand.net')
+
+    await form.getByRole('button', { name: 'Check names' }).click()
+    await finished(page)
+    await expect(row(page, 'getpaid.com')).toContainText('Available')
+    await expect(row(page, 'takenbrand.net')).toContainText('Taken')
+  })
+
+  test('a failed block says which names were not checked, and retries just those', async ({
+    page,
+  }) => {
+    const id = unique()
+    const names = [`failonce${id}`, ...Array.from({ length: 59 }, (_, index) => `ok${id}n${index}`)]
+    await bulkSearch(page, names)
+
+    await expect(unchecked(page)).toHaveAccessibleName('50 names weren’t checked')
+    await expect(unchecked(page)).toContainText(`failonce${id}.com`)
+    await expect(summary(page).getByRole('heading')).toHaveText('10 of 60 available')
+
+    await unchecked(page).getByRole('button', { name: 'Check these 50 again' }).click()
+    await finished(page)
+    await expect(summary(page).getByRole('heading')).toHaveText('60 of 60 available')
+    await expect(unchecked(page)).toHaveCount(0)
+  })
+
+  test('a registry outage leaves the names not checked, with a way to try again', async ({
+    page,
+  }) => {
     await bulkSearch(page, ['gatewaydown'])
-    await expect(row(page, 'gatewaydown.com')).toContainText("Couldn't check")
-    await expect(summary(page).getByRole('link', { name: 'Try again' })).toHaveAttribute(
-      'href',
-      '/search/bulk?names=gatewaydown&tld=com',
-    )
+    await expect(row(page, 'gatewaydown.com')).toContainText('Not checked')
+    await expect(unchecked(page)).toContainText("The registry didn't answer")
+    await expect(unchecked(page).getByRole('button', { name: 'Check it again' })).toBeEnabled()
   })
 
-  test('adds every free name in one press, and they are in the cart', async ({ page }) => {
-    const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
-    const plain = `${TEST_DOMAIN_PREFIX}bulk${id}`
+  test('filters by available, taken, premium and not checked', async ({ page }) => {
+    await bulkSearch(page, ['getpaid', 'takenbrand', 'hotel.africa', 'flakycheck.app'])
+
+    await page.getByRole('radio', { name: /^Taken/ }).check()
+    await expect(results(page)).toHaveCount(1)
+    await expect(row(page, 'takenbrand.com')).toBeVisible()
+
+    await page.getByRole('radio', { name: /^Premium/ }).check()
+    await expect(results(page)).toHaveCount(1)
+    await expect(row(page, 'hotel.africa')).toBeVisible()
+
+    await page.getByRole('radio', { name: /^Not checked/ }).check()
+    await expect(results(page)).toHaveCount(1)
+    await expect(row(page, 'flakycheck.app')).toBeVisible()
+
+    await page.getByRole('radio', { name: /^Available/ }).check()
+    await expect(results(page)).toHaveCount(1)
+    await expect(row(page, 'getpaid.com')).toBeVisible()
+
+    await page.getByRole('radio', { name: /^All/ }).check()
+    await expect(results(page)).toHaveCount(4)
+  })
+
+  test('downloads the results as CSV, with both prices on every free name', async ({ page }) => {
+    await bulkSearch(page, ['getpaid', 'takenbrand', 'not_a_name'])
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Download 3 as CSV' }).click(),
+    ])
+    expect(download.suggestedFilename()).toMatch(/^bulk-search-\d{4}-\d{2}-\d{2}\.csv$/)
+    const text = (await readFile(await download.path(), 'utf8')).replace(/^\uFEFF/, '')
+    const lines = text.split('\r\n')
+    expect(lines[0]).toBe('name,extension,status,first_year_price_ngn,renewal_price_ngn,ascii_name')
+    expect(lines[1]).toMatch(/^getpaid\.com,com,available,\d+\.\d{2},\d+\.\d{2},getpaid\.com$/)
+    expect(lines[2]).toBe('takenbrand.com,com,taken,,,takenbrand.com')
+    expect(lines[3]).toBe('not_a_name,,not a domain,,,')
+  })
+
+  test('adds the names selected, and they are in the cart', async ({ page }) => {
+    const plain = `${TEST_DOMAIN_PREFIX}bulk${unique()}`
     try {
       await bulkSearch(page, [plain, `${plain}.net`, 'takenbrand'])
 
-      await summary(page).getByRole('button', { name: 'Add all 2 available to cart' }).click()
-      await expect(summary(page).getByRole('status')).toContainText('Added 2 names to your cart.')
-      await summary(page).getByRole('link', { name: 'View cart' }).click()
+      // Nothing is ticked for anyone (N9).
+      const cart = page.getByRole('region', { name: 'Add to cart' })
+      await expect(cart.getByText('0 selected')).toBeVisible()
+      await cart.getByRole('button', { name: 'Select all 2 available' }).click()
+      await cart.getByRole('button', { name: 'Add 2 to cart' }).click()
+      // Each name is re-checked and written to the cart first: seconds, more under load.
+      await expect(cart.getByRole('status')).toContainText('Added 2 names to your cart.', {
+        timeout: 20_000,
+      })
+      await cart.getByRole('link', { name: 'View cart' }).click()
 
       const lines = page.getByRole('list', { name: 'Domains in your cart' }).getByRole('listitem')
       await expect(lines.getByRole('heading')).toHaveText([`${plain}.com`, `${plain}.net`])
@@ -121,27 +241,34 @@ test.describe('bulk search', () => {
     }
   })
 
-  test('limits bulk searches per address', async ({ page, context, request }) => {
+  test('checks names sent in the address once the page is ready', async ({ page }) => {
+    await page.goto('/search/bulk?names=getpaid%0Atakenbrand&tld=com')
+    await finished(page)
+    await expect(bulkForm(page).getByLabel('Names to check')).toHaveValue('getpaid\ntakenbrand')
+    await expect(row(page, 'getpaid.com')).toContainText('Available')
+    await expect(row(page, 'takenbrand.com')).toContainText('Taken')
+  })
+
+  test('limits how many names one address checks, and says so', async ({ page }) => {
     test.skip(test.info().project.name !== 'chromium-desktop', 'one device is enough to count')
-    const address = testAddress()
-    await context.setExtraHTTPHeaders({ 'x-real-ip': address })
-    const search = async (name: string) => {
-      const response = await request.get(`/search/bulk?names=${name}`, {
-        headers: { 'x-real-ip': address },
-      })
-      expect(response.ok()).toBe(true)
-      return (await response.text()).includes('a lot of bulk searches')
+    test.setTimeout(180_000)
+    const id = unique()
+    await openBulk(page)
+
+    // 24 blocks of 50 names per ten minutes: the third 500-name list runs out. The count runs
+    // in fixed windows, so if one closes meanwhile the next fills within three more lists.
+    for (let list = 0; list < 6; list += 1) {
+      const names = Array.from({ length: 500 }, (_, index) => `limit${id}l${list}n${index}`)
+      await bulkForm(page).getByLabel('Names to check').fill(names.join('\n'))
+      await bulkForm(page).getByRole('button', { name: 'Check names' }).click()
+      await finished(page)
+      if ((await unchecked(page).count()) > 0) break
     }
 
-    // A fresh address gets its twenty.
-    for (let n = 0; n < 20; n += 1) expect(await search(`getpaid${n}`)).toBe(false)
-    // The count runs in fixed windows, so if one closed meanwhile, the next fills within 20 more.
-    let limited = false
-    for (let n = 20; n < 41 && !limited; n += 1) limited = await search(`getpaid${n}`)
-    expect(limited).toBe(true)
-
-    await page.goto('/search/bulk?names=onemore')
-    await expect(page.getByText("That's a lot of bulk searches")).toBeVisible()
+    await expect(unchecked(page)).toContainText(
+      'This connection has checked a lot of names in the last few minutes',
+    )
+    await expect(unchecked(page)).toContainText('single searches still work meanwhile')
   })
 })
 
@@ -183,7 +310,19 @@ test.describe('international names (FR-S8)', () => {
 
 test.describe('bulk search quality', () => {
   test('has no detectable accessibility violations', async ({ page }) => {
-    await bulkSearch(page, ['getpaid', 'takenbrand.net', 'café.com', 'not_a_name'])
+    await bulkSearch(page, [
+      'getpaid',
+      'takenbrand.net',
+      'café.com',
+      'not_a_name',
+      'flakycheck.app',
+    ])
+    await page
+      .getByRole('region', { name: 'Add to cart' })
+      .getByRole('button', {
+        name: /^Select all/,
+      })
+      .click()
     const report = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze()
@@ -192,9 +331,9 @@ test.describe('bulk search quality', () => {
 
   test('never scrolls horizontally, even with long names', async ({ page }) => {
     await page.goto(
-      `/search/bulk?names=${encodeURIComponent(`${'a'.repeat(60)}\n${'ö'.repeat(30)}.com`)}`,
+      `/search/bulk?names=${encodeURIComponent(`${'a'.repeat(60)}\n${'ö'.repeat(30)}.com\nflakycheck.app\ngetpaid`)}`,
     )
-    await expect(summary(page)).toBeVisible()
+    await finished(page)
 
     for (const width of [320, 375, 768, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 })
