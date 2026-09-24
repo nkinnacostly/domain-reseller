@@ -31,6 +31,8 @@ export type NameserverRequest =
   | { ok: true; nameservers: string; presetId?: string }
   | { ok: false; error: string }
 
+export const CHOOSE_HOST = 'Choose your host, or pick another option.'
+
 /**
  * What the checkout form sends for the choice. Only the chosen way travels —
  * typed nameservers left behind after switching to a preset are not sent —
@@ -44,7 +46,7 @@ export function nameserverRequest(
 ): NameserverRequest {
   if (mode === 'preset') {
     const preset = presets.find((candidate) => candidate.id === presetId)
-    if (!preset) return { ok: false, error: 'Choose your host, or pick another option.' }
+    if (!preset) return { ok: false, error: CHOOSE_HOST }
     if (preset.assignsPerZone) {
       return {
         ok: false,

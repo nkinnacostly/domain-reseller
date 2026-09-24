@@ -23,7 +23,8 @@ export function Field({
   children,
 }: {
   id: string
-  label: string
+  /** Text, or markup such as a domain in its own script (FR-S8). */
+  label: React.ReactNode
   error?: string | undefined
   hint?: string
   /** A link beside the label, e.g. "Forgot password?". */
