@@ -14,13 +14,21 @@ import {
   SubmitButton,
 } from '@/components/common/form-parts'
 import { confirmTotpEnrollment, disableTwoFactor, startTotpEnrollment } from '../actions/two-factor'
+import { TWO_FACTOR_REQUIRED_ABOVE_DOMAINS } from '../lib/security'
 
 /** Groups a base32 key in fours so it can be typed without losing your place. */
 function groupKey(secret: string): string {
   return secret.replace(/(.{4})/g, '$1 ').trim()
 }
 
-export function TwoFactorPanel({ factorId }: { factorId: string | null }) {
+export function TwoFactorPanel({
+  factorId,
+  requiredFor = null,
+}: {
+  factorId: string | null
+  /** FR-A2 — the domains the account holds, when that makes two-factor mandatory. */
+  requiredFor?: number | null
+}) {
   const id = useId()
   const router = useRouter()
   const start = useAction(startTotpEnrollment)
@@ -44,6 +52,12 @@ export function TwoFactorPanel({ factorId }: { factorId: string | null }) {
             authenticator app as well as your password.
           </span>
         </p>
+        {requiredFor ? (
+          <p className="text-pretty text-sm/6 text-muted-foreground">
+            Your account holds more than {TWO_FACTOR_REQUIRED_ABOVE_DOMAINS} domains, so it needs
+            two-factor: while it is off, you can't order new domains or transfer more in.
+          </p>
+        ) : null}
         {error ? <FormMessage tone="error">{error}</FormMessage> : null}
         <form onSubmit={onSubmitWith(() => disable.execute({ factorId }))}>
           <SubmitButton
@@ -67,10 +81,18 @@ export function TwoFactorPanel({ factorId }: { factorId: string | null }) {
   if (!setup) {
     return (
       <div className="space-y-4">
-        <p className="text-pretty text-sm/6 text-muted-foreground">
-          <strong className="font-medium text-foreground">Off.</strong> Turn it on so that someone
-          with your password — or access to your email — still can't sign in or move your domains.
-        </p>
+        {requiredFor ? (
+          <p className="text-pretty text-sm/6 text-muted-foreground">
+            <strong className="font-medium text-foreground">Off, and required.</strong> Your account
+            holds {requiredFor} domains; above {TWO_FACTOR_REQUIRED_ABOVE_DOMAINS}, new orders and
+            transfers in wait until two-factor is on. Renewals carry on as normal.
+          </p>
+        ) : (
+          <p className="text-pretty text-sm/6 text-muted-foreground">
+            <strong className="font-medium text-foreground">Off.</strong> Turn it on so that someone
+            with your password — or access to your email — still can't sign in or move your domains.
+          </p>
+        )}
         {startError ? <FormMessage tone="error">{startError}</FormMessage> : null}
         <form onSubmit={onSubmitWith(() => start.execute())}>
           <SubmitButton pending={start.isPending} pendingLabel="Setting up…" className="sm:w-auto">

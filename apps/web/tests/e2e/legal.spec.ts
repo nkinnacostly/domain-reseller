@@ -141,6 +141,22 @@ test.describe('compliance statements', () => {
     ).toBeVisible()
   })
 
+  test('help states the daily limit and the two-factor rule as they work (SEC-11, FR-A2)', async ({
+    page,
+  }) => {
+    await page.goto('/help')
+    await page
+      .getByRole('button', { name: 'Is there a limit on how many domains I can buy?' })
+      .click()
+    await expect(
+      page.getByText(/registrations and transfers in count, over the last 24 hours/),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Should I turn on two-factor authentication?' }).click()
+    await expect(
+      page.getByText(/Once your account holds more than\s+10 domains it is required to add more/),
+    ).toBeVisible()
+  })
+
   test('help answers expand', async ({ page }) => {
     await page.goto('/help')
     const question = page.getByRole('button', { name: 'How do I renew?' })

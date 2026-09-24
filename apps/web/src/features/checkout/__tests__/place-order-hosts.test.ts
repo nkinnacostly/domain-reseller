@@ -79,19 +79,32 @@ const TYPED = 'ns1.host.com\nns2.host.com'
 /** A chainable double: a real promise, with the query methods the action calls. */
 function chain(result: unknown) {
   const node = Object.assign(Promise.resolve(result), {} as Record<string, unknown>)
-  for (const method of ['select', 'eq', 'in', 'update', 'insert']) node[method] = () => node
+  for (const method of ['select', 'eq', 'neq', 'not', 'in', 'update', 'insert']) {
+    node[method] = () => node
+  }
   node.single = async () => result
   node.maybeSingle = async () => result
   return node
 }
 
 let inserted: { orders: unknown[]; items: unknown[] }
-let allowance: { ordered: number; max: number }
+/** account_domain_allowance() for an established account (migration 32). */
+const ALLOWANCE = {
+  ordered: 0,
+  max: 20,
+  tier: 'standard',
+  paid_orders: 1,
+  account_days: 12,
+  standard_after_days: 7,
+  trusted_after_days: 30,
+  trusted_after_paid_orders: 3,
+}
+let allowance: typeof ALLOWANCE
 
 beforeEach(() => {
   vi.clearAllMocks()
   inserted = { orders: [], items: [] }
-  allowance = { ordered: 0, max: 20 }
+  allowance = ALLOWANCE
 
   vi.mocked(requirePaymentEnv).mockReturnValue({
     secretKey: 'FLWSECK_TEST-x-X',
@@ -121,7 +134,13 @@ beforeEach(() => {
 
   vi.mocked(createClient).mockResolvedValue({
     auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }) },
-    from: () => chain({ data: { id: 'contact-1' }, error: null }),
+    // FR-A2: an account well under ten domains — two-factor stays optional.
+    from: (table: string) =>
+      chain(
+        table === 'domains'
+          ? { count: 1, error: null }
+          : { data: { id: 'contact-1' }, error: null },
+      ),
   } as never)
   vi.mocked(createServiceClient).mockReturnValue({
     rpc: async (name: string) =>
@@ -216,7 +235,7 @@ describe('placeOrder — a host that cannot work stops the order before payment 
   })
 
   it('looks nothing up for an account over its daily cap (SEC-11)', async () => {
-    allowance = { ordered: 20, max: 20 }
+    allowance = { ...ALLOWANCE, ordered: 20 }
     await placeOrder({ ...INPUT, nameservers: TYPED })
     expect(lookupHost).not.toHaveBeenCalled()
   })

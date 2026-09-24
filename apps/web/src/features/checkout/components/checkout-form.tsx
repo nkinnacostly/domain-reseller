@@ -7,6 +7,7 @@ import { useId, useState } from 'react'
 import { DomainName } from '@/components/common/domain-name'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { PANEL } from '@/components/layout/panel'
+import { TWO_FACTOR_SETTINGS_HREF } from '@/features/auth/lib/security'
 import { ContactRoles } from '@/features/contacts/components/contact-roles'
 import type { ProfileOption } from '@/features/contacts/lib/profiles'
 import { contactRolesFromForm } from '@/features/contacts/lib/roles'
@@ -201,7 +202,20 @@ export function CheckoutForm({
 
         {hostWarnings ? <HostWarnings warnings={hostWarnings} /> : null}
         {failure && !isHostFailure(failure) ? (
-          <FormMessage tone="error">{failure.error}</FormMessage>
+          <FormMessage tone="error">
+            {failure.error}
+            {failure.twoFactor ? (
+              <>
+                {' '}
+                <Link
+                  href={TWO_FACTOR_SETTINGS_HREF}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Turn on two-factor
+                </Link>
+              </>
+            ) : null}
+          </FormMessage>
         ) : null}
         {place.result.serverError ? (
           <FormMessage tone="error">{place.result.serverError}</FormMessage>

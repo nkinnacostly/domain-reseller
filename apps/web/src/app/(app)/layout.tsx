@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { AppSidebar, AppSidebarSkeleton } from '@/components/layout/app-sidebar'
+import { TwoFactorNotice } from '@/features/auth/components/two-factor-notice'
 import { PRIVATE } from '@/features/seo/lib/metadata'
 import { BUSINESS } from '@/lib/business'
 
@@ -21,6 +22,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </Suspense>
         <div className="flex min-w-0 flex-1 flex-col">
           <main id="main" className="min-h-[60dvh] flex-1">
+            {/* FR-A2: on every page, for an account that must turn two-factor on. */}
+            <Suspense fallback={null}>
+              <TwoFactorNotice />
+            </Suspense>
             {children}
           </main>
           <footer className="px-5 py-6 text-xs text-muted-foreground sm:px-6 lg:px-2 lg:pb-2 print:hidden">

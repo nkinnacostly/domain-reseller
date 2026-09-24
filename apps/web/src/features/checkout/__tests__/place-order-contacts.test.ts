@@ -76,7 +76,9 @@ const order = (contacts?: unknown) =>
 
 function chain(result: unknown) {
   const node = Object.assign(Promise.resolve(result), {} as Record<string, unknown>)
-  for (const method of ['select', 'eq', 'in', 'update', 'insert']) node[method] = () => node
+  for (const method of ['select', 'eq', 'neq', 'not', 'in', 'update', 'insert']) {
+    node[method] = () => node
+  }
   node.single = async () => result
   node.maybeSingle = async () => result
   return node
@@ -90,6 +92,8 @@ function userClient(profile: unknown = PROFILE_ROW) {
   vi.mocked(createClient).mockResolvedValue({
     auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }) },
     from: (table: string) => {
+      // FR-A2: an account well under ten domains — two-factor stays optional.
+      if (table === 'domains') return chain({ count: 1, error: null })
       if (table !== 'contact_profiles') throw new Error(`unexpected user table ${table}`)
       // A chosen profile read back by its id; otherwise the default checkout keeps.
       const node = chain({ data: { id: 'contact-1' }, error: null })
@@ -151,7 +155,19 @@ beforeEach(() => {
   vi.mocked(createServiceClient).mockReturnValue({
     rpc: async (name: string) =>
       name === 'account_domain_allowance'
-        ? { data: { ordered: 0, max: 20 }, error: null }
+        ? {
+            data: {
+              ordered: 0,
+              max: 20,
+              tier: 'standard',
+              paid_orders: 1,
+              account_days: 12,
+              standard_after_days: 7,
+              trusted_after_days: 30,
+              trusted_after_paid_orders: 3,
+            },
+            error: null,
+          }
         : { data: true, error: null },
     from: (table: string) => {
       if (table === 'tlds') {

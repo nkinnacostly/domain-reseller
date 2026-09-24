@@ -1,7 +1,12 @@
 import { AppError } from '@dr/shared/errors'
 import { headers } from 'next/headers'
 import { createSafeActionClient } from 'next-safe-action'
-import { describeHold, hasFreshSecondFactor, resetHoldUntil } from '@/features/auth/lib/security'
+import {
+  describeHold,
+  hasFreshSecondFactor,
+  resetHoldUntil,
+  SENSITIVE_CHANGE_NEEDS_TWO_FACTOR,
+} from '@/features/auth/lib/security'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
 
@@ -46,6 +51,12 @@ export const elevatedAction = authAction.use(async ({ next, ctx }) => {
     ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     ctx.supabase.from('profiles').select('password_reset_at').eq('id', ctx.user.id).single(),
   ])
+
+  // No verified authenticator at all: asking for its code would send them to
+  // a code screen with nothing to enter. Say what is missing instead (SEC-2).
+  if (aal?.nextLevel === 'aal1') {
+    throw new AppError('MFA_REQUIRED', SENSITIVE_CHANGE_NEEDS_TWO_FACTOR)
+  }
 
   const now = new Date()
   if (
