@@ -47,8 +47,10 @@ export default function PrivacyPage() {
             same way.
           </li>
           <li>
-            <strong>Registrant contact details:</strong> name, company, email, phone and postal
-            address for each domain’s owner. We save them so you do not have to type them again.
+            <strong>Domain contact details:</strong> name, company, email, phone and postal address
+            for each domain’s owner (the registrant), and for its administrative, technical and
+            billing contacts where you name someone else. We keep the registrant you use, and any
+            contacts you save, so you do not have to type them again.
           </li>
           <li>
             <strong>Your domains and orders:</strong> the domains you buy, their settings (such as
@@ -85,7 +87,8 @@ export default function PrivacyPage() {
             our contract with you.
           </li>
           <li>
-            <strong>To send registrant details to the registrar and registry</strong>, which the
+            <strong>To send a domain’s contact details to the registrar and registry</strong> — the
+            registrant and the administrative, technical and billing contacts — which the
             registration itself requires — necessary to perform the contract, and required by the
             registry’s and ICANN’s rules.
           </li>
@@ -158,8 +161,9 @@ export default function PrivacyPage() {
         <ul>
           <li>Account details: while your account is open.</li>
           <li>
-            Registrant details: for as long as the domain is registered, and afterwards for as long
-            as registry and ICANN rules require.
+            A domain’s contact details: for as long as the domain is registered, and afterwards for
+            as long as registry and ICANN rules require. Saved contacts: until you delete them or
+            close your account.
           </li>
           <li>Orders and payments: for as long as tax and accounting law requires.</li>
           <li>The cart cookie: 60 days.</li>

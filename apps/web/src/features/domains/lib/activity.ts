@@ -75,6 +75,8 @@ export function describeEvent(type: string, payload: Record<string, unknown>): s
 }
 
 const onOff = (value: unknown) => (value ? 'on' : 'off')
+/** The other three contacts (migration 29), as a request's payload names them. */
+const ROLE_NAMES: readonly unknown[] = ['administrative', 'technical', 'billing']
 
 /**
  * Registry-side settings (migration 26) and transfer-code reveals (FR-DS5).
@@ -103,16 +105,23 @@ function describeSettingEvent(type: string, payload: Record<string, unknown>): s
       return 'Contact privacy change delayed — waiting on the registry'
     case 'privacy_not_applied':
       return 'Contact privacy change not applied'
-    case 'contacts_requested':
-      return 'Asked to change the registrant'
+    // One job applies the registrant and the other three roles together
+    // (migration 29); only the request says which was asked for.
+    case 'contacts_requested': {
+      if (!Array.isArray(payload.roles)) return 'Asked to change the registrant'
+      const roles = payload.roles.filter((role) => ROLE_NAMES.includes(role))
+      return roles.length > 0
+        ? `Asked to change the ${roles.join(' and ')} contact`
+        : 'Asked to change a contact'
+    }
     case 'contacts_applied':
-      return 'Registrant updated at the registry'
+      return 'Contacts updated at the registry'
     case 'contacts_rejected':
-      return `Registrant change refused by the registry: ${reason()}`
+      return `Contact change refused by the registry: ${reason()}`
     case 'contacts_delayed':
-      return 'Registrant change delayed — waiting on the registry'
+      return 'Contact change delayed — waiting on the registry'
     case 'contacts_not_applied':
-      return 'Registrant change not applied'
+      return 'Contact change not applied'
     case 'auth_code_revealed':
       return payload.sandbox
         ? 'Transfer code shown, from the registrar’s test system'

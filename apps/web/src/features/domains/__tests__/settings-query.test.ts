@@ -40,6 +40,8 @@ describe('getDomainSettings (migration 26, FR-T7)', () => {
         pending_transfer_lock: false,
         pending_privacy: null,
         pending_registrant: { firstName: 'Bayo' },
+        contacts: { billing: { firstName: 'Chi' }, reseller: { firstName: 'X' } },
+        pending_contacts: {},
       },
       domain_events: { created_at: '2026-09-01T10:00:00Z' },
     })
@@ -47,6 +49,9 @@ describe('getDomainSettings (migration 26, FR-T7)', () => {
       pendingTransferLock: false,
       pendingPrivacy: null,
       pendingRegistrant: { firstName: 'Bayo' },
+      // Migration 29: only the three roles; `{}` waiting is all back to the registrant.
+      contacts: { billing: { firstName: 'Chi' } },
+      pendingContacts: {},
       transferredInAt: '2026-09-01T10:00:00Z',
     })
     expect(calls.domains).toContainEqual(['eq', 'id', 'dom-1'])
@@ -65,6 +70,8 @@ describe('getDomainSettings (migration 26, FR-T7)', () => {
       pendingTransferLock: null,
       pendingPrivacy: null,
       pendingRegistrant: null,
+      contacts: {},
+      pendingContacts: null,
       transferredInAt: null,
     })
   })

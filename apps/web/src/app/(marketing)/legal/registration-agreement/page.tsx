@@ -62,9 +62,10 @@ export default function RegistrationAgreementPage() {
       <LegalSection id="accurate" title="Keeping your details accurate">
         <p>
           You must give accurate and reliable contact details for the domain’s registrant (its legal
-          owner), and correct them within <strong>seven days</strong> of any change. Change them on
-          the domain’s Contacts page in your account; the change is sent to the registry and shows
-          there once the registry confirms it.
+          owner) and for any administrative, technical or billing contact you name, and correct them
+          within <strong>seven days</strong> of any change. Change them on the domain’s Contacts
+          page in your account; the change is sent to the registry and shows there once the registry
+          confirms it.
         </p>
         <p>
           Wilfully giving inaccurate or unreliable information, failing to update it promptly, or

@@ -95,10 +95,12 @@ export async function saveDefaultContact(
     .eq('user_id', userId)
     .eq('is_default', true)
     .maybeSingle()
+  // A default the person named on the Contacts page keeps its name (FR-A4).
+  const { label: _label, ...details } = row
   const saved = existing
     ? await supabase
         .from('contact_profiles')
-        .update(row)
+        .update(details)
         .eq('id', existing.id)
         .select('id')
         .single()

@@ -154,7 +154,17 @@ describe('activity for registry-side settings', () => {
     expect(describeEvent('contacts_requested', { material: true })).toBe(
       'Asked to change the registrant',
     )
-    expect(describeEvent('contacts_applied', {})).toBe('Registrant updated at the registry')
+    // FR-DS1: one job applies all four contacts; the request names the role.
+    expect(describeEvent('contacts_requested', { roles: ['billing'] })).toBe(
+      'Asked to change the billing contact',
+    )
+    expect(describeEvent('contacts_requested', { roles: ['technical', 'billing'] })).toBe(
+      'Asked to change the technical and billing contact',
+    )
+    expect(describeEvent('contacts_requested', { roles: ['<b>x</b>'] })).toBe(
+      'Asked to change a contact',
+    )
+    expect(describeEvent('contacts_applied', {})).toBe('Contacts updated at the registry')
   })
 
   it('explains refusals in our words, never the supplier’s (N10)', () => {
@@ -165,7 +175,7 @@ describe('activity for registry-side settings', () => {
       'Contact privacy change refused by the registry: The registry could not complete it.',
     )
     expect(describeEvent('contacts_rejected', { code: 'CONTACT_INVALID' })).toBe(
-      'Registrant change refused by the registry: The registry rejected the contact details.',
+      'Contact change refused by the registry: The registry rejected the contact details.',
     )
   })
 
@@ -177,11 +187,11 @@ describe('activity for registry-side settings', () => {
       'Contact privacy change delayed — waiting on the registry',
     )
     expect(describeEvent('contacts_delayed', {})).toBe(
-      'Registrant change delayed — waiting on the registry',
+      'Contact change delayed — waiting on the registry',
     )
     expect(describeEvent('transfer_lock_not_applied', {})).toBe('Transfer lock change not applied')
     expect(describeEvent('privacy_not_applied', {})).toBe('Contact privacy change not applied')
-    expect(describeEvent('contacts_not_applied', {})).toBe('Registrant change not applied')
+    expect(describeEvent('contacts_not_applied', {})).toBe('Contact change not applied')
   })
 
   it('records a transfer code being shown, and where it came from — never the code', () => {

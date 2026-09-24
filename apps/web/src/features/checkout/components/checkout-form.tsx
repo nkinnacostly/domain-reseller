@@ -7,6 +7,9 @@ import { useId, useState } from 'react'
 import { DomainName } from '@/components/common/domain-name'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { PANEL } from '@/components/layout/panel'
+import { ContactRoles } from '@/features/contacts/components/contact-roles'
+import type { ProfileOption } from '@/features/contacts/lib/profiles'
+import { contactRolesFromForm } from '@/features/contacts/lib/roles'
 import type { NameserverPreset } from '@/features/domains/queries/domains'
 import { cn } from '@/lib/utils'
 import { placeOrder } from '../actions/place-order'
@@ -42,6 +45,7 @@ export function CheckoutForm({
   registrant,
   testMode,
   presets = [],
+  profiles = [],
 }: {
   lines: CheckoutLine[]
   summary: Summary
@@ -49,6 +53,8 @@ export function CheckoutForm({
   testMode: boolean
   /** FR-C10 — verified, visible host presets (FR-D2). */
   presets?: NameserverPreset[]
+  /** FR-A4 — the account's saved contacts, for the other three roles. */
+  profiles?: ProfileOption[]
 }) {
   const id = useId()
   /** A nameserver choice that cannot work, caught before the order is tried. */
@@ -81,12 +87,14 @@ export function CheckoutForm({
           return
         }
         setNameserverProblem(null)
+        const contacts = contactRolesFromForm(form)
         place.execute({
           registrant: registrantFromForm(form),
           nameservers: delegation.nameservers,
           ...(delegation.presetId ? { presetId: delegation.presetId } : {}),
           confirmed: form.get('confirmed') === 'on' ? true : (false as unknown as true),
           expectedTotalKobo: summary.totalKobo,
+          ...(contacts ? { contacts } : {}),
         })
       })}
     >
@@ -115,6 +123,8 @@ export function CheckoutForm({
               errorFor={(name) => nestedError(errors, 'registrant', name)}
             />
           </div>
+
+          <ContactRoles profiles={profiles} errors={errors} failure={failure} />
         </section>
 
         <NameserverChoice
