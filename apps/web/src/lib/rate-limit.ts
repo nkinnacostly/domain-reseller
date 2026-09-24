@@ -4,7 +4,8 @@ import { logger } from '@/lib/logger'
 import { createServiceClient } from '@/lib/supabase/service'
 
 /**
- * Per-account limits on the payment path (SEC-11, PRD R15). Counted in
+ * Per-account limits on the payment path (SEC-11, PRD R15), and per-address
+ * limits on public lookups (FR-PUB2, keyed by lib/client-ip.ts). Counted in
  * Postgres, so every serverless instance and region sees the same count.
  *
  * Fails closed: if the count cannot be read, the action is refused. For
@@ -25,6 +26,11 @@ export const LIMITS = {
   webhookAll: { max: 600, windowSeconds: 60 },
   // Anyone may ask for a price refresh; it only acts when prices really changed.
   pricingRefresh: { max: 12, windowSeconds: 3600 },
+  // A WHOIS lookup asks a registry, and registries limit us by our server's
+  // address (FR-PUB2). Per person: plenty for checking a few names. In total:
+  // so one scraper cannot get our lookups — transfer checks included — refused.
+  whoisLookup: { max: 30, windowSeconds: 600 },
+  whoisAll: { max: 600, windowSeconds: 600 },
 } as const
 
 export async function withinLimit(
