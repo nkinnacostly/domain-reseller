@@ -41,6 +41,17 @@ describe('clientKey', () => {
     expect(await keyFor({ 'x-real-ip': '203.0.113.7' }, undefined)).toMatch(/^[0-9a-f]{32}$/)
   })
 
+  it('hands the address itself only to whoever asks for it for this request', async () => {
+    vi.resetModules()
+    const { clientAddress } = await import('../client-ip')
+    expect(clientAddress(new Headers({ 'x-real-ip': ' 203.0.113.7 ' }))).toBe('203.0.113.7')
+    expect(clientAddress(new Headers({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1' }))).toBe(
+      '203.0.113.7',
+    )
+    expect(clientAddress(new Headers({ 'x-forwarded-for': '' }))).toBeUndefined()
+    expect(clientAddress(new Headers())).toBeUndefined()
+  })
+
   it('cannot be reproduced without the server’s secret', async () => {
     expect(await keyFor({ 'x-real-ip': '203.0.113.7' }, 'one-secret')).not.toBe(
       await keyFor({ 'x-real-ip': '203.0.113.7' }, 'another-secret'),

@@ -10,6 +10,9 @@ const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3100)
 const MOCK_GATEWAY_PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 8788)
 const MOCK_GATEWAY = `http://127.0.0.1:${MOCK_GATEWAY_PORT}`
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`
+// https://developers.cloudflare.com/turnstile/troubleshooting/testing/
+const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
+const TURNSTILE_TEST_SECRET_KEY = '1x0000000000000000000000000000000AA'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -58,6 +61,11 @@ export default defineConfig({
         RDAP_BOOTSTRAP_URL: `${MOCK_GATEWAY}/rdap/dns.json`,
         // Payment return addresses must point back at this server, not :3000.
         NEXT_PUBLIC_APP_URL: baseURL,
+        // SEC-9 — Cloudflare's documented always-pass Turnstile test keys: the
+        // real widget and a real siteverify call, answering yes without a click.
+        // A live secret here would refuse the widget's dummy tokens.
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_TEST_SITE_KEY,
+        TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET_KEY,
       },
     },
   ],

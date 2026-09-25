@@ -81,4 +81,15 @@ export const handlers = [
 
   // Gateway health
   http.get('*/health', () => HttpResponse.json({ ok: true, data: { status: 'healthy' } })),
+
+  // Cloudflare Turnstile siteverify (SEC-9): a person, as Cloudflare answers a
+  // good token. Tests override per case for refusals and outages.
+  http.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', () =>
+    HttpResponse.json({
+      success: true,
+      'error-codes': [],
+      challenge_ts: '2026-09-25T08:00:00.000Z',
+      hostname: 'www.mydomainshub.com',
+    }),
+  ),
 ]

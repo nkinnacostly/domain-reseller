@@ -27,6 +27,11 @@ export const HTML_LIMITED_BOTS = new RegExp(
  * `'unsafe-inline'` stays for scripts because Next's bootstrap is inline and
  * this site has no nonce plumbing; the other directives still hold. Dev adds
  * `'unsafe-eval'` for React's tooling.
+ *
+ * The one outside origin is Cloudflare Turnstile (SEC-9): its script and the
+ * challenge frame it draws, on the forms that send email and when a search
+ * asks for a check (components/common/turnstile.tsx). It talks to Cloudflare
+ * from inside its own frame, so connect-src does not change.
  */
 const supabase = (() => {
   try {
@@ -36,14 +41,16 @@ const supabase = (() => {
   }
 })()
 
+const TURNSTILE = 'https://challenges.cloudflare.com'
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
+  `script-src 'self' 'unsafe-inline' ${TURNSTILE}${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   `connect-src 'self' https://${supabase} wss://${supabase}`,
-  "frame-src 'none'",
+  `frame-src ${TURNSTILE}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
