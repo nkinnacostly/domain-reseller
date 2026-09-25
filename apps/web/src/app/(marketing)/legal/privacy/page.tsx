@@ -8,6 +8,7 @@ import {
 } from '@/features/legal/components/legal-page'
 import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS, POLICY_LINKS, SPONSORING_REGISTRAR } from '@/lib/business'
+import { emailProvider } from '@/lib/email/provider'
 import { isTurnstileEnabled } from '@/lib/turnstile'
 
 export const metadata: Metadata = pageMetadata({
@@ -25,9 +26,16 @@ export const metadata: Metadata = pageMetadata({
  * Cloudflare Turnstile and its search pass cookie (SEC-9) are listed only
  * while the check is switched on (both keys set, lib/turnstile.ts): with
  * them unset nothing reaches Cloudflare, and N9b forbids saying it does.
+ * Likewise the email processor is the one EMAIL_PROVIDER names — Brevo in
+ * France, or Amazon SES in London — never both, never the one not in use.
  */
 export default function PrivacyPage() {
   const hasBotCheck = isTurnstileEnabled()
+  const sendsWithSes = emailProvider() === 'ses'
+  // SES sends from London, already on the list; Brevo adds the European Union.
+  const destinations = sendsWithSes
+    ? 'Türkiye, the United Kingdom, the United States and the country of your extension’s registry'
+    : 'Türkiye, the United Kingdom, the United States, the European Union (for our emails) and the country of your extension’s registry'
   return (
     <LegalPage
       path="/legal/privacy"
@@ -162,10 +170,17 @@ export default function PrivacyPage() {
           <li>
             <strong>Vercel</strong> — hosts this website (United States, with servers worldwide).
           </li>
-          <li>
-            <strong>Brevo</strong> — sends our emails: your email address and each message (France,
-            European Union).
-          </li>
+          {sendsWithSes ? (
+            <li>
+              <strong>Amazon Web Services (Amazon SES)</strong> — sends our emails: your email
+              address and each message (United Kingdom, London region).
+            </li>
+          ) : (
+            <li>
+              <strong>Brevo</strong> — sends our emails: your email address and each message
+              (France, European Union).
+            </li>
+          )}
           {hasBotCheck ? (
             <li>
               <strong>Cloudflare Turnstile</strong> — tells people from bots when you sign up, ask
@@ -182,10 +197,9 @@ export default function PrivacyPage() {
 
       <LegalSection id="abroad" title="Transfers outside Nigeria">
         <p>
-          Registering a domain is international by nature, so your data goes to Türkiye, the United
-          Kingdom, the United States, the European Union (for our emails) and the country of your
-          extension’s registry. We transfer it because it is necessary to provide the registration
-          you asked for, and rely on our providers’ data protection terms where they offer them.
+          Registering a domain is international by nature, so your data goes to {destinations}. We
+          transfer it because it is necessary to provide the registration you asked for, and rely on
+          our providers’ data protection terms where they offer them.
         </p>
       </LegalSection>
 
