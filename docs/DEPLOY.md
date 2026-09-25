@@ -196,6 +196,36 @@ Built into the site (`apps/web/src/features/seo`), nothing to configure:
 The owner's steps (Search Console, Bing Webmaster Tools, brand profiles) are
 in `docs/BACKLOG.md` §1b.
 
+## 5e. Bot protection — Cloudflare Turnstile (SEC-9)
+
+Sign-up, the sign-in link, password reset and "send the link again" ask
+Turnstile before sending an email; search asks after 30 searches in ten
+minutes from one address, and bulk search before a list starts. Until both
+keys are set none of this runs (the site works as before, and production logs
+an error once per process), and the privacy notice does not mention Cloudflare.
+
+1. **You:** Cloudflare dashboard → Turnstile → **Add widget**: hostnames
+   `www.mydomainshub.com`, `mydomainshub.com` (and `mydomainshub.vercel.app`
+   while it serves), widget mode **Managed**. Copy the site key and the secret.
+2. **You:** Vercel → Settings → Environment Variables, **Production**:
+
+   | Variable | Value |
+   |---|---|
+   | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | the site key (public; built into the page) |
+   | `TURNSTILE_SECRET_KEY` | the secret key |
+
+   Both or neither: a secret without a site key would refuse every sign-up,
+   so the code treats that as off. Redeploy — the site key is read at build
+   time. Preview deployments can use Cloudflare's test keys
+   (`1x00000000000000000000AA` / `1x0000000000000000000000000000000AA`),
+   which always pass.
+3. **Check:** open `/sign-up` in a private window: the form works with no
+   visible widget (one appears only if Cloudflare wants a click), and
+   `/legal/privacy` now lists Cloudflare Turnstile and `dr_search_pass`.
+
+Playwright always uses the test keys (`apps/web/playwright.config.ts`), so a
+real secret in `.env` never reaches e2e.
+
 ## 6. Refunds and alerts (L15, L16)
 
 The gateway sends refunds for failed registrations, second charges and short

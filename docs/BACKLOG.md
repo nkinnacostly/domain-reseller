@@ -52,7 +52,7 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 - **Security emails** (SEC-4) — built 24 Sept 2026 (migration 31): a new device, a password or two-factor change, and a domain's nameservers, lock, contacts or transfer code. Still to add: "transfer-out requested" once the supplier tells us about one.
 - **MFA recovery codes** (FR-A2) — `supabase-js` supports them (experimental) but the hosted server returns `mfa_recovery_codes_enroll_not_enabled`, and the CLI cannot enable it. Settings currently advises adding a second device.
 - **Mandatory 2FA** (FR-A2) — above 10 domains built 24 Sept 2026: a notice on every panel page, and new orders and transfers in wait until it is on (renewals never do). The wallet-balance trigger waits for the wallet (FR-W1).
-- **Bot protection on sign-up and search** (SEC-9) — Cloudflare Turnstile keys.
+- **Bot protection on sign-up and search** (SEC-9) — built 25 Sept 2026 with Cloudflare Turnstile, verified on our server: the four forms that send email, search past 30 in ten minutes per address (a pass cookie lifts it to 300), and bulk search before a list starts. Off until the keys are set. **Still open (owner):** create the Turnstile widget and set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` on Vercel, Production — steps in `docs/DEPLOY.md` §5e.
 - **Contact profiles** (FR-A4) — the registrant/admin/tech/billing contacts; built with checkout, where registration needs them.
 
 ### Refunds and alerts (after L15, L16)
