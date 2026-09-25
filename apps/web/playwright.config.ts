@@ -66,6 +66,9 @@ export default defineConfig({
         // A live secret here would refuse the widget's dummy tokens.
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_TEST_SITE_KEY,
         TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET_KEY,
+        // The privacy notice names the provider in use (N9b); pin it so legal.spec
+        // knows which. e2e sends no email either way (tests/e2e/support/accounts.mjs).
+        EMAIL_PROVIDER: 'brevo',
       },
     },
   ],

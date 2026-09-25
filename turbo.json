@@ -17,8 +17,11 @@
         "RDAP_BOOTSTRAP_URL",
         "FX_BUFFER_PCT",
         "PRICE_LOCK_MINUTES",
+        "EMAIL_PROVIDER",
         "BREVO_API_KEY",
         "SEND_EMAIL_HOOK_SECRET",
+        "AWS_SES_*",
+        "SES_EVENTS_TOPIC_ARN",
         "TURNSTILE_SECRET_KEY",
         "SENTRY_DSN",
         "LOG_LEVEL"

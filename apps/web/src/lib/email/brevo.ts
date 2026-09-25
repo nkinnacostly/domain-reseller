@@ -3,6 +3,7 @@ import 'server-only'
 import { BUSINESS } from '@/lib/business'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import type { OutgoingEmail, SendResult } from './types'
 
 /**
  * Sends one email through Brevo's transactional API (L1). Every message comes
@@ -13,21 +14,10 @@ import { logger } from '@/lib/logger'
  * Brevo's message id.
  */
 
-export type OutgoingEmail = {
-  to: string
-  subject: string
-  html: string
-  text: string
-  /** Brevo tags, for its delivery log: what kind of email this was. */
-  tags?: string[]
-}
-
-export type SendResult = { ok: true; messageId: string | null } | { ok: false; status: number }
-
 export const BREVO_SEND_URL = 'https://api.brevo.com/v3/smtp/email'
 const TIMEOUT_MS = 10_000
 
-export async function sendEmail(email: OutgoingEmail): Promise<SendResult> {
+export async function sendWithBrevo(email: OutgoingEmail): Promise<SendResult> {
   const apiKey = env.BREVO_API_KEY
   if (!apiKey) {
     logger.error('BREVO_API_KEY is not set: email not sent')

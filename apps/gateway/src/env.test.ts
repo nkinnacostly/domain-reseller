@@ -155,3 +155,27 @@ describe('scheduled job settings', () => {
     expect(() => parseEnv({ ...BASE, APP_URL: 'www.mydomainshub.com' })).toThrow()
   })
 })
+
+describe('email provider settings', () => {
+  it('sends through Brevo unless told otherwise, at one SES message a second', () => {
+    const env = parseEnv(BASE)
+    expect(env.EMAIL_PROVIDER).toBe('brevo')
+    expect(env.SES_MAX_SEND_RATE).toBe(1)
+    expect(parseEnv({ ...BASE, EMAIL_PROVIDER: 'ses' }).EMAIL_PROVIDER).toBe('ses')
+    expect(parseEnv({ ...BASE, SES_MAX_SEND_RATE: '14' }).SES_MAX_SEND_RATE).toBe(14)
+  })
+
+  it('starts without SES credentials — they are asserted where used', () => {
+    expect(parseEnv({ ...BASE, EMAIL_PROVIDER: 'ses' }).AWS_SES_ACCESS_KEY_ID).toBeUndefined()
+  })
+
+  it('refuses a provider it does not know, a region that is not one, or a rate of nothing', () => {
+    expect(() => parseEnv({ ...BASE, EMAIL_PROVIDER: 'mailgun' })).toThrow()
+    expect(() => parseEnv({ ...BASE, AWS_SES_REGION: 'evil.example.com/x' })).toThrow(/AWS region/)
+    expect(() => parseEnv({ ...BASE, AWS_SES_CONFIGURATION_SET: 'two words' })).toThrow(
+      /configuration set/,
+    )
+    expect(() => parseEnv({ ...BASE, SES_MAX_SEND_RATE: '0' })).toThrow()
+    expect(parseEnv({ ...BASE, AWS_SES_REGION: 'eu-west-2' }).AWS_SES_REGION).toBe('eu-west-2')
+  })
+})

@@ -633,10 +633,12 @@ export type Database = {
           category: string
           claimed_at: string | null
           claimed_by: string | null
+          complained_at: string | null
           created_at: string
           data: Json
           dedupe_key: string
           delivery_checked_at: string | null
+          delivery_detail: Json | null
           delivery_status: string | null
           domain_id: string | null
           id: string
@@ -659,10 +661,12 @@ export type Database = {
           category: string
           claimed_at?: string | null
           claimed_by?: string | null
+          complained_at?: string | null
           created_at?: string
           data?: Json
           dedupe_key: string
           delivery_checked_at?: string | null
+          delivery_detail?: Json | null
           delivery_status?: string | null
           domain_id?: string | null
           id?: string
@@ -685,10 +689,12 @@ export type Database = {
           category?: string
           claimed_at?: string | null
           claimed_by?: string | null
+          complained_at?: string | null
           created_at?: string
           data?: Json
           dedupe_key?: string
           delivery_checked_at?: string | null
+          delivery_detail?: Json | null
           delivery_status?: string | null
           domain_id?: string | null
           id?: string
@@ -2281,6 +2287,10 @@ export type Database = {
       }
       record_email_delivery: {
         Args: { p_id: string; p_status: string }
+        Returns: boolean
+      }
+      record_email_event: {
+        Args: { p_detail?: Json; p_event: string; p_message_id: string }
         Returns: boolean
       }
       record_heartbeat: {

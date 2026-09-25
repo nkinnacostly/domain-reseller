@@ -37,11 +37,30 @@ export const env = createEnv({
     RDAP_BOOTSTRAP_URL: z.url().default('https://data.iana.org/rdap/dns.json'),
     FX_BUFFER_PCT: z.coerce.number().min(0).max(25).default(4),
     PRICE_LOCK_MINUTES: z.coerce.number().int().min(5).max(120).default(PRICE_LOCK_DEFAULT_MINUTES),
-    // Email through Brevo (L1): the API key sends; the hook secret proves a
-    // request to /api/auth/send-email came from Supabase Auth (Standard
-    // Webhooks, `v1,whsec_…`). Asserted where used, like the payment keys.
+    // Email (L1): the hook secret proves a request to /api/auth/send-email
+    // came from Supabase Auth (Standard Webhooks, `v1,whsec_…`); the email
+    // goes out through EMAIL_PROVIDER — Brevo (its API key) or Amazon SES
+    // (the four AWS_SES_* values). Asserted where used, like the payment keys.
+    // The privacy notice names whichever is chosen (N9b).
+    EMAIL_PROVIDER: z.enum(['brevo', 'ses']).default('brevo'),
     BREVO_API_KEY: z.string().min(1).optional(),
     SEND_EMAIL_HOOK_SECRET: z.string().startsWith('v1,whsec_').optional(),
+    AWS_SES_REGION: z
+      .string()
+      .regex(/^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, 'Not an AWS region name')
+      .optional(),
+    AWS_SES_ACCESS_KEY_ID: z.string().min(16).optional(),
+    AWS_SES_SECRET_ACCESS_KEY: z.string().min(20).optional(),
+    AWS_SES_CONFIGURATION_SET: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/, 'Not an SES configuration set name')
+      .optional(),
+    // The SNS topic SES publishes delivery events to; /api/email/ses-events
+    // acts only on messages signed for exactly this topic. Not a secret.
+    SES_EVENTS_TOPIC_ARN: z
+      .string()
+      .regex(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/, 'Not an SNS topic ARN')
+      .optional(),
     // Cloudflare Turnstile (SEC-9), verified on our server by lib/turnstile.ts.
     // Optional like the payment keys: until both keys are set, forms and search
     // run without the check (production logs that once), rather than refusing.

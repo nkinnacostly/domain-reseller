@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Mailer } from './brevo'
-import { createEmailSender } from './sender'
+import type { Mailer } from './mailer'
+import { createEmailSender, type EmailSenderOptions } from './sender'
 import type { EmailStore, QueuedEmail } from './store'
 
 const NOW = new Date('2026-09-24T12:00:00Z')
@@ -32,13 +32,27 @@ function fakeStore(
 
 function fakeMailer(over: Partial<Mailer> = {}): Mailer & { send: ReturnType<typeof vi.fn> } {
   return {
+    provider: 'brevo',
     send: vi.fn(async () => ({ ok: true as const, messageId: '<m1>' })),
     delivery: vi.fn(async () => 'delivered' as const),
     ...over,
   } as Mailer & { send: ReturnType<typeof vi.fn> }
 }
 
-const sender = (store: EmailStore, mailer: Mailer, testMode = false) =>
+/** SES: sends, and reports deliveries by push — there is nothing to ask. */
+function fakeSes(): Mailer & { send: ReturnType<typeof vi.fn> } {
+  return {
+    provider: 'ses',
+    send: vi.fn(async () => ({ ok: true as const, messageId: '0102-m1' })),
+  }
+}
+
+const sender = (
+  store: EmailStore,
+  mailer: Mailer,
+  testMode = false,
+  over: Partial<EmailSenderOptions> = {},
+) =>
   createEmailSender({
     store,
     mailer,
@@ -49,6 +63,7 @@ const sender = (store: EmailStore, mailer: Mailer, testMode = false) =>
     deliveryEveryMs: 60_000,
     log,
     now: () => NOW,
+    ...over,
   })
 
 beforeEach(() => vi.clearAllMocks())
@@ -183,6 +198,18 @@ describe('the loops', () => {
     expect(store.deliveryDue).toHaveBeenCalledTimes(1)
   })
 
+  it('with SES, sends but never polls for deliveries — SES pushes them (migration 34)', async () => {
+    const store = fakeStore([], [{ id: 'e1', messageId: '0102-m1', sentAt: NOW }])
+    const running = sender(store, fakeSes())
+    expect(running.readsDeliveries).toBe(false)
+    expect(await running.checkDeliveries()).toBe(0)
+    running.start()
+    await running.stop()
+    expect(store.claim).toHaveBeenCalledTimes(1)
+    expect(store.deliveryDue).not.toHaveBeenCalled()
+    expect(store.recordDelivery).not.toHaveBeenCalled()
+  })
+
   it('keeps going after a failed run, and logs it', async () => {
     const store = fakeStore()
     store.claim.mockRejectedValueOnce(new Error('database unreachable'))
@@ -190,5 +217,103 @@ describe('the loops', () => {
     running.start()
     await running.stop()
     expect(log.error).toHaveBeenCalledWith({ err: 'database unreachable' }, 'email sending failed')
+  })
+})
+
+describe('pacing to the provider’s send rate', () => {
+  /** A clock the waits move forward, so pacing is measured, not slept through. */
+  function fakeTime() {
+    let at = 1_000_000
+    const sleeps: number[] = []
+    return {
+      clock: () => at,
+      sleep: vi.fn(async (ms: number) => {
+        sleeps.push(ms)
+        at += ms
+      }),
+      pass: (ms: number) => {
+        at += ms
+      },
+      sleeps,
+    }
+  }
+
+  it('spaces sends at least a second apart at SES’s sandbox rate', async () => {
+    const time = fakeTime()
+    const mailer = fakeSes()
+    const sentAt: number[] = []
+    mailer.send.mockImplementation(async () => {
+      sentAt.push(time.clock())
+      time.pass(120) // SES takes a moment to answer
+      return { ok: true, messageId: 'm' }
+    })
+    const store = fakeStore([email(), email({ id: 'e2' }), email({ id: 'e3' })])
+    const running = sender(store, mailer, false, {
+      minIntervalMs: 1000,
+      clock: time.clock,
+      sleep: time.sleep,
+    })
+    expect(await running.sendDue()).toEqual({ sent: 3, failed: 0, skipped: 0 })
+    expect(sentAt[1]! - sentAt[0]!).toBeGreaterThanOrEqual(1000)
+    expect(sentAt[2]! - sentAt[1]!).toBeGreaterThanOrEqual(1000)
+    // The first waits for nothing; the others a full interval from SES's last
+    // answer, so a slow answer never lets two sends land closer than the rate.
+    expect(time.sleeps).toEqual([1000, 1000])
+  })
+
+  it('keeps the spacing from one run to the next, and counts a failed send too', async () => {
+    const time = fakeTime()
+    const mailer = fakeSes()
+    mailer.send.mockResolvedValueOnce({ ok: false, permanent: false, error: 'HTTP 503' })
+    const store = fakeStore([email()])
+    const running = sender(store, mailer, false, {
+      minIntervalMs: 1000,
+      clock: time.clock,
+      sleep: time.sleep,
+    })
+    await running.sendDue()
+    time.pass(300)
+    await running.sendDue()
+    expect(time.sleeps).toEqual([700])
+    time.pass(5000)
+    await running.sendDue()
+    expect(time.sleeps).toEqual([700])
+  })
+
+  it('does not wait for emails it skips or cannot render', async () => {
+    const time = fakeTime()
+    const store = fakeStore([
+      email({ toEmail: 'e2e-1@example.com' }),
+      email({ id: 'e2', kind: 'no_such_kind' }),
+      email({ id: 'e3' }),
+    ])
+    const running = sender(store, fakeSes(), false, {
+      minIntervalMs: 1000,
+      clock: time.clock,
+      sleep: time.sleep,
+    })
+    expect(await running.sendDue()).toEqual({ sent: 1, failed: 1, skipped: 1 })
+    expect(time.sleep).not.toHaveBeenCalled()
+  })
+
+  it('sends back to back for Brevo, which sets no per-second rate here', async () => {
+    const time = fakeTime()
+    const running = sender(fakeStore([email(), email({ id: 'e2' })]), fakeMailer(), false, {
+      clock: time.clock,
+      sleep: time.sleep,
+    })
+    await running.sendDue()
+    expect(time.sleep).not.toHaveBeenCalled()
+  })
+
+  it('really waits when no clock is given', async () => {
+    const mailer = fakeSes()
+    const running = sender(fakeStore([email(), email({ id: 'e2' })]), mailer, false, {
+      minIntervalMs: 30,
+    })
+    const started = Date.now()
+    await running.sendDue()
+    expect(Date.now() - started).toBeGreaterThanOrEqual(25)
+    expect(mailer.send).toHaveBeenCalledTimes(2)
   })
 })

@@ -125,7 +125,8 @@ secrets: `gh secret delete DNA_API_KEY` and `gh secret delete DNA_RESELLER_ID`.
 ## 5c. Email (L1)
 
 Supabase Auth sends every email through our route `/api/auth/send-email`,
-which uses Brevo's API: from `no-reply@notify.mydomainshub.com`, replies to
+which uses the API of the provider `EMAIL_PROVIDER` names — Brevo today, Amazon
+SES after the cutover below: from `no-reply@notify.mydomainshub.com`, replies to
 `hello@mydomainshub.com` (a Spaceship mailbox).
 
 - **Vercel** needs `BREVO_API_KEY` and `SEND_EMAIL_HOOK_SECRET` (the value in
@@ -139,23 +140,117 @@ which uses Brevo's API: from `no-reply@notify.mydomainshub.com`, replies to
 - Brevo's free plan sends 300 a day. Its delivery log is under Transactional →
   Logs.
 
+### Amazon SES — what is set up, and the cutover
+
+`EMAIL_PROVIDER=ses` sends the auth emails (web) and the outbox (gateway)
+through SES instead of Brevo — same From, same Reply-To, same templates. Brevo
+stays the default until AWS lets the account out of the SES sandbox, which
+only delivers to verified addresses, one message a second.
+
+Already in AWS (do not change): region **eu-west-2**; identity
+`notify.mydomainshub.com` with Easy DKIM and custom MAIL FROM
+`mail.notify.mydomainshub.com`; configuration set **`mydomainshub`**, whose
+event destination publishes DELIVERY, BOUNCE, COMPLAINT, REJECT,
+DELIVERY_DELAY and RENDERING_FAILURE to the SNS topic
+**`mydomainshub-ses-events`**; account-level suppression of bounces and
+complaints. The key in `AWS_SES_*` should be a sending-only IAM user's (`.env`
+notes `mydomainshub-ses-sender`), allowed `ses:SendEmail` on the identity and
+the configuration set and nothing else.
+
+SES cannot be asked what became of a message, so delivery reports come to us:
+SNS posts every event to `https://www.mydomainshub.com/api/email/ses-events`,
+which verifies the SNS signature — the certificate must come from
+`sns.eu-west-2.amazonaws.com` and the topic must be `SES_EVENTS_TOPIC_ARN` —
+and records it with `record_email_event` (migration 34). With SES the
+gateway's Brevo read-back loop does not run. An ERRP or security email with no
+final report a day after sending raises `email_unconfirmed` (critical for an
+ERRP notice); a spam complaint raises `email_complaint`.
+
+| Variable | Vercel (Production) | Fly (gateway) | Notes |
+|---|---|---|---|
+| `EMAIL_PROVIDER` | `ses` at cutover | `ses` at cutover | `brevo` or unset keeps Brevo. Read at build on Vercel (the privacy notice names the provider), so redeploy after changing it. |
+| `AWS_SES_REGION` | `eu-west-2` | `eu-west-2` | |
+| `AWS_SES_ACCESS_KEY_ID` | the sending user's key | same | Secret. Never logged. |
+| `AWS_SES_SECRET_ACCESS_KEY` | the sending user's secret | same | Secret. |
+| `AWS_SES_CONFIGURATION_SET` | `mydomainshub` | `mydomainshub` | Without it no events are published. |
+| `SES_EVENTS_TOPIC_ARN` | the topic's ARN | — | Not secret. Set it before subscribing (step 2). |
+| `SES_MAX_SEND_RATE` | — | the account's rate | Messages a second; 1 until AWS raises it. |
+| `SES_SMTP_USERNAME`, `SES_SMTP_PASSWORD` | — | — | `.env` only, for `supabase config push` (step 5). |
+
+**Cutover checklist**
+
+1. **You:** AWS grants production access (SES → Account dashboard shows
+   *Production*). Note the maximum send rate it shows.
+2. **You:** subscribe the webhook — possible before the cutover, and harmless
+   while Brevo still sends:
+   - add `SES_EVENTS_TOPIC_ARN` on Vercel (Production) and redeploy;
+   - SNS → topic `mydomainshub-ses-events` → *Create subscription*: protocol
+     **HTTPS**, endpoint `https://www.mydomainshub.com/api/email/ses-events`,
+     **raw message delivery off** (the route needs SNS's signed envelope). The
+     route confirms the subscription itself; it shows *Confirmed* within a
+     minute (Vercel's log: `SES events: SNS subscription confirmed`);
+   - check: SES → *Send test email* with configuration set `mydomainshub` to
+     `success@simulator.amazonses.com`. The route logs `SES events: delivery
+     event` with `known: false` — not one of ours, answered 200.
+3. **You:** on Vercel (Production) set `EMAIL_PROVIDER=ses` and the four
+   `AWS_SES_*` values, then redeploy. Sign up or ask for a password reset with
+   a real address: the email arrives from `no-reply@notify.mydomainshub.com`,
+   and replying goes to hello@. The privacy notice now names Amazon SES.
+4. **You:** on Fly:
+   ```bash
+   grep -E '^(AWS_SES_(REGION|ACCESS_KEY_ID|SECRET_ACCESS_KEY|CONFIGURATION_SET))=' .env | fly secrets import -a mydomainshub-gateway
+   fly secrets set EMAIL_PROVIDER=ses SES_MAX_SEND_RATE=<the rate from step 1> -a mydomainshub-gateway
+   ```
+   The gateway restarts and logs `email sender started` with `provider: ses`
+   and `deliveryReports: pushed to the web` (never a key). Without all four
+   values it logs `email provider not configured` with the missing names, and
+   emails wait — it never falls back to Brevo.
+5. **You:** point Supabase Auth's SMTP fallback at SES: in
+   `supabase/config.toml`, `[auth.email.smtp]` becomes
+   `host = "email-smtp.eu-west-2.amazonaws.com"`, `port = 587`,
+   `user = "env(SES_SMTP_USERNAME)"`, `pass = "env(SES_SMTP_PASSWORD)"`
+   (SES SMTP credentials, generated for eu-west-2 — not the API key); then
+   `set -a; . ./.env; set +a; supabase config push`, reading the diff first.
+6. **Watch deliveries** for a few days:
+   ```sql
+   select kind, category, sent_at, delivery_status, delivery_detail, complained_at
+     from email_outbox where sent_at > now() - interval '1 day' order by sent_at desc;
+   ```
+   SES's message ids look like `0102019…-000000`. `delivery_status` should
+   reach `delivered` within minutes. Telegram carries `email_unconfirmed`,
+   `email_complaint` and `compliance_notice_bounced`; SES → *Reputation
+   metrics* shows bounce and complaint rates (keep them under 5% and 0.1%).
+   Notices sent through Brevo in the last day before the switch are no longer
+   read back and may raise `email_unconfirmed`: look them up in Brevo's log.
+7. **Rolling back** is `EMAIL_PROVIDER=brevo` on Vercel (redeploy) and Fly,
+   and the Brevo SMTP lines back in `config.toml` — as long as Brevo is kept.
+8. **Later, you:** retire Brevo once a couple of weeks have been clean: remove
+   `BREVO_API_KEY` from Vercel and Fly and `BREVO_*` from `.env`; in
+   Cloudflare delete Brevo's records on `notify.mydomainshub.com` (its DKIM
+   keys, the `brevo-code` TXT and `include:spf.brevo.com`), keeping SES's
+   three DKIM CNAMEs, the `mail.notify` MX and SPF, and DMARC; close the Brevo
+   account. The Brevo code can then go in its own change.
+
 ## 5c-2. Notification emails (migration 31)
 
 Receipts, domain news, refunds, security notices, ERRP renewal reminders and
 the undelegated nudge are queued in the database (`email_outbox`) by the
-thing that causes them, and sent by the gateway through Brevo.
+thing that causes them, and sent by the gateway through `EMAIL_PROVIDER` —
+Brevo until the SES cutover in §5c.
 
-- **Fly** needs `BREVO_API_KEY` (the same key as Vercel's):
+- **Fly** needs `BREVO_API_KEY` (the same key as Vercel's) while Brevo sends:
   ```bash
   grep '^BREVO_API_KEY=' .env | fly secrets import -a mydomainshub-gateway
   ```
-  Without it the gateway logs a warning and emails wait; after 30 minutes the
-  `emails_waiting` alert reaches Telegram.
+  Without the chosen provider's credentials the gateway logs a warning naming
+  the missing variables and emails wait; after 30 minutes the `emails_waiting`
+  alert reaches Telegram.
 - The daily `email-notices` cron (08:05 WAT) queues ERRP reminders and nudges;
   `purge-email-records` clears outbox rows after 90 days. ERRP notices are
   logged in `compliance_notices` for three years, with delivery read back from
-  Brevo every 30 minutes — a bounce is a critical alert: reach the registrant
-  another way.
+  Brevo every 30 minutes, or pushed by SES as it happens — a bounce is a
+  critical alert: reach the registrant another way. So is a notice with no
+  final report a day after sending (`email_unconfirmed`, migration 34).
 - Nothing is ever sent to example.com or another reserved address (e2e users).
 - To see what went out: `select kind, status, sent_at, delivery_status from
   email_outbox order by created_at desc limit 20;`
@@ -314,6 +409,8 @@ open to the service key, on purpose):
 | Contact change of … needs a person (`CONTACTS_NOT_VISIBLE`) | The registry accepted new contacts but does not show them. In the sandbox this always happens; on live it is unconfirmed | Look at the domain's contacts in the DomainNameAPI panel. Showing the new ones: `select retry_job('<job id>');` records them. Not showing: ask DomainNameAPI why SaveContacts did not apply, then retry. |
 | Host preset … is not resolving / is hidden | Its nameservers stopped resolving in public DNS (FR-D2); after a day it is hidden from customers | Read the provider's own documentation. Changed: update the preset's nameservers and `verified_at` in the table editor — it is checked again within 6 hours and shown once it passes. Gone: leave it hidden. |
 | Host preset … was last verified … | 90 days since it was checked against the provider's documentation | Check it again; update `verified_at`, and the nameservers if they changed. |
+| A compliance / security email … has no delivery report (`email_unconfirmed`) | Sent over a day ago, and neither delivered nor bounced has come back — from Brevo's read-back or SES's events (migration 34). It is not counted as delivered | Brevo: look the message up under Transactional → Logs. SES keeps no per-message log of its own: check the SNS subscription is still *Confirmed* and Vercel's log shows `SES events` lines arriving. For an ERRP notice you cannot confirm, reach the registrant another way. |
+| A … email … was reported as spam (`email_complaint`) | The recipient marked it as spam; SES has put the address on the account's suppression list | Nothing to send. If it was a mistake the customer can ask; remove the address from the suppression list in SES only then. Several in a week: look at what we send. |
 | The supplier catalogue sync failed / was refused / hasn't run for 8 days | The weekly sync in the gateway stopped updating costs; prices can drift from the supplier's | `fly logs -a mydomainshub-gateway` for `catalogue`. To run it now, set `CATALOGUE_SYNC_EVERY_HOURS=1` on Fly, wait for it, then unset it. |
 
 `cancel_refund` means "no money went back and none will"; use

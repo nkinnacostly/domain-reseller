@@ -1,4 +1,5 @@
 import { HttpResponse, http } from 'msw'
+import { SNS_HOST, snsPublicKeyPem } from './sns'
 
 /**
  * Default network doubles. Tests override per-case with `server.use(...)`.
@@ -9,6 +10,24 @@ export const handlers = [
   // Brevo transactional email (L1): accepted, as Brevo answers a good send.
   http.post('https://api.brevo.com/v3/smtp/email', () =>
     HttpResponse.json({ messageId: '<test@smtp-relay.mailin.fr>' }, { status: 201 }),
+  ),
+
+  // Amazon SES v2 SendEmail (L1, EMAIL_PROVIDER=ses): accepted, as SES answers.
+  http.post('https://email.eu-west-2.amazonaws.com/v2/email/outbound-emails', () =>
+    HttpResponse.json({ MessageId: '0102019a-test-4b7c-0000-000000000000-000000' }),
+  ),
+
+  // Amazon SNS: the signing certificate (the test key pair's public half, in
+  // tests/mocks/sns.ts) and the subscription confirmation link.
+  http.get(`https://${SNS_HOST}/:certificate`, ({ params }) =>
+    String(params.certificate).endsWith('.pem')
+      ? new HttpResponse(snsPublicKeyPem(), { headers: { 'content-type': 'text/plain' } })
+      : new HttpResponse(null, { status: 404 }),
+  ),
+  http.get(`https://${SNS_HOST}/`, () =>
+    HttpResponse.xml(
+      '<ConfirmSubscriptionResponse xmlns="http://sns.amazonaws.com/doc/2010-03-31/"><ConfirmSubscriptionResult><SubscriptionArn>arn:aws:sns:eu-west-2:123456789012:mydomainshub-ses-events:test</SubscriptionArn></ConfirmSubscriptionResult></ConfirmSubscriptionResponse>',
+    ),
   ),
 
   // Registrar gateway — availability, in the shared contract's shape. Every

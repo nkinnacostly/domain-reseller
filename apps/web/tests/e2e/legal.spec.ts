@@ -107,6 +107,18 @@ test.describe('compliance statements', () => {
     ).toBeVisible()
   })
 
+  test('the privacy notice names the email provider in use, and only that one (N9b)', async ({
+    page,
+  }) => {
+    // playwright.config.ts runs the server with EMAIL_PROVIDER=brevo.
+    await page.goto('/legal/privacy')
+    const recipients = page.getByRole('region', { name: 'Who receives it' })
+    await expect(recipients.getByRole('listitem').filter({ hasText: 'Brevo' })).toContainText(
+      'France, European Union',
+    )
+    await expect(page.getByRole('main')).not.toContainText('Amazon')
+  })
+
   test('the legal side menu marks the page you are on', async ({ page }) => {
     await page.goto('/legal/refunds')
     const nav = page.getByRole('navigation', { name: 'Legal documents' })

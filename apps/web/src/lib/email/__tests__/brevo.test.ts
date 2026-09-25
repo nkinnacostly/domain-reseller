@@ -2,7 +2,7 @@ import { HttpResponse, http } from 'msw'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { env } from '@/lib/env'
 import { server } from '../../../../tests/mocks/server'
-import { BREVO_SEND_URL, sendEmail } from '../brevo'
+import { BREVO_SEND_URL, sendWithBrevo as sendEmail } from '../brevo'
 
 const settings = env as { BREVO_API_KEY?: string }
 let before: string | undefined
@@ -22,7 +22,7 @@ const EMAIL = {
   tags: ['auth', 'recovery'],
 }
 
-describe('sendEmail (L1)', () => {
+describe('sendWithBrevo (L1)', () => {
   it('sends from the no-reply address with replies to the support inbox', async () => {
     let sent: { headers: Headers; body: unknown } | undefined
     server.use(

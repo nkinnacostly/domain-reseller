@@ -7,7 +7,7 @@ import { createApp } from './app'
 import { catalogueScheduleFor } from './catalogue/schedule'
 import { delegationCheckerFor } from './delegation/checker'
 import { getDnaWriteClient } from './dna/client'
-import { createBrevo } from './email/brevo'
+import { emailSetupFor } from './email/provider'
 import { createEmailSender } from './email/sender'
 import { createEmailStore } from './email/store'
 import { env } from './env'
@@ -186,12 +186,15 @@ const monitor = target
     })
   : null
 
-// PRD E12: the notification emails the database queues, for this side.
+// PRD E12: the notification emails the database queues, for this side,
+// through EMAIL_PROVIDER (Brevo by default, or SES) once its credentials are set.
+const email = target ? emailSetupFor(env, logger) : null
 const emailSender =
-  target && env.BREVO_API_KEY
+  target && email?.mailer
     ? createEmailSender({
         store: createEmailStore(),
-        mailer: createBrevo({ apiKey: env.BREVO_API_KEY }),
+        mailer: email.mailer,
+        minIntervalMs: email.minIntervalMs,
         testMode: target === 'ote',
         workerId: `${hostname()}:${process.pid}`,
         siteUrl: env.APP_URL ?? 'https://www.mydomainshub.com',
@@ -224,8 +227,21 @@ catalogueSync?.start()
 delegationCheck?.start()
 presetCheck?.start()
 emailSender?.start()
-if (target && !env.BREVO_API_KEY) {
-  logger.warn({ target }, 'no BREVO_API_KEY: notification emails wait in the outbox')
+if (emailSender && email) {
+  // Which provider, never its keys (N13).
+  logger.info(
+    {
+      target,
+      provider: email.provider,
+      deliveryReports: emailSender.readsDeliveries ? 'polled' : 'pushed to the web',
+    },
+    'email sender started',
+  )
+} else if (target && email && !email.mailer) {
+  logger.warn(
+    { target, provider: email.provider, missing: email.missing },
+    'email provider not configured: notification emails wait in the outbox',
+  )
 }
 if (target && !(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID)) {
   logger.warn({ target }, 'no Telegram bot configured: alerts are only logged')
