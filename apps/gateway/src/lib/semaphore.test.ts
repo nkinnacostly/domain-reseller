@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { QueueTimeout, Semaphore } from './semaphore'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { QueueTimeout, Semaphore, supplierSlots } from './semaphore'
 
 const deferred = () => {
   let resolve: () => void = () => {}
@@ -173,5 +173,81 @@ describe('Semaphore low lane (FR-S5 bulk search)', () => {
     expect(slots.inFlight).toBe(2)
     gate.resolve()
     await Promise.all([a, b])
+  })
+
+  describe('starts per second (the supplier allows 2 requests a second, 25 Sept 2026)', () => {
+    afterEach(() => vi.useRealTimers())
+
+    it('starts no more than the limit in any second, and the rest as the window moves on', async () => {
+      vi.useFakeTimers()
+      const slots = new Semaphore(5, 5, 2)
+      const started: number[] = []
+      const tasks = [1, 2, 3, 4].map((n) =>
+        slots.run(async () => {
+          started.push(n)
+        }),
+      )
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(started).toEqual([1, 2])
+      expect(slots.queued).toBe(2)
+
+      await vi.advanceTimersByTimeAsync(999)
+      expect(started).toEqual([1, 2])
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(started).toEqual([1, 2, 3, 4])
+      await Promise.all(tasks)
+      expect(slots.queued).toBe(0)
+    })
+
+    it('serves the lanes in order when the rate, not a slot, holds tasks back', async () => {
+      vi.useFakeTimers()
+      const slots = new Semaphore(5, 5, 1)
+      const started: string[] = []
+      const run = (name: string, priority: 'high' | 'normal' | 'low') =>
+        slots.run(
+          async () => {
+            started.push(name)
+          },
+          { priority },
+        )
+      const tasks = [run('first', 'normal'), run('bulk', 'low'), run('exact', 'high')]
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(started).toEqual(['first'])
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(started).toEqual(['first', 'exact'])
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(started).toEqual(['first', 'exact', 'bulk'])
+      await Promise.all(tasks)
+    })
+
+    it('still gives up after the deadline while the rate holds a task back', async () => {
+      vi.useFakeTimers()
+      const slots = new Semaphore(5, 5, 1)
+      await slots.run(async () => 'first')
+      const late = expect(slots.run(async () => 'late', { waitMs: 100 })).rejects.toBeInstanceOf(
+        QueueTimeout,
+      )
+      await vi.advanceTimersByTimeAsync(100)
+      await late
+      expect(slots.queued).toBe(0)
+    })
+
+    it('holds every supplier call to two in flight and two starts a second', async () => {
+      vi.useFakeTimers()
+      const started: number[] = []
+      const tasks = [1, 2, 3].map((n) =>
+        supplierSlots.run(async () => {
+          started.push(n)
+        }),
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      expect(started).toEqual([1, 2])
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(started).toEqual([1, 2, 3])
+      await Promise.all(tasks)
+    })
   })
 })

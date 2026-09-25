@@ -194,6 +194,22 @@ export function supplierMessage(body: unknown): string {
     .slice(0, 300)
 }
 
+/**
+ * The supplier's own error code (`API_301`, `API_350`…) from its error body,
+ * if it sent one. Support said on 25 Sept 2026 that the body carries it; the
+ * field is not documented, so a code anywhere in the error is read.
+ */
+export function supplierCode(body: unknown): string | null {
+  const error = (body as { error?: Record<string, unknown> } | null)?.error
+  if (!error || typeof error !== 'object') return null
+  for (const field of ['code', 'Code', 'errorCode', 'message', 'details']) {
+    const value = error[field]
+    const match = typeof value === 'string' ? /\bAPI_\d{3}\b/.exec(value) : null
+    if (match) return match[0]
+  }
+  return null
+}
+
 /** Supplier refusal → our taxonomy (PRD §13.8). Order matters: most specific first. */
 export function classifyRefusal(message: string): GatewayErrorCode {
   if (/balance|insufficient|credit|fund/i.test(message)) return 'SUPPLIER_INSUFFICIENT_FUNDS'
@@ -240,6 +256,15 @@ export function judgeExchange(exchange: Exchange | undefined): Verdict {
   const { status } = exchange
   if (status >= 200 && status < 300) return { outcome: 'ok' }
   const message = supplierMessage(exchange.body) || `HTTP ${status}`
+  // Support, 25 Sept 2026: an allowlist refusal (API_301) comes back as 403
+  // or 400, and too little balance (API_350) as 402, 422 or 400 — so the
+  // code decides, whatever the status.
+  const code = supplierCode(exchange.body)
+  if (code === 'API_301') return { outcome: 'blocked', code: 'SUPPLIER_IP_BLOCKED', message }
+  if (code === 'API_350' || status === 402) {
+    return { outcome: 'rejected', code: 'SUPPLIER_INSUFFICIENT_FUNDS', message }
+  }
+  if (code === 'API_429') return { outcome: 'unknown', code: 'HTTP_429', message }
   if (status === 401 || status === 301 || status === 302) {
     return { outcome: 'blocked', code: 'SUPPLIER_AUTH', message }
   }

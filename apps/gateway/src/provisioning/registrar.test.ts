@@ -442,6 +442,47 @@ describe('judgeExchange', () => {
       judgeExchange(exchange(403, { error: { message: 'Your IP address is not allowed' } })),
     ).toMatchObject({ outcome: 'blocked' })
   })
+
+  // Support, 25 Sept 2026: the body's code decides, whatever the status.
+  it.each([403, 400])('reads API_301 with HTTP %i as our address being refused', (status) => {
+    expect(
+      judgeExchange(exchange(status, { error: { code: 'API_301', message: 'Not whitelisted' } })),
+    ).toMatchObject({ outcome: 'blocked', code: 'SUPPLIER_IP_BLOCKED' })
+  })
+
+  it.each([402, 422, 400])('reads API_350 with HTTP %i as too little balance', (status) => {
+    expect(
+      judgeExchange(exchange(status, { error: { code: 'API_350', message: 'Operation failed' } })),
+    ).toMatchObject({ outcome: 'rejected', code: 'SUPPLIER_INSUFFICIENT_FUNDS' })
+  })
+
+  it('reads HTTP 402 as too little balance, even without a code or a telling message', () => {
+    expect(judgeExchange(exchange(402, { error: { message: 'Payment Required' } }))).toMatchObject({
+      outcome: 'rejected',
+      code: 'SUPPLIER_INSUFFICIENT_FUNDS',
+    })
+  })
+
+  it('finds a code written into the message', () => {
+    expect(
+      judgeExchange(exchange(400, { error: { message: 'API_301: IP not in list' } })),
+    ).toMatchObject({ outcome: 'blocked', code: 'SUPPLIER_IP_BLOCKED' })
+  })
+
+  it('reads API_429 as throttled — unknown, never a refusal', () => {
+    expect(judgeExchange(exchange(400, { error: { code: 'API_429' } }))).toMatchObject({
+      outcome: 'unknown',
+      code: 'HTTP_429',
+    })
+  })
+
+  it('still reads an ordinary refusal by its words', () => {
+    expect(
+      judgeExchange(
+        exchange(400, { error: { code: 'DOMAIN_REGISTER', message: 'Domain exists' } }),
+      ),
+    ).toMatchObject({ outcome: 'rejected', code: 'DOMAIN_TAKEN' })
+  })
 })
 
 describe('classifyRefusal (PRD §13.8)', () => {
