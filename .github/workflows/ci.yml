@@ -53,6 +53,20 @@ jobs:
           done
           exit $bad
 
+      # L1 — the SES signing key is server-only too: @dr/shared/ses is imported
+      # only from modules that import 'server-only'.
+      - name: SES credentials are server-only
+        run: |
+          bad=0
+          for file in $(grep -rlE "AWS_SES_SECRET_ACCESS_KEY|@dr/shared/ses" apps/web/src --include='*.ts' --include='*.tsx' \
+                        | grep -v "/__tests__/" | grep -v "apps/web/src/lib/env.ts"); do
+            if ! grep -q "^import 'server-only'" "$file"; then
+              echo "::error file=$file::uses the SES key or client without import 'server-only'"
+              bad=1
+            fi
+          done
+          exit $bad
+
       # SEC-5 — supplier credentials belong to the gateway alone.
       - name: Supplier credentials stay in the gateway
         run: |
