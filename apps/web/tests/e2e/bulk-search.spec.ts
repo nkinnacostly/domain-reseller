@@ -325,12 +325,17 @@ test.describe('bulk search quality', () => {
       'not_a_name',
       'flakycheck.app',
     ])
-    await page
-      .getByRole('region', { name: 'Add to cart' })
+    const cart = page.getByRole('region', { name: 'Add to cart' })
+    await cart
       .getByRole('button', {
         name: /^Select all/,
       })
       .click()
+    // The add button fades in from its disabled opacity; axe measuring
+    // mid-fade reads a paler blue than anyone sees once it settles.
+    const add = cart.getByRole('button', { name: /^Add \d+ to cart$/ })
+    await expect(add).toBeEnabled()
+    await expect(add).toHaveCSS('opacity', '1')
     const report = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
       .analyze()
