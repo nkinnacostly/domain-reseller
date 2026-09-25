@@ -28,9 +28,12 @@ export type BulkPrice = {
  * - `unavailable` — the registry did not answer for them this time
  * - `busy` — too many bulk searches at once, across everyone
  * - `limited` — this connection has checked a lot of names lately
+ * - `unconfirmed` — no search pass (SEC-9). The page pauses for the Turnstile
+ *   check first; this is recorded only when the server still refuses right
+ *   after a pass — the browser did not keep the cookie (BulkRunProvider)
  * - `stopped` — the person stopped the search
  */
-export type FailReason = 'unavailable' | 'busy' | 'limited' | 'stopped'
+export type FailReason = 'unavailable' | 'busy' | 'limited' | 'unconfirmed' | 'stopped'
 
 /** What the server answers for one request (see actions/bulk.ts). */
 export type BulkAnswer =
@@ -143,7 +146,7 @@ export function uncheckedDomains(run: BulkRun): string[] {
 export function failureReason(run: BulkRun): FailReason | null {
   const reasons = new Set<FailReason>()
   for (const state of run.checks.values()) if (state.state === 'failed') reasons.add(state.reason)
-  for (const reason of ['limited', 'busy', 'unavailable', 'stopped'] as const) {
+  for (const reason of ['limited', 'unconfirmed', 'busy', 'unavailable', 'stopped'] as const) {
     if (reasons.has(reason)) return reason
   }
   return null

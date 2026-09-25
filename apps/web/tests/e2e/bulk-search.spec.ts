@@ -63,10 +63,13 @@ test.describe('bulk search', () => {
     test.setTimeout(60_000)
     const id = unique()
     const names = Array.from({ length: 500 }, (_, index) => `bulk${id}n${index}`)
-    const actions: string[] = []
+    // Blocks as sent. The first is sent twice: it waits for the Turnstile check
+    // (SEC-9) and is refused before any supplier call, then goes again.
+    const blocks = new Set<string>()
     page.on('request', (request) => {
-      if (request.method() === 'POST' && request.headers()['next-action'])
-        actions.push(request.url())
+      const body = request.postData() ?? ''
+      if (request.method() === 'POST' && request.headers()['next-action'] && body.includes('names'))
+        blocks.add(body)
     })
 
     await bulkSearch(page, names)
@@ -78,7 +81,7 @@ test.describe('bulk search', () => {
     // 500 names on one extension: 25 blocks of twenty, one supplier call each. The mock
     // refuses a bulk block over the supplier's 20-check ceiling, so every name answering
     // above also proves no block was too big.
-    expect(actions).toHaveLength(25)
+    expect(blocks.size).toBe(25)
     await expect(results(page)).toHaveCount(100)
     await page.getByRole('button', { name: 'Show 100 more of 400 not shown' }).click()
     await expect(results(page)).toHaveCount(200)

@@ -82,6 +82,17 @@ export async function deleteAllTestUsers() {
   }
 }
 
+/** Whether any account holds this address — to prove a refused sign-up created none. */
+export async function hasAccount(email) {
+  const client = admin()
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await client.auth.admin.listUsers({ page, perPage: 200 })
+    if (error) throw error
+    if (data.users.some((user) => user.email === email)) return true
+    if (data.users.length < 200) return false
+  }
+}
+
 /** The current RFC 6238 code for a base32 secret — what an authenticator app shows. */
 export function totpCode(secret, now = Date.now()) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'

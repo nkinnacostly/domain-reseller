@@ -360,6 +360,8 @@ function whyUnchecked(reason: FailReason, one: boolean): string {
   switch (reason) {
     case 'limited':
       return `This connection has checked a lot of names in the last few minutes, so we stopped there to keep the registry quick for everyone. Wait a few minutes, then check ${them} again — single searches still work meanwhile.`
+    case 'unconfirmed':
+      return `You passed the check, but the next request didn’t carry its pass — your browser may be blocking cookies for this site, or your connection changed. Check ${them} again to take the check once more.`
     case 'busy':
       return `A lot of bulk searches are running right now. Your list is fine — check ${them} again in a moment.`
     case 'unavailable':

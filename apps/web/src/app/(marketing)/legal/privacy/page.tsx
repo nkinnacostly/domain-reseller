@@ -8,6 +8,7 @@ import {
 } from '@/features/legal/components/legal-page'
 import { pageMetadata } from '@/features/seo/lib/metadata'
 import { BUSINESS, POLICY_LINKS, SPONSORING_REGISTRAR } from '@/lib/business'
+import { isTurnstileEnabled } from '@/lib/turnstile'
 
 export const metadata: Metadata = pageMetadata({
   title: 'Privacy notice',
@@ -20,8 +21,13 @@ export const metadata: Metadata = pageMetadata({
  * code as of the date shown: the cookies are the Supabase session and the two
  * cart cookies (features/cart/lib/token*.ts), searches are not stored by us
  * (FR-S7), and no analytics or advertising scripts are loaded.
+ *
+ * Cloudflare Turnstile and its search pass cookie (SEC-9) are listed only
+ * while the check is switched on (both keys set, lib/turnstile.ts): with
+ * them unset nothing reaches Cloudflare, and N9b forbids saying it does.
  */
 export default function PrivacyPage() {
+  const hasBotCheck = isTurnstileEnabled()
   return (
     <LegalPage
       path="/legal/privacy"
@@ -81,9 +87,9 @@ export default function PrivacyPage() {
           <li>
             <strong>Technical data:</strong> our hosting providers keep standard request logs, which
             include IP addresses and the addresses of pages you visit, for a short time. To stop one
-            connection from overloading bulk search, we count the names it checks there, and the
-            names it adds to a cart in one go, against a one-way hash of the IP address — never the
-            address itself.
+            connection from overloading search, we count the searches it runs, the names it checks
+            in bulk search and the names it adds to a cart in one go, against a one-way hash of the
+            IP address — never the address itself.
           </li>
         </ul>
         <p>
@@ -152,6 +158,13 @@ export default function PrivacyPage() {
             <strong>Brevo</strong> — sends our emails: your email address and each message (France,
             European Union).
           </li>
+          {hasBotCheck ? (
+            <li>
+              <strong>Cloudflare Turnstile</strong> — tells people from bots when you sign up, ask
+              for a sign-in link or a password reset, run a bulk search, or search many times in a
+              few minutes. It sees your IP address and signals from your browser (United States).
+            </li>
+          ) : null}
           <li>
             <strong>Authorities and dispute providers</strong>, where the law, a court order or a
             domain dispute requires it.
@@ -217,6 +230,16 @@ export default function PrivacyPage() {
             </strong>
             : the number shown on the cart icon. Lasts 60 days.
           </li>
+          {hasBotCheck ? (
+            <li>
+              <strong>
+                <code>dr_search_pass</code>
+              </strong>
+              : set when you pass Cloudflare’s check while searching, so you can keep searching and
+              run bulk searches without being asked again. It works only from the connection that
+              passed. Lasts 2 hours.
+            </li>
+          ) : null}
         </ul>
         <p>Your light or dark theme choice is kept in your browser’s own storage, not a cookie.</p>
       </LegalSection>

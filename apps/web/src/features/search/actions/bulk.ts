@@ -6,9 +6,11 @@ import { toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
+import { isTurnstileEnabled } from '@/lib/turnstile'
 import { BULK_CHUNK } from '../lib/bulk'
 import type { BulkAnswer, BulkPrice } from '../lib/bulk-run'
 import { lengthIssue } from '../lib/length'
+import { hasHumanPass } from '../queries/allowance'
 import { checkAvailability } from '../queries/availability'
 import { getLengthRules } from '../queries/length-rules'
 
@@ -48,6 +50,13 @@ export const checkBulkNames = actionClient
     }),
   )
   .action(async ({ parsedInput }): Promise<BulkAnswer> => {
+    // SEC-9 — one list can keep the supplier busy for minutes, so with
+    // Turnstile on it starts only with a search pass (queries/allowance.ts).
+    // Asked first: a refusal costs nothing and counts nothing.
+    if (isTurnstileEnabled() && !(await hasHumanPass())) {
+      return { ok: false, reason: 'unconfirmed' }
+    }
+
     const [priced, lengthRules] = await Promise.all([getPricedCatalogue(), getLengthRules()])
     // Without prices nothing can be shown for an available name (N8, N5b).
     if (!priced) return { ok: false, reason: 'unavailable' }

@@ -5,6 +5,7 @@ import { cloneElement, isValidElement, type ReactNode } from 'react'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue, type PricedCatalogue } from '@/features/pricing/queries/pricing'
+import { createServiceClient } from '@/lib/supabase/service'
 import { server } from '../../../../tests/mocks/server'
 import {
   BulkSearchLink,
@@ -24,6 +25,18 @@ afterAll(() => vi.unstubAllEnvs())
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
 vi.mock('../queries/length-rules', () => ({ getLengthRules: vi.fn() }))
+// SEC-9: each search is counted per address, in the rate-limit table.
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ 'x-real-ip': '102.89.1.2' }),
+  cookies: async () => ({ get: () => undefined }),
+}))
+vi.mock('@/lib/supabase/service', () => ({ createServiceClient: vi.fn() }))
+
+const rateLimit = (withinLimit: boolean) => {
+  const rpc = vi.fn(async () => ({ data: withinLimit, error: null }))
+  vi.mocked(createServiceClient).mockReturnValue({ rpc } as never)
+  return rpc
+}
 
 // Fixed inputs so expectations do not move with the live rate.
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
@@ -86,6 +99,7 @@ beforeEach(() => {
   vi.mocked(getPricedCatalogue).mockReset()
   vi.mocked(getPricedCatalogue).mockResolvedValue(CATALOGUE)
   vi.mocked(getLengthRules).mockResolvedValue({})
+  rateLimit(true)
 })
 
 /** Records every availability request the gateway receives. */
@@ -155,6 +169,40 @@ describe('SearchResults', () => {
 
     expect(screen.getByText("That doesn't look like a domain")).toBeInTheDocument()
     expect(screen.getByText(/for example getpaid or getpaid\.com/)).toBeInTheDocument()
+  })
+
+  it('does not count a query that is never searched against the allowance (SEC-9)', async () => {
+    const rpc = rateLimit(true)
+    await renderResults('not a domain!')
+    await renderResults('')
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('past the allowance, with no check to offer, asks the supplier nothing and says to wait (SEC-9)', async () => {
+    const asked = recordGateway()
+    const rpc = rateLimit(false)
+
+    await renderResults('getpaid.com')
+
+    expect(rpc).toHaveBeenCalledWith('rate_limit_hit', expect.objectContaining({ p_max: 30 }))
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'You’ve searched a lot in the last few minutes',
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Wait a few minutes, then search again.')
+    expect(screen.queryByRole('article')).not.toBeInTheDocument()
+    expect(asked).toEqual([])
+  })
+
+  it('counts a search once, against a hash of the address (SEC-9)', async () => {
+    const rpc = rateLimit(true)
+    await renderResults('getpaid.com')
+
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith('rate_limit_hit', {
+      p_key: expect.stringMatching(/^search:[0-9a-f]{32}$/),
+      p_max: 30,
+      p_window_seconds: 600,
+    })
   })
 
   it('shows no results at all when prices are withheld, since a result needs a price (N8)', async () => {

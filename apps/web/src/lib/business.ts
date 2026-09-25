@@ -20,9 +20,9 @@ export const BUSINESS = {
   noReplyEmail: 'no-reply@notify.mydomainshub.com',
   /** Promise for refunding a paid line that fails to register (the owner's choice). */
   refundBusinessDays: 5,
-  lastUpdated: '24 September 2026',
+  lastUpdated: '25 September 2026',
   /** The same date for machines (the sitemap's lastmod). */
-  lastUpdatedOn: '2026-09-24',
+  lastUpdatedOn: '2026-09-25',
 } as const
 
 /**
