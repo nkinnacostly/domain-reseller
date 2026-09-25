@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { env } from '@/lib/env'
 import { actionClient, authAction } from '@/lib/safe-action'
 import { createClient } from '@/lib/supabase/server'
+import { humanCheckError, verifyTurnstile } from '@/lib/turnstile'
 import { callbackUrl } from '../lib/links'
 import { authMessage } from '../lib/messages'
 import { safeNext } from '../lib/redirect'
@@ -13,6 +14,17 @@ import { emailOnlySchema, signInSchema, signUpSchema } from '../schemas'
 
 /** Expected failures come back as `{ error }` for the form to show; nothing throws. */
 type Failure = { error: string }
+
+/**
+ * SEC-9 — every action here that sends an email asks Turnstile first, before
+ * Supabase: each email costs Brevo quota, and a form that mails any address on
+ * request can be aimed at someone else's inbox. Password sign-in sends none,
+ * and Supabase limits it per address, so it is not asked.
+ */
+async function refuseBots(token: string | undefined): Promise<Failure | null> {
+  const check = await verifyTurnstile(token, await headers())
+  return check.ok ? null : { error: humanCheckError(check) }
+}
 
 export const signIn = actionClient
   .inputSchema(signInSchema)
@@ -38,6 +50,8 @@ export const signIn = actionClient
 export const signUp = actionClient
   .inputSchema(signUpSchema)
   .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const refused = await refuseBots(parsedInput.turnstileToken)
+    if (refused) return refused
     const supabase = await createClient()
     const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
     const { error } = await supabase.auth.signUp({
@@ -57,6 +71,8 @@ export const signUp = actionClient
 export const resendConfirmation = actionClient
   .inputSchema(emailOnlySchema)
   .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const refused = await refuseBots(parsedInput.turnstileToken)
+    if (refused) return refused
     const supabase = await createClient()
     const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
     const { error } = await supabase.auth.resend({
@@ -71,6 +87,8 @@ export const resendConfirmation = actionClient
 export const sendMagicLink = actionClient
   .inputSchema(emailOnlySchema)
   .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const refused = await refuseBots(parsedInput.turnstileToken)
+    if (refused) return refused
     const supabase = await createClient()
     const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)
     const { error } = await supabase.auth.signInWithOtp({
@@ -86,6 +104,8 @@ export const sendMagicLink = actionClient
 export const requestPasswordReset = actionClient
   .inputSchema(emailOnlySchema)
   .action(async ({ parsedInput }): Promise<Failure | { sentTo: string }> => {
+    const refused = await refuseBots(parsedInput.turnstileToken)
+    if (refused) return refused
     const supabase = await createClient()
     const { error } = await supabase.auth.resetPasswordForEmail(parsedInput.email, {
       redirectTo: callbackUrl('recovery', '/reset-password'),

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import {
   describedBy,
   Field,
@@ -13,6 +13,7 @@ import {
   SubmitButton,
 } from '@/components/common/form-parts'
 import { PasswordInput } from '@/components/common/password-input'
+import { Turnstile, type TurnstileHandle, turnstileInput } from '@/components/common/turnstile'
 import { sendMagicLink, signIn } from '../actions/session'
 
 const NOTICES: Record<string, { tone: 'error' | 'success'; text: string }> = {
@@ -31,7 +32,10 @@ export function SignInForm({ next, notice }: { next?: string; notice?: string })
   const [mode, setMode] = useState<'password' | 'link'>('password')
   const id = useId()
   const password = useAction(signIn)
-  const link = useAction(sendMagicLink)
+  // SEC-9: the link form sends an email, so it carries a Turnstile token; the
+  // server spends it, so a refused request asks for a fresh one.
+  const linkCheck = useRef<TurnstileHandle>(null)
+  const link = useAction(sendMagicLink, { onSettled: () => linkCheck.current?.reset() })
 
   const banner = notice ? NOTICES[notice] : undefined
   const pwErrors = password.result.validationErrors
@@ -130,7 +134,7 @@ export function SignInForm({ next, notice }: { next?: string; notice?: string })
           className="space-y-4"
           noValidate
           onSubmit={onSubmitWith((form) =>
-            link.execute({ email: String(form.get('email') ?? ''), next }),
+            link.execute({ email: String(form.get('email') ?? ''), next, ...turnstileInput(form) }),
           )}
         >
           {link.result.data && 'error' in link.result.data ? (
@@ -158,9 +162,12 @@ export function SignInForm({ next, notice }: { next?: string; notice?: string })
               className={inputClass}
             />
           </Field>
-          <SubmitButton pending={link.isPending} pendingLabel="Sending…">
-            Email me a link
-          </SubmitButton>
+          <div>
+            <Turnstile ref={linkCheck} action="sign-in-link" className="data-interactive:mb-4" />
+            <SubmitButton pending={link.isPending} pendingLabel="Sending…">
+              Email me a link
+            </SubmitButton>
+          </div>
         </form>
       )}
 

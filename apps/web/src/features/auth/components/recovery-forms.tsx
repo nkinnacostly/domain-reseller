@@ -1,7 +1,7 @@
 'use client'
 
 import { useAction } from 'next-safe-action/hooks'
-import { useId } from 'react'
+import { useId, useRef } from 'react'
 import {
   describedBy,
   Field,
@@ -12,6 +12,7 @@ import {
   SubmitButton,
 } from '@/components/common/form-parts'
 import { PasswordInput } from '@/components/common/password-input'
+import { Turnstile, type TurnstileHandle, turnstileInput } from '@/components/common/turnstile'
 import { completePasswordReset } from '../actions/password'
 import { requestPasswordReset } from '../actions/session'
 
@@ -23,7 +24,9 @@ const LINK_ERRORS: Record<string, string> = {
 
 export function ForgotPasswordForm({ error }: { error?: string }) {
   const id = useId()
-  const request = useAction(requestPasswordReset)
+  // SEC-9: this form sends an email; a refused request asks for a fresh token.
+  const check = useRef<TurnstileHandle>(null)
+  const request = useAction(requestPasswordReset, { onSettled: () => check.current?.reset() })
   const errors = request.result.validationErrors
   const data = request.result.data
   const sentTo = data && 'sentTo' in data ? data.sentTo : null
@@ -44,7 +47,9 @@ export function ForgotPasswordForm({ error }: { error?: string }) {
       aria-label="Reset your password"
       className="space-y-4"
       noValidate
-      onSubmit={onSubmitWith((form) => request.execute({ email: String(form.get('email') ?? '') }))}
+      onSubmit={onSubmitWith((form) =>
+        request.execute({ email: String(form.get('email') ?? ''), ...turnstileInput(form) }),
+      )}
     >
       {linkError ? <FormMessage tone="error">{linkError}</FormMessage> : null}
       {data && 'error' in data ? <FormMessage tone="error">{data.error}</FormMessage> : null}
@@ -62,9 +67,12 @@ export function ForgotPasswordForm({ error }: { error?: string }) {
           className={inputClass}
         />
       </Field>
-      <SubmitButton pending={request.isPending} pendingLabel="Sending…">
-        Email me a reset link
-      </SubmitButton>
+      <div>
+        <Turnstile ref={check} action="password-reset" className="data-interactive:mb-4" />
+        <SubmitButton pending={request.isPending} pendingLabel="Sending…">
+          Email me a reset link
+        </SubmitButton>
+      </div>
     </form>
   )
 }
