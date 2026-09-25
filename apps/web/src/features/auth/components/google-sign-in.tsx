@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useAction } from 'next-safe-action/hooks'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { continueWithGoogle } from '../actions/oauth'
@@ -26,7 +27,14 @@ export function GoogleSignIn({ next, failed = false }: { next?: string; failed?:
       >
         <SubmitButton pending={start.isPending} pendingLabel="Opening Google…" variant="secondary">
           {/* Google's own mark, in its own colours (their branding rules) — a file, not tokens. */}
-          <img src="/icons/google-g.svg" alt="" width={18} height={18} className="shrink-0" />
+          <Image
+            src="/icons/google-g.svg"
+            alt=""
+            width={18}
+            height={18}
+            unoptimized
+            className="shrink-0"
+          />
           Continue with Google
         </SubmitButton>
       </form>
