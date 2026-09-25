@@ -8,6 +8,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from 'react'
 import { checkBulkNames } from '../actions/bulk'
 import type { BulkChunk, BulkPlan } from '../lib/bulk'
@@ -22,6 +23,12 @@ import { type BulkAnswer, type BulkRun, reduceRun, retryChunks } from '../lib/bu
  * at once, and each answer is shown as it lands. A block that fails leaves
  * its names "not checked", to be retried on their own; a connection that has
  * checked too much is stopped there, since every later block would be too.
+ *
+ * Without a search pass (SEC-9) the server checks nothing: the run pauses on
+ * that block, the form shows the Turnstile check, and passing it carries on
+ * from the same block — before the first, or when a pass runs out mid-list.
+ * Refused again straight after a pass, the rest are left not checked, with
+ * the reason: asking again would only loop.
  */
 type BulkRunApi = {
   run: BulkRun | null
@@ -30,6 +37,10 @@ type BulkRunApi = {
   retry: () => void
   /** Stops after the block in flight; the rest are left not checked. */
   stop: () => void
+  /** Paused until the person passes the Turnstile check. */
+  awaitingPass: boolean
+  /** The check is passed: carry on from the block that was refused. */
+  resume: () => void
 }
 
 const BulkRunContext = createContext<BulkRunApi | null>(null)
@@ -52,18 +63,30 @@ export function BulkRunProvider({ children }: { children: React.ReactNode }) {
   }, [run])
   const current = useRef(0)
   const stopping = useRef(false)
+  const paused = useRef<{ id: number; chunks: BulkChunk[] } | null>(null)
+  const [awaitingPass, setAwaitingPass] = useState(false)
 
-  const drive = useCallback(async (id: number, chunks: BulkChunk[]) => {
+  const drive = useCallback(async (id: number, chunks: BulkChunk[], afterPass = false) => {
     stopping.current = false
+    let isFreshPass = afterPass
     for (const [index, chunk] of chunks.entries()) {
       if (stopping.current || current.current !== id) {
         dispatch({ type: 'halt', id, chunks: chunks.slice(index), reason: 'stopped' })
         break
       }
       const answer = await ask(chunk)
+      if (!answer.ok && answer.reason === 'unconfirmed' && !isFreshPass) {
+        // Still running, nothing recorded: resume() picks up from this block.
+        paused.current = { id, chunks: chunks.slice(index) }
+        setAwaitingPass(true)
+        return
+      }
+      isFreshPass = false
       dispatch({ type: 'answer', id, chunk, answer })
-      if (!answer.ok && answer.reason === 'limited') {
-        dispatch({ type: 'halt', id, chunks: chunks.slice(index + 1), reason: 'limited' })
+      // Every later block would be refused the same way. A refusal straight
+      // after a pass means the pass did not arrive: stop, or it would loop.
+      if (!answer.ok && (answer.reason === 'limited' || answer.reason === 'unconfirmed')) {
+        dispatch({ type: 'halt', id, chunks: chunks.slice(index + 1), reason: answer.reason })
         break
       }
     }
@@ -74,6 +97,8 @@ export function BulkRunProvider({ children }: { children: React.ReactNode }) {
     (plan: BulkPlan) => {
       current.current += 1
       const id = current.current
+      paused.current = null
+      setAwaitingPass(false)
       dispatch({ type: 'start', id, plan })
       void drive(id, plan.chunks)
     },
@@ -89,11 +114,28 @@ export function BulkRunProvider({ children }: { children: React.ReactNode }) {
     void drive(now.id, chunks)
   }, [drive])
 
+  const resume = useCallback(() => {
+    const waiting = paused.current
+    paused.current = null
+    setAwaitingPass(false)
+    if (waiting && current.current === waiting.id) void drive(waiting.id, waiting.chunks, true)
+  }, [drive])
+
   const stop = useCallback(() => {
     stopping.current = true
+    // Nothing is in flight while paused, so stop here rather than after it.
+    const waiting = paused.current
+    if (!waiting) return
+    paused.current = null
+    setAwaitingPass(false)
+    dispatch({ type: 'halt', id: waiting.id, chunks: waiting.chunks, reason: 'stopped' })
+    dispatch({ type: 'finish', id: waiting.id })
   }, [])
 
-  const api = useMemo(() => ({ run, start, retry, stop }), [run, start, retry, stop])
+  const api = useMemo(
+    () => ({ run, start, retry, stop, awaitingPass, resume }),
+    [run, start, retry, stop, awaitingPass, resume],
+  )
   return <BulkRunContext.Provider value={api}>{children}</BulkRunContext.Provider>
 }
 

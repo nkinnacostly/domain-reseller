@@ -4,7 +4,16 @@ import { expect, type Page, test } from '@playwright/test'
 /**
  * Search results (PRD E1) against the mock gateway in tests/e2e/support —
  * never the live supplier (N12). Names map to fixed answers there.
+ *
+ * Searches are counted per address (SEC-9), so each test gets its own made-up
+ * one: runs on five devices, and other builders' runs, never share a count.
  */
+const testAddress = () =>
+  `198.18.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`
+
+test.beforeEach(async ({ context }) => {
+  await context.setExtraHTTPHeaders({ 'x-real-ip': testAddress() })
+})
 
 const exact = (page: Page) => page.locator('article[aria-labelledby="exact-domain"]')
 const grid = (page: Page) =>

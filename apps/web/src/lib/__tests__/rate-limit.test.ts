@@ -39,3 +39,15 @@ describe('withinLimit (SEC-11)', () => {
     expect(await withinLimit('k', LIMITS.placeOrder)).toBe(false)
   })
 })
+
+describe('search limits (SEC-9)', () => {
+  it('give a person thirty searches in ten minutes, and ten times that with a pass', () => {
+    expect(LIMITS.search).toEqual({ max: 30, windowSeconds: 600 })
+    expect(LIMITS.searchWithPass.max).toBe(LIMITS.search.max * 10)
+  })
+
+  it('share one window, since both judge the same count', () => {
+    // rate_limit_hit keys its window by the seconds given: different ones would split the count.
+    expect(LIMITS.searchWithPass.windowSeconds).toBe(LIMITS.search.windowSeconds)
+  })
+})

@@ -1,4 +1,4 @@
-import { ListChecks, Search as SearchIcon, ShieldCheck } from 'lucide-react'
+import { Clock, ListChecks, Search as SearchIcon, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
@@ -7,6 +7,7 @@ import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { toUnicodeHost } from '../lib/idn'
 import { planSearch } from '../lib/plan'
 import { describeProblem, displayQuery, parseSearchQuery } from '../lib/query'
+import { searchAllowance } from '../queries/allowance'
 import { getLengthRules } from '../queries/length-rules'
 import {
   ExactSection,
@@ -17,6 +18,7 @@ import {
   SuggestionsSkeleton,
 } from './availability-sections'
 import { DomainSearch } from './domain-search'
+import { HumanCheck } from './human-check'
 
 type SearchParams = Promise<{ q?: string | string[] }>
 
@@ -70,6 +72,27 @@ export function BulkSearchLink() {
   )
 }
 
+/** Past every allowance this address has (SEC-9): the only way on is to wait. */
+function SearchLimited() {
+  return (
+    <div
+      role="status"
+      className="max-w-2xl rounded-[2rem] border border-brand-subtle-border bg-brand-subtle p-6 sm:p-8"
+    >
+      <span className="grid size-12 place-items-center rounded-full bg-background text-brand-ink">
+        <Clock className="size-5" aria-hidden="true" />
+      </span>
+      <p className="mt-4 font-semibold text-foreground">
+        You’ve searched a lot in the last few minutes
+      </p>
+      <p className="mt-2 text-pretty text-sm/6 text-muted-foreground">
+        To keep searches quick for everyone, each connection can run a limited number every ten
+        minutes. Wait a few minutes, then search again.
+      </p>
+    </div>
+  )
+}
+
 export function SearchHeadingSkeleton() {
   return (
     <div aria-hidden="true" className="animate-pulse">
@@ -84,6 +107,9 @@ export function SearchHeadingSkeleton() {
  * page's Suspense boundary. The exact match and the suggestions each stream in
  * behind their own boundary, keyed on the query, so a new search shows fresh
  * skeletons rather than the last search's answers.
+ *
+ * Each results page counts against the caller's address (SEC-9); past the
+ * free allowance a Turnstile check stands in for the results until passed.
  */
 export async function SearchResults({ searchParams }: { searchParams: SearchParams }) {
   const { q, parsed, shown } = await readQuery(searchParams)
@@ -112,7 +138,11 @@ export async function SearchResults({ searchParams }: { searchParams: SearchPara
     )
   }
 
-  const [priced, lengthRules] = await Promise.all([getPricedCatalogue(), getLengthRules()])
+  const [priced, lengthRules, allowance] = await Promise.all([
+    getPricedCatalogue(),
+    getLengthRules(),
+    searchAllowance(),
+  ])
 
   // No catalogue, no prices — and a result without a price breaks N8.
   if (!priced) {
@@ -122,6 +152,21 @@ export async function SearchResults({ searchParams }: { searchParams: SearchPara
       </div>
     )
   }
+
+  // SEC-9 — past this address's allowance, nothing goes to the supplier.
+  if (allowance === 'challenge') {
+    return (
+      <HumanCheck
+        title="Confirm you’re a person to keep searching"
+        action="search"
+        className="max-w-2xl"
+      >
+        This connection has searched a lot in the last few minutes. Cloudflare checks that you’re a
+        person — usually without a click — and then your results appear.
+      </HumanCheck>
+    )
+  }
+  if (allowance === 'limited') return <SearchLimited />
 
   const plan = planSearch({
     stem: parsed.stem,

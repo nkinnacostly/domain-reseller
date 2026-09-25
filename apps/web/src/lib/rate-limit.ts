@@ -7,7 +7,8 @@ import { createServiceClient } from '@/lib/supabase/service'
 
 /**
  * Per-account limits on the payment path (SEC-11, PRD R15), and per-address
- * limits on public lookups (FR-PUB2, keyed by lib/client-ip.ts). Counted in
+ * limits on public lookups and search (FR-PUB2, SEC-9, keyed by
+ * lib/client-ip.ts). Counted in
  * Postgres, so every serverless instance and region sees the same count.
  *
  * Fails closed: if the count cannot be read, the action is refused. For
@@ -33,6 +34,13 @@ export const LIMITS = {
   // so one scraper cannot get our lookups — transfer checks included — refused.
   whoisLookup: { max: 30, windowSeconds: 600 },
   whoisAll: { max: 600, windowSeconds: 600 },
+  // SEC-9 — per address, one per search results page: each asks the supplier,
+  // which allows two requests in flight for everyone (PRD V4). Thirty is more
+  // than a person comparing names needs; past it, passing Turnstile earns a
+  // pass (features/search/lib/human-pass.ts) worth ten times as many. One
+  // count, two ceilings — so both must keep the same window.
+  search: { max: 30, windowSeconds: 600 },
+  searchWithPass: { max: 300, windowSeconds: 600 },
   // FR-S5 — per address, counted per block (one gateway request and one
   // supplier call of at most 20 checks), so the count follows the checks
   // made, not the searches run. The largest list — 500 names on all seven

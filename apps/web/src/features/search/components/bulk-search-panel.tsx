@@ -2,6 +2,7 @@ import { PricingUnavailable } from '@/features/pricing/components/pricing-unavai
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { BULK_MAX_EXTENSIONS, pickDefaultTlds, splitNames } from '../lib/bulk'
 import { getLengthRules } from '../queries/length-rules'
+import { BulkPassCheck } from './bulk-pass-check'
 import { BulkSearchForm } from './bulk-search-form'
 
 type BulkParams = Promise<{ names?: string | string[]; tld?: string | string[] }>
@@ -43,15 +44,18 @@ export async function BulkSearchPanel({ searchParams }: { searchParams: BulkPara
   const extensions = featured.filter((tld) => soldSet.has(tld)).slice(0, BULK_MAX_EXTENSIONS)
 
   return (
-    <BulkSearchForm
-      extensions={extensions}
-      sold={sold}
-      featured={featured}
-      lengthRules={lengthRules}
-      defaultNames={names.join('\n')}
-      defaultPicked={pickDefaultTlds(picked, soldSet, extensions)}
-      autoRun={names.length > 0}
-    />
+    <>
+      <BulkSearchForm
+        extensions={extensions}
+        sold={sold}
+        featured={featured}
+        lengthRules={lengthRules}
+        defaultNames={names.join('\n')}
+        defaultPicked={pickDefaultTlds(picked, soldSet, extensions)}
+        autoRun={names.length > 0}
+      />
+      <BulkPassCheck />
+    </>
   )
 }
 

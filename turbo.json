@@ -19,6 +19,7 @@
         "PRICE_LOCK_MINUTES",
         "BREVO_API_KEY",
         "SEND_EMAIL_HOOK_SECRET",
+        "TURNSTILE_SECRET_KEY",
         "SENTRY_DSN",
         "LOG_LEVEL"
       ]

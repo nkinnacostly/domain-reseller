@@ -38,7 +38,7 @@ describe('sitemap', () => {
     expect(byPath.get('/domains/com')?.lastModified).toEqual(PRICES_FROM)
     expect(byPath.get('/pricing')?.lastModified).toEqual(PRICES_FROM)
     expect(byPath.get('/legal/privacy')?.lastModified).toEqual(
-      new Date('2026-09-24T00:00:00+01:00'),
+      new Date('2026-09-25T00:00:00+01:00'),
     )
     expect(byPath.get('/help')).not.toHaveProperty('lastModified')
   })

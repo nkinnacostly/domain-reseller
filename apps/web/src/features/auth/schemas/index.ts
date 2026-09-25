@@ -12,6 +12,13 @@ export const passwordSchema = z
   .min(10, 'Use at least 10 characters')
   .max(72, 'Use 72 characters or fewer')
 
+/**
+ * SEC-9 — a Cloudflare Turnstile token from the form, for the actions that
+ * send email. Optional here: the server decides whether one is needed
+ * (lib/turnstile.ts). 2048 characters is Cloudflare's maximum.
+ */
+const turnstileToken = z.string().max(2048).optional()
+
 export const signInSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, 'Enter your password'),
@@ -23,9 +30,15 @@ export const signUpSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   next: z.string().optional(),
+  turnstileToken,
 })
 
-export const emailOnlySchema = z.object({ email: emailSchema, next: z.string().optional() })
+/** A form that emails a link: a magic link, a reset, a confirmation sent again. */
+export const emailOnlySchema = z.object({
+  email: emailSchema,
+  next: z.string().optional(),
+  turnstileToken,
+})
 
 export const newPasswordSchema = z
   .object({ password: passwordSchema, confirm: z.string() })

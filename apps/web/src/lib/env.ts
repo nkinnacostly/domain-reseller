@@ -42,6 +42,10 @@ export const env = createEnv({
     // Webhooks, `v1,whsec_…`). Asserted where used, like the payment keys.
     BREVO_API_KEY: z.string().min(1).optional(),
     SEND_EMAIL_HOOK_SECRET: z.string().startsWith('v1,whsec_').optional(),
+    // Cloudflare Turnstile (SEC-9), verified on our server by lib/turnstile.ts.
+    // Optional like the payment keys: until both keys are set, forms and search
+    // run without the check (production logs that once), rather than refusing.
+    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     SENTRY_DSN: z.string().optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   },
@@ -51,6 +55,8 @@ export const env = createEnv({
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
     NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: z.string().optional(),
+    /** SEC-9 — the Turnstile widget's site key; paired with TURNSTILE_SECRET_KEY. */
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
     NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   },
   experimental__runtimeEnv: {
@@ -59,6 +65,7 @@ export const env = createEnv({
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY: process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
   // Lets `pnpm build` run in CI without a full secret set.

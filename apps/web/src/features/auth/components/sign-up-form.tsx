@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
-import { useId } from 'react'
+import { useId, useRef } from 'react'
 import {
   describedBy,
   Field,
@@ -13,14 +13,21 @@ import {
   SubmitButton,
 } from '@/components/common/form-parts'
 import { PasswordInput } from '@/components/common/password-input'
+import { Turnstile, type TurnstileHandle, turnstileInput } from '@/components/common/turnstile'
 import { resendConfirmation, signUp } from '../actions/session'
 
 const PASSWORD_HINT = 'At least 10 characters. A few unrelated words is strong and easy to type.'
 
 export function SignUpForm({ next }: { next?: string }) {
   const id = useId()
-  const create = useAction(signUp)
-  const resend = useAction(resendConfirmation)
+  // SEC-9: both forms here send an email. A token is spent by the server's
+  // check, so each asks for a fresh one after every answer that keeps it up.
+  const createCheck = useRef<TurnstileHandle>(null)
+  const resendCheck = useRef<TurnstileHandle>(null)
+  const create = useAction(signUp, { onSettled: () => createCheck.current?.reset() })
+  const resend = useAction(resendConfirmation, {
+    onSettled: () => resendCheck.current?.reset(),
+  })
   const errors = create.result.validationErrors
   const sentTo =
     create.result.data && 'sentTo' in create.result.data ? create.result.data.sentTo : null
@@ -40,7 +47,16 @@ export function SignUpForm({ next }: { next?: string }) {
         </FormMessage>
         {resent ? <FormMessage tone="success">Sent again.</FormMessage> : null}
         {resendError ? <FormMessage tone="error">{resendError}</FormMessage> : null}
-        <form onSubmit={onSubmitWith(() => resend.execute({ email: sentTo, next }))}>
+        <form
+          onSubmit={onSubmitWith((form) =>
+            resend.execute({ email: sentTo, next, ...turnstileInput(form) }),
+          )}
+        >
+          <Turnstile
+            ref={resendCheck}
+            action="resend-confirmation"
+            className="data-interactive:mb-4"
+          />
           <SubmitButton pending={resend.isPending} pendingLabel="Sending…" variant="secondary">
             Send the link again
           </SubmitButton>
@@ -60,6 +76,7 @@ export function SignUpForm({ next }: { next?: string }) {
           email: String(form.get('email') ?? ''),
           password: String(form.get('password') ?? ''),
           next,
+          ...turnstileInput(form),
         }),
       )}
     >
@@ -117,9 +134,12 @@ export function SignUpForm({ next }: { next?: string }) {
         />
       </Field>
 
-      <SubmitButton pending={create.isPending} pendingLabel="Creating your account…">
-        Create account
-      </SubmitButton>
+      <div>
+        <Turnstile ref={createCheck} action="sign-up" className="data-interactive:mb-4" />
+        <SubmitButton pending={create.isPending} pendingLabel="Creating your account…">
+          Create account
+        </SubmitButton>
+      </div>
 
       <p className="text-pretty text-xs/5 text-muted-foreground">
         By creating an account you agree to the{' '}
