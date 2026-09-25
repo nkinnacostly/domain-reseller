@@ -14,7 +14,8 @@
     "./errors": "./src/errors/index.ts",
     "./payments": "./src/payments/index.ts",
     "./transfers": "./src/transfers/index.ts",
-    "./email": "./src/email/index.ts"
+    "./email": "./src/email/index.ts",
+    "./ses": "./src/ses/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
