@@ -7,8 +7,15 @@ import { BRAND_NAME } from '@/components/layout/brand'
  */
 export const BUSINESS = {
   brand: BRAND_NAME,
-  /** The legal operator (the owner's answer; the supplier account is in this name). */
-  operator: 'CLOOP UNIVERSE TECH',
+  /** The legal operator, as its certificate of incorporation names it (CAC, 13 Aug 2026). */
+  operator: 'CLOOP UNIVERSE TECH LTD',
+  /** Its Corporate Affairs Commission registration number, from the same certificate. */
+  rcNumber: 'RC 9771867',
+  /**
+   * Its Tax Identification Number, from the same certificate — printed on
+   * receipts as the supplier's TIN (CMP-17).
+   */
+  tin: '2622401595060',
   site: 'www.mydomainshub.com',
   /** One address for support, abuse and privacy requests (the owner's choice). */
   email: 'hello@mydomainshub.com',
@@ -18,8 +25,17 @@ export const BUSINESS = {
    * choice, 24 Sept 2026).
    */
   noReplyEmail: 'no-reply@notify.mydomainshub.com',
-  /** Promise for refunding a paid line that fails to register (the owner's choice). */
-  refundBusinessDays: 5,
+  /**
+   * How soon we send a refund for a paid line that fails (the owner's
+   * commitment); the refund worker usually sends it within minutes.
+   */
+  refundSendBusinessDays: 5,
+  /**
+   * How long Flutterwave says a card refund can take to reach the customer
+   * once sent (the order page and refund emails say the same); bank refunds
+   * are usually quicker (the owner's choice, 25 Sept 2026: follow Flutterwave).
+   */
+  cardRefundBusinessDays: 15,
   lastUpdated: '25 September 2026',
   /** The same date for machines (the sitemap's lastmod). */
   lastUpdatedOn: '2026-09-25',

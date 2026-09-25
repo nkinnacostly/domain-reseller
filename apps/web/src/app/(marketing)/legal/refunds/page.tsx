@@ -11,13 +11,16 @@ export const metadata: Metadata = pageMetadata({
 })
 
 /**
- * Refund policy (FR-PUB4). The timescale is the owner's commitment. Refunds
- * for failed registrations, renewals and transfers, second charges and short
- * payments are automatic (FR-R3, migrations 15–16, 23, 26), back to the
- * payment method used — as this says.
+ * Refund policy (FR-PUB4). How soon we send a refund is the owner's
+ * commitment; how long it then takes to arrive is Flutterwave's, and matches
+ * what the order page and refund emails say. Refunds for failed
+ * registrations, renewals and transfers, second charges and short payments
+ * are automatic (FR-R3, migrations 15–16, 23, 26), back to the payment method
+ * used — as this says.
  */
 export default function RefundsPage() {
-  const days = BUSINESS.refundBusinessDays
+  const sendDays = BUSINESS.refundSendBusinessDays
+  const cardDays = BUSINESS.cardRefundBusinessDays
   return (
     <LegalPage
       path="/legal/refunds"
@@ -52,9 +55,22 @@ export default function RefundsPage() {
         </ul>
         <p>
           You get the <strong>full amount you paid for that domain, VAT included</strong>, back to
-          the payment method you used, within <strong>{days} business days</strong>. If only some
-          domains in an order fail, only those are refunded; the rest stay registered. Flutterwave’s
-          processing fee, added on its payment page, is Flutterwave’s and is not part of the refund.
+          the payment method you used. If only some domains in an order fail, only those are
+          refunded; the rest stay registered. Flutterwave’s processing fee, added on its payment
+          page, is Flutterwave’s and is not part of the refund.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="timing" title="How long a refund takes">
+        <p>
+          We send the refund through Flutterwave, our payment provider, usually within minutes of
+          the failure and always within <strong>{sendDays} business days</strong>. Your order shows
+          when it has been sent, and we email you.
+        </p>
+        <p>
+          Flutterwave then returns it to the card or account you paid with. A card refund can take
+          up to <strong>{cardDays} business days</strong> to show on your statement, depending on
+          your bank; bank refunds are usually quicker.
         </p>
       </LegalSection>
 
@@ -73,10 +89,11 @@ export default function RefundsPage() {
 
       <LegalSection id="how" title="How to ask">
         <p>
-          Refunds for failed registrations, renewals and transfers need no request — if yours has
-          not arrived within {days} business days, or you think you were charged twice, email{' '}
-          <EmailLink /> with your order number (it starts with “ND-”). You can find it under{' '}
-          <Link href="/app/orders">your orders</Link>.
+          Refunds for failed registrations, renewals and transfers need no request. If your order
+          does not show a refund as sent within {sendDays} business days, if a card refund has not
+          arrived {cardDays} business days after it was sent, or if you think you were charged
+          twice, email <EmailLink /> with your order number (it starts with “ND-”). You can find it
+          under <Link href="/app/orders">your orders</Link>.
         </p>
       </LegalSection>
     </LegalPage>

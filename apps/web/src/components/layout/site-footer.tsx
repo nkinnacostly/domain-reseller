@@ -141,7 +141,8 @@ export function SiteFooter() {
               <Suspense fallback={LAUNCH_YEAR}>
                 <CopyrightYear />
               </Suspense>{' '}
-              {BUSINESS.operator}, trading as {BRAND_NAME}. All rights reserved.
+              {BUSINESS.operator} ({BUSINESS.rcNumber}), trading as {BRAND_NAME}. All rights
+              reserved.
             </p>
             <p>
               Abuse reports:{' '}

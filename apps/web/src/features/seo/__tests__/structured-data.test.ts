@@ -34,7 +34,7 @@ describe('organization and site', () => {
       '@type': 'OnlineStore',
       '@id': `${SITE}/#organization`,
       name: 'MyDomainsHub',
-      legalName: 'CLOOP UNIVERSE TECH',
+      legalName: 'CLOOP UNIVERSE TECH LTD',
       url: `${SITE}/`,
       email: 'hello@mydomainshub.com',
       logo: { url: `${SITE}/brand/mydomainshub-mark.png`, width: 512, height: 512 },

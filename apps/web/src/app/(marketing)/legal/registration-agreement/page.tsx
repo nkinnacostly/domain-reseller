@@ -40,9 +40,10 @@ export default function RegistrationAgreementPage() {
     >
       <LegalSection id="who" title="Who we are">
         <p>
-          {BUSINESS.brand} ({BUSINESS.site}) is operated by {BUSINESS.operator} (“we”, “us”). We are
-          an authorised <strong>reseller</strong>: we sell domain registrations provided by an
-          ICANN-accredited registrar. We are not ourselves accredited by ICANN.
+          {BUSINESS.brand} ({BUSINESS.site}) is operated by {BUSINESS.operator}, a company
+          registered in Nigeria ({BUSINESS.rcNumber}) (“we”, “us”). We are an authorised{' '}
+          <strong>reseller</strong>: we sell domain registrations provided by an ICANN-accredited
+          registrar. We are not ourselves accredited by ICANN.
         </p>
       </LegalSection>
 

@@ -66,7 +66,7 @@ const REFUND: OrderRefund = {
 const ready = (receipt: Partial<Receipt> = {}, refunds: OrderRefund[] = []) =>
   render(<ReceiptView lookup={{ state: 'ready', receipt: { ...RECEIPT, ...receipt }, refunds }} />)
 
-const document_ = () => screen.getByRole('article', { name: 'Receipt' })
+const document_ = () => screen.getByRole('article', { name: /^(Tax invoice|Receipt)$/ })
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -123,14 +123,23 @@ describe('ReceiptDocument — what the receipt says (CMP-17, FR-C5, N8)', () => 
     expect(header.getByText('ND-001001')).toBeVisible()
   })
 
-  it('names the seller from the business facts only — no invented tax or company number', () => {
+  it('names the seller, with its CAC number and TIN, from the business facts only', () => {
     ready()
     const seller = screen.getByRole('region', { name: 'From' })
     expect(seller).toHaveTextContent(BUSINESS.operator)
     expect(seller).toHaveTextContent(`Operator of ${BUSINESS.brand}`)
+    expect(seller).toHaveTextContent(BUSINESS.rcNumber)
+    expect(seller).toHaveTextContent(`TIN ${BUSINESS.tin}`)
     expect(seller).toHaveTextContent(BUSINESS.site)
     expect(seller).toHaveTextContent(BUSINESS.email)
-    expect(document_()).not.toHaveTextContent(/\bTIN\b|\bRC\b|CAC/)
+  })
+
+  it('calls a live receipt a tax invoice, and a test one only a receipt (CMP-17)', () => {
+    const { unmount } = ready()
+    expect(screen.getByRole('article', { name: 'Tax invoice' })).toBeVisible()
+    unmount()
+    ready({ testMode: true, invoiceNumber: 'TEST-INV-000007' })
+    expect(screen.getByRole('article', { name: 'Receipt' })).toBeVisible()
   })
 
   it('bills the registrant recorded on the order', () => {

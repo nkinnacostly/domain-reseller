@@ -42,8 +42,8 @@ export default function PrivacyPage() {
     >
       <LegalSection id="controller" title="Who is responsible">
         <p>
-          {BUSINESS.operator}, trading as {BUSINESS.brand}, is the data controller. For anything
-          about your data, email <EmailLink />.
+          {BUSINESS.operator} ({BUSINESS.rcNumber}), trading as {BUSINESS.brand}, is the data
+          controller. For anything about your data, email <EmailLink />.
         </p>
       </LegalSection>
 

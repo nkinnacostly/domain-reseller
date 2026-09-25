@@ -98,7 +98,7 @@ test.describe('compliance statements', () => {
   }) => {
     await page.goto('/legal/privacy')
     const main = page.getByRole('main')
-    await expect(main).toContainText('CLOOP UNIVERSE TECH')
+    await expect(main).toContainText('CLOOP UNIVERSE TECH LTD (RC 9771867)')
     for (const cookie of ['sb-', 'dr_cart', 'dr_cart_count']) {
       await expect(main).toContainText(cookie)
     }
@@ -190,7 +190,16 @@ test.describe('footer', () => {
       'href',
       'mailto:hello@mydomainshub.com',
     )
-    await expect(footer).toContainText('CLOOP UNIVERSE TECH')
+    await expect(footer).toContainText('CLOOP UNIVERSE TECH LTD (RC 9771867)')
+  })
+
+  test('the refund policy says when a refund is sent and how long a card refund takes', async ({
+    page,
+  }) => {
+    await page.goto('/legal/refunds')
+    const timing = page.getByRole('region', { name: 'How long a refund takes' })
+    await expect(timing).toContainText('within 5 business days')
+    await expect(timing).toContainText('up to 15 business days')
   })
 
   test('every support and legal link leads to a real page', async ({ page }) => {

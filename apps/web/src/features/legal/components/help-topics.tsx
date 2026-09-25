@@ -95,8 +95,10 @@ export const HELP_TOPICS: {
         a: (
           <p>
             Your order shows which domain failed and why — for example, someone registered it
-            moments before you. You get the full amount back within {BUSINESS.refundBusinessDays}{' '}
-            business days. See the <Link href="/legal/refunds">refund policy</Link>.
+            moments before you. You get the full amount back: we send it within{' '}
+            {BUSINESS.refundSendBusinessDays} business days, usually within minutes, and a card
+            refund can take up to {BUSINESS.cardRefundBusinessDays} business days more to show. See
+            the <Link href="/legal/refunds">refund policy</Link>.
           </p>
         ),
       },

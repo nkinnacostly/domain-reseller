@@ -11,11 +11,11 @@ import { lineLabel, notDoneLabel, type Receipt, receiptDate } from '../lib/recei
 const LABEL = 'text-xs font-medium tracking-wide text-muted-foreground uppercase'
 
 /**
- * The receipt itself (CMP-17, FR-C5, N8): who sold, who bought, every line
- * with its renewal price, VAT at the order's own rate, the payment, and any
- * refunds. On paper the card falls away and only this prints. Seller facts
- * come from `BUSINESS` alone — no tax or company number is shown because we
- * hold none to show (N9b).
+ * The receipt itself (CMP-17, FR-C5, N8): who sold — with the company's CAC
+ * number and TIN — who bought, every line with its renewal price, VAT at the
+ * order's own rate, the payment, and any refunds. A live one is a tax
+ * invoice; a test one says it is not. On paper the card falls away and only
+ * this prints. Seller facts come from `BUSINESS` alone (N9b).
  */
 export function ReceiptDocument({
   receipt,
@@ -48,7 +48,7 @@ export function ReceiptDocument({
             id="receipt-heading"
             className="mt-5 text-2xl font-semibold tracking-tight text-foreground"
           >
-            Receipt
+            {receipt.testMode ? 'Receipt' : 'Tax invoice'}
           </h2>
         </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm sm:text-right">
@@ -72,6 +72,10 @@ export function ReceiptDocument({
             <span className="font-medium">{BUSINESS.operator}</span>
             <br />
             <span className="text-muted-foreground">Operator of {BUSINESS.brand}</span>
+            <br />
+            {BUSINESS.rcNumber}
+            <br />
+            TIN {BUSINESS.tin}
             <br />
             {BUSINESS.site}
             <br />
