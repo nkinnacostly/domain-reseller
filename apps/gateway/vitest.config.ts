@@ -15,8 +15,16 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@dr/shared': new URL('../../packages/shared/src/index.ts', import.meta.url).pathname,
-    },
+    // Subpaths (`@dr/shared/ses`) first, so the bare name does not swallow them.
+    alias: [
+      {
+        find: /^@dr\/shared\/(.+)$/,
+        replacement: new URL('../../packages/shared/src/$1/index.ts', import.meta.url).pathname,
+      },
+      {
+        find: /^@dr\/shared$/,
+        replacement: new URL('../../packages/shared/src/index.ts', import.meta.url).pathname,
+      },
+    ],
   },
 })

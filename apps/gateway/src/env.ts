@@ -92,11 +92,27 @@ const schema = z
     ALERT_EVERY_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
 
     /**
-     * Notification emails (migration 31), sent through Brevo from the
-     * authenticated no-reply subdomain. Unset, queued emails wait — and an
-     * ops alert says so after half an hour.
+     * Notification emails (migration 31), sent from the authenticated no-reply
+     * subdomain through Brevo (the default) or Amazon SES. The chosen
+     * provider's credentials are asserted where used (email/provider.ts):
+     * without them queued emails wait — and an ops alert says so after half
+     * an hour.
      */
+    EMAIL_PROVIDER: z.enum(['brevo', 'ses']).default('brevo'),
     BREVO_API_KEY: z.string().min(20).optional(),
+    /** SES (API v2) in eu-west-2, with the `mydomainshub` configuration set. */
+    AWS_SES_REGION: z
+      .string()
+      .regex(/^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, 'Not an AWS region name')
+      .optional(),
+    AWS_SES_ACCESS_KEY_ID: z.string().min(16).optional(),
+    AWS_SES_SECRET_ACCESS_KEY: z.string().min(20).optional(),
+    AWS_SES_CONFIGURATION_SET: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/, 'Not an SES configuration set name')
+      .optional(),
+    /** SES's maximum send rate, messages a second: 1 in the sandbox, more once AWS raises it. */
+    SES_MAX_SEND_RATE: z.coerce.number().positive().max(1000).default(1),
     EMAIL_POLL_MS: z.coerce.number().int().min(1_000).default(15_000),
     /** How often the delivery of sent ERRP and security notices is read back (FR-NT3). */
     EMAIL_DELIVERY_CHECK_MINUTES: z.coerce

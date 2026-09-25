@@ -1,5 +1,6 @@
 import { EMAIL_BRAND } from '@dr/shared'
 import { type JsonResponse, NoAnswer, requestJson } from '../lib/http'
+import type { Delivery, Mailer } from './mailer'
 
 /**
  * Brevo's transactional API (L1): send one message, and read back what
@@ -7,29 +8,9 @@ import { type JsonResponse, NoAnswer, requestJson } from '../lib/http'
  * subdomain, replies to the support inbox.
  *
  * Addresses and content never reach a log or an error string (N13): a
- * refusal is described by its status and Brevo's short code only.
+ * refusal is described by its status and Brevo's short code only. A 400 is
+ * Brevo refusing the message itself, so it is permanent.
  */
-
-export type OutgoingMessage = {
-  to: string
-  subject: string
-  html: string
-  text: string
-  tags: string[]
-}
-
-export type SendOutcome =
-  | { ok: true; messageId: string | null }
-  /** `permanent`: Brevo refused this message itself (400) — sending it again cannot help. */
-  | { ok: false; permanent: boolean; error: string }
-
-export type Delivery = 'delivered' | 'bounced' | 'deferred' | null
-
-export interface Mailer {
-  send(message: OutgoingMessage): Promise<SendOutcome>
-  /** What Brevo has recorded for one message: delivered, bounced, still trying, or nothing yet. */
-  delivery(messageId: string): Promise<Delivery>
-}
 
 type Request = (url: string, init: Parameters<typeof requestJson>[1]) => Promise<JsonResponse>
 
@@ -48,11 +29,13 @@ export function createBrevo(options: {
   apiKey: string
   request?: Request
   baseUrl?: string
-}): Mailer {
+}): Mailer & { delivery: NonNullable<Mailer['delivery']> } {
   const { apiKey, request = requestJson, baseUrl = 'https://api.brevo.com/v3' } = options
   const headers = { 'api-key': apiKey }
 
   return {
+    provider: 'brevo',
+
     async send(message) {
       let response: JsonResponse
       try {

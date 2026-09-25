@@ -1,13 +1,18 @@
 import { isReservedAddress, renderNotice } from '@dr/shared'
-import type { Mailer } from './brevo'
+import type { Mailer } from './mailer'
 import type { EmailStore } from './store'
 
 /**
  * Sends the notification emails the database queues (migration 31, PRD
  * E12): claims what is due on this gateway's side, renders each from its
- * versioned template (@dr/shared) and hands it to Brevo. A second, slower
- * loop reads back whether ERRP and security notices were delivered, so a
- * bounced compliance notice becomes an ops alert (FR-NT3).
+ * versioned template (@dr/shared) and hands it to the provider — Brevo or
+ * SES (EMAIL_PROVIDER). Sends are spaced at least `minIntervalMs` apart, so
+ * SES's per-second rate (1 in its sandbox) is never exceeded.
+ *
+ * A second, slower loop reads back from Brevo whether ERRP and security
+ * notices were delivered, so a bounced compliance notice becomes an ops
+ * alert (FR-NT3). SES cannot be asked: it pushes those reports to the web
+ * (migration 34), so with SES that loop does not run.
  *
  * Never logs an address or a message body (N13) — the email's id and kind.
  */
@@ -29,13 +34,20 @@ export type EmailSenderOptions = {
   deliveryEveryMs: number
   log: Log
   batchSize?: number
+  /** The least time between two sends (SES's maximum send rate); 0 sends back to back. */
+  minIntervalMs?: number
   now?: () => Date
+  /** Test seams for the pacing: a millisecond clock and a wait. */
+  clock?: () => number
+  sleep?: (ms: number) => Promise<void>
 }
 
 export type SendRun = { sent: number; failed: number; skipped: number }
 
 /** A notice still "deferred" this long after sending did not arrive: treat it as bounced. */
 const GIVE_UP_AFTER_MS = 3 * 86_400_000
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 export function createEmailSender(options: EmailSenderOptions) {
   const {
@@ -48,8 +60,30 @@ export function createEmailSender(options: EmailSenderOptions) {
     deliveryEveryMs,
     log,
     batchSize = 10,
+    minIntervalMs = 0,
     now = () => new Date(),
+    clock = Date.now,
+    sleep = wait,
   } = options
+
+  let lastSendAt: number | null = null
+
+  /**
+   * Holds a send back until the provider's rate allows it — across runs too.
+   * Measured from the last answer, not the last start: a slow answer must not
+   * let two sends reach SES closer together than its rate.
+   */
+  async function paced<T>(send: () => Promise<T>): Promise<T> {
+    if (lastSendAt !== null && minIntervalMs > 0) {
+      const due = lastSendAt + minIntervalMs - clock()
+      if (due > 0) await sleep(due)
+    }
+    try {
+      return await send()
+    } finally {
+      lastSendAt = clock()
+    }
+  }
 
   async function sendDue(): Promise<SendRun> {
     const run: SendRun = { sent: 0, failed: 0, skipped: 0 }
@@ -76,13 +110,15 @@ export function createEmailSender(options: EmailSenderOptions) {
         continue
       }
       const { notice } = rendered
-      const result = await mailer.send({
-        to: email.toEmail,
-        subject: notice.subject,
-        html: notice.html,
-        text: notice.text,
-        tags: notice.tags,
-      })
+      const result = await paced(() =>
+        mailer.send({
+          to: email.toEmail,
+          subject: notice.subject,
+          html: notice.html,
+          text: notice.text,
+          tags: notice.tags,
+        }),
+      )
       if (result.ok) {
         await store.sent(email.id, workerId, result.messageId, notice.version)
         run.sent += 1
@@ -97,11 +133,14 @@ export function createEmailSender(options: EmailSenderOptions) {
   }
 
   async function checkDeliveries(): Promise<number> {
+    const read = mailer.delivery
+    // SES reports by push (migration 34); nothing to ask.
+    if (!read) return 0
     const due = await store.deliveryDue(50)
     let checked = 0
     for (const email of due) {
       try {
-        let status = await mailer.delivery(email.messageId)
+        let status = await read(email.messageId)
         if (status === 'deferred' && now().getTime() - email.sentAt.getTime() > GIVE_UP_AFTER_MS) {
           status = 'bounced'
         }
@@ -148,17 +187,21 @@ export function createEmailSender(options: EmailSenderOptions) {
   }
 
   const sending = loop('email sending', pollMs, sendDue)
-  const delivery = loop('email delivery check', deliveryEveryMs, checkDeliveries)
+  const delivery = mailer.delivery
+    ? loop('email delivery check', deliveryEveryMs, checkDeliveries)
+    : null
 
   return {
     sendDue,
     checkDeliveries,
+    /** Whether this sender polls the provider for delivery reports (Brevo) or not (SES). */
+    readsDeliveries: delivery !== null,
     start() {
       sending.start()
-      delivery.start()
+      delivery?.start()
     },
     async stop() {
-      await Promise.all([sending.stop(), delivery.stop()])
+      await Promise.all([sending.stop(), delivery?.stop()])
     },
   }
 }
