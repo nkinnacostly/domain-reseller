@@ -2,7 +2,9 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { AuthCard, AuthCardSkeleton } from '@/features/auth/components/auth-card'
+import { GoogleSignIn } from '@/features/auth/components/google-sign-in'
 import { SignUpForm } from '@/features/auth/components/sign-up-form'
+import { googleSignInAvailable } from '@/features/auth/queries/providers'
 import { pageMetadata } from '@/features/seo/lib/metadata'
 
 export const metadata: Metadata = pageMetadata({
@@ -14,6 +16,7 @@ type Params = Promise<{ next?: string }>
 
 async function SignUp({ searchParams }: { searchParams: Params }) {
   const { next } = await searchParams
+  const google = await googleSignInAvailable()
   const signInHref = next ? `/sign-in?next=${encodeURIComponent(next)}` : '/sign-in'
   return (
     <AuthCard
@@ -31,6 +34,7 @@ async function SignUp({ searchParams }: { searchParams: Params }) {
         </>
       }
     >
+      {google ? <GoogleSignIn next={next} /> : null}
       <SignUpForm next={next} />
     </AuthCard>
   )

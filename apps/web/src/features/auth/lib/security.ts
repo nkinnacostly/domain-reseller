@@ -26,15 +26,23 @@ export function resetHoldUntil(passwordResetAt: string | null, now: Date): Date 
   return until > now ? until : null
 }
 
-/** The session was started with the password, not an email link or OAuth. */
-export function startedWithPassword(methods: readonly (AuthMethod | string)[]): boolean {
-  return methods.some((entry) => (typeof entry === 'string' ? entry : entry.method) === 'password')
+/**
+ * The session was started with something only the account holder has — the
+ * password, or their Google account (FR-A1) — not an email link, which is
+ * exactly what someone with access to the inbox holds. Supabase reports
+ * Google as `oauth`.
+ */
+export function startedWithStrongSignIn(methods: readonly (AuthMethod | string)[]): boolean {
+  return methods.some((entry) => {
+    const method = typeof entry === 'string' ? entry : entry.method
+    return method === 'password' || method === 'oauth'
+  })
 }
 
 /** Started from an email link — a recovery or magic-link sign-in. */
 export function startedFromEmailLink(methods: readonly (AuthMethod | string)[]): boolean {
   const names = methods.map((entry) => (typeof entry === 'string' ? entry : entry.method))
-  return names.includes('otp') && !names.includes('password')
+  return names.includes('otp') && !names.includes('password') && !names.includes('oauth')
 }
 
 /** A second factor verified within the step-up window (FR-A3). */

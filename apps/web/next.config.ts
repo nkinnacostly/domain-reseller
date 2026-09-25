@@ -47,7 +47,10 @@ const csp = [
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  // FR-A1: "Continue with Google" is a form whose answer sends the browser to
+  // Supabase Auth, which sends it on to Google — without these, a browser
+  // enforcing form-action on redirects stops it.
+  `form-action 'self' https://${supabase} https://accounts.google.com`,
 ].join('; ')
 
 const nextConfig: NextConfig = {

@@ -178,6 +178,24 @@ reason:
   a change — and corrects or flags them as the hourly reconcile does. Its reads
   wait behind searches and appear in `supplier_calls` as `GetDetails`.
 
+## 5e. Google sign-in (FR-A1)
+
+1. **Google Cloud Console** → new project *MyDomainsHub* → APIs & Services →
+   **OAuth consent screen**: External; app name MyDomainsHub; support email
+   hello@mydomainshub.com; authorised domain `mydomainshub.com`; scopes
+   `email`, `profile`, `openid`; then **Publish app** (basic scopes need no
+   Google review).
+2. **Credentials → Create OAuth client ID → Web application**:
+   - Authorised JavaScript origin: `https://www.mydomainshub.com`
+   - Authorised redirect URI: `https://zorqxevikrismmqxxsyp.supabase.co/auth/v1/callback`
+3. Put the id and secret in the root `.env` as `GOOGLE_OAUTH_CLIENT_ID` and
+   `GOOGLE_OAUTH_CLIENT_SECRET` (they go to Supabase, not Vercel).
+4. `set -a; . ./.env; set +a; supabase config push` — read the diff: it should
+   add only `[auth.external.google]`. From now on every config push needs both
+   variables set.
+5. The button appears on `/sign-in` and `/sign-up` within the hour (the
+   providers read is cached), or at once after a deploy.
+
 ## 5d. Search engines and AI assistants
 
 Built into the site (`apps/web/src/features/seo`), nothing to configure:

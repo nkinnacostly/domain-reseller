@@ -47,6 +47,17 @@ describe('email links sign a device in (SEC-4)', () => {
     expect(noteSignIn).not.toHaveBeenCalled()
   })
 
+  it('sends someone Google turned back to sign-in, keeping where they were going (FR-A1)', async () => {
+    supabase({ data: { user: null }, error: null })
+    const response = await callback.GET(
+      request('/auth/callback?flow=oauth&next=/app/checkout&error=access_denied'),
+    )
+    expect(response.headers.get('location')).toBe(
+      'https://www.mydomainshub.com/sign-in?error=oauth&next=%2Fapp%2Fcheckout',
+    )
+    expect(noteSignIn).not.toHaveBeenCalled()
+  })
+
   it('notes the device when a code is exchanged for a session', async () => {
     supabase({ data: { user: { id: 'user-2' }, session: {} }, error: null })
     await callback.GET(request('/auth/callback?code=c&next=/app/domains'))

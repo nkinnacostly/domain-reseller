@@ -9,7 +9,7 @@ import {
   resetHoldUntil,
   SENSITIVE_CHANGE_NEEDS_TWO_FACTOR,
   startedFromEmailLink,
-  startedWithPassword,
+  startedWithStrongSignIn,
   TWO_FACTOR_REQUIRED_ABOVE_DOMAINS,
   TWO_FACTOR_SETTINGS_HREF,
   twoFactorRequired,
@@ -45,17 +45,24 @@ describe('how the session started', () => {
 
   it('treats a reset or magic-link session as an email-link session', () => {
     expect(startedFromEmailLink([emailLink])).toBe(true)
-    expect(startedWithPassword([emailLink])).toBe(false)
+    expect(startedWithStrongSignIn([emailLink])).toBe(false)
   })
 
   it('treats a password session as one, second factor or not', () => {
-    expect(startedWithPassword([totp, password])).toBe(true)
+    expect(startedWithStrongSignIn([totp, password])).toBe(true)
     expect(startedFromEmailLink([totp, password])).toBe(false)
   })
 
   it('reads the plain-string form some tokens use', () => {
-    expect(startedWithPassword(['password'])).toBe(true)
+    expect(startedWithStrongSignIn(['password'])).toBe(true)
     expect(startedFromEmailLink(['otp'])).toBe(true)
+  })
+
+  it('treats a Google sign-in like the password — only the account holder has it (FR-A1)', () => {
+    const google = { method: 'oauth', timestamp: seconds(NOW) }
+    expect(startedWithStrongSignIn([google])).toBe(true)
+    expect(startedFromEmailLink([google])).toBe(false)
+    expect(startedFromEmailLink(['otp', 'oauth'])).toBe(false)
   })
 })
 

@@ -472,6 +472,23 @@ describe('changePassword', () => {
     expect(client.auth.signOut).not.toHaveBeenCalled()
   })
 
+  it('tells someone who signed up with Google how to create a password (FR-A1)', async () => {
+    const { client } = fake()
+    client.auth.getUser.mockResolvedValueOnce({
+      data: {
+        user: { id: 'user-1', email: 'ada@example.com', app_metadata: { providers: ['google'] } },
+      },
+    } as never)
+    verifier({ code: 'invalid_credentials' })
+
+    const result = await changePassword(input)
+
+    expect(result?.data).toEqual({
+      error: expect.stringMatching(/signed up with Google and never set one/),
+    })
+    expect(client.auth.updateUser).not.toHaveBeenCalled()
+  })
+
   it('passes on other reasons the check failed, such as a rate limit', async () => {
     const { client } = fake()
     verifier({ code: 'over_request_rate_limit' })

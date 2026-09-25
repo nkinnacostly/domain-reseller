@@ -68,11 +68,15 @@ export const changePassword = authAction
       password: parsedInput.current,
     })
     if (wrong) {
+      // FR-A1: an account made with Google has no password until one is set.
+      const google = (ctx.user.app_metadata?.providers as string[] | undefined)?.includes('google')
       return {
         error:
-          wrong.code === 'invalid_credentials'
-            ? "That isn't your current password."
-            : authMessage(wrong.code),
+          wrong.code !== 'invalid_credentials'
+            ? authMessage(wrong.code)
+            : google
+              ? "That isn't your current password. If you signed up with Google and never set one, sign out and use “Forgot your password?” on the sign-in page to create it."
+              : "That isn't your current password.",
       }
     }
     await verifier.auth.signOut({ scope: 'local' })

@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
   // Supabase reports an expired or reused link as `error_code=otp_expired`.
   const expired = url.searchParams.get('error_code') !== null || !code
 
+  // FR-A1: Google sent them back without a code — cancelled, or refused.
+  if (flow === 'oauth') return to(`/sign-in?error=oauth&next=${encodeURIComponent(next)}`)
   if (flow === 'recovery') return to(`/forgot-password?error=${expired ? 'expired' : 'device'}`)
   if (flow === 'signup' && !expired) return to('/sign-in?notice=confirmed')
   return to(`/sign-in?error=${expired ? 'expired' : 'device'}`)

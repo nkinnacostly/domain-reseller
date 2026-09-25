@@ -181,6 +181,16 @@ export const HELP_TOPICS: {
         ),
       },
       {
+        q: 'Can I sign in with Google?',
+        a: (
+          <p>
+            Yes — choose “Continue with Google” when you sign in or create an account. If your
+            Google account uses the same email address as an account you already have here, you are
+            signed in to that account. You can still turn on two-factor authentication here as well.
+          </p>
+        ),
+      },
+      {
         q: 'How do I sign out a device I no longer use?',
         a: (
           <p>

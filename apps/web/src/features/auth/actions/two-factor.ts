@@ -11,7 +11,7 @@ import {
   describeHold,
   hasFreshSecondFactor,
   resetHoldUntil,
-  startedWithPassword,
+  startedWithStrongSignIn,
 } from '../lib/security'
 import { queueAccountNotice } from '../queries/notices'
 import { totpCodeSchema } from '../schemas'
@@ -32,8 +32,8 @@ async function securityChangeBlocked(supabase: Supabase, userId: string): Promis
     supabase.from('profiles').select('password_reset_at').eq('id', userId).single(),
   ])
 
-  if (!startedWithPassword(aal?.currentAuthenticationMethods ?? [])) {
-    return 'Sign in with your password to change two-factor settings. Sessions started from an email link cannot change security settings.'
+  if (!startedWithStrongSignIn(aal?.currentAuthenticationMethods ?? [])) {
+    return 'Sign in with your password or Google to change two-factor settings. Sessions started from an email link cannot change security settings.'
   }
   const hold = resetHoldUntil(profile?.password_reset_at ?? null, new Date())
   return hold ? describeHold(hold) : null

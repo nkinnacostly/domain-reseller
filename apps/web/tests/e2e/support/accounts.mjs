@@ -564,3 +564,13 @@ export async function queuedEmails(userId) {
   if (error) throw new Error(error.message)
   return data ?? []
 }
+
+/** Which sign-in providers the hosted Supabase Auth has on (FR-A1). */
+export async function authProviders() {
+  loadEnv()
+  const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
+    headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '' },
+  })
+  const body = await response.json()
+  return { google: body?.external?.google === true }
+}

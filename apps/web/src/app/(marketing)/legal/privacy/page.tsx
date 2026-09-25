@@ -50,6 +50,10 @@ export default function PrivacyPage() {
             same way.
           </li>
           <li>
+            <strong>If you sign in with Google:</strong> Google tells us your name, email address
+            and profile picture. We keep the name and email address, as for any account.
+          </li>
+          <li>
             <strong>Domain contact details:</strong> name, company, email, phone and postal address
             for each domain’s owner (the registrant), and for its administrative, technical and
             billing contacts where you name someone else. We keep the registrant you use, and any
@@ -144,6 +148,10 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Fly.io</strong> — runs our registration service, in London, United Kingdom.
+          </li>
+          <li>
+            <strong>Google</strong> — only if you choose to sign in with Google: it confirms who you
+            are to us (United States).
           </li>
           <li>
             <strong>Vercel</strong> — hosts this website (United States, with servers worldwide).

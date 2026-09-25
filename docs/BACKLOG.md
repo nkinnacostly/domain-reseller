@@ -48,7 +48,7 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 - **The `.ng` family** (`.ng`, `.com.ng`, `.net.ng`, `.org.ng`) is paused (`tlds.is_paused`). DomainNameAPI charges USD 11.99 flat — 27–171% above market (PRD R17). Route back: a NiRA-accredited source such as Go54 (WHMCS reseller API, naira wallet, no price-list endpoint). Ask them for the reseller price sheet, API key and minimum deposit. Unpause with data, not code.
 
 ### Accounts (PRD E2)
-- **Google sign-in** (FR-A1) — needs Google Cloud OAuth credentials added in Supabase.
+- **Google sign-in** (FR-A1) — built 25 Sept 2026: "Continue with Google" on sign-in and sign-up, shown once Supabase Auth has the provider on. *Owner:* create the OAuth client in Google Cloud and put `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` in `.env`; then `supabase config push` (docs/DEPLOY.md §5e).
 - **Security emails** (SEC-4) — built 24 Sept 2026 (migration 31): a new device, a password or two-factor change, and a domain's nameservers, lock, contacts or transfer code. Still to add: "transfer-out requested" once the supplier tells us about one.
 - **MFA recovery codes** (FR-A2) — `supabase-js` supports them (experimental) but the hosted server returns `mfa_recovery_codes_enroll_not_enabled`, and the CLI cannot enable it. Settings currently advises adding a second device.
 - **Mandatory 2FA** (FR-A2) — above 10 domains built 24 Sept 2026: a notice on every panel page, and new orders and transfers in wait until it is on (renewals never do). The wallet-balance trigger waits for the wallet (FR-W1).
