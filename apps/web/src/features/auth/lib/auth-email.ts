@@ -1,6 +1,6 @@
 import { renderEmail } from '@dr/shared/email'
 import { z } from 'zod'
-import type { OutgoingEmail } from '@/lib/email/brevo'
+import type { OutgoingEmail } from '@/lib/email/types'
 
 /**
  * The emails Supabase Auth asks us to send (its Send Email hook, L1): the

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { authEmailPayloadSchema, planAuthEmail } from '@/features/auth/lib/auth-email'
-import { sendEmail } from '@/lib/email/brevo'
+import { sendEmail } from '@/lib/email/send'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { verifyWebhook } from '@/lib/standard-webhooks'

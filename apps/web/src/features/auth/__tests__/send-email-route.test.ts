@@ -1,10 +1,10 @@
 import { createHmac } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { sendEmail } from '@/lib/email/brevo'
+import { sendEmail } from '@/lib/email/send'
 import { env } from '@/lib/env'
 
-vi.mock('@/lib/email/brevo', () => ({ sendEmail: vi.fn() }))
+vi.mock('@/lib/email/send', () => ({ sendEmail: vi.fn() }))
 
 const { POST } = await import('@/app/api/auth/send-email/route')
 
