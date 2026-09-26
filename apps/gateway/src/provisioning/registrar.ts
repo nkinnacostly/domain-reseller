@@ -330,15 +330,33 @@ export function statusWord(status: unknown): string {
   return /^\d+$/.test(text) ? (STATUS_WORDS[text] ?? text) : text
 }
 
+/**
+ * Nameserver hostnames from a supplier answer, lower-cased. GetDetails sends
+ * plain strings; GetList sends objects — `{ name, isChildnameServer,
+ * isGlueRecord, isLinked }` (seen 26 Sept 2026). Turning those objects into
+ * strings stored "[object object]" as every domain's nameservers, so an entry
+ * that is neither a string nor carries a string `name` is dropped, never
+ * guessed at.
+ */
+export function hostNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const name =
+      typeof entry === 'string'
+        ? entry
+        : entry && typeof entry === 'object'
+          ? (entry as { name?: unknown }).name
+          : undefined
+    return typeof name === 'string' && name.trim() !== '' ? [name.trim().toLowerCase()] : []
+  })
+}
+
 export function toRegistryDomain(sdk: DnaDomain, body: unknown): RegistryDomain {
   const raw = (body ?? {}) as Record<string, unknown>
-  const nameservers = Array.isArray(raw.nameservers)
-    ? raw.nameservers.map(String)
-    : (sdk.NameServers ?? [])
   return {
     registeredAt: supplierDate(raw.startDate, sdk.Dates?.Start),
     expiresAt: supplierDate(raw.expirationDate, sdk.Dates?.Expiration),
-    nameservers: nameservers.map((host) => host.toLowerCase()),
+    nameservers: hostNames(Array.isArray(raw.nameservers) ? raw.nameservers : sdk.NameServers),
     transferLock: sdk.LockStatus === 'true',
     privacy: sdk.PrivacyProtectionStatus === 'true',
     status: statusWord(raw.status ?? sdk.Status),
@@ -372,9 +390,7 @@ export function toListing(item: unknown): RegistryListing | null {
     domainName: raw.domainName.toLowerCase(),
     status: statusWord(status),
     expiresAt: supplierDate(raw.expirationDate),
-    nameservers: Array.isArray(raw.nameservers)
-      ? raw.nameservers.map((host) => String(host).toLowerCase())
-      : [],
+    nameservers: hostNames(raw.nameservers),
     transferLock: raw.lockStatus === true,
     privacy: raw.privacyProtectionStatus === true,
     renewalMode: typeof raw.renewalMode === 'string' ? raw.renewalMode : null,
@@ -756,11 +772,8 @@ export function createDnaRegistrar(deps: {
         deps.client.ModifyNameServer(domainName, nameservers),
       )
       if (verdict.outcome === 'ok') {
-        const applied =
-          result && result.result === 'OK' && Array.isArray(result.data.NameServers)
-            ? result.data.NameServers.map((host) => String(host).toLowerCase())
-            : nameservers
-        return { kind: 'ok', data: applied }
+        const answered = result && result.result === 'OK' ? hostNames(result.data.NameServers) : []
+        return { kind: 'ok', data: answered.length > 0 ? answered : nameservers }
       }
       if (verdict.outcome === 'rejected')
         return { kind: 'rejected', code: verdict.code, message: verdict.message }

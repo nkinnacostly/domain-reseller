@@ -1,5 +1,14 @@
+import { nameserverSchema } from '@dr/shared'
 import { type RegistryListing, transferState } from '../provisioning/registrar'
 import { sameNameservers } from '../provisioning/saga'
+
+/**
+ * Only real hostnames are copied from the registry. A parsing slip once
+ * stored "[object object]" as every domain's nameservers (26 Sept 2026); a
+ * set with anything that is not a hostname is left alone, never recorded.
+ */
+const allHostnames = (hosts: readonly string[]) =>
+  hosts.every((host) => nameserverSchema.safeParse(host).success)
 
 /**
  * Our domains against the registry's listing (PRD §13.5). Pure: the
@@ -175,6 +184,7 @@ export function compareWithRegistry(
     if (
       !held.pendingNameservers &&
       listed.nameservers.length > 0 &&
+      allHostnames(listed.nameservers) &&
       !sameNameservers(listed.nameservers, held.nameservers ?? [])
     ) {
       update.nameservers = listed.nameservers

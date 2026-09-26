@@ -196,6 +196,25 @@ describe('compareWithRegistry (PRD §13.5)', () => {
       })
     })
 
+    it('never copies a set that is not all hostnames', () => {
+      const { updates } = compare(
+        [ours()],
+        [listed({ nameservers: ['[object object]', '[object object]'] })],
+      )
+      expect(updates[0]?.nameservers).toBeUndefined()
+      expect(updates[0]?.events ?? []).not.toContainEqual(
+        expect.objectContaining({ type: 'nameservers_synced' }),
+      )
+    })
+
+    it('repairs a stored "[object object]" set from a real listing', () => {
+      const { updates } = compare(
+        [ours({ nameservers: ['[object object]', '[object object]'] })],
+        [listed()],
+      )
+      expect(updates[0]?.nameservers).toEqual(DEFAULT_NS)
+    })
+
     it('leaves nameservers alone while a change of ours is waiting', () => {
       const { updates } = compare(
         [ours({ pendingNameservers: ['a.test', 'b.test'] })],

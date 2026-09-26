@@ -9,11 +9,14 @@ import {
   classifyRefusal,
   classifySettingRefusal,
   createDnaRegistrar,
+  hostNames,
   judgeExchange,
   sameContact,
   supplierDate,
   toDnaContact,
+  toListing,
   toRegistryContacts,
+  toRegistryDomain,
 } from './registrar'
 
 /**
@@ -840,5 +843,57 @@ describe('contact comparison', () => {
   it('classifies settings refusals', () => {
     expect(classifySettingRefusal('Email address is not valid')).toBe('CONTACT_INVALID')
     expect(classifySettingRefusal('Status prohibits update')).toBe('REGISTRY_REFUSED')
+  })
+})
+
+describe('nameserver names from the supplier (26 Sept 2026: "[object object]")', () => {
+  // GetList's items, exactly as the live API sent them on 26 Sept 2026.
+  const LISTED = [
+    {
+      name: 'ns2.domainnameapi.com',
+      isChildnameServer: false,
+      isGlueRecord: false,
+      isLinked: true,
+    },
+    {
+      name: 'NS1.DomainNameAPI.com',
+      isChildnameServer: false,
+      isGlueRecord: false,
+      isLinked: true,
+    },
+  ]
+
+  it('reads GetList’s objects by their name', () => {
+    expect(hostNames(LISTED)).toEqual(['ns2.domainnameapi.com', 'ns1.domainnameapi.com'])
+  })
+
+  it('reads GetDetails’ plain strings, trimmed and lower-cased', () => {
+    expect(hostNames([' NS1.Example.com ', 'ns2.example.com'])).toEqual([
+      'ns1.example.com',
+      'ns2.example.com',
+    ])
+  })
+
+  it('drops anything that is neither, rather than writing "[object object]"', () => {
+    expect(hostNames([{ host: 'ns1.example.com' }, 42, null, '', { name: 7 }])).toEqual([])
+    expect(hostNames('ns1.example.com')).toEqual([])
+    expect(hostNames(undefined)).toEqual([])
+  })
+
+  it('a portfolio listing carries hostnames, never "[object object]"', () => {
+    const listing = toListing({ domainName: 'GetPaid.com', status: 0, nameservers: LISTED })
+    expect(listing?.nameservers).toEqual(['ns2.domainnameapi.com', 'ns1.domainnameapi.com'])
+  })
+
+  it('a domain record reads either shape, and falls back to the SDK’s list', () => {
+    const sdk = { NameServers: ['NS9.Example.com'] } as never
+    expect(toRegistryDomain(sdk, { nameservers: LISTED }).nameservers).toEqual([
+      'ns2.domainnameapi.com',
+      'ns1.domainnameapi.com',
+    ])
+    expect(toRegistryDomain(sdk, { nameservers: ['a.example.com'] }).nameservers).toEqual([
+      'a.example.com',
+    ])
+    expect(toRegistryDomain(sdk, {}).nameservers).toEqual(['ns9.example.com'])
   })
 })
