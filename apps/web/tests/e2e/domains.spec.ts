@@ -6,6 +6,8 @@ import {
   deleteTestUser,
   enableTotp,
   freshTotpCode,
+  registrarDefault,
+  updateTestDomain,
 } from './support/accounts.mjs'
 
 /**
@@ -24,10 +26,27 @@ async function signIn(page: Page, user: TestUser, next = '/app/domains') {
   await form.getByRole('button', { name: 'Sign in', exact: true }).click()
 }
 
+/** Signs in, then enters the second factor a nameserver change needs (SEC-2). */
+async function signInWithCode(page: Page, user: TestUser, secret: string, next: string) {
+  await signIn(page, user, next)
+  await expect(page).toHaveURL(/\/verify/)
+  const verify = page.getByRole('form', { name: 'Two-factor code' })
+  await verify.getByLabel('6-digit code').fill(await freshTotpCode(secret))
+  await verify.getByRole('button', { name: 'Continue' }).click()
+  await expect(page).toHaveURL(new RegExp(`${next.replaceAll('.', '\\.')}$`))
+}
+
 const axe = (page: Page) =>
   new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze()
+
+/** The nameserver editor and its rows (FR-D1). */
+const nameserverForm = (page: Page) => page.getByRole('form', { name: 'Change nameservers' })
+const nameserverRow = (page: Page, n: number) =>
+  nameserverForm(page).getByRole('textbox', { name: `Nameserver ${n}`, exact: true })
+const nameserverRows = (page: Page) =>
+  nameserverForm(page).getByRole('group', { name: 'Nameservers' }).getByRole('textbox')
 
 test.describe('domains, signed out', () => {
   test('a domain page sends you to sign in', async ({ page }) => {
@@ -286,17 +305,14 @@ test.describe('nameserver change', () => {
     page,
   }) => {
     test.setTimeout(90_000)
-    await signIn(page, user as TestUser, `/app/domains/${name}/nameservers`)
-    await expect(page).toHaveURL(/\/verify/)
-    const verify = page.getByRole('form', { name: 'Two-factor code' })
-    await verify.getByLabel('6-digit code').fill(await freshTotpCode(secret))
-    await verify.getByRole('button', { name: 'Continue' }).click()
-    await expect(page).toHaveURL(
-      new RegExp(`/app/domains/${name.replaceAll('.', '\\.')}/nameservers$`),
-    )
+    await signInWithCode(page, user as TestUser, secret, `/app/domains/${name}/nameservers`)
 
-    const form = page.getByRole('form', { name: 'Change nameservers' })
-    await form.getByLabel('Nameservers').fill('ns1.vercel-dns.com\nns2.vercel-dnss.com')
+    const form = nameserverForm(page)
+    // Typing before hydration would be undone when React takes the rows over.
+    await page.waitForLoadState('networkidle')
+    await expect(nameserverRows(page)).toHaveCount(2)
+    await nameserverRow(page, 1).fill('ns1.vercel-dns.com')
+    await nameserverRow(page, 2).fill('ns2.vercel-dnss.com')
     await form.getByRole('button', { name: 'Save nameservers' }).click()
     await expect(form.getByRole('alert')).toContainText(
       "ns2.vercel-dnss.com doesn't exist — check the spelling",
@@ -305,11 +321,19 @@ test.describe('nameserver change', () => {
       },
     )
 
-    // A preset fills the box from the verified list (FR-D1, FR-D2).
+    // Rows come and go, and the cursor follows (FR-D1).
+    await form.getByRole('button', { name: 'Add row' }).click()
+    await expect(nameserverRows(page)).toHaveCount(3)
+    await expect(nameserverRow(page, 3)).toBeFocused()
+    await form.getByRole('button', { name: 'Remove nameserver 3' }).click()
+    await expect(nameserverRows(page)).toHaveCount(2)
+    await expect(form.getByRole('button', { name: 'Remove nameserver 1' })).toBeDisabled()
+
+    // A preset fills the rows from the verified list (FR-D1, FR-D2).
     await form.getByLabel('Where is your site hosted?').selectOption({ label: 'Vercel' })
-    await expect(form.getByLabel('Nameservers')).toHaveValue(
-      'ns1.vercel-dns.com\nns2.vercel-dns.com',
-    )
+    await expect(nameserverRow(page, 1)).toHaveValue('ns1.vercel-dns.com')
+    await expect(nameserverRow(page, 2)).toHaveValue('ns2.vercel-dns.com')
+    expect((await axe(page)).violations).toEqual([])
     await form.getByRole('button', { name: 'Save nameservers' }).click()
     // A demo domain never reaches a registry, and the panel says so.
     await expect(form.getByRole('status')).toContainText(
@@ -330,5 +354,95 @@ test.describe('nameserver change', () => {
     await expect(page.getByRole('list', { name: 'Activity' })).toContainText(
       'Nameserver change requested: ns1.vercel-dns.com, ns2.vercel-dns.com',
     )
+  })
+
+  test('"Use default DNS" fills in the registrar’s own nameservers, saved like any change (migration 35)', async ({
+    page,
+  }) => {
+    // The pair lives in the database (N11), so this runs once migration 35 is there.
+    const preset = await registrarDefault('live')
+    test.skip(!preset, 'migration 35 is not on this database yet')
+    if (!preset) return
+    test.setTimeout(90_000)
+    await signInWithCode(page, user as TestUser, secret, `/app/domains/${name}/nameservers`)
+
+    const form = nameserverForm(page)
+    const hostedAt = form.getByLabel('Where is your site hosted?')
+    await page.waitForLoadState('networkidle')
+    await form.getByRole('button', { name: 'Use default DNS' }).click()
+    await expect(nameserverRows(page)).toHaveCount(preset.nameservers.length)
+    for (const [index, host] of preset.nameservers.entries()) {
+      await expect(nameserverRow(page, index + 1)).toHaveValue(host)
+    }
+    await expect(hostedAt).toHaveValue(preset.id)
+    expect((await axe(page)).violations).toEqual([])
+
+    await form.getByRole('button', { name: 'Save nameservers' }).click()
+    await expect(form.getByRole('status')).toContainText(
+      'Saved. This is a demo domain, so nothing is sent to a registry.',
+      { timeout: 20_000 },
+    )
+    await page.reload()
+    await expect(
+      page.getByText(`Requested: ${preset.nameservers.join(', ')}. Nothing is sent to a registry.`),
+    ).toBeVisible()
+    // The domain now shows as on the registrar's default, not at a host.
+    await expect(nameserverForm(page).getByLabel('Where is your site hosted?')).toHaveValue(
+      preset.id,
+    )
+  })
+})
+
+test.describe('nameserver rows on a phone (S5, S6, S7, S3)', () => {
+  let user: TestUser | undefined
+  let name: string
+  let secret: string
+
+  test.beforeEach(async () => {
+    // One phone profile: the layout changed, and sign-ins are rate-limited.
+    test.skip(test.info().project.name !== 'mobile-android', 'sign-in rate limits')
+    user = await createTestUser('ns-phone', { fullName: 'Ada Okafor' })
+    const domain = await createDemoDomain(user.id, { expiresInDays: 90 })
+    name = domain.name
+    // Three long hostnames: the widest a common host hands out.
+    await updateTestDomain(domain.id, {
+      nameservers: ['ns1.cloudoon.com', 'ns2.cloudoon.net', 'ns3.cloudoon.org'],
+    })
+    secret = await enableTotp(user)
+  })
+  test.afterEach(async () => {
+    if (user) await deleteTestUser(user.id)
+  })
+
+  test('the rows fit 320px with thumb-sized controls, in both themes', async ({ page }) => {
+    test.setTimeout(90_000)
+    await signInWithCode(page, user as TestUser, secret, `/app/domains/${name}/nameservers`)
+    await page.waitForLoadState('networkidle')
+
+    for (const theme of ['light', 'dark'] as const) {
+      await page.evaluate((value) => localStorage.setItem('theme', value), theme)
+      await page.setViewportSize({ width: 320, height: 900 })
+      await page.goto(`/app/domains/${name}/nameservers`)
+      await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /^(?!.*dark)/)
+      await expect(nameserverRows(page)).toHaveCount(3)
+      await expect(nameserverRow(page, 3)).toHaveValue('ns3.cloudoon.org')
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow).toBeLessThanOrEqual(1)
+      const form = nameserverForm(page)
+      for (const control of [
+        form.getByRole('button', { name: 'Remove nameserver 1' }),
+        form.getByRole('button', { name: 'Add row' }),
+        form.getByRole('button', { name: 'Save nameservers' }),
+        nameserverRow(page, 1),
+      ]) {
+        const box = await control.boundingBox()
+        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
+        expect(box?.width ?? 0).toBeGreaterThanOrEqual(44)
+      }
+      expect((await axe(page)).violations).toEqual([])
+    }
   })
 })

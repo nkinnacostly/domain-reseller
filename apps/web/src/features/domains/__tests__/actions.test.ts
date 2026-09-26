@@ -19,6 +19,7 @@ function userClient({
   freshCode = true,
   status = 'active',
   source = 'registration',
+  testMode = false,
   pending = null as string[] | null,
 } = {}) {
   const domain = owns
@@ -26,6 +27,7 @@ function userClient({
         id: DOMAIN_ID,
         domain_name: 'getpaid.com',
         source,
+        test_mode: testMode,
         local_status: status,
         nameservers: null,
         pending_nameservers: pending,
@@ -62,10 +64,34 @@ let writes: { table: string; op: string; row: unknown }[]
 let queueError: { message: string } | null
 const VERCEL = '6c4f1a2e-3b5d-4e7f-8a9b-0c1d2e3f4a5b'
 const HIDDEN = '7d5a2b3f-4c6e-4f80-9bac-1d2e3f4a5b6c'
-/** The host presets the action may be sent — one visible, one hidden. */
-const PRESETS: Record<string, { id: string; is_hidden: boolean; verified_at: string | null }> = {
+const LIVE_DEFAULT = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
+const SANDBOX_DEFAULT = '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e'
+type PresetRow = {
+  id: string
+  is_hidden: boolean
+  verified_at: string | null
+  registrar_default_for?: string | null
+}
+/**
+ * The presets the action may be sent — a visible host (read as a database
+ * without migration 35's column returns it), a hidden one, and the
+ * registrar's default on each side.
+ */
+const PRESETS: Record<string, PresetRow> = {
   [VERCEL]: { id: VERCEL, is_hidden: false, verified_at: '2026-09-23T00:00:00Z' },
   [HIDDEN]: { id: HIDDEN, is_hidden: true, verified_at: '2026-09-23T00:00:00Z' },
+  [LIVE_DEFAULT]: {
+    id: LIVE_DEFAULT,
+    is_hidden: false,
+    verified_at: '2026-09-26T00:00:00Z',
+    registrar_default_for: 'live',
+  },
+  [SANDBOX_DEFAULT]: {
+    id: SANDBOX_DEFAULT,
+    is_hidden: false,
+    verified_at: '2026-09-26T00:00:00Z',
+    registrar_default_for: 'sandbox',
+  },
 }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -178,6 +204,34 @@ describe('requestNameservers (FR-D1, FR-D4, SEC-2)', () => {
       op: 'update',
       row: {
         pending_nameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+        nameserver_preset_id: stored,
+      },
+    })
+  })
+
+  it.each([
+    ['keeps the live default ("Use default DNS") on a live domain', LIVE_DEFAULT, {}, LIVE_DEFAULT],
+    [
+      'keeps the sandbox default on a test-mode domain',
+      SANDBOX_DEFAULT,
+      { testMode: true },
+      SANDBOX_DEFAULT,
+    ],
+    ['keeps the live default on a demo domain', LIVE_DEFAULT, { source: 'demo' }, LIVE_DEFAULT],
+    ['drops the sandbox default on a live domain', SANDBOX_DEFAULT, {}, null],
+    ['drops the live default on a test-mode domain', LIVE_DEFAULT, { testMode: true }, null],
+  ])('%s (migration 35)', async (_case, presetId, domain, stored) => {
+    userClient(domain)
+    await requestNameservers({
+      domainId: DOMAIN_ID,
+      nameservers: 'ns1.registrar.test\nns2.registrar.test',
+      presetId,
+    })
+    expect(writes[0]).toEqual({
+      table: 'domains',
+      op: 'update',
+      row: {
+        pending_nameservers: ['ns1.registrar.test', 'ns2.registrar.test'],
         nameserver_preset_id: stored,
       },
     })

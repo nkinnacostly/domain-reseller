@@ -14,11 +14,13 @@ import { NameserverForm } from '@/features/domains/components/nameserver-form'
 import { NameserverHistory } from '@/features/domains/components/nameserver-history'
 import { RevertNameservers } from '@/features/domains/components/revert-nameservers'
 import { revertTarget } from '@/features/domains/lib/nameserver-history'
+import { type RegistrarSide, registrarSide } from '@/features/domains/lib/registrar-default'
 import { nameserverNote } from '@/features/domains/lib/registration'
 import {
   getDomain,
   getNameserverHistory,
   getNameserverPresets,
+  getRegistrarDefault,
 } from '@/features/domains/queries/domains'
 
 export const metadata: Metadata = { title: 'Nameservers' }
@@ -62,6 +64,7 @@ async function Nameservers({ params }: { params: Params }) {
                 current={requested}
                 currentPresetId={domain.presetId}
                 presets={presets}
+                side={registrarSide(domain)}
                 hasTwoFactor={hasTwoFactor}
               />
             </Suspense>
@@ -101,8 +104,8 @@ async function Nameservers({ params }: { params: Params }) {
             What the internet sees
           </h2>
           <p className="mt-1.5 text-pretty text-sm/6 text-muted-foreground">
-            Checked live with three public resolvers. After a change, each catches up within a few
-            hours as its cached answer expires.
+            Checked live with three public resolvers. After a change, each usually catches up within
+            a few hours as its cached answer expires; some keep the old answer for up to 48 hours.
           </p>
           <div className="mt-4">
             <Suspense fallback={<DnsSkeleton />}>
@@ -141,11 +144,24 @@ async function History({ domainId }: { domainId: string }) {
   return <NameserverHistory entries={entries} />
 }
 
-async function NameserverFormWithRecords(
-  props: Omit<Parameters<typeof NameserverForm>[0], 'currentRecords'>,
-) {
-  const currentRecords = await currentRecordSummary(props.domain)
-  return <NameserverForm {...props} currentRecords={currentRecords} />
+/** The live records (FR-N6) and the side's registrar default (migration 35), read together. */
+async function NameserverFormWithRecords({
+  side,
+  ...props
+}: Omit<Parameters<typeof NameserverForm>[0], 'currentRecords' | 'registrarDefault'> & {
+  side: RegistrarSide
+}) {
+  const [currentRecords, registrarDefault] = await Promise.all([
+    currentRecordSummary(props.domain),
+    getRegistrarDefault(side),
+  ])
+  return (
+    <NameserverForm
+      {...props}
+      currentRecords={currentRecords}
+      registrarDefault={registrarDefault}
+    />
+  )
 }
 
 export default function NameserversPage({ params }: { params: Params }) {

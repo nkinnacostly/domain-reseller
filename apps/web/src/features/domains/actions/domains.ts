@@ -8,6 +8,7 @@ import { authAction, elevatedAction } from '@/lib/safe-action'
 import type { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { judgeNameservers, sameNameservers } from '../lib/nameserver-check'
+import { type RegistrarSide, registrarSide } from '../lib/registrar-default'
 import { lookupHost } from '../queries/dns'
 
 /**
@@ -22,7 +23,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>
 async function ownedDomain(supabase: Supabase, domainId: string) {
   const { data } = await supabase
     .from('domains')
-    .select('id, domain_name, source, local_status, nameservers, pending_nameservers')
+    .select('id, domain_name, source, test_mode, local_status, nameservers, pending_nameservers')
     .eq('id', domainId)
     .maybeSingle()
   return data
@@ -127,9 +128,14 @@ export const requestNameservers = elevatedAction
       }
 
       // N11: the host label is kept only for a preset customers can see — never
-      // a hidden or unverified one the browser sent.
+      // a hidden or unverified one the browser sent — or for the registrar's
+      // default on this domain's own side ("Use default DNS", migration 35).
       const presetId = parsedInput.presetId
-        ? await visiblePresetId(service, parsedInput.presetId)
+        ? await visiblePresetId(
+            service,
+            parsedInput.presetId,
+            registrarSide({ source: domain.source, testMode: domain.test_mode }),
+          )
         : null
       const { error } = await service
         .from('domains')
@@ -154,14 +160,22 @@ export const requestNameservers = elevatedAction
     },
   )
 
+/**
+ * The preset id worth keeping as the domain's host label. Every column is
+ * read so a database without migration 35's column yet still keeps host
+ * labels: there, no row is a registrar default.
+ */
 async function visiblePresetId(
   service: ReturnType<typeof createServiceClient>,
   presetId: string,
+  side: RegistrarSide,
 ): Promise<string | null> {
   const { data } = await service
     .from('nameserver_presets')
-    .select('id, is_hidden, verified_at')
+    .select('*')
     .eq('id', presetId)
     .maybeSingle()
-  return data && !data.is_hidden && data.verified_at ? data.id : null
+  if (!data || data.is_hidden || !data.verified_at) return null
+  const defaultFor = data.registrar_default_for ?? null
+  return defaultFor === null || defaultFor === side ? data.id : null
 }

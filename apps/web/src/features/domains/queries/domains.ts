@@ -3,11 +3,13 @@ import 'server-only'
 import type { DelegationStatus, LocalStatus } from '@dr/shared'
 import { cacheLife, cacheTag } from 'next/cache'
 import { cache } from 'react'
+import { logger } from '@/lib/logger'
 import { createPublicClient } from '@/lib/supabase/public'
 import { createClient } from '@/lib/supabase/server'
 import { sortLabels, toLabel } from '../lib/labels'
 import { attributeHistory, type HistoryEntry } from '../lib/nameserver-history'
 import type { PortfolioDomain } from '../lib/portfolio'
+import type { RegistrarSide } from '../lib/registrar-default'
 
 /** Domains are read as the user — RLS returns only their own (migration 12). */
 
@@ -137,23 +139,76 @@ export type NameserverPreset = {
   sourceUrl: string
 }
 
-/** FR-D2 — verified presets only (RLS hides the rest). Same for everyone, so cached. */
-export async function getNameserverPresets(): Promise<NameserverPreset[]> {
-  'use cache'
-  cacheTag('nameserver-presets')
-  cacheLife('hours')
-  const { data } = await createPublicClient()
-    .from('nameserver_presets')
-    .select('id, provider, nameservers, assigns_per_zone, notes, source_url')
-    .order('provider')
-  return (data ?? []).map((row) => ({
+type PresetRow = {
+  id: string
+  provider: string
+  nameservers: string[]
+  assigns_per_zone: boolean
+  notes: string | null
+  source_url: string
+}
+
+function toPreset(row: PresetRow): NameserverPreset {
+  return {
     id: row.id,
     provider: row.provider,
     nameservers: row.nameservers,
     assignsPerZone: row.assigns_per_zone,
     notes: row.notes,
     sourceUrl: row.source_url,
-  }))
+  }
+}
+
+/**
+ * FR-D2 — the hosts customers pick from: verified presets only (RLS hides the
+ * rest), and never the registrar's own default (migration 35), which is not a
+ * host. Same for everyone, so cached.
+ *
+ * The defaults are left out here rather than in the query so the list keeps
+ * working on a database without that column yet: a web deploy ahead of the
+ * migration must not empty every host picker.
+ */
+export async function getNameserverPresets(): Promise<NameserverPreset[]> {
+  'use cache'
+  cacheTag('nameserver-presets')
+  cacheLife('hours')
+  const { data } = await createPublicClient()
+    .from('nameserver_presets')
+    .select('*')
+    .order('provider')
+  return (data ?? []).filter((row) => !row.registrar_default_for).map(toPreset)
+}
+
+/**
+ * The registrar's default nameservers on one side (migration 35) — what "Use
+ * default DNS" fills in. Null when there is none to offer or it could not be
+ * read: the form then leaves the button out rather than failing the page.
+ */
+export async function getRegistrarDefault(side: RegistrarSide): Promise<NameserverPreset | null> {
+  try {
+    return await loadRegistrarDefault(side)
+  } catch (err) {
+    logger.warn(
+      { side, err: err instanceof Error ? err.message : String(err) },
+      'registrar default nameservers unavailable',
+    )
+    return null
+  }
+}
+
+/** The cached read. Throws on a failed query, so a failure is never cached as "none". */
+export async function loadRegistrarDefault(side: RegistrarSide): Promise<NameserverPreset | null> {
+  'use cache'
+  cacheTag('nameserver-presets')
+  cacheLife('hours')
+  const { data, error } = await createPublicClient()
+    .from('nameserver_presets')
+    .select('id, provider, nameservers, assigns_per_zone, notes, source_url')
+    .eq('registrar_default_for', side)
+    .maybeSingle()
+  if (error) throw new Error(`nameserver_presets: ${error.message}`)
+  // Migration 35 holds a default to a fixed set; anything else has nothing to fill in.
+  return data && !data.assigns_per_zone && data.nameservers.length > 0 ? toPreset(data) : null
 }
 
 /** Events that say where a nameserver change came from (FR-N5). */
