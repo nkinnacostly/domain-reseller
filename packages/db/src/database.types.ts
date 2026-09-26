@@ -951,6 +951,7 @@ export type Database = {
           nameservers: string[]
           notes: string | null
           provider: string
+          registrar_default_for: string | null
           source_url: string
           updated_at: string
           verified_at: string | null
@@ -967,6 +968,7 @@ export type Database = {
           nameservers?: string[]
           notes?: string | null
           provider: string
+          registrar_default_for?: string | null
           source_url: string
           updated_at?: string
           verified_at?: string | null
@@ -983,6 +985,7 @@ export type Database = {
           nameservers?: string[]
           notes?: string | null
           provider?: string
+          registrar_default_for?: string | null
           source_url?: string
           updated_at?: string
           verified_at?: string | null
