@@ -1924,6 +1924,7 @@ export type Database = {
         Args: { p_by: string; p_refund_id: string }
         Returns: undefined
       }
+      are_hostnames: { Args: { p_hosts: string[] }; Returns: boolean }
       begin_reconcile: {
         Args: { p_min_interval_seconds: number; p_test_mode: boolean }
         Returns: string

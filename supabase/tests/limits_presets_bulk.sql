@@ -173,7 +173,8 @@ begin
      or (select count(*) from public.domain_nameserver_history where domain_id = v_live) <> 1 then
     raise exception 'FAILED 6: history of the synced change';
   end if;
-  update public.domains set nameservers = array['NS2.NEW.TEST', 'ns1.new.test'] where id = v_live;
+  -- Reordered only (migration 36 keeps every stored name lower-case, so case cannot differ).
+  update public.domains set nameservers = array['ns2.new.test', 'ns1.new.test'] where id = v_live;
   if (select count(*) from public.domain_nameserver_history where domain_id = v_live) <> 1 then
     raise exception 'FAILED 6: the same set reordered counted as a change';
   end if;

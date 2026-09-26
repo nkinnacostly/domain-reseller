@@ -692,8 +692,14 @@ describe.skipIf(!enabled)('refunds and alerts against the database', { timeout: 
   it('reports how many domains an account ordered today, against its cap (SEC-11)', async () => {
     const user = await makeUser('velocity')
     await makeOrder(user.id, [1_830_000, 1_830_000], 'vel')
-    const { data } = await db.rpc('account_domain_allowance', { p_user_id: user.id })
+    // Each side keeps its own count (migration 32): these are test orders.
+    const { data } = await db.rpc('account_domain_allowance', {
+      p_user_id: user.id,
+      p_test_mode: true,
+    })
     expect(data).toMatchObject({ ordered: 2 })
     expect((data as { max: number }).max).toBeGreaterThan(0)
+    const { data: live } = await db.rpc('account_domain_allowance', { p_user_id: user.id })
+    expect(live).toMatchObject({ ordered: 0 })
   })
 })
