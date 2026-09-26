@@ -267,6 +267,11 @@ reason:
   day of failures it is hidden from customers and `preset_hidden` is
   critical; it comes back by itself once it resolves. A preset you hid stays
   hidden. When the resolvers do not answer at all, nothing is recorded.
+  The registrar's default nameservers (migration 35, the rows named
+  "Registrar default (live)" and "(sandbox)") are checked the same way; while
+  one is hidden, the Nameservers tab offers no "Use default DNS" on that side.
+  Push migration 35 before deploying the web that reads it — until then the
+  tab offers no default and the web logs the missing column on each view.
 - **Deep sync (§13.5)**, on whichever side writes are on: every
   `DEEP_SYNC_EVERY_MINUTES` (default 60, at least 15) the gateway reads 25
   domains with GetDetails — least recently read first, and again soon after
@@ -407,7 +412,7 @@ open to the service key, on purpose):
 | Transfer of … needs a person (`TRANSFER_OVERDUE`) | A transfer the registry accepted has not landed or been refused in 10 days | Check the domain at DomainNameAPI. Landed: ask Claude to record it. Refused or stuck: ask the customer, then `fail_job` or `retry_job` with Claude. |
 | Transfer lock / privacy / contact change of … needs a person | The registry's answer to a settings change could not be read after several tries | Read the domain at DomainNameAPI; `select retry_job('<job id>');` once it answers. The customer's newest request stays pending until then. |
 | Contact change of … needs a person (`CONTACTS_NOT_VISIBLE`) | The registry accepted new contacts but does not show them. In the sandbox this always happens; on live it is unconfirmed | Look at the domain's contacts in the DomainNameAPI panel. Showing the new ones: `select retry_job('<job id>');` records them. Not showing: ask DomainNameAPI why SaveContacts did not apply, then retry. |
-| Host preset … is not resolving / is hidden | Its nameservers stopped resolving in public DNS (FR-D2); after a day it is hidden from customers | Read the provider's own documentation. Changed: update the preset's nameservers and `verified_at` in the table editor — it is checked again within 6 hours and shown once it passes. Gone: leave it hidden. |
+| Host preset … is not resolving / is hidden | Its nameservers stopped resolving in public DNS (FR-D2); after a day it is hidden from customers | Read the provider's own documentation. Changed: update the preset's nameservers and `verified_at` in the table editor — it is checked again within 6 hours and shown once it passes. Gone: leave it hidden. A *Registrar default* row has no documentation page: read a domain freshly registered on the defaults from its registry's RDAP (live), or ask the supplier's support (sandbox). |
 | Host preset … was last verified … | 90 days since it was checked against the provider's documentation | Check it again; update `verified_at`, and the nameservers if they changed. |
 | A compliance / security email … has no delivery report (`email_unconfirmed`) | Sent over a day ago, and neither delivered nor bounced has come back — from Brevo's read-back or SES's events (migration 34). It is not counted as delivered | Brevo: look the message up under Transactional → Logs. SES keeps no per-message log of its own: check the SNS subscription is still *Confirmed* and Vercel's log shows `SES events` lines arriving. For an ERRP notice you cannot confirm, reach the registrant another way. |
 | A … email … was reported as spam (`email_complaint`) | The recipient marked it as spam; SES has put the address on the account's suppression list | Nothing to send. If it was a mistake the customer can ask; remove the address from the suppression list in SES only then. Several in a week: look at what we send. |

@@ -70,11 +70,18 @@ export const nameserverSchema = z
     'That does not look like a valid nameserver hostname',
   )
 
-/** Registries accept between 2 and 13 nameservers. Duplicates are rejected. */
+/**
+ * Registries accept between 2 and 13 nameservers, and so does the database
+ * (`domains.pending_nameservers`). Forms size themselves from these.
+ */
+export const NAMESERVERS_MIN = 2
+export const NAMESERVERS_MAX = 13
+
+/** A nameserver set, within the registry's bounds. Duplicates are rejected. */
 export const nameserverSetSchema = z
   .array(nameserverSchema)
-  .min(2, 'At least two nameservers are required')
-  .max(13, 'No more than 13 nameservers')
+  .min(NAMESERVERS_MIN, 'At least two nameservers are required')
+  .max(NAMESERVERS_MAX, `No more than ${NAMESERVERS_MAX} nameservers`)
   .refine((list) => new Set(list).size === list.length, 'Remove the duplicate nameserver')
 
 export const searchQuerySchema = z.object({

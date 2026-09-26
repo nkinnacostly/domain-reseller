@@ -7,22 +7,34 @@ vi.mock('@/lib/supabase/public', () => ({ createPublicClient: vi.fn() }))
 const { createClient } = await import('@/lib/supabase/server')
 const { createPublicClient } = await import('@/lib/supabase/public')
 const { cacheLife, cacheTag } = await import('next/cache')
-const { getDomain, getDomainEvents, getNameserverPresets, getPortfolio, getRecentActivity } =
-  await import('../queries/domains')
+const {
+  getDomain,
+  getDomainEvents,
+  getNameserverPresets,
+  getPortfolio,
+  getRecentActivity,
+  getRegistrarDefault,
+} = await import('../queries/domains')
 
 type Call = [method: string, ...args: unknown[]]
 
 /**
  * A stand-in for the Supabase query builder: every chained call is recorded
- * and returns the same thenable, which resolves to `{ data }` for the table.
+ * and returns the same thenable, which resolves to `{ data }` for the table —
+ * or `{ error }` for a table named in `errors`.
  */
-function supabase(tables: Record<string, unknown>) {
+function supabase(tables: Record<string, unknown>, errors: Record<string, string> = {}) {
   const calls: Record<string, Call[]> = {}
   const from = vi.fn((table: string) => {
     const log: Call[] = []
     calls[table] = log
+    const failure = errors[table]
     const query: Record<string, unknown> = Object.assign(
-      Promise.resolve({ data: tables[table] ?? null, error: null }),
+      Promise.resolve(
+        failure
+          ? { data: null, error: { message: failure } }
+          : { data: tables[table] ?? null, error: null },
+      ),
       Object.fromEntries(
         ['select', 'eq', 'order', 'limit', 'maybeSingle'].map((method) => [
           method,
@@ -247,5 +259,85 @@ describe('getNameserverPresets (FR-D2)', () => {
       supabase({ nameserver_presets: null }).client as never,
     )
     expect(await getNameserverPresets()).toEqual([])
+  })
+
+  it('never lists the registrar’s own defaults as hosts (migration 35)', async () => {
+    const preset = (provider: string, registrarDefaultFor: string | null) => ({
+      id: `preset-${provider}`,
+      provider,
+      nameservers: ['ns1.example.test', 'ns2.example.test'],
+      assigns_per_zone: false,
+      notes: null,
+      source_url: 'https://example.test/docs',
+      registrar_default_for: registrarDefaultFor,
+    })
+    const fake = supabase({
+      nameserver_presets: [
+        preset('Hostinger', null),
+        preset('Registrar default (live)', 'live'),
+        preset('Registrar default (sandbox)', 'sandbox'),
+        preset('Vercel', null),
+      ],
+    })
+    vi.mocked(createPublicClient).mockReturnValue(fake.client as never)
+
+    expect((await getNameserverPresets()).map((host) => host.provider)).toEqual([
+      'Hostinger',
+      'Vercel',
+    ])
+    // Every column, so a database without the new one still lists its hosts.
+    expect(fake.calls.nameserver_presets).toContainEqual(['select', '*'])
+  })
+})
+
+describe('getRegistrarDefault (migration 35)', () => {
+  const DEFAULT = {
+    id: 'preset-default',
+    provider: 'Registrar default (sandbox)',
+    nameservers: ['tr.example.test', 'eu.example.test'],
+    assigns_per_zone: false,
+    notes: 'Not a host.',
+    source_url: 'https://example.test',
+  }
+
+  it('reads the default for the domain’s side through the cookie-free client, cached', async () => {
+    const fake = supabase({ nameserver_presets: DEFAULT })
+    vi.mocked(createPublicClient).mockReturnValue(fake.client as never)
+
+    expect(await getRegistrarDefault('sandbox')).toEqual({
+      id: 'preset-default',
+      provider: 'Registrar default (sandbox)',
+      nameservers: ['tr.example.test', 'eu.example.test'],
+      assignsPerZone: false,
+      notes: 'Not a host.',
+      sourceUrl: 'https://example.test',
+    })
+    expect(fake.calls.nameserver_presets).toContainEqual(['eq', 'registrar_default_for', 'sandbox'])
+    expect(fake.calls.nameserver_presets).toContainEqual(['maybeSingle'])
+    expect(createClient).not.toHaveBeenCalled()
+    expect(cacheTag).toHaveBeenCalledWith('nameserver-presets')
+    expect(cacheLife).toHaveBeenCalledWith('hours')
+  })
+
+  it('has none to offer when the side has no default, hidden or never added', async () => {
+    vi.mocked(createPublicClient).mockReturnValue(
+      supabase({ nameserver_presets: null }).client as never,
+    )
+    expect(await getRegistrarDefault('live')).toBeNull()
+  })
+
+  it('has none to offer, rather than failing the page, when it cannot be read', async () => {
+    vi.mocked(createPublicClient).mockReturnValue(
+      supabase({}, { nameserver_presets: 'column does not exist' }).client as never,
+    )
+    expect(await getRegistrarDefault('live')).toBeNull()
+  })
+
+  it('offers nothing for a row with no fixed set to fill in', async () => {
+    vi.mocked(createPublicClient).mockReturnValue(
+      supabase({ nameserver_presets: { ...DEFAULT, nameservers: [], assigns_per_zone: true } })
+        .client as never,
+    )
+    expect(await getRegistrarDefault('sandbox')).toBeNull()
   })
 })

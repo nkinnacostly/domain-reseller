@@ -465,6 +465,24 @@ export async function updateTestDomain(domainId, fields) {
   if (error) throw error
 }
 
+/**
+ * The registrar's default nameservers on one side, as the table holds them
+ * (migration 35) — null while that migration is not on the database, so the
+ * test that needs them skips and says why.
+ *
+ * @param {'live' | 'sandbox'} side
+ * @returns {Promise<{ id: string, nameservers: string[] } | null>}
+ */
+export async function registrarDefault(side) {
+  const { data, error } = await admin()
+    .from('nameserver_presets')
+    .select('id, nameservers')
+    .eq('registrar_default_for', side)
+    .eq('is_hidden', false)
+    .maybeSingle()
+  return error || !data ? null : data
+}
+
 /** A JSON value with its keys in a fixed order, so two contacts compare by content. */
 const canonical = (value) =>
   value && typeof value === 'object' && !Array.isArray(value)

@@ -138,8 +138,8 @@ export const HELP_TOPICS: {
             </p>
             <p>
               The registry usually applies the change within a minute. Other networks catch up as
-              their cached answers expire, which can take a few hours. The tab shows what public DNS
-              services currently see.
+              their cached answers expire, which usually takes a few hours; some keep the old
+              nameservers for up to 48 hours. The tab shows what public DNS services currently see.
             </p>
           </>
         ),

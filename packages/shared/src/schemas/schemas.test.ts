@@ -5,6 +5,8 @@ import {
   countryCode,
   domainNameSchema,
   domainStemSchema,
+  NAMESERVERS_MAX,
+  NAMESERVERS_MIN,
   nameserverSchema,
   nameserverSetSchema,
 } from './index'
@@ -84,6 +86,15 @@ describe('nameserverSetSchema', () => {
   it('rejects more than 13', () => {
     const many = Array.from({ length: 14 }, (_, i) => `ns${i}.example.com`)
     expect(nameserverSetSchema.safeParse(many).success).toBe(false)
+  })
+
+  it('publishes the bounds it enforces, for forms to size themselves by', () => {
+    const set = (length: number) => Array.from({ length }, (_, i) => `ns${i}.example.com`)
+    expect([NAMESERVERS_MIN, NAMESERVERS_MAX]).toEqual([2, 13])
+    expect(nameserverSetSchema.safeParse(set(NAMESERVERS_MIN)).success).toBe(true)
+    expect(nameserverSetSchema.safeParse(set(NAMESERVERS_MAX)).success).toBe(true)
+    expect(nameserverSetSchema.safeParse(set(NAMESERVERS_MIN - 1)).success).toBe(false)
+    expect(nameserverSetSchema.safeParse(set(NAMESERVERS_MAX + 1)).success).toBe(false)
   })
 })
 
