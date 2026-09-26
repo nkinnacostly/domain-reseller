@@ -50,14 +50,19 @@ describe('judgeDelegation', () => {
     expect(judge([answered('Cloudflare', []), answered('Google', [])])).toBe('failed')
   })
 
-  it('waits a day after a change before calling it failed: resolvers still hold the old delegation', () => {
+  it('waits two days after a change before calling it failed: .com delegations live 48 hours', () => {
+    expect(FAILURE_GRACE_MS).toBe(48 * 3_600_000)
     const justChanged = new Date(NOW.getTime() - 2 * 3_600_000)
     expect(
       judge([answered('Cloudflare', OLD), answered('Google', OLD)], { changedAt: justChanged }),
     ).toBe('pending')
-    const aDayAgo = new Date(NOW.getTime() - FAILURE_GRACE_MS)
+    const thirtyHoursAgo = new Date(NOW.getTime() - 30 * 3_600_000)
     expect(
-      judge([answered('Cloudflare', OLD), answered('Google', OLD)], { changedAt: aDayAgo }),
+      judge([answered('Cloudflare', OLD), answered('Google', OLD)], { changedAt: thirtyHoursAgo }),
+    ).toBe('pending')
+    const twoDaysAgo = new Date(NOW.getTime() - FAILURE_GRACE_MS)
+    expect(
+      judge([answered('Cloudflare', OLD), answered('Google', OLD)], { changedAt: twoDaysAgo }),
     ).toBe('failed')
   })
 

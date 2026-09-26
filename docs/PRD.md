@@ -817,7 +817,7 @@ Before calling `ModifyNameServer`: syntax check, confirm each nameserver resolve
 
 **FR-D5 — Delegation verification.**
 After the change, poll the TLD's authoritative servers until the new delegation appears, then confirm the new nameservers answer authoritatively for the domain. Show progress honestly: *"Registry updated ✓ · Waiting for your host's nameservers to respond…"*. Email on success.
-*Given delegation has not verified after 24 hours; Then surface a diagnostic with likely causes and a support route.*
+*Given delegation has not verified after 48 hours; Then surface a diagnostic with likely causes and a support route.* (48, not 24, since 26 Sept 2026: .com publishes delegations with a 48-hour TTL, so a resolver can show the old nameservers that long.)
 
 **FR-D6 — Propagation check.** Query several public resolvers and report what each currently sees, with a plain-language TTL explanation. Available any time, not only after a change.
 

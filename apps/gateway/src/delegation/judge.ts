@@ -8,9 +8,10 @@ import type { ResolverView } from './resolvers'
  * - Every resolver sees our nameservers → `verified`.
  * - Every resolver gives the same other answer — other nameservers, no such
  *   domain, or no answer from the nameservers themselves → `failed`. But not
- *   within a day of the nameservers changing: resolvers keep the old
- *   delegation for hours after a change, and FR-D5 surfaces a failure after
- *   24 hours, not before. Until then it is `pending`.
+ *   within two days of the nameservers changing: .com publishes its
+ *   delegations with a 48-hour TTL, so a resolver can keep the old ones that
+ *   long, and FR-D5 surfaces a failure after 48 hours, not before (the
+ *   owner's decision, 26 Sept 2026 — it was 24). Until then it is `pending`.
  * - Resolvers disagree with each other: the change is still spreading →
  *   `pending`.
  * - A resolver we could not ask at all (timeout, network) tells us nothing
@@ -21,7 +22,7 @@ import type { ResolverView } from './resolvers'
 export type CheckedStatus = 'verified' | 'failed' | 'pending'
 export type CurrentStatus = CheckedStatus | 'undelegated'
 
-export const FAILURE_GRACE_MS = 24 * 3_600_000
+export const FAILURE_GRACE_MS = 48 * 3_600_000
 
 export type DelegationInput = {
   /** What the registry has for the domain, as we hold it. */
