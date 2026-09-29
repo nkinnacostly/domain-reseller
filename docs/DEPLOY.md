@@ -122,6 +122,27 @@ transfers in are closed. `APP_URL` (in `fly.toml`) lets it refresh the site's
 prices afterwards. The pricing workflow no longer needs the `DNA_*` GitHub
 secrets: `gh secret delete DNA_API_KEY` and `gh secret delete DNA_RESELLER_ID`.
 
+### Multi-year terms (.ai) — migration 37
+
+Extensions whose registry sells only blocks of years (.ai: 2, 4, 6, 8 or 10)
+reach the storefront once the catalogue sync writes their periods:
+
+1. **Push migration 37 first** (`supabase db push`), then run
+   `supabase db query --linked -f supabase/tests/multi_year_terms.sql`. The
+   gateway's weekly sync writes the new `tlds` period columns and fails —
+   raising the catalogue alert — until they exist. The web can deploy before
+   or after: it reads every column (a row without periods sells every year,
+   as before) and writes `order_items.renewal_years` only for a line that
+   renews in blocks, which cannot exist until the sync has written one.
+2. `pnpm --filter @dr/gateway sync:catalogue` (report only) lists what will
+   change: the extensions sold in blocks, and every period left out because
+   the supplier prices it off the per-year rate (e.g. .me for 2–10 years) or
+   does not sell it (.ai renewals of 3, 5, 7, 9 years). Read it before step 3 —
+   a left-out period stops being offered in carts and renewals.
+3. Deploy the gateway; its next sync applies it (or set
+   `CATALOGUE_SYNC_EVERY_HOURS=1` on Fly, wait for the run, then unset it).
+   Prices reach the site on the refresh that follows.
+
 ## 5c. Email (L1)
 
 Supabase Auth sends every email through our route `/api/auth/send-email`,

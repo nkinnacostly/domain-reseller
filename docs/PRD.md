@@ -702,6 +702,7 @@ The search input queries availability with a 300 ms debounce, minimum 2 characte
 **FR-S2 — Honest price display.**
 Every result card shows: first-year price, renewal price, and — for gTLDs — an ICANN-fee indicator. Renewal price is never smaller than 80% of the first-year price's type size.
 *Given a `.com` result; Then the card displays "₦X first year · ₦Y/yr after" with both prices legible at a glance.*
+*Given a `.ai` result (sold only in 2-year blocks); Then the card displays "₦X for 2 years — the shortest term .ai allows · ₦Y every 2 years", with no per-year price.*
 
 **FR-S3 — Premium flagging.**
 When `IsFee = true` or `ClassKey` indicates a premium tier, the card carries a "Premium" badge and shows the premium renewal price. Premium domains cannot be added to the cart without an explicit confirmation modal restating both prices.
@@ -741,7 +742,7 @@ Paste up to 500 names or upload a CSV; check against a selected TLD set; results
 
 **FR-C1 — Cart.** Persisted server-side per user (and per anonymous session, merged on sign-in). Holds domain lines with TLD, period, privacy flag, auto-renew flag, and the quoted `price_version_id`.
 
-**FR-C2 — Period selection.** 1 to `TldInfo.MaxRegistrationPeriod` years, floored at `MinRegistrationPeriod`. A multi-year registration is priced as the first year at the registration price plus each later year at the renewal price — the way the supplier builds its own per-period matrix (checked 23 Sept 2026 against all 5,613 multi-year prices; the few exceptions differ by cents). There is no multi-year discount, so none is claimed.
+**FR-C2 — Period selection.** Only the periods the registry sells: 1 to 10 years for most extensions, but some registries sell only blocks — .ai registers and renews in 2, 4, 6, 8 or 10 years (supplier listing, 29 Sept 2026). A multi-year registration is priced as the first term at the registration price for each of its years (one year for most, two for .ai) plus each later year at the renewal price — the way the supplier builds its own per-period matrix (checked 23 Sept 2026 against all 5,613 multi-year prices). The catalogue sync offers a period only where the supplier's listed price for it matches that rule to the cent, never below, and reports the rest (migration 37); the cart, checkout and renewals refuse any other period server-side. There is no multi-year discount, so none is claimed. Where the shortest term is longer than a year, every price says so: "₦X for 2 years (the shortest term .ai allows), then ₦Y every 2 years" — never a per-year figure for a year nobody can buy.
 
 **FR-C3 — No pre-ticked add-ons.** Privacy protection and auto-renew are the only toggles. Auto-renew defaults **on** with plain-language disclosure adjacent to the toggle. Privacy defaults **on** where the TLD supports it at no cost, **off** where it costs extra.
 
@@ -844,7 +845,7 @@ For any domain, query its current authoritative nameservers and display what we 
 
 ### E8 — Renewals
 
-**FR-RN1 — Manual renew.** From portfolio or detail. Period selection. Price shown before confirmation.
+**FR-RN1 — Manual renew.** From portfolio or detail. Period selection — only the renewal periods the registry sells that fit under the ten-year limit (2, 4, 6… for .ai; a bulk renewal offers only the periods every domain in it shares). Price shown before confirmation.
 
 **FR-RN2 — Auto-renew.** Per-domain toggle synced to the supplier via `ModifyRenewalMode`. Renewal attempt at **T-30 days** so failures have runway.
 
