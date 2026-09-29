@@ -1,4 +1,4 @@
-import { type Contact, formatNaira } from '@dr/shared'
+import { type Contact, formatNaira, formatRenewal } from '@dr/shared'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -33,6 +33,9 @@ import { cn } from '@/lib/utils'
 export const metadata: Metadata = { title: 'Order' }
 
 type Params = Promise<{ id: string }>
+
+/** The term a line's renewal price is for; a line from before migration 37 renews yearly. */
+const termOf = (item: { renewal_years?: number | null }) => item.renewal_years ?? 1
 
 const placedFormat = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'long',
@@ -132,13 +135,14 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                   </p>
                   {item.item_type === 'transfer' ? (
                     <p className="text-sm text-muted-foreground">
-                      Transfer in · renews at {formatNaira(Number(item.renewal_kobo))}/yr
+                      Transfer in · renews at{' '}
+                      {formatRenewal(Number(item.renewal_kobo), termOf(item))}
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       {item.item_type === 'renew' ? 'Renewal · ' : ''}
                       {item.period_years} {item.period_years === 1 ? 'year' : 'years'} · renews at{' '}
-                      {formatNaira(Number(item.renewal_kobo))}/yr
+                      {formatRenewal(Number(item.renewal_kobo), termOf(item))}
                       {item.item_type !== 'renew' && item.auto_renew ? ' · auto-renew on' : ''}
                       {item.item_type !== 'renew' && item.privacy ? ' · privacy on' : ''}
                     </p>

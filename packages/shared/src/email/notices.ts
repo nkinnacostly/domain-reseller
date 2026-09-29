@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { formatNaira } from '../pricing/index'
+import { formatNaira, formatRenewal } from '../pricing/index'
 import { EMAIL_BRAND, type EmailBlock, type EmailContent, renderEmail } from './layout'
 
 /**
@@ -130,7 +130,8 @@ const REFUND_REASON: Record<string, (domainName: string | null) => string> = {
 
 export const NOTICE_TEMPLATES = {
   order_receipt: template({
-    version: 1,
+    // 2: a renewal sold only in blocks reads "every 2 years", not "/yr" (migration 37).
+    version: 2,
     category: 'transactional',
     schema: z.object({
       order_id: z.string().min(1),
@@ -148,7 +149,10 @@ export const NOTICE_TEMPLATES = {
             kind: z.string(),
             years: z.coerce.number().int().positive(),
             price_kobo: naira,
+            /** One year's renewal price. */
             renewal_kobo: naira,
+            /** The shortest renewal the extension sells; absent before migration 37. */
+            renewal_years: z.coerce.number().int().min(1).max(10).default(1),
           }),
         )
         .min(1),
@@ -168,7 +172,7 @@ export const NOTICE_TEMPLATES = {
             ...d.lines.map((line) => ({
               label: line.domain,
               // N8 — every line carries its renewal price.
-              detail: `${LINE_LABEL[line.kind] ?? 'Domain'}, ${years(line.years)} · renews at ${formatNaira(line.renewal_kobo)}/yr`,
+              detail: `${LINE_LABEL[line.kind] ?? 'Domain'}, ${years(line.years)} · renews at ${formatRenewal(line.renewal_kobo, line.renewal_years)}`,
               value: formatNaira(line.price_kobo),
             })),
             { label: 'Subtotal', value: formatNaira(d.subtotal_kobo) },

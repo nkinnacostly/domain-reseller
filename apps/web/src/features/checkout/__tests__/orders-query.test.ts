@@ -66,11 +66,11 @@ describe('getOrder', () => {
     expect(steps).toContainEqual(['eq', 'id', ORDER_ID])
   })
 
-  it('reads each line’s id and type with its domain, so renewal lines show as renewals', async () => {
+  it('reads every column of each line — its type, and its renewal term where the database has one', async () => {
     const { steps } = userClient({ data: null })
     await getOrder(ORDER_ID)
     const [, columns] = steps.find(([method]) => method === 'select') ?? []
-    expect(columns).toMatch(/order_items\(id, item_type, domain, /)
+    expect(columns).toContain('order_items(*)')
   })
 
   it('accepts an upper-case UUID', async () => {

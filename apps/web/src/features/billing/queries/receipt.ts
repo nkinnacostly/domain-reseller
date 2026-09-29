@@ -14,8 +14,10 @@ export type ReceiptLookup =
   | { state: 'unpaid'; orderId: string; orderNumber: string }
   | { state: 'ready'; receipt: Receipt; refunds: OrderRefund[] }
 
+// Every line column, so `renewal_years` (migration 37) is read where the
+// database has it; a line from before it renews a year at a time.
 const COLUMNS =
-  'id, order_number, invoice_number, paid_at, payment_id, tx_ref, subtotal_kobo, vat_pct, vat_kobo, total_kobo, registrant, test_mode, order_items(id, item_type, domain, period_years, price_kobo, renewal_kobo, status, created_at), payments(id, provider_reference, amount_kobo, method, created_at)'
+  'id, order_number, invoice_number, paid_at, payment_id, tx_ref, subtotal_kobo, vat_pct, vat_kobo, total_kobo, registrant, test_mode, order_items(*), payments(id, provider_reference, amount_kobo, method, created_at)'
 
 const regions = new Intl.DisplayNames(['en'], { type: 'region' })
 const countryName = (code: string) => {

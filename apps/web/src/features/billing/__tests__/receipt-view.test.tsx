@@ -29,6 +29,7 @@ const RECEIPT: Receipt = {
       years: 1,
       priceKobo: 1_840_000,
       renewalKobo: 1_870_000,
+      renewalYears: 1,
       failed: false,
     },
     {
@@ -38,6 +39,7 @@ const RECEIPT: Receipt = {
       years: 2,
       priceKobo: 7_450_000,
       renewalKobo: 5_610_000,
+      renewalYears: 1,
       failed: true,
     },
   ],
@@ -176,6 +178,29 @@ describe('ReceiptDocument — what the receipt says (CMP-17, FR-C5, N8)', () => 
     // FR-R2 — the receipt says what was not registered.
     expect(second).toHaveTextContent('Not registered')
     expect(first).not.toHaveTextContent('Not registered')
+  })
+
+  it('states a block-sold renewal for its block, never per year (.ai, N8)', () => {
+    ready({
+      lines: [
+        {
+          id: 'line-ai',
+          domain: 'getpaid.ai',
+          kind: 'register',
+          years: 2,
+          priceKobo: 27_300_000,
+          renewalKobo: 13_650_000,
+          renewalYears: 2,
+          failed: false,
+        },
+      ],
+    })
+    const table = screen.getByRole('table', { name: 'What this order paid for' })
+    const [, line] = within(table).getAllByRole('row')
+    expect(line).toHaveTextContent(
+      `getpaid.aiRegistration, 2 years · renews at ${formatNaira(27_300_000)} every 2 years`,
+    )
+    expect(line).not.toHaveTextContent('/yr')
   })
 
   it('itemises the subtotal, VAT at the order’s own rate, and the total', () => {

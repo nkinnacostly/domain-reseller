@@ -104,7 +104,8 @@ describe('getReceipt — paid or not', () => {
     expect(rpc).toHaveBeenCalledWith('my_order_refunds', { p_order_id: ORDER_ID })
     const [, columns] = steps.find(([method]) => method === 'select') ?? []
     expect(columns).toMatch(/invoice_number/)
-    expect(columns).toMatch(/order_items\(id, item_type, domain, period_years, price_kobo/)
+    // Every line column, so the renewal term (migration 37) is read where it exists.
+    expect(columns).toMatch(/order_items\(\*\)/)
     expect(columns).toMatch(/payments\(id, provider_reference, amount_kobo, method/)
     expect(lookup).toMatchObject({
       state: 'ready',

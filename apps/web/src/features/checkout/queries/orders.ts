@@ -19,10 +19,12 @@ export async function getOrders() {
 export async function getOrder(id: string) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null
   const supabase = await createClient()
+  // Every line column: `renewal_years` (migration 37) is read where the
+  // database has it, and a line from before it renews a year at a time.
   const { data } = await supabase
     .from('orders')
     .select(
-      'id, user_id, order_number, status, subtotal_kobo, vat_pct, vat_kobo, total_kobo, registrant, nameservers, test_mode, float_check, paid_at, created_at, order_items(id, item_type, domain, period_years, privacy, auto_renew, price_kobo, renewal_kobo, status, failure_code, nameservers), payments(provider_reference, amount_kobo, method, created_at)',
+      'id, user_id, order_number, status, subtotal_kobo, vat_pct, vat_kobo, total_kobo, registrant, nameservers, test_mode, float_check, paid_at, created_at, order_items(*), payments(provider_reference, amount_kobo, method, created_at)',
     )
     .eq('id', id)
     .maybeSingle()
