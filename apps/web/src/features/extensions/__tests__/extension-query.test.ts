@@ -97,12 +97,23 @@ describe('loadCatalogueFacts', () => {
       isCountryCode: false,
       minPeriod: 1,
       maxPeriod: 10,
+      // A row without periods (before migration 37) sells every year, as it always did.
+      registerPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       requiresExtraFields: false,
       minChars: 3,
       maxChars: 63,
       isTransferable: true,
       tagline: 'Built for brands with a continental reach',
     })
+  })
+
+  it('reads the periods a block-sold extension is sold in (.ai)', async () => {
+    catalogue({
+      data: [{ ...ROWS[1], name: 'ai', min_period: 2, register_periods: [2, 4, 6, 8, 10] }],
+      error: null,
+    })
+    const [ai] = await loadCatalogueFacts()
+    expect(ai).toMatchObject({ tld: 'ai', minPeriod: 2, registerPeriods: [2, 4, 6, 8, 10] })
   })
 
   it('throws on a failed read, so the failure is never cached', async () => {

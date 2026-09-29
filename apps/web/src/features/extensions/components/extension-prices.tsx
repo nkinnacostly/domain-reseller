@@ -2,7 +2,15 @@ import { ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { Container } from '@/components/layout/site-shell'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
+import { shortestTermNote } from '@/features/pricing/lib/terms'
 import type { ExtensionPrices as Prices } from '../lib/extension'
+
+/** When a renewal is charged: every year after, or every block after the first term. */
+function renewalWhen(registerYears: number, renewYears: number): string {
+  if (registerYears === 1 && renewYears === 1) return 'Every year after'
+  const after = registerYears === 1 ? 'the first year' : `the first ${registerYears}`
+  return renewYears === 1 ? `Each year after ${after}` : `Every ${renewYears} years after ${after}`
+}
 
 /**
  * What an extension costs, from the one pricing path (N5b). The renewal price
@@ -20,15 +28,22 @@ export function ExtensionPrices({
   vatPct: number | null
   isCountryCode: boolean
 }) {
+  const blocks = prices !== null && (prices.registerYears > 1 || prices.renewYears > 1)
   const cards = prices
     ? [
-        { label: 'First year', value: prices.register, note: 'To register it today' },
+        prices.registerYears === 1
+          ? { label: 'First year', value: prices.register, note: 'To register it today' }
+          : {
+              label: `First ${prices.registerYears} years`,
+              value: prices.register,
+              note: `To register it today — ${shortestTermNote(tld)}`,
+            },
         {
           label: 'Renewal',
           value: prices.renew,
-          note: prices.renewalIsHigher
-            ? 'Every year after — more than the first year'
-            : 'Every year after',
+          note: `${renewalWhen(prices.registerYears, prices.renewYears)}${
+            prices.renewalIsHigher ? ' — more than the first year' : ''
+          }`,
         },
         {
           label: 'Transfer in',
@@ -52,7 +67,9 @@ export function ExtensionPrices({
               What a .{tld} domain costs
             </h2>
             <p className="mt-4 text-pretty text-muted-foreground">
-              In naira, per year, with the renewal price beside the first-year price.
+              {blocks
+                ? `In naira, for the whole term — the .${tld} registry sells no single year — with the renewal price beside the first price.`
+                : 'In naira, per year, with the renewal price beside the first-year price.'}
             </p>
           </div>
           <Link

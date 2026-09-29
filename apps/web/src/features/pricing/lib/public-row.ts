@@ -9,9 +9,16 @@ import { formatNaira, type TldPricing } from '@dr/shared'
  */
 export type PublicPriceRow = {
   tld: string
-  /** Display strings, already formatted — the client does no money maths. */
+  /**
+   * Display strings, already formatted — the client does no money maths.
+   * `register` is the shortest registration the registry sells, for
+   * `registerYears` years: the first year for most extensions, two years for
+   * .ai. `renew` is the shortest renewal, for `renewYears` years (N8).
+   */
   register: string
+  registerYears: number
   renew: string
+  renewYears: number
   transfer: string | null
   /** True when renewal costs more than the first year, so the UI can say so. */
   renewalIsHigher: boolean
@@ -26,14 +33,17 @@ export type PublicPriceRow = {
 export function toPublicRow(pricing: TldPricing): PublicPriceRow {
   return {
     tld: pricing.tld,
-    register: formatNaira(pricing.registration.priceKobo),
-    renew: formatNaira(pricing.renewal.priceKobo),
+    register: formatNaira(pricing.firstTerm.priceKobo),
+    registerYears: pricing.firstTerm.years,
+    renew: formatNaira(pricing.renewalTerm.priceKobo),
+    renewYears: pricing.renewalTerm.years,
     transfer: pricing.transfer ? formatNaira(pricing.transfer.priceKobo) : null,
     renewalIsHigher: pricing.renewalIsHigher,
     isCountryCode: pricing.isCountryCode,
     maxPeriod: pricing.maxPeriod,
     requiresExtraFields: pricing.requiresExtraFields,
-    registerRank: pricing.registration.priceKobo,
+    // What the least anyone can pay is — for .ai, its two years.
+    registerRank: pricing.firstTerm.priceKobo,
   }
 }
 

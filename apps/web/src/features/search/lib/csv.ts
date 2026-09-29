@@ -174,15 +174,19 @@ export const CSV_HEADER = [
   'name',
   'extension',
   'status',
-  'first_year_price_ngn',
+  'first_term_price_ngn',
+  'first_term_years',
   'renewal_price_ngn',
+  'renewal_term_years',
   'ascii_name',
 ] as const
 
 /**
  * The results as a spreadsheet: every row with its status, and for every
- * available name both its first-year and its renewal price (N8). A line that
- * is not a domain keeps the reason it was refused as its status.
+ * available name both its first price and its renewal price (N8), each with
+ * the years it buys — one for most extensions, two for .ai, whose registry
+ * sells no single year. A line that is not a domain keeps the reason it was
+ * refused as its status.
  */
 export function resultsCsv(rows: readonly ResultRow[]): string {
   const lines = rows.map((row) => [
@@ -190,7 +194,9 @@ export function resultsCsv(rows: readonly ResultRow[]): string {
     row.tld ? toUnicodeHost(row.tld) : '',
     row.label ? row.label.toLowerCase() : STATUS_WORDS[row.category],
     row.price ? nairaFigure(row.price.registerKobo) : '',
+    row.price ? String(row.price.registerYears) : '',
     row.price ? nairaFigure(row.price.renewKobo) : '',
+    row.price ? String(row.price.renewYears) : '',
     row.domain ?? '',
   ])
   // The byte order mark tells Excel the file is UTF-8, so café.com survives.

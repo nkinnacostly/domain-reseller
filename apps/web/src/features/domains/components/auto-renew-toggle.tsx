@@ -48,7 +48,7 @@ export function AutoRenewToggle({
             Renew automatically
           </span>
           <span id={`${id}-note`} className="block text-pretty text-muted-foreground">
-            {renewal ? `At ${renewal}/yr. ` : ''}
+            {renewal ? `At ${renewal}. ` : ''}
             Automatic renewal isn’t switched on yet — this records what you want. Until it is, renew
             from the Renew tab.
           </span>

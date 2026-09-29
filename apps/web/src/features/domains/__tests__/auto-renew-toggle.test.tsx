@@ -19,7 +19,7 @@ beforeEach(() => vi.mocked(setAutoRenew).mockReset())
 
 describe('AutoRenewToggle (FR-RN2)', () => {
   it('shows the current choice, the renewal price, and that automatic renewal is not live yet', () => {
-    render(<AutoRenewToggle domainId={DOMAIN_ID} autoRenew renewal="₦21,500" />)
+    render(<AutoRenewToggle domainId={DOMAIN_ID} autoRenew renewal="₦21,500/yr" />)
     expect(toggle()).toBeChecked()
     expect(toggle()).toHaveAccessibleDescription(
       'At ₦21,500/yr. Automatic renewal isn’t switched on yet — this records what you want. Until it is, renew from the Renew tab.',

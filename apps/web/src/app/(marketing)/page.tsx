@@ -33,13 +33,18 @@ export default async function HomePage() {
   // every other price on the site (N5b). Whatever the database ranks first leads.
   const [priced, presets] = await Promise.all([getPricedCatalogue(), getNameserverPresets()])
 
-  const quotes: Quote[] = (priced?.featured ?? []).map((t) => ({
+  // The mockups show a year's registration renewing yearly, so they quote only
+  // extensions sold a year at a time — .ai there would show a year nobody can buy.
+  const yearly = (priced?.featured ?? []).filter(
+    (t) => t.firstTerm.years === 1 && t.renewalTerm.years === 1,
+  )
+  const quotes: Quote[] = yearly.map((t) => ({
     tld: t.tld,
     firstYear: formatNaira(t.registration.priceKobo),
     renewal: formatNaira(t.renewal.priceKobo),
   }))
   const lead = quotes[0] ?? null
-  const leadPricing = priced?.featured[0]
+  const leadPricing = yearly[0]
   const vat =
     priced && leadPricing
       ? (() => {

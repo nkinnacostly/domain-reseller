@@ -1,10 +1,29 @@
 import { ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { AddToCartButton } from '@/features/cart/components/add-to-cart-button'
+import {
+  firstTermLabel,
+  firstTermName,
+  renewalText,
+  shortestTermNote,
+  yearsText,
+} from '@/features/pricing/lib/terms'
 import { transferCheckHref } from '@/features/transfers/lib/href'
 import { refusalNote, type SearchRow } from '../lib/rows'
 import { AsciiForm, LookalikeWarning } from './idn-notes'
 import { ResultStatus } from './result-status'
+
+/** When the renewal applies: every year after the first, or after the first term. */
+function renewalAfter(price: NonNullable<SearchRow['price']>): string {
+  const first = firstTermName(price.registerYears)
+  const when =
+    price.renewYears === 1 && price.registerYears === 1
+      ? 'every year after'
+      : price.renewYears === 1
+        ? `each year after ${first}`
+        : `after ${first}`
+  return price.renewalIsHigher ? `${when} — higher than the first` : when
+}
 
 /**
  * The exact match — the one domain the person asked for, in large type
@@ -42,7 +61,10 @@ export function ExactResult({ row }: { row: SearchRow }) {
             >
               {row.price.register}
             </span>
-            <span className="text-sm text-muted-foreground">first year</span>
+            <span className="text-sm text-muted-foreground">
+              {firstTermLabel(row.price.registerYears)}
+              {row.price.registerYears > 1 ? ` — ${shortestTermNote(row.tld)}` : ''}
+            </span>
           </p>
           <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span
@@ -53,18 +75,16 @@ export function ExactResult({ row }: { row: SearchRow }) {
                   : 'text-2xl font-semibold tracking-tight text-muted-foreground tabular-nums'
               }
             >
-              {row.price.renew}/yr
+              {renewalText(row.price.renew, row.price.renewYears)}
             </span>
-            <span className="text-sm text-muted-foreground">
-              {row.price.renewalIsHigher
-                ? 'every year after — higher than the first'
-                : 'every year after'}
-            </span>
+            <span className="text-sm text-muted-foreground">{renewalAfter(row.price)}</span>
           </p>
           <p className="mt-4 text-xs text-muted-foreground">
             In naira, before VAT
-            {row.price.includesIcannFee ? ' · includes the ICANN fee' : ''} · register for up to{' '}
-            {row.price.maxPeriod} years
+            {row.price.includesIcannFee ? ' · includes the ICANN fee' : ''} ·{' '}
+            {row.price.maxPeriod === row.price.registerYears
+              ? `register for ${yearsText(row.price.maxPeriod)}`
+              : `register for up to ${row.price.maxPeriod} years`}
           </p>
           <AddToCartButton domain={row.domain} label={row.display} size="large" className="mt-6" />
         </div>

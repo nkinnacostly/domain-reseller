@@ -144,22 +144,30 @@ export function aboutPageLd(
 
 export type ExtensionOffer = {
   tld: string
+  /** The shortest registration's whole price, for `registerYears` years. */
   registerKobo: number
+  registerYears: number
+  /** The shortest renewal's whole price, for `renewYears` years. */
   renewKobo: number
+  renewYears: number
   /** Human wording of both prices, as the page shows them (N8). */
   priceText: string
 }
 
 /**
- * One extension as a service we sell: a year's registration, priced in naira.
- * A Service, not a Product: nothing tangible changes hands, which is how
- * Google's shopping policies class it, so Product markup would promise a
- * shopping result it could never get. The first-year and renewal prices both
- * go in (N8), each per year and before VAT — as the page shows them.
+ * One extension as a service we sell: its shortest registration, priced in
+ * naira. A Service, not a Product: nothing tangible changes hands, which is
+ * how Google's shopping policies class it, so Product markup would promise a
+ * shopping result it could never get. The first and renewal prices both go in
+ * (N8), before VAT, each for the years it really buys — one for most
+ * extensions; for .ai, whose registry sells no single year, two — as the page
+ * shows them (N9b).
  */
 export function extensionServiceLd(site: string, offer: ExtensionOffer): JsonLdNode {
   const url = siteUrl(site, `/domains/${offer.tld}`)
-  const year = { '@type': 'QuantitativeValue', value: 1, unitCode: 'ANN' }
+  const years = (value: number) => ({ '@type': 'QuantitativeValue', value, unitCode: 'ANN' })
+  const first = offer.registerYears
+  const renew = offer.renewYears
   return {
     '@type': 'Service',
     '@id': `${url}#service`,
@@ -180,19 +188,29 @@ export function extensionServiceLd(site: string, offer: ExtensionOffer): JsonLdN
       priceSpecification: [
         {
           '@type': 'UnitPriceSpecification',
-          name: 'First year',
+          name:
+            first === 1
+              ? 'First year'
+              : `First ${first} years, the shortest term .${offer.tld} is sold for`,
           price: koboToDecimal(offer.registerKobo),
           priceCurrency: 'NGN',
-          referenceQuantity: year,
+          referenceQuantity: years(first),
+          billingDuration: first,
+          unitCode: 'ANN',
           valueAddedTaxIncluded: false,
         },
         {
           '@type': 'UnitPriceSpecification',
-          name: 'Renewal, each year after the first',
+          name:
+            first === 1 && renew === 1
+              ? 'Renewal, each year after the first'
+              : `Renewal, ${renew === 1 ? 'each year' : `every ${renew} years`} after the first ${first === 1 ? 'year' : `${first} years`}`,
           price: koboToDecimal(offer.renewKobo),
           priceCurrency: 'NGN',
-          referenceQuantity: year,
-          billingStart: 1,
+          referenceQuantity: years(renew),
+          billingDuration: renew,
+          billingStart: first,
+          unitCode: 'ANN',
           valueAddedTaxIncluded: false,
         },
       ],

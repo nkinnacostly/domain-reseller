@@ -1,4 +1,4 @@
-import { formatNaira } from '@dr/shared'
+import { formatNaira, formatRenewal } from '@dr/shared'
 import { ArrowRight, ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { Container } from '@/components/layout/site-shell'
@@ -100,7 +100,7 @@ export async function TransferResult({
   const offer: Offer | null = entry?.transfer
     ? {
         transfer: formatNaira(entry.transfer.priceKobo),
-        renewal: formatNaira(entry.renewal.priceKobo),
+        renewal: formatRenewal(entry.renewal.priceKobo, entry.renewalTerm.years),
       }
     : null
   const offered: ExtensionOffer = !priced ? 'unknown' : offer ? 'offered' : 'not-offered'
@@ -173,8 +173,7 @@ export async function TransferResult({
               </p>
               {/* N8 — never a price without its renewal price. */}
               <p className="mt-1 text-sm text-muted-foreground">
-                Then renews at{' '}
-                <span className="font-medium text-foreground">{offer.renewal}/yr</span>
+                Then renews at <span className="font-medium text-foreground">{offer.renewal}</span>
               </p>
               <p className="mt-4 text-pretty text-xs/5 text-muted-foreground">
                 In naira, before VAT. Includes an extra year on your registration where the registry

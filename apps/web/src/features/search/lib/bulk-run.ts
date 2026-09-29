@@ -12,8 +12,12 @@ import { refusalNote } from './rows'
 
 /** A price as bulk results show and export it. Retail figures only — never cost. */
 export type BulkPrice = {
+  /** The shortest registration, for `registerYears` years — the first year for most. */
   register: string
+  registerYears: number
+  /** The shortest renewal, for `renewYears` years (N8). */
   renew: string
+  renewYears: number
   renewalIsHigher: boolean
   /** gTLDs carry the ICANN fee, and it is already in the price (FR-S2). */
   includesIcannFee: boolean

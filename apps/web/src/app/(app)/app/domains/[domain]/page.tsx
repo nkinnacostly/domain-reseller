@@ -1,4 +1,4 @@
-import { formatNaira } from '@dr/shared'
+import { formatRenewal } from '@dr/shared'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -30,7 +30,10 @@ async function Overview({ params }: { params: Params }) {
 
   const days = daysUntilExpiry(domain.expiresAt, new Date())
   const pricing = priced?.tlds.find((tld) => tld.tld === domain.tld)
-  const renewal = pricing ? formatNaira(pricing.renewal.priceKobo) : null
+  // N8 — with its term: "/yr", or "every 2 years" where the registry renews only in blocks.
+  const renewal = pricing
+    ? formatRenewal(pricing.renewal.priceKobo, pricing.renewalTerm.years)
+    : null
   const note = registrationNote(domain)
   // Its dates and nameservers are the current registrar's until it lands (FR-T3).
   const moving = isTransferInProgress(domain.status)
@@ -78,9 +81,7 @@ async function Overview({ params }: { params: Params }) {
           {/* N8 — the renewal price, always. */}
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">Renews at</dt>
-            <dd className="text-right font-medium">
-              {renewal ? `${renewal}/yr` : 'Price unavailable'}
-            </dd>
+            <dd className="text-right font-medium">{renewal ?? 'Price unavailable'}</dd>
           </div>
         </dl>
         {domain.source !== 'demo' &&

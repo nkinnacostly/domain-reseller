@@ -57,12 +57,43 @@ describe('toPublicRow', () => {
       'maxPeriod',
       'register',
       'registerRank',
+      'registerYears',
       'renew',
+      'renewYears',
       'renewalIsHigher',
       'requiresExtraFields',
       'tld',
       'transfer',
     ])
+  })
+
+  it('keeps a one-year extension’s prices per year, as before', () => {
+    const [com] = priceCatalogue([record('com', 11.31, 11.51)], INPUTS)
+    if (!com) throw new Error('fixture')
+    expect(toPublicRow(com)).toMatchObject({
+      registerYears: 1,
+      renewYears: 1,
+      registerRank: com.registration.priceKobo,
+    })
+  })
+
+  it('shows a block-sold extension’s shortest term, and ranks it by what it costs (.ai)', () => {
+    const [ai] = priceCatalogue(
+      [
+        {
+          ...record('ai', 99.9),
+          minPeriod: 2,
+          registerPeriods: [2, 4, 6, 8, 10],
+          renewPeriods: [2, 4, 6, 8, 10],
+        },
+      ],
+      INPUTS,
+    )
+    if (!ai) throw new Error('fixture')
+    const row = toPublicRow(ai)
+    expect(row).toMatchObject({ registerYears: 2, renewYears: 2, maxPeriod: 10 })
+    expect(row.registerRank).toBe(2 * ai.registration.priceKobo)
+    expect(row.register).toMatch(/^₦[\d,]+$/)
   })
 
   it('formats money as naira strings, so the client does no maths', () => {

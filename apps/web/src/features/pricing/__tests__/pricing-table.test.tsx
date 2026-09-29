@@ -55,6 +55,37 @@ const bodyRows = () => screen.getAllByRole('rowheader')
 const filter = () => screen.getByRole('searchbox', { name: 'Find an extension' })
 
 describe('PricingTable', () => {
+  it('prices a block-sold extension for its whole term, and says so (.ai, N9b)', () => {
+    const [ai] = priceCatalogue(
+      [
+        record('ai', {
+          registerUsd: 99.9,
+          renewUsd: 99.9,
+          isCountryCode: true,
+          minPeriod: 2,
+          registerPeriods: [2, 4, 6, 8, 10],
+          renewPeriods: [2, 4, 6, 8, 10],
+        }),
+      ],
+      INPUTS,
+    ).map(toPublicRow)
+    if (!ai) throw new Error('fixture')
+    render(<PricingTable rows={[byTld('com'), ai]} />)
+
+    const cells = within(row('ai') as HTMLElement).getAllByRole('cell')
+    expect(cells[0]).toHaveTextContent(`${ai.register}for 2 years`)
+    expect(cells[1]).toHaveTextContent(`${ai.renew}every 2 years`)
+    expect(screen.getByText(/that registry sells nothing shorter/)).toBeInTheDocument()
+  })
+
+  it('adds no term notes where every extension sells a year at a time', () => {
+    render(<PricingTable rows={rows} />)
+    expect(screen.queryByText(/that registry sells nothing shorter/)).not.toBeInTheDocument()
+    expect(within(row('com') as HTMLElement).getAllByRole('cell')[0]).toHaveTextContent(
+      new RegExp(`^${byTld('com').register}$`),
+    )
+  })
+
   it('lists first-year, renewal and transfer prices side by side (N8)', () => {
     render(<PricingTable rows={rows} />)
 

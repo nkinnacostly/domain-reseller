@@ -11,13 +11,32 @@ const row = (overrides: Partial<SearchRow> = {}): SearchRow => ({
   status: 'available',
   price: {
     register: '₦18,400',
+    registerYears: 1,
     renew: '₦18,700',
+    renewYears: 1,
     renewalIsHigher: true,
     includesIcannFee: true,
     maxPeriod: 10,
   },
   ...overrides,
 })
+
+/** .ai as the search shows it: its two-year minimum, renewing every two years. */
+const ai = (): SearchRow =>
+  row({
+    domain: 'getpaid.ai',
+    display: 'getpaid.ai',
+    tld: 'ai',
+    price: {
+      register: '₦273,000',
+      registerYears: 2,
+      renew: '₦273,000',
+      renewYears: 2,
+      renewalIsHigher: false,
+      includesIcannFee: false,
+      maxPeriod: 10,
+    },
+  })
 
 describe('ExactResult', () => {
   it('shows the first-year and renewal price together (N8, FR-S2)', () => {
@@ -27,6 +46,21 @@ describe('ExactResult', () => {
     expect(screen.getByText('₦18,700/yr')).toBeInTheDocument()
     expect(screen.getByText(/higher than the first/)).toBeInTheDocument()
     expect(screen.getByText(/includes the ICANN fee/)).toBeInTheDocument()
+  })
+
+  it('keeps the one-year wording exactly as it was', () => {
+    render(<ExactResult row={row()} />)
+    expect(screen.getByText('first year')).toBeInTheDocument()
+    expect(screen.getByText(/every year after — higher than the first/)).toBeInTheDocument()
+    expect(screen.getByText(/register for up to 10 years/)).toBeInTheDocument()
+  })
+
+  it('states .ai’s real minimum charge and renewal, with no per-year price (N8, N9b)', () => {
+    render(<ExactResult row={ai()} />)
+    expect(screen.getByText('for 2 years — the shortest term .ai allows')).toBeInTheDocument()
+    expect(screen.getByText('₦273,000 every 2 years')).toBeInTheDocument()
+    expect(screen.getByText('after the first 2 years')).toBeInTheDocument()
+    expect(screen.getByRole('article')).not.toHaveTextContent(/\/yr|first year/)
   })
 
   it('offers a transfer check for a taken name, since it may be theirs', () => {

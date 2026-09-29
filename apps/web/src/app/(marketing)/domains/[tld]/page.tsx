@@ -11,6 +11,7 @@ import {
   extensionFaqs,
   extensionPrices,
   normaliseExtension,
+  priceSentence,
 } from '@/features/extensions/lib/extension'
 import { extensionStaticParams, getExtensionPage } from '@/features/extensions/queries/extension'
 import { DomainSearch } from '@/features/search/components/domain-search'
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
   const prices = extensionPrices(page.pricing, page.facts.isTransferable)
   // N8 — a price in a search snippet still comes with its renewal price.
-  const price = prices ? `${prices.register} for the first year, then ${prices.renew} a year. ` : ''
+  const price = prices ? `${priceSentence(tld, prices)}. ` : ''
   const description = `Register a .${tld} domain in naira. ${price}${describeKind(tld, page.facts.isCountryCode)}`
   return pageMetadata({
     // The words people search with: the extension, buying it, Nigeria, naira.
@@ -79,9 +80,11 @@ export default async function ExtensionPage({ params }: { params: Params }) {
           pricing && prices
             ? extensionServiceLd(env.NEXT_PUBLIC_APP_URL, {
                 tld,
-                registerKobo: pricing.registration.priceKobo,
-                renewKobo: pricing.renewal.priceKobo,
-                priceText: `${prices.register} for the first year, then ${prices.renew} a year to renew, before VAT.`,
+                registerKobo: pricing.firstTerm.priceKobo,
+                registerYears: pricing.firstTerm.years,
+                renewKobo: pricing.renewalTerm.priceKobo,
+                renewYears: pricing.renewalTerm.years,
+                priceText: `${priceSentence(tld, prices)} to renew, before VAT.`,
               })
             : null,
           faqPageLd(faqs),
@@ -97,8 +100,8 @@ export default async function ExtensionPage({ params }: { params: Params }) {
             prices ? (
               <p>
                 {/* N8 — the renewal price travels with the first-year price. */}
-                {prices.register} for the first year, then {prices.renew} a year to renew. In naira,
-                with VAT added at checkout and Flutterwave’s processing fee on its payment page.
+                {priceSentence(tld, prices)} to renew. In naira, with VAT added at checkout and
+                Flutterwave’s processing fee on its payment page.
               </p>
             ) : (
               <p>{describeKind(tld, facts.isCountryCode)}</p>

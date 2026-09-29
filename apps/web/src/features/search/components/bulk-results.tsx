@@ -2,6 +2,7 @@
 
 import { Check, CircleHelp, Download, Minus, RotateCw, ShieldCheck, Square, X } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
+import { renewalText, yearsText } from '@/features/pricing/lib/terms'
 import { cn } from '@/lib/utils'
 import { BULK_MAX_NAMES } from '../lib/bulk'
 import {
@@ -483,12 +484,17 @@ function BulkRow({
             <span className="text-base font-semibold text-foreground tabular-nums">
               {row.price.register}
             </span>
+            {row.price.registerYears > 1 ? (
+              <span className="text-muted-foreground">
+                for {yearsText(row.price.registerYears)}
+              </span>
+            ) : null}
             <span className="text-muted-foreground">
               then{' '}
               <span
                 className={row.price.renewalIsHigher ? 'font-medium text-foreground' : undefined}
               >
-                {row.price.renew}/yr
+                {renewalText(row.price.renew, row.price.renewYears)}
               </span>
             </span>
           </p>

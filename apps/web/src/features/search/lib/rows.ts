@@ -20,8 +20,12 @@ export type SearchRow = {
   lengthIssue?: LengthIssue
   /** Null only if the catalogue has no price — then we show none (N5b). */
   price: {
+    /** The shortest registration, for `registerYears` years — the first year for most. */
     register: string
+    registerYears: number
+    /** The shortest renewal, for `renewYears` years (N8). */
     renew: string
+    renewYears: number
     renewalIsHigher: boolean
     /** gTLDs carry the ICANN fee, and it is already in the price (FR-S2). */
     includesIcannFee: boolean
@@ -44,7 +48,9 @@ export function toSearchRows(
       price: row
         ? {
             register: row.register,
+            registerYears: row.registerYears,
             renew: row.renew,
+            renewYears: row.renewYears,
             renewalIsHigher: row.renewalIsHigher,
             includesIcannFee: !row.isCountryCode,
             maxPeriod: row.maxPeriod,
