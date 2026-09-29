@@ -1101,6 +1101,7 @@ export type Database = {
           price_kobo: number
           privacy: boolean
           renewal_kobo: number
+          renewal_years: number
           status: Database["public"]["Enums"]["order_item_status"]
           tld: string
           updated_at: string
@@ -1120,6 +1121,7 @@ export type Database = {
           price_kobo: number
           privacy: boolean
           renewal_kobo: number
+          renewal_years?: number
           status?: Database["public"]["Enums"]["order_item_status"]
           tld: string
           updated_at?: string
@@ -1139,6 +1141,7 @@ export type Database = {
           price_kobo?: number
           privacy?: boolean
           renewal_kobo?: number
+          renewal_years?: number
           status?: Database["public"]["Enums"]["order_item_status"]
           tld?: string
           updated_at?: string
@@ -1806,7 +1809,9 @@ export type Database = {
           name: string
           paused_reason: string | null
           redemption_days: number
+          register_periods: number[] | null
           register_usd: number
+          renew_periods: number[] | null
           renew_usd: number
           requires_extra_fields: boolean
           restore_usd: number | null
@@ -1827,7 +1832,9 @@ export type Database = {
           name: string
           paused_reason?: string | null
           redemption_days?: number
+          register_periods?: number[] | null
           register_usd: number
+          renew_periods?: number[] | null
           renew_usd: number
           requires_extra_fields?: boolean
           restore_usd?: number | null
@@ -1848,7 +1855,9 @@ export type Database = {
           name?: string
           paused_reason?: string | null
           redemption_days?: number
+          register_periods?: number[] | null
           register_usd?: number
+          renew_periods?: number[] | null
           renew_usd?: number
           requires_extra_fields?: boolean
           restore_usd?: number | null
@@ -1925,6 +1934,7 @@ export type Database = {
         Returns: undefined
       }
       are_hostnames: { Args: { p_hosts: string[] }; Returns: boolean }
+      are_sold_periods: { Args: { p_periods: number[] }; Returns: boolean }
       begin_reconcile: {
         Args: { p_min_interval_seconds: number; p_test_mode: boolean }
         Returns: string
