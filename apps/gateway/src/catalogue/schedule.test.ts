@@ -309,7 +309,15 @@ describe('where the schedule runs', () => {
     const getJson = vi.fn(async (_url: string) => ({
       totalCount: 1,
       items: [
-        { name: 'com', prices: [{ register: [{ period: 1, price: 11.31, currency: 'USD' }] }] },
+        {
+          name: 'com',
+          prices: [
+            {
+              register: [{ period: 1, price: 11.31, currency: 'USD' }],
+              renew: [{ period: 1, price: 11.51, currency: 'USD' }],
+            },
+          ],
+        },
       ],
     }))
     const fetchImpl = vi.fn(async (_url: string | URL | Request) => Response.json({ ok: true }))

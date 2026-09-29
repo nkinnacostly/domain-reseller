@@ -72,7 +72,28 @@ describe('catalogue store', () => {
       [0, 999],
       [1000, 1999],
     ])
-    expect(calls.find((call) => call.fn === 'select')?.args[0]).toContain('is_transferable')
+    expect(calls.find((call) => call.fn === 'select')?.args[0]).toBe('*')
+  })
+
+  it('keeps the sync’s columns, and reads periods a database does not have yet as none', async () => {
+    const before37 = {
+      name: 'com',
+      register_usd: 11.31,
+      min_period: 1,
+      max_period: 10,
+      is_sellable: true,
+      featured_rank: 1,
+    }
+    const { client } = fakeClient({ pages: [[before37]] })
+    const [read] = await createCatalogueStore(client).load()
+    expect(read).toMatchObject({
+      name: 'com',
+      register_usd: 11.31,
+      register_periods: null,
+      renew_periods: null,
+      is_sellable: true,
+    })
+    expect(read).not.toHaveProperty('featured_rank')
   })
 
   it('reads an empty answer as an empty table', async () => {

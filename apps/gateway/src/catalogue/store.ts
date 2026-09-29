@@ -18,6 +18,14 @@ export interface CatalogueStore {
 
 const PAGE = 1_000
 
+/** The columns the sync owns, from a whole row; a period column not there yet reads as null. */
+function toCurrent(row: Partial<CurrentTld>): CurrentTld {
+  const picked = Object.fromEntries(
+    CURRENT_TLD_COLUMNS.map((column) => [column, row[column] ?? null]),
+  ) as CurrentTld
+  return picked
+}
+
 export function createCatalogueStore(
   client: SupabaseClient<Database>,
   batchSize = 200,
@@ -28,13 +36,16 @@ export function createCatalogueStore(
       // would report every extension past the cap as new.
       const rows: CurrentTld[] = []
       for (let from = 0; ; from += PAGE) {
+        // Every column, then the sync's own: a database without migration 37's
+        // period columns still reads (as every year from min to max), so the
+        // report runs before the migration does. Writing needs them.
         const { data, error } = await client
           .from('tlds')
-          .select(CURRENT_TLD_COLUMNS)
+          .select('*')
           .order('name')
           .range(from, from + PAGE - 1)
         if (error) throw new Error(`Could not read the current catalogue: ${error.message}`)
-        rows.push(...((data ?? []) as CurrentTld[]))
+        rows.push(...(data ?? []).map(toCurrent))
         if ((data ?? []).length < PAGE) return rows
       }
     },

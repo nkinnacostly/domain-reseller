@@ -5,6 +5,7 @@ import {
   hasChanges,
   listingRefusal,
   retirementRefusal,
+  termsNotes,
   toRows,
 } from './catalogue'
 import type { CatalogueStore } from './store'
@@ -58,7 +59,7 @@ export async function syncCatalogue(options: SyncOptions): Promise<SyncResult> {
 
   const current = await store.load()
   const diff = compareCatalogue(rows, current)
-  const report = formatReport(diff, counts.listed, counts.sellable)
+  const report = formatReport(diff, counts.listed, counts.sellable, termsNotes(listing.items))
 
   const tooMany = retirementRefusal(diff, current)
   if (tooMany) {
