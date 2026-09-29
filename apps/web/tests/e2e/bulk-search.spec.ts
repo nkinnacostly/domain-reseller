@@ -217,10 +217,13 @@ test.describe('bulk search', () => {
     expect(download.suggestedFilename()).toMatch(/^bulk-search-\d{4}-\d{2}-\d{2}\.csv$/)
     const text = (await readFile(await download.path(), 'utf8')).replace(/^\uFEFF/, '')
     const lines = text.split('\r\n')
-    expect(lines[0]).toBe('name,extension,status,first_year_price_ngn,renewal_price_ngn,ascii_name')
-    expect(lines[1]).toMatch(/^getpaid\.com,com,available,\d+\.\d{2},\d+\.\d{2},getpaid\.com$/)
-    expect(lines[2]).toBe('takenbrand.com,com,taken,,,takenbrand.com')
-    expect(lines[3]).toBe('not_a_name,,not a domain,,,')
+    // Each price with the years it buys: one for .com, two for .ai (migration 37).
+    expect(lines[0]).toBe(
+      'name,extension,status,first_term_price_ngn,first_term_years,renewal_price_ngn,renewal_term_years,ascii_name',
+    )
+    expect(lines[1]).toMatch(/^getpaid\.com,com,available,\d+\.\d{2},1,\d+\.\d{2},1,getpaid\.com$/)
+    expect(lines[2]).toBe('takenbrand.com,com,taken,,,,,takenbrand.com')
+    expect(lines[3]).toBe('not_a_name,,not a domain,,,,,')
   })
 
   test('adds the names selected, and they are in the cart', async ({ page }) => {
