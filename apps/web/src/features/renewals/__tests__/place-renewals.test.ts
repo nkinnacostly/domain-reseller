@@ -116,8 +116,20 @@ beforeEach(() => {
   vi.mocked(getPricedCatalogue).mockResolvedValue({
     vatPct: 7.5,
     tlds: [
-      { tld: 'com', maxPeriod: 10, renewal: { priceKobo: COM_KOBO } },
-      { tld: 'ng', maxPeriod: 10, renewal: { priceKobo: NG_KOBO } },
+      {
+        tld: 'com',
+        maxPeriod: 10,
+        renewPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        renewal: { priceKobo: COM_KOBO },
+        renewalTerm: { years: 1, priceKobo: COM_KOBO },
+      },
+      {
+        tld: 'ng',
+        maxPeriod: 10,
+        renewPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        renewal: { priceKobo: NG_KOBO },
+        renewalTerm: { years: 1, priceKobo: NG_KOBO },
+      },
     ],
   } as never)
   vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 500 })
@@ -257,7 +269,15 @@ describe('placeRenewals — nothing is created or charged when a check fails', (
     })
     vi.mocked(getPricedCatalogue).mockResolvedValue({
       vatPct: 7.5,
-      tlds: [{ tld: 'com', maxPeriod: 10, renewal: { priceKobo: COM_KOBO } }],
+      tlds: [
+        {
+          tld: 'com',
+          maxPeriod: 10,
+          renewPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          renewal: { priceKobo: COM_KOBO },
+          renewalTerm: { years: 1, priceKobo: COM_KOBO },
+        },
+      ],
     } as never)
     expect((await placeRenewals(INPUT))?.data).toEqual({
       error: expect.stringMatching(/^naija\.ng: renewal prices for \.ng are unavailable/),

@@ -19,8 +19,9 @@ const line = (overrides: Partial<LineView> = {}): LineView => ({
   tld: 'com',
   status: 'held',
   periodYears: 1,
+  unsoldYears: null,
   total: '₦18,400',
-  renewal: '₦18,700',
+  renewal: '₦18,700/yr',
   was: null,
   heldUntil: '11:30 am',
   includesIcannFee: true,
@@ -31,6 +32,7 @@ const line = (overrides: Partial<LineView> = {}): LineView => ({
     { years: 1, label: '1 year — ₦18,400' },
     { years: 2, label: '2 years — ₦37,100' },
   ],
+  periodNote: null,
   ...overrides,
 })
 
@@ -185,6 +187,60 @@ describe('CartLine — what it shows', () => {
 
   it('says how long the quoted price is held', () => {
     expect(renderLine()).toHaveTextContent('Price held until 11:30 am')
+  })
+
+  it('offers .ai only the blocks its registry sells, and shows its renewal every 2 years', () => {
+    const item = renderLine({
+      domain: 'getpaid.ai',
+      tld: 'ai',
+      periodYears: 2,
+      total: '₦273,000',
+      renewal: '₦273,000 every 2 years',
+      includesIcannFee: false,
+      privacyOffered: false,
+      periodOptions: [2, 4, 6, 8, 10].map((years) => ({
+        years,
+        label: `${years} years — ₦${(136_500 * years).toLocaleString('en-NG')}`,
+      })),
+      periodNote: 'The .ai registry sells 2, 4, 6, 8 or 10 years at a time.',
+    })
+    const period = within(item).getByRole('combobox', { name: 'Registration period' })
+    expect(
+      within(period)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual([
+      '2 years — ₦273,000',
+      '4 years — ₦546,000',
+      '6 years — ₦819,000',
+      '8 years — ₦1,092,000',
+      '10 years — ₦1,365,000',
+    ])
+    expect(period).toHaveValue('2')
+    expect(period).toHaveAccessibleDescription(
+      'The .ai registry sells 2, 4, 6, 8 or 10 years at a time.',
+    )
+    expect(item).toHaveTextContent('for 2 years, then ₦273,000 every 2 years')
+    expect(
+      within(item).getByRole('switch', { name: 'Renew automatically' }),
+    ).toHaveAccessibleDescription(/^At ₦273,000 every 2 years\./)
+    expect(item).not.toHaveTextContent('/yr')
+  })
+
+  it('says when a period the registry stopped selling was moved', () => {
+    const item = renderLine({
+      domain: 'getpaid.ai',
+      tld: 'ai',
+      status: 'changed',
+      periodYears: 4,
+      unsoldYears: 3,
+      was: '₦409,500',
+      total: '₦546,000',
+      heldUntil: null,
+    })
+    expect(item).toHaveTextContent(
+      'The .ai registry no longer sells 3 years at a time, so this is now for 4 years.',
+    )
   })
 
   it('shows the old and new price when it changed', () => {

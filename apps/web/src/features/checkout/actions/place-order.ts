@@ -23,6 +23,7 @@ import { allowanceRefusal, exceedsAllowance } from '../lib/allowance'
 import { registrantFormSchema, toContact } from '../lib/contact'
 import { type SupplierCost, wholesaleCostUsd } from '../lib/cost'
 import { lineHostsSchema } from '../lib/line-hosts'
+import { renewalTermColumn, unsoldPeriods } from '../lib/periods'
 import { readAllowance } from '../queries/allowance'
 import { chooseNameservers, planHosts } from '../queries/hosts'
 import { saveDefaultContact } from '../queries/registrant'
@@ -123,6 +124,14 @@ export const placeOrder = authAction
         error: 'Your total has changed since this page loaded. Check the new total, then pay.',
       }
     }
+    // FR-C2, N9b: only a period the registry sells has a price we can state
+    // and a cost we know — .ai is sold for 2, 4, 6, 8 or 10 years, never 3.
+    const unsold = unsoldPeriods(lines)
+    if (unsold.length > 0) {
+      return {
+        error: `${unsold.map((line) => line.domain).join(', ')} can't be registered for the period in your cart. ${NOT_CHARGED} Choose one of the periods offered there.`,
+      }
+    }
 
     // ── Velocity (SEC-11) ────────────────────────────────────────────────
     // Stolen cards buy domains in bulk for phishing: a cap on domains per
@@ -193,6 +202,8 @@ export const placeOrder = authAction
         .in('name', [...byTld.keys()]),
       service.from('pricing_settings').select('icann_fee_usd').single(),
     ])
+    // The first term comes from the catalogue the cart was priced with.
+    const firstTerms = new Map(lines.map((line) => [line.tld, line.minPeriod]))
     const costs = new Map<string, SupplierCost>(
       (tldRows ?? []).map((row) => [
         row.name,
@@ -200,6 +211,7 @@ export const placeOrder = authAction
           registerUsd: Number(row.register_usd),
           renewUsd: Number(row.renew_usd),
           isCountryCode: Boolean(row.is_country_code),
+          firstTermYears: firstTerms.get(row.name) ?? 1,
         },
       ]),
     )
@@ -282,6 +294,7 @@ export const placeOrder = authAction
         auto_renew: line.autoRenew,
         price_kobo: line.payableKobo,
         renewal_kobo: line.renewalKobo,
+        ...renewalTermColumn(line.renewYears),
         // FR-C10 — a domain's own host wins over the order's (migration 29).
         ...hosts.columnsFor(line.domain),
       })),

@@ -1,4 +1,4 @@
-import { formatNaira, renewalTotalKobo, vatKobo } from '@dr/shared'
+import { formatNaira, formatRenewal, renewalTotalKobo, vatKobo } from '@dr/shared'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -54,8 +54,8 @@ async function Renew({ params }: { params: Params }) {
   if (!pricing || !domain.expiresAt) notFound()
 
   const expiresAt = domain.expiresAt
-  const options: RenewalOption[] = Array.from({ length: check.maxYears }, (_, index) => {
-    const years = index + 1
+  // Only the periods the registry renews in — for .ai, 2, 4, 6… years (FR-RN1).
+  const options: RenewalOption[] = check.years.map((years) => {
     const subtotal = renewalTotalKobo(pricing, years)
     const vat = vatKobo(subtotal, view.vatPct)
     return {
@@ -68,6 +68,7 @@ async function Renew({ params }: { params: Params }) {
     }
   })
   const rise = priceRise(view.previousRenewalKobo, pricing.renewal.priceKobo)
+  const term = pricing.renewalTerm.years
   const days = daysUntilExpiry(expiresAt, new Date())
   const expired = domain.status === 'expired_grace'
 
@@ -88,10 +89,14 @@ async function Renew({ params }: { params: Params }) {
           <RenewForm
             domainId={domain.id}
             domainName={domain.domainName}
-            perYear={formatNaira(pricing.renewal.priceKobo)}
+            renewal={{ price: formatNaira(pricing.renewalTerm.priceKobo), years: term }}
             vatPct={view.vatPct}
             options={options}
-            priceRise={rise ? { from: formatNaira(rise.from), to: formatNaira(rise.to) } : null}
+            priceRise={
+              rise
+                ? { from: formatRenewal(rise.from, term), to: formatRenewal(rise.to, term) }
+                : null
+            }
             testMode={view.paymentTestMode === true}
           />
         </div>

@@ -133,6 +133,11 @@ beforeEach(() => {
         privacyOffered: true,
         payableKobo: 1_840_000,
         renewalKobo: 1_870_000,
+        status: 'current',
+        minPeriod: 1,
+        registerPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        unsoldYears: null,
+        renewYears: 1,
       },
     ],
     totals: {

@@ -38,6 +38,12 @@ export type PricedLine = StoredLine & {
   currentKobo: number | null
   minPeriod: number
   maxPeriod: number
+  /** Years this extension can be registered for; the line's period is one of them. */
+  registerPeriods: number[]
+  /** The period the line held that the registry no longer sells, if it was moved. */
+  unsoldYears: number | null
+  /** The shortest renewal, in years: the renewal price is shown for this term (N8). */
+  renewYears: number
   /** Generic extensions carry the ICANN fee, already inside the price (FR-C5). */
   includesIcannFee: boolean
   /** Contact privacy is free, and offered on generic extensions (FR-C3). */
@@ -45,16 +51,31 @@ export type PricedLine = StoredLine & {
   heldUntil: string | null
 }
 
+/**
+ * A line's price for `years`, which must be a period the extension is sold
+ * for (periodTotalKobo throws otherwise). The renewal is one year's price —
+ * `quoted_renewal_kobo` has always held a year — and is shown for the
+ * extension's renewal term.
+ */
 export function quoteFor(pricing: TldPricing, years: number): Quote {
   return { totalKobo: periodTotalKobo(pricing, years), renewalKobo: pricing.renewal.priceKobo }
 }
 
-/** Keeps a period inside what the registry allows. */
-export function clampPeriod(
+/** Whether the registry sells a registration of `years` for this extension (FR-C2). */
+export function sellsPeriod(pricing: Pick<TldPricing, 'registerPeriods'>, years: number): boolean {
+  return pricing.registerPeriods.includes(years)
+}
+
+/**
+ * The period to price a line at whose own period is no longer sold: the next
+ * longer one the registry sells, else its longest. Never a shorter one — the
+ * customer asked for at least that long.
+ */
+export function nearestSoldPeriod(
   years: number,
-  pricing: Pick<TldPricing, 'minPeriod' | 'maxPeriod'>,
+  pricing: Pick<TldPricing, 'registerPeriods' | 'minPeriod' | 'maxPeriod'>,
 ): number {
-  return Math.min(Math.max(Math.trunc(years), pricing.minPeriod, 1), pricing.maxPeriod)
+  return pricing.registerPeriods.find((period) => period >= years) ?? pricing.maxPeriod
 }
 
 export function priceLine(
@@ -74,23 +95,35 @@ export function priceLine(
       currentKobo: null,
       minPeriod: 1,
       maxPeriod: line.periodYears,
+      registerPeriods: [line.periodYears],
+      unsoldYears: null,
+      renewYears: 1,
       includesIcannFee: false,
       privacyOffered: false,
       heldUntil: null,
     }
   }
 
-  const current = quoteFor(pricing, line.periodYears)
+  // A period the registry stopped selling since the line was added has no true
+  // price: the line moves to one it sells, and the new price must be accepted
+  // (FR-C4) — a held quote for it cannot be honoured.
+  const sold = sellsPeriod(pricing, line.periodYears)
+  const years = sold ? line.periodYears : nearestSoldPeriod(line.periodYears, pricing)
+  const current = quoteFor(pricing, years)
   const base = {
     ...line,
+    periodYears: years,
     currentKobo: current.totalKobo,
     minPeriod: pricing.minPeriod,
     maxPeriod: pricing.maxPeriod,
+    registerPeriods: pricing.registerPeriods,
+    unsoldYears: sold ? null : line.periodYears,
+    renewYears: pricing.renewalTerm.years,
     includesIcannFee: !pricing.isCountryCode,
     privacyOffered: !pricing.isCountryCode,
   }
 
-  if (now < heldUntil) {
+  if (sold && now < heldUntil) {
     return {
       ...base,
       status: 'held',
@@ -101,7 +134,9 @@ export function priceLine(
   }
 
   const unchanged =
-    current.totalKobo === line.quotedTotalKobo && current.renewalKobo === line.quotedRenewalKobo
+    sold &&
+    current.totalKobo === line.quotedTotalKobo &&
+    current.renewalKobo === line.quotedRenewalKobo
   return {
     ...base,
     status: unchanged ? 'current' : 'changed',

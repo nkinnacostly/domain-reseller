@@ -1,4 +1,5 @@
 import { type LocalStatus, renewalTotalKobo, vatKobo } from '@dr/shared'
+import { periodsText } from '@/features/pricing/lib/terms'
 import { BUSINESS } from '@/lib/business'
 
 /**
@@ -20,7 +21,14 @@ export type RenewableDomain = {
   expiresAt: string | null
 }
 
-export type Renewability = { ok: true; maxYears: number } | { ok: false; reason: string }
+/**
+ * `years`: every renewal the registry sells that fits under the ten-year
+ * limit, ascending — 1 to 10 for most, 2, 4, 6… for .ai. `maxYears` is the
+ * longest of them.
+ */
+export type Renewability =
+  | { ok: true; maxYears: number; years: number[] }
+  | { ok: false; reason: string }
 
 export function addYears(date: Date | string, years: number): Date {
   const next = new Date(date)
@@ -33,8 +41,8 @@ export function renewability(
   options: {
     /** The payment keys' side: true for test keys, null when payments are not set up. */
     paymentTestMode: boolean | null
-    /** The extension's longest registration period, from the catalogue. */
-    tldMaxPeriod: number | null
+    /** The renewal periods the extension is sold in, from the catalogue; null without a price. */
+    renewPeriods: readonly number[] | null
     /** A renewal of this domain is already paid for and being made. */
     inProgress: boolean
     now: Date
@@ -72,22 +80,43 @@ export function renewability(
   if (options.inProgress) {
     return { ok: false, reason: 'A renewal of this domain is already paid for and being made.' }
   }
-  if (options.tldMaxPeriod === null) {
+  if (options.renewPeriods === null || options.renewPeriods.length === 0) {
     return { ok: false, reason: 'Renewal prices for this extension are unavailable right now.' }
   }
 
   const limit = addYears(options.now, MAX_YEARS_AHEAD)
-  let maxYears = 0
-  for (let years = 1; years <= Math.min(options.tldMaxPeriod, MAX_YEARS_AHEAD); years += 1) {
-    if (addYears(domain.expiresAt, years) <= limit) maxYears = years
-  }
-  if (maxYears === 0) {
+  const expiresAt = domain.expiresAt
+  const years = options.renewPeriods.filter(
+    (period) => period <= MAX_YEARS_AHEAD && addYears(expiresAt, period) <= limit,
+  )
+  const maxYears = years.at(-1)
+  if (maxYears === undefined) {
+    const shortest = options.renewPeriods[0] ?? 1
     return {
       ok: false,
-      reason: `It’s already registered for as long as a registry allows — ${MAX_YEARS_AHEAD} years ahead.`,
+      reason:
+        shortest === 1
+          ? `It’s already registered for as long as a registry allows — ${MAX_YEARS_AHEAD} years ahead.`
+          : `Its registry renews it only ${shortest} years at a time, and ${shortest} more would take it past the ${MAX_YEARS_AHEAD} years ahead a registry allows. It can be renewed once it is ${MAX_YEARS_AHEAD - shortest} years or less from expiry.`,
     }
   }
-  return { ok: true, maxYears }
+  return { ok: true, maxYears, years }
+}
+
+/**
+ * Why `requested` years cannot be bought now, or null when they can — what
+ * the renewal actions tell someone whose choice is not on offer (N9b).
+ */
+export function renewalYearsRefusal(
+  check: { maxYears: number; years: readonly number[] },
+  requested: number,
+  subject = 'This domain',
+): string | null {
+  if (check.years.includes(requested)) return null
+  if (requested > check.maxYears) {
+    return `${subject} can be renewed for at most ${check.maxYears} ${check.maxYears === 1 ? 'year' : 'years'} now.`
+  }
+  return `${subject} can be renewed for ${periodsText(check.years)} at a time.`
 }
 
 /**
@@ -130,12 +159,16 @@ export function parseRenewIds(value: string | undefined): string[] {
 }
 
 /**
- * The years every domain in a bulk renewal can take: the same for all, so
- * up to the fewest any one of them allows. Null when none is renewable.
+ * The years every renewable domain in a bulk renewal can take: the same for
+ * all, so only the periods each of them is sold in and has room for — a mix
+ * of .com and .ai renews in 2, 4, 6… years. Null when none is renewable;
+ * empty when they share no period.
  */
-export function sharedMaxYears(checks: readonly Renewability[]): number | null {
-  const years = checks.flatMap((check) => (check.ok ? [check.maxYears] : []))
-  return years.length === 0 ? null : Math.min(...years)
+export function sharedYears(checks: readonly Renewability[]): number[] | null {
+  const lists = checks.flatMap((check) => (check.ok ? [check.years] : []))
+  const [first, ...rest] = lists
+  if (!first) return null
+  return first.filter((years) => rest.every((list) => list.includes(years)))
 }
 
 /**
@@ -144,7 +177,7 @@ export function sharedMaxYears(checks: readonly Renewability[]): number | null {
  * VAT once on the subtotal, as checkout charges it.
  */
 export function bulkRenewalTotals(
-  pricings: readonly { renewal: { priceKobo: number } }[],
+  pricings: readonly { renewal: { priceKobo: number }; renewPeriods: readonly number[] }[],
   years: number,
   vatPct: number,
 ): { lineKobo: number[]; subtotalKobo: number; vatKobo: number; totalKobo: number } {

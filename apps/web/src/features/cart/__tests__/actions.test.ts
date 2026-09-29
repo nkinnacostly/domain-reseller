@@ -41,9 +41,19 @@ const record = (name: string, minPeriod = 1): TldRecord => ({
   redemptionDays: 30,
   requiresExtraFields: false,
 })
-const tlds = priceCatalogue([record('com'), record('dev', 2)], INPUTS)
+/** .ai as the sync stores it (29 Sept 2026): $99.90 a year, sold in 2- to 10-year blocks. */
+const aiRecord: TldRecord = {
+  ...record('ai', 2),
+  registerUsd: 99.9,
+  renewUsd: 99.9,
+  isCountryCode: true,
+  registerPeriods: [2, 4, 6, 8, 10],
+  renewPeriods: [2, 4, 6, 8, 10],
+}
+const tlds = priceCatalogue([record('com'), record('dev', 2), aiRecord], INPUTS)
 const com = tlds[0]
-if (!com) throw new Error('fixture')
+const ai = tlds.find((entry) => entry.tld === 'ai')
+if (!com || !ai) throw new Error('fixture')
 
 const available = (status = 'available') => ({
   ok: true as const,
@@ -127,6 +137,22 @@ describe('addToCart', () => {
     expect(vi.mocked(store.insertLine).mock.calls[0]?.[1].periodYears).toBe(2)
   })
 
+  it('adds a block-sold extension at its two-year minimum, never one year (.ai)', async () => {
+    vi.mocked(checkAvailability).mockResolvedValue({
+      ok: true,
+      results: [{ name: 'getpaid', tld: 'ai', domain: 'getpaid.ai', status: 'available' }],
+    })
+    await addToCart({ domain: 'getpaid.ai' })
+    expect(store.insertLine).toHaveBeenCalledWith('cart-1', {
+      domain: 'getpaid.ai',
+      tld: 'ai',
+      periodYears: 2,
+      quotedTotalKobo: 2 * ai.registration.priceKobo,
+      quotedRenewalKobo: ai.renewal.priceKobo,
+      quotedFxRateId: 'rate-1',
+    })
+  })
+
   it('gives an anonymous shopper an httpOnly cart cookie', async () => {
     vi.mocked(store.currentOwner).mockResolvedValue({ owner: null, anonToken: null })
     await addToCart({ domain: 'getpaid.com' })
@@ -177,6 +203,32 @@ describe('updateCartLine', () => {
     expect(result?.data).toEqual({ error: 'That domain is no longer in your cart.' })
     expect(store.updateLine).not.toHaveBeenCalled()
   })
+
+  it('refuses a period the registry does not sell, and names the ones it does (.ai)', async () => {
+    const aiLine = { ...stored, domain: 'getpaid.ai', tld: 'ai', periodYears: 2 }
+    vi.mocked(store.loadLines).mockResolvedValue([aiLine])
+    for (const periodYears of [1, 3, 5]) {
+      const result = await updateCartLine({ lineId: stored.id, periodYears })
+      expect(result?.data).toEqual({ error: '.ai can be registered for 2, 4, 6, 8 or 10 years.' })
+    }
+    expect(store.updateLine).not.toHaveBeenCalled()
+  })
+
+  it('re-quotes a block-sold line for a period it sells', async () => {
+    vi.mocked(store.loadLines).mockResolvedValue([
+      { ...stored, domain: 'getpaid.ai', tld: 'ai', periodYears: 2 },
+    ])
+    await updateCartLine({ lineId: stored.id, periodYears: 6 })
+    expect(store.updateLine).toHaveBeenCalledWith(
+      'cart-1',
+      stored.id,
+      expect.objectContaining({
+        period_years: 6,
+        quoted_total_kobo: 6 * ai.registration.priceKobo,
+        quoted_renewal_kobo: ai.renewal.priceKobo,
+      }),
+    )
+  })
 })
 
 describe('acceptCurrentPrices', () => {
@@ -210,7 +262,32 @@ describe('acceptCurrentPrices', () => {
     expect(store.updateLine).toHaveBeenCalledWith(
       'cart-1',
       'a',
-      expect.objectContaining({ quoted_total_kobo: com.registration.priceKobo }),
+      expect.objectContaining({ period_years: 1, quoted_total_kobo: com.registration.priceKobo }),
+    )
+  })
+
+  it('moves a line off a period no longer sold to the one the cart showed, and prices that', async () => {
+    vi.mocked(store.loadLines).mockResolvedValue([
+      {
+        id: 'c',
+        domain: 'getpaid.ai',
+        tld: 'ai',
+        periodYears: 3,
+        privacy: false,
+        autoRenew: true,
+        quotedTotalKobo: 1,
+        quotedRenewalKobo: 1,
+        quotedAt: '2026-09-23T10:00:00.000Z',
+      },
+    ])
+    await acceptCurrentPrices()
+    expect(store.updateLine).toHaveBeenCalledWith(
+      'cart-1',
+      'c',
+      expect.objectContaining({
+        period_years: 4,
+        quoted_total_kobo: 4 * ai.registration.priceKobo,
+      }),
     )
   })
 })

@@ -6,6 +6,7 @@ import {
   type RenewableDomain,
   renewability,
   renewalCostUsd,
+  renewalYearsRefusal,
 } from '../lib/renewal'
 
 const NOW = new Date('2026-09-24T12:00:00.000Z')
@@ -15,19 +16,43 @@ const DOMAIN: RenewableDomain = {
   testMode: true,
   expiresAt: '2027-09-23T10:00:00.000Z',
 }
-const OPTIONS = { paymentTestMode: true, tldMaxPeriod: 10, inProgress: false, now: NOW }
+const EVERY_YEAR = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+const OPTIONS = { paymentTestMode: true, renewPeriods: EVERY_YEAR, inProgress: false, now: NOW }
+const upTo = (max: number) => EVERY_YEAR.filter((years) => years <= max)
 
 describe('renewability (FR-RN1, FR-RN5)', () => {
   it('offers every year up to ten years from today', () => {
     // Expires in a year: nine more years fit under the ten-year ceiling.
-    expect(renewability(DOMAIN, OPTIONS)).toEqual({ ok: true, maxYears: 9 })
+    expect(renewability(DOMAIN, OPTIONS)).toEqual({ ok: true, maxYears: 9, years: upTo(9) })
   })
 
   it('stops at the extension’s own longest period', () => {
-    expect(renewability(DOMAIN, { ...OPTIONS, tldMaxPeriod: 5 })).toEqual({
+    expect(renewability(DOMAIN, { ...OPTIONS, renewPeriods: upTo(5) })).toEqual({
       ok: true,
       maxYears: 5,
+      years: upTo(5),
     })
+  })
+
+  it('offers only the blocks a registry renews in, under the ten-year limit (.ai)', () => {
+    expect(renewability(DOMAIN, { ...OPTIONS, renewPeriods: [2, 4, 6, 8, 10] })).toEqual({
+      ok: true,
+      maxYears: 8,
+      years: [2, 4, 6, 8],
+    })
+  })
+
+  it('says why a block-sold domain too near the limit cannot be renewed yet', () => {
+    const nearly = { ...DOMAIN, expiresAt: addYears(NOW, 9).toISOString() }
+    const check = renewability(nearly, { ...OPTIONS, renewPeriods: [2, 4, 6, 8, 10] })
+    expect(check).toEqual({
+      ok: false,
+      reason: expect.stringMatching(
+        /renews it only 2 years at a time.*8 years or less from expiry/,
+      ),
+    })
+    // A year at a time still fits there.
+    expect(renewability(nearly, OPTIONS)).toMatchObject({ ok: true, years: [1] })
   })
 
   it('renews a domain in its grace period at the normal price', () => {
@@ -36,7 +61,7 @@ describe('renewability (FR-RN1, FR-RN5)', () => {
       status: 'expired_grace' as const,
       expiresAt: '2026-09-01T00:00:00Z',
     }
-    expect(renewability(expired, OPTIONS)).toEqual({ ok: true, maxYears: 10 })
+    expect(renewability(expired, OPTIONS)).toEqual({ ok: true, maxYears: 10, years: EVERY_YEAR })
   })
 
   it('refuses once the domain is already ten years ahead', () => {
@@ -92,8 +117,36 @@ describe('renewability (FR-RN1, FR-RN5)', () => {
   })
 
   it('withholds renewal without a price for the extension (N5b)', () => {
-    const check = renewability(DOMAIN, { ...OPTIONS, tldMaxPeriod: null })
+    const check = renewability(DOMAIN, { ...OPTIONS, renewPeriods: null })
     expect(!check.ok && check.reason).toMatch(/prices for this extension are unavailable/)
+    const none = renewability(DOMAIN, { ...OPTIONS, renewPeriods: [] })
+    expect(!none.ok && none.reason).toMatch(/prices for this extension are unavailable/)
+  })
+})
+
+describe('renewalYearsRefusal (N9b)', () => {
+  const blocks = { maxYears: 8, years: [2, 4, 6, 8] }
+
+  it('accepts a period on offer', () => {
+    expect(renewalYearsRefusal(blocks, 4)).toBeNull()
+  })
+
+  it('refuses a year the registry does not renew in, naming the ones it does', () => {
+    expect(renewalYearsRefusal(blocks, 3)).toBe(
+      'This domain can be renewed for 2, 4, 6 or 8 years at a time.',
+    )
+    expect(renewalYearsRefusal(blocks, 1, 'getpaid.ai')).toBe(
+      'getpaid.ai can be renewed for 2, 4, 6 or 8 years at a time.',
+    )
+  })
+
+  it('keeps the old wording for a period past the ten-year limit', () => {
+    expect(renewalYearsRefusal(blocks, 10)).toBe(
+      'This domain can be renewed for at most 8 years now.',
+    )
+    expect(renewalYearsRefusal({ maxYears: 1, years: [1] }, 2)).toBe(
+      'This domain can be renewed for at most 1 year now.',
+    )
   })
 })
 

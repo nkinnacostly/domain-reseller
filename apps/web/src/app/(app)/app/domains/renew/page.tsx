@@ -1,4 +1,4 @@
-import { formatNaira } from '@dr/shared'
+import { formatNaira, formatRenewal } from '@dr/shared'
 import { ArrowLeft } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -24,7 +24,7 @@ import {
   bulkRenewalTotals,
   parseRenewIds,
   priceRise,
-  sharedMaxYears,
+  sharedYears,
 } from '@/features/renewals/lib/renewal'
 import {
   type BulkRenewalLine,
@@ -78,7 +78,7 @@ function Unavailable({ title, message }: { title: string; message: string }) {
 }
 
 type Renewable = BulkRenewalLine & {
-  check: { ok: true; maxYears: number }
+  check: { ok: true; maxYears: number; years: number[] }
   pricing: NonNullable<BulkRenewalLine['pricing']>
   expiresAt: string
 }
@@ -87,9 +87,8 @@ const isRenewable = (line: BulkRenewalLine): line is Renewable =>
   line.check.ok && line.pricing !== null && line.expiresAt !== null
 
 /** Each choice of years, priced line by line as the one-domain renewal prices it. */
-function priceOptions(lines: Renewable[], maxYears: number, vatPct: number): BulkRenewalOption[] {
-  return Array.from({ length: maxYears }, (_, index) => {
-    const years = index + 1
+function priceOptions(lines: Renewable[], choices: number[], vatPct: number): BulkRenewalOption[] {
+  return choices.map((years) => {
     const totals = bulkRenewalTotals(
       lines.map((line) => line.pricing),
       years,
@@ -155,7 +154,8 @@ async function Renew({ searchParams }: { searchParams: Search }) {
 
   const renewable = view.lines.filter(isRenewable)
   const skipped = view.lines.filter((line) => !isRenewable(line))
-  const maxYears = sharedMaxYears(renewable.map((line) => line.check))
+  // The same years for every domain: only periods each one's registry renews in (FR-P4).
+  const choices = sharedYears(renewable.map((line) => line.check))
   const title =
     renewable.length === 0
       ? 'Renew domains'
@@ -177,12 +177,15 @@ async function Renew({ searchParams }: { searchParams: Search }) {
 
   const domains: BulkRenewalDomain[] = renewable.map((line) => {
     const rise = priceRise(line.previousRenewalKobo, line.pricing.renewal.priceKobo)
+    const term = line.pricing.renewalTerm.years
     return {
       id: line.id,
       domainName: line.domainName,
       expires: dateFormat.format(new Date(line.expiresAt)),
-      perYear: formatNaira(line.pricing.renewal.priceKobo),
-      priceRise: rise ? { from: formatNaira(rise.from), to: formatNaira(rise.to) } : null,
+      renewal: formatRenewal(line.pricing.renewal.priceKobo, term),
+      priceRise: rise
+        ? { from: formatRenewal(rise.from, term), to: formatRenewal(rise.to, term) }
+        : null,
     }
   })
 
@@ -199,13 +202,22 @@ async function Renew({ searchParams }: { searchParams: Search }) {
             Your renewal
           </h2>
           <div className="mt-4">
-            {renewable.length > 0 && maxYears ? (
+            {renewable.length > 0 && choices && choices.length > 0 ? (
               <BulkRenewForm
                 domains={domains}
-                options={priceOptions(renewable, maxYears, view.vatPct)}
+                options={priceOptions(renewable, choices, view.vatPct)}
                 vatPct={view.vatPct}
                 testMode={view.paymentTestMode === true}
               />
+            ) : renewable.length > 1 && choices?.length === 0 ? (
+              <div className="space-y-4">
+                <p className="text-pretty text-sm/6 text-foreground">
+                  These domains can’t be renewed for the same number of years: their registries
+                  renew them in different periods, or one is too close to the ten-year limit. Renew
+                  them in separate orders from each domain’s page.
+                </p>
+                <BackLink />
+              </div>
             ) : (
               <div className="space-y-4">
                 <p className="text-pretty text-sm/6 text-foreground">

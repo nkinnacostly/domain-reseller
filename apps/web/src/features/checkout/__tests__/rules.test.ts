@@ -81,8 +81,10 @@ describe('parseNameservers (FR-C10)', () => {
 
 describe('wholesaleCostUsd (FR-C8)', () => {
   const costs = new Map([
-    ['com', { registerUsd: 11.31, renewUsd: 11.51, isCountryCode: false }],
-    ['co', { registerUsd: 19.49, renewUsd: 38.99, isCountryCode: true }],
+    ['com', { registerUsd: 11.31, renewUsd: 11.51, isCountryCode: false, firstTermYears: 1 }],
+    ['co', { registerUsd: 19.49, renewUsd: 38.99, isCountryCode: true, firstTermYears: 1 }],
+    // .ai as the sync stores it: $99.90 a year, sold from two years.
+    ['ai', { registerUsd: 99.9, renewUsd: 99.9, isCountryCode: true, firstTermYears: 2 }],
   ])
 
   it('adds registration, renewals and the ICANN fee per year on generic extensions', () => {
@@ -95,6 +97,18 @@ describe('wholesaleCostUsd (FR-C8)', () => {
 
   it('refuses to guess the cost of an extension it has no price for', () => {
     expect(() => wholesaleCostUsd([{ tld: 'xyz', periodYears: 1 }], costs, 0.2)).toThrow()
+  })
+
+  it('costs a block-sold extension at what the supplier lists for the period (.ai)', () => {
+    // The supplier's listed .ai prices on 29 Sept 2026: 2 years $199.80, 4 years $399.60.
+    expect(wholesaleCostUsd([{ tld: 'ai', periodYears: 2 }], costs, 0.2)).toBe(199.8)
+    expect(wholesaleCostUsd([{ tld: 'ai', periodYears: 4 }], costs, 0.2)).toBe(399.6)
+  })
+
+  it('refuses to cost a period shorter than the first term the registry sells', () => {
+    expect(() => wholesaleCostUsd([{ tld: 'ai', periodYears: 1 }], costs, 0.2)).toThrow(
+      /not sold for 1 years/,
+    )
   })
 })
 

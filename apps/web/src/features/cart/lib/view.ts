@@ -1,4 +1,5 @@
-import { formatNaira, periodTotalKobo, type TldPricing } from '@dr/shared'
+import { formatNaira, formatRenewal, periodTotalKobo, type TldPricing } from '@dr/shared'
+import { periodsText, yearsText } from '@/features/pricing/lib/terms'
 import type { LineStatus, PricedLine } from './lines'
 
 /**
@@ -11,7 +12,10 @@ export type LineView = {
   tld: string
   status: LineStatus
   periodYears: number
+  /** A period the registry stopped selling, which the line was moved from. */
+  unsoldYears: number | null
   total: string
+  /** The renewal price with its term: "₦18,700/yr", or "₦273,000 every 2 years" (N8). */
   renewal: string
   /** A changed line's old and new price, for the diff (FR-C4). */
   was: string | null
@@ -21,6 +25,8 @@ export type LineView = {
   privacy: boolean
   autoRenew: boolean
   periodOptions: { years: number; label: string }[]
+  /** Said beside the choice where the registry sells only some periods: "…2, 4, 6, 8 or 10 years". */
+  periodNote: string | null
 }
 
 const timeFormat = new Intl.DateTimeFormat('en-NG', {
@@ -31,16 +37,19 @@ const timeFormat = new Intl.DateTimeFormat('en-NG', {
 })
 
 export function toLineView(line: PricedLine, pricing: TldPricing | undefined): LineView {
-  const years = (count: number) => `${count} ${count === 1 ? 'year' : 'years'}`
+  // Only the periods the registry sells — for .ai, 2, 4, 6, 8 or 10 years (FR-C2).
   const periodOptions = pricing
-    ? Array.from({ length: pricing.maxPeriod - pricing.minPeriod + 1 }, (_, index) => {
-        const count = pricing.minPeriod + index
-        return {
-          years: count,
-          label: `${years(count)} — ${formatNaira(periodTotalKobo(pricing, count))}`,
-        }
-      })
-    : [{ years: line.periodYears, label: years(line.periodYears) }]
+    ? pricing.registerPeriods.map((count) => ({
+        years: count,
+        label: `${yearsText(count)} — ${formatNaira(periodTotalKobo(pricing, count))}`,
+      }))
+    : [{ years: line.periodYears, label: yearsText(line.periodYears) }]
+  const periods = pricing?.registerPeriods ?? []
+  const everyYear = periods.length > 0 && periods.every((year, index) => year === index + 1)
+  const periodNote =
+    pricing && !everyYear && periods.length > 1
+      ? `The .${line.tld} registry sells ${periodsText(periods)} at a time.`
+      : null
 
   return {
     id: line.id,
@@ -48,8 +57,9 @@ export function toLineView(line: PricedLine, pricing: TldPricing | undefined): L
     tld: line.tld,
     status: line.status,
     periodYears: line.periodYears,
+    unsoldYears: line.unsoldYears,
     total: formatNaira(line.payableKobo),
-    renewal: formatNaira(line.renewalKobo),
+    renewal: formatRenewal(line.renewalKobo, line.renewYears),
     was: line.status === 'changed' ? formatNaira(line.quotedTotalKobo) : null,
     heldUntil: line.heldUntil ? timeFormat.format(new Date(line.heldUntil)) : null,
     includesIcannFee: line.includesIcannFee,
@@ -57,5 +67,6 @@ export function toLineView(line: PricedLine, pricing: TldPricing | undefined): L
     privacy: line.privacy,
     autoRenew: line.autoRenew,
     periodOptions,
+    periodNote,
   }
 }

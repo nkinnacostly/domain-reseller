@@ -69,6 +69,42 @@ describe('loadPricedCatalogue (the cached read)', () => {
     expect(priced?.featured[0]?.tagline).toBe('The one everybody types first')
   })
 
+  it('reads a row without period columns (before migration 37) as every year, as before', async () => {
+    vi.mocked(createServiceClient).mockReturnValue(healthy() as never)
+    const [com] = (await loadPricedCatalogue())?.tlds ?? []
+    expect(com).toMatchObject({
+      registerPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      renewPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      firstTerm: { years: 1 },
+      renewalTerm: { years: 1 },
+    })
+  })
+
+  it('prices a block-sold extension from the periods its row lists (.ai)', async () => {
+    const ai = {
+      ...TLDS[0],
+      name: 'ai',
+      register_usd: '99.9000',
+      renew_usd: '99.9000',
+      min_period: 2,
+      register_periods: [2, 4, 6, 8, 10],
+      renew_periods: [2, 4, 6, 8, 10],
+      featured_rank: null,
+      featured_tagline: null,
+    }
+    vi.mocked(createServiceClient).mockReturnValue(
+      client({ fx_rates: ok(RATE), pricing_settings: ok(SETTINGS), tlds: ok([ai]) }) as never,
+    )
+    const [priced] = (await loadPricedCatalogue())?.tlds ?? []
+    expect(priced).toMatchObject({
+      tld: 'ai',
+      minPeriod: 2,
+      registerPeriods: [2, 4, 6, 8, 10],
+      firstTerm: { years: 2, priceKobo: 2 * (priced?.registration.priceKobo ?? 0) },
+      renewalTerm: { years: 2 },
+    })
+  })
+
   /**
    * The point of the split: a throw is never cached, a `null` is. A dropped
    * connection must not become an hour of "prices unavailable".
