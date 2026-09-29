@@ -169,7 +169,7 @@ export function TransferCheckoutForm({
           <p className="text-xl font-bold tracking-tight break-all text-foreground">{domain}</p>
           {/* N8 — never a price without its renewal price. */}
           <p className="text-sm text-muted-foreground">
-            Transfer {summary.transfer}, then renews at {summary.renewal}/yr
+            Transfer {summary.transfer}, then renews at {summary.renewal}
             {summary.includesIcannFee ? ' · includes the ICANN fee' : ''}
           </p>
         </div>

@@ -17,7 +17,9 @@ type Status = 'available' | 'registered' | 'premium' | 'restricted' | 'unknown'
 
 const price = (registerKobo: number, renewKobo: number): BulkPrice => ({
   register: `₦${(registerKobo / 100).toLocaleString('en-NG')}`,
+  registerYears: 1,
   renew: `₦${(renewKobo / 100).toLocaleString('en-NG')}`,
+  renewYears: 1,
   renewalIsHigher: renewKobo > registerKobo,
   includesIcannFee: true,
   maxPeriod: 10,
@@ -398,9 +400,11 @@ describe('bulk results — CSV download (FR-S5, N8)', () => {
     expect(link.href).toBe('blob:bulk')
     const text = await created[0]?.text()
     expect(text?.split('\r\n')).toEqual([
-      expect.stringMatching(/name,extension,status,first_year_price_ngn,renewal_price_ngn/),
-      'getpaid.com,com,available,18200.00,19000.00,getpaid.com',
-      'takenbrand.com,com,taken,,,takenbrand.com',
+      expect.stringMatching(
+        /name,extension,status,first_term_price_ngn,first_term_years,renewal_price_ngn,renewal_term_years/,
+      ),
+      'getpaid.com,com,available,18200.00,1,19000.00,1,getpaid.com',
+      'takenbrand.com,com,taken,,,,,takenbrand.com',
       '',
     ])
 

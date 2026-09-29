@@ -93,4 +93,67 @@ describe('toLineView — lines whose quote no longer stands', () => {
       toLineView(priceLine(stored, undefined, later, 30), undefined).periodOptions[0]?.label,
     ).toBe('1 year')
   })
+
+  it('keeps a one-year extension’s renewal per year, with no note on the periods', () => {
+    const view = toLineView(priceLine(stored, net, later, 30), net)
+    expect(view.renewal).toBe(`${formatNaira(net.renewal.priceKobo)}/yr`)
+    expect(view.periodNote).toBeNull()
+    expect(view.unsoldYears).toBeNull()
+  })
+})
+
+/** .ai as the sync stores it (29 Sept 2026): $99.90 a year, sold in 2- to 10-year blocks. */
+describe('toLineView — an extension sold only in blocks (.ai)', () => {
+  const [ai] = priceCatalogue(
+    [
+      {
+        name: 'ai',
+        registerUsd: 99.9,
+        renewUsd: 99.9,
+        transferUsd: 99.9,
+        restoreUsd: null,
+        isCountryCode: true,
+        minPeriod: 2,
+        maxPeriod: 10,
+        registerPeriods: [2, 4, 6, 8, 10],
+        renewPeriods: [2, 4, 6, 8, 10],
+        redemptionDays: 30,
+        requiresExtraFields: false,
+      } satisfies TldRecord,
+    ],
+    INPUTS,
+  )
+  if (!ai) throw new Error('fixture')
+  const aiLine = {
+    ...stored,
+    domain: 'getpaid.ai',
+    tld: 'ai',
+    periodYears: 2,
+    quotedTotalKobo: 2 * ai.registration.priceKobo,
+    quotedRenewalKobo: ai.renewal.priceKobo,
+  }
+  const at = new Date('2026-09-23T10:05:00Z')
+
+  it('offers 2, 4, 6, 8 or 10 years only, each at its whole price, and says why', () => {
+    const view = toLineView(priceLine(aiLine, ai, at, 30), ai)
+    expect(view.periodOptions).toEqual(
+      [2, 4, 6, 8, 10].map((years) => ({
+        years,
+        label: `${years} years — ${formatNaira(years * ai.registration.priceKobo)}`,
+      })),
+    )
+    expect(view.periodNote).toBe('The .ai registry sells 2, 4, 6, 8 or 10 years at a time.')
+  })
+
+  it('shows the renewal for its two-year block, never per year (N8)', () => {
+    const view = toLineView(priceLine(aiLine, ai, at, 30), ai)
+    expect(view.total).toBe(formatNaira(2 * ai.registration.priceKobo))
+    expect(view.renewal).toBe(`${formatNaira(2 * ai.renewal.priceKobo)} every 2 years`)
+  })
+
+  it('shows a period the registry stopped selling as moved, with the old price beside the new', () => {
+    const view = toLineView(priceLine({ ...aiLine, periodYears: 3 }, ai, at, 30), ai)
+    expect(view).toMatchObject({ status: 'changed', periodYears: 4, unsoldYears: 3 })
+    expect(view.was).toBe(formatNaira(2 * ai.registration.priceKobo))
+  })
 })

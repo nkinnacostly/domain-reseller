@@ -25,6 +25,7 @@ export type CheckoutLine = {
   domain: string
   years: number
   total: string
+  /** With its term: "₦18,700/yr", or "₦273,000 every 2 years" (N8). */
   renewal: string
   includesIcannFee: boolean
 }
@@ -159,7 +160,7 @@ export function CheckoutForm({
               </p>
               <p className="text-sm text-muted-foreground">
                 {line.years} {line.years === 1 ? 'year' : 'years'} · {line.total}, then{' '}
-                {line.renewal}/yr
+                {line.renewal}
                 {line.includesIcannFee ? ' · includes the ICANN fee' : ''}
               </p>
             </li>

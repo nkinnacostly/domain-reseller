@@ -23,7 +23,7 @@ const REGISTRANT = {
 }
 const SUMMARY = {
   transfer: '₦17,000',
-  renewal: '₦18,700',
+  renewal: '₦18,700/yr',
   vatPct: 7.5,
   vat: '₦1,275',
   total: '₦18,275',

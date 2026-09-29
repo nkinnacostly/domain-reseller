@@ -24,7 +24,9 @@ async function inputs(): Promise<LlmsInput & { all: PriceLine[] }> {
   const line = (row: (typeof rows)[number]): PriceLine => ({
     tld: row.tld,
     register: row.register,
+    registerYears: row.registerYears,
     renew: row.renew,
+    renewYears: row.renewYears,
     transfer: row.transfer,
   })
   const leading = new Set<string>([...priced.featured.map((entry) => entry.tld), ...POPULAR_TLDS])

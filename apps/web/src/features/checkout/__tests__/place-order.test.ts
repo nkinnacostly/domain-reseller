@@ -35,6 +35,12 @@ const LINE = {
   privacyOffered: true,
   payableKobo: 1_840_000,
   renewalKobo: 1_870_000,
+  // A one-year extension, sold every year from 1 to 10 (FR-C2).
+  status: 'current',
+  minPeriod: 1,
+  registerPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  unsoldYears: null,
+  renewYears: 1,
 }
 const TOTALS = {
   subtotalKobo: 1_840_000,
@@ -821,5 +827,111 @@ describe('placeOrder — two-factor is mandatory above ten domains (FR-A2)', () 
     const result = await placeOrder(INPUT)
     expect(result?.data).toEqual({ error: expect.stringMatching(/couldn't complete checkout/) })
     expect(inserted.orders).toEqual([])
+  })
+})
+
+/**
+ * .ai, sold only in blocks of 2, 4, 6, 8 or 10 years at $99.90 a year (29 Sept
+ * 2026): the cart line as priceLine leaves it, at its two-year minimum.
+ */
+describe('placeOrder — an extension sold only in blocks (.ai)', () => {
+  const AI_YEAR_KOBO = 13_650_000
+  const aiLine = (over: Record<string, unknown> = {}) => ({
+    ...LINE,
+    domain: 'getpaid.ai',
+    tld: 'ai',
+    periodYears: 2,
+    privacyOffered: false,
+    payableKobo: 2 * AI_YEAR_KOBO,
+    renewalKobo: AI_YEAR_KOBO,
+    minPeriod: 2,
+    registerPeriods: [2, 4, 6, 8, 10],
+    renewYears: 2,
+    ...over,
+  })
+  const totals = {
+    ...TOTALS,
+    subtotalKobo: 2 * AI_YEAR_KOBO,
+    vatKobo: 2_047_500,
+    totalKobo: 2 * AI_YEAR_KOBO + 2_047_500,
+  }
+  const cart = (line: Record<string, unknown>) =>
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: [line],
+      totals,
+      vatPct: 7.5,
+      lockMinutes: 30,
+    } as never)
+
+  beforeEach(() => {
+    vi.mocked(checkAvailability).mockResolvedValue({
+      ok: true,
+      results: [{ name: 'getpaid', tld: 'ai', domain: 'getpaid.ai', status: 'available' }],
+    })
+    answers.tlds = [{ name: 'ai', register_usd: 99.9, renew_usd: 99.9, is_country_code: true }]
+  })
+
+  it('refuses a period the registry does not sell, before any supplier or payment call', async () => {
+    cart(aiLine({ periodYears: 3 }))
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: totals.totalKobo })
+    expect(result?.data).toEqual({
+      error: expect.stringMatching(
+        /^getpaid\.ai can't be registered for the period in your cart\. You haven't been charged\./,
+      ),
+    })
+    expect(checkAvailability).not.toHaveBeenCalled()
+    expect(callGateway).not.toHaveBeenCalled()
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('refuses a line the cart had to move off a period no longer sold', async () => {
+    cart(aiLine({ periodYears: 4, unsoldYears: 3 }))
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: totals.totalKobo })
+    expect(result?.data).toEqual({ error: expect.stringMatching(/can't be registered/) })
+    expect(inserted.orders).toEqual([])
+  })
+
+  it('orders two years, with its renewal term, at the total the customer saw', async () => {
+    cart(aiLine())
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: totals.totalKobo })
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({ subtotal_kobo: 2 * AI_YEAR_KOBO, total_kobo: totals.totalKobo }),
+    ])
+    expect(inserted.items[0]).toEqual([
+      expect.objectContaining({
+        domain: 'getpaid.ai',
+        period_years: 2,
+        price_kobo: 2 * AI_YEAR_KOBO,
+        renewal_kobo: AI_YEAR_KOBO,
+        renewal_years: 2,
+        privacy: false,
+      }),
+    ])
+  })
+
+  it('checks the float against the supplier’s two-year price, $199.80, to the cent (FR-C8)', async () => {
+    cart(aiLine())
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 199.8 })
+    await placeOrder({ ...INPUT, expectedTotalKobo: totals.totalKobo })
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 199.79 })
+    await placeOrder({ ...INPUT, expectedTotalKobo: totals.totalKobo })
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({ float_check: 'covered' }),
+      expect.objectContaining({ float_check: 'shortfall_test_mode' }),
+    ])
+  })
+
+  it('writes a one-year line exactly as before, with no renewal term column', async () => {
+    answers.tlds = [{ name: 'com', register_usd: 11.31, renew_usd: 11.51, is_country_code: false }]
+    vi.mocked(checkAvailability).mockResolvedValue({
+      ok: true,
+      results: [{ name: 'getpaid', tld: 'com', domain: 'getpaid.com', status: 'available' }],
+    })
+    await placeOrder(INPUT)
+    const [line] = (inserted.items[0] as Record<string, unknown>[] | undefined) ?? []
+    expect(line).toMatchObject({ domain: 'getpaid.com', period_years: 1 })
+    expect(Object.keys(line ?? {})).not.toContain('renewal_years')
   })
 })

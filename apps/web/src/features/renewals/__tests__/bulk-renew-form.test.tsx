@@ -17,15 +17,15 @@ const DOMAINS: BulkRenewalDomain[] = [
     id: A,
     domainName: 'getpaid.com',
     expires: '24 September 2027',
-    perYear: '₦18,700',
+    renewal: '₦18,700/yr',
     priceRise: null,
   },
   {
     id: B,
     domainName: 'naija.ng',
     expires: '1 March 2027',
-    perYear: '₦10,500',
-    priceRise: { from: '₦9,500', to: '₦10,500' },
+    renewal: '₦10,500/yr',
+    priceRise: { from: '₦9,500/yr', to: '₦10,500/yr' },
   },
 ]
 const OPTIONS: BulkRenewalOption[] = [

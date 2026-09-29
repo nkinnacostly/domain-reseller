@@ -44,6 +44,11 @@ export type PricedCatalogue = {
   version: string
 }
 
+/** A period column as numbers; absent (before migration 37) or null means none listed. */
+function periodList(value: readonly (number | string)[] | null | undefined): number[] | null {
+  return Array.isArray(value) ? value.map(Number) : null
+}
+
 /**
  * The priced catalogue, or `null` when prices must be withheld (N5b).
  *
@@ -101,9 +106,10 @@ export async function readPricedCatalogue(): Promise<PricedCatalogue | null> {
     allRows((from, to) =>
       supabase
         .from('tlds')
-        .select(
-          'name, register_usd, renew_usd, transfer_usd, restore_usd, min_period, max_period, redemption_days, requires_extra_fields, is_country_code, featured_rank, featured_tagline',
-        )
+        // Every column: a database without migration 37's period columns
+        // still reads, each row then selling every year from min to max as
+        // before — so this can deploy before the migration is applied.
+        .select('*')
         .eq('is_sellable', true)
         // Paused extensions are ours to switch off without a deploy — the .ng
         // family is paused while we find a competitive source (PRD R17).
@@ -153,6 +159,8 @@ export async function readPricedCatalogue(): Promise<PricedCatalogue | null> {
     isCountryCode: Boolean(row.is_country_code),
     minPeriod: Number(row.min_period),
     maxPeriod: Number(row.max_period),
+    registerPeriods: periodList(row.register_periods),
+    renewPeriods: periodList(row.renew_periods),
     redemptionDays: Number(row.redemption_days),
     requiresExtraFields: Boolean(row.requires_extra_fields),
   }))

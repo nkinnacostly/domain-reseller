@@ -154,7 +154,7 @@ describe('getRenewalView', () => {
       paymentTestMode: true,
       open: true,
       // Expiring a year from now, so nine more years reach the ten-year limit.
-      check: { ok: true, maxYears: 9 },
+      check: { ok: true, maxYears: 9, years: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
     })
   })
 
@@ -190,7 +190,7 @@ describe('getRenewalView', () => {
     ])('does not count a %s line in a %s order as under way', async (status, order) => {
       userClient({ lines: [line(status, order)] })
       const view = await getRenewalView('getpaid.com')
-      expect(view?.check).toEqual({ ok: true, maxYears: 9 })
+      expect(view?.check).toEqual({ ok: true, maxYears: 9, years: [1, 2, 3, 4, 5, 6, 7, 8, 9] })
     })
   })
 
@@ -217,7 +217,7 @@ describe('getRenewalView', () => {
       userClient({ lines: null })
       const view = await getRenewalView('getpaid.com')
       expect(view?.previousRenewalKobo).toBe(1_870_000)
-      expect(view?.check).toEqual({ ok: true, maxYears: 9 })
+      expect(view?.check).toEqual({ ok: true, maxYears: 9, years: [1, 2, 3, 4, 5, 6, 7, 8, 9] })
     })
 
     it('is unknown when nothing was ever quoted or paid', async () => {

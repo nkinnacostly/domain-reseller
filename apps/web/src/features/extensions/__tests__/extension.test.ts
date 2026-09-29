@@ -14,6 +14,7 @@ import {
   lengthText,
   normaliseExtension,
   periodText,
+  priceSentence,
 } from '../lib/extension'
 
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
@@ -32,15 +33,25 @@ const record = (name: string, overrides: Partial<TldRecord> = {}): TldRecord => 
   ...overrides,
 })
 
-const [COM, PROMO, NOXFER] = priceCatalogue(
+const [COM, PROMO, NOXFER, AI] = priceCatalogue(
   [
     record('com', { renewUsd: 11.31 }),
     record('promo', { registerUsd: 2, renewUsd: 30 }),
     record('noxfer', { transferUsd: null }),
+    // .ai as the sync stores it (29 Sept 2026): $99.90 a year, sold in 2- to 10-year blocks.
+    record('ai', {
+      registerUsd: 99.9,
+      renewUsd: 99.9,
+      transferUsd: 99.9,
+      isCountryCode: true,
+      minPeriod: 2,
+      registerPeriods: [2, 4, 6, 8, 10],
+      renewPeriods: [2, 4, 6, 8, 10],
+    }),
   ],
   INPUTS,
 )
-if (!COM || !PROMO || !NOXFER) throw new Error('fixture catalogue did not price')
+if (!COM || !PROMO || !NOXFER || !AI) throw new Error('fixture catalogue did not price')
 
 const facts = (overrides: Partial<ExtensionFacts> = {}): ExtensionFacts => ({
   ...factsFromPricing(COM),
@@ -144,9 +155,14 @@ describe('rules', () => {
   })
 
   it('states the registration period', () => {
-    expect(periodText(1, 10)).toBe('1 to 10 years at a time')
-    expect(periodText(2, 2)).toBe('2 years at a time')
-    expect(periodText(1, 1)).toBe('1 year at a time')
+    expect(periodText([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toBe('1 to 10 years at a time')
+    expect(periodText([2])).toBe('2 years at a time')
+    expect(periodText([1])).toBe('1 year at a time')
+  })
+
+  it('names only the periods a block-sold extension is sold in (.ai)', () => {
+    expect(periodText([2, 4, 6, 8, 10])).toBe('2, 4, 6, 8 or 10 years at a time')
+    expect(periodText([1, 2, 3, 4, 5, 10])).toBe('1, 2, 3, 4, 5 or 10 years at a time')
   })
 
   it('states name length only when it is known', () => {
@@ -170,9 +186,20 @@ describe('extensionPrices', () => {
   it('always carries the renewal price with the first-year price (N8)', () => {
     expect(extensionPrices(COM, null)).toEqual({
       register: formatNaira(COM.registration.priceKobo),
+      registerYears: 1,
       renew: formatNaira(COM.renewal.priceKobo),
+      renewYears: 1,
       transfer: formatNaira(COM.transfer?.priceKobo ?? 0),
       renewalIsHigher: COM.renewalIsHigher,
+    })
+  })
+
+  it('prices a block-sold extension for its shortest term, never one year (.ai)', () => {
+    expect(extensionPrices(AI, null)).toMatchObject({
+      register: formatNaira(2 * AI.registration.priceKobo),
+      registerYears: 2,
+      renew: formatNaira(2 * AI.renewal.priceKobo),
+      renewYears: 2,
     })
   })
 
@@ -200,6 +227,34 @@ describe('extensionFaqs', () => {
       new RegExp(`^Transferring one in costs ${prices?.transfer}`),
     )
     expect(answer(faqs, 'Is the ICANN')).toMatch(/^Yes\./)
+  })
+
+  it('words .ai by its real terms: the two-year minimum, renewing every two years', () => {
+    const prices = extensionPrices(AI, null)
+    const faqs = extensionFaqs({
+      facts: factsFromPricing(AI),
+      prices,
+      vatPct: 7.5,
+    })
+    const two = formatNaira(2 * AI.registration.priceKobo)
+    expect(prices && priceSentence('ai', prices)).toBe(
+      `${two} for 2 years (the shortest term .ai allows), then ${two} every 2 years`,
+    )
+    expect(answer(faqs, 'How much')).toMatch(
+      new RegExp(
+        `^${two} for 2 years \\(the shortest term \\.ai allows\\), then ${two} every 2 years to renew\\.`,
+      ),
+    )
+    expect(answer(faqs, 'How long')).toMatch(/^2, 4, 6, 8 or 10 years at a time\./)
+    expect(answer(faqs, 'Can I transfer')).toMatch(new RegExp(`then ${two} every 2 years\\.`))
+    expect(faqs.map((faq) => faq.a).join(' ')).not.toMatch(/a year to renew|\/yr/)
+  })
+
+  it('keeps the one-year sentence exactly as it was', () => {
+    const prices = extensionPrices(COM, null)
+    expect(prices && priceSentence('com', prices)).toBe(
+      `${prices?.register} for the first year, then ${prices?.renew} a year`,
+    )
   })
 
   it('says when renewing costs more than the first year', () => {

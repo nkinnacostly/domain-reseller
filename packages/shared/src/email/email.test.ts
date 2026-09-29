@@ -138,6 +138,27 @@ describe('renderNotice', () => {
     expect(text).toContain('https://www.mydomainshub.com/app/orders/order-1/receipt')
   })
 
+  it('words a renewal sold only in blocks by its block, never per year (N8, N9b)', () => {
+    const { text, version } = render('order_receipt', {
+      ...SAMPLES.order_receipt,
+      lines: [
+        {
+          domain: 'getpaid.ai',
+          kind: 'register',
+          years: 2,
+          price_kobo: 27300000,
+          renewal_kobo: 13650000,
+          renewal_years: 2,
+        },
+      ],
+    })
+    expect(text).toContain(
+      'getpaid.ai (Registration, 2 years · renews at ₦273,000 every 2 years): ₦273,000',
+    )
+    expect(text).not.toContain('/yr')
+    expect(version).toBe('order_receipt@2')
+  })
+
   it('marks a test-mode email in the subject and the body', () => {
     const notice = render('order_receipt', SAMPLES.order_receipt, { ...CONTEXT, testMode: true })
     expect(notice.subject).toBe('[Test] Receipt for order ND-001040')

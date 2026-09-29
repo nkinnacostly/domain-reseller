@@ -1,4 +1,4 @@
-import { formatNaira } from '@dr/shared'
+import { formatNaira, formatRenewal } from '@dr/shared'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -63,7 +63,7 @@ async function Checkout() {
         domain: line.domain,
         years: line.periodYears,
         total: formatNaira(line.payableKobo),
-        renewal: formatNaira(line.renewalKobo),
+        renewal: formatRenewal(line.renewalKobo, line.renewYears),
         includesIcannFee: line.includesIcannFee,
       }))}
       summary={{

@@ -1,4 +1,4 @@
-import { formatNaira } from '@dr/shared'
+import { formatNaira, formatRenewal } from '@dr/shared'
 import { DomainName } from '@/components/common/domain-name'
 import { Brand } from '@/components/layout/brand'
 import { PANEL } from '@/components/layout/panel'
@@ -125,8 +125,8 @@ export function ReceiptDocument({
                     <DomainName name={line.domain} />
                   </p>
                   <p className="text-muted-foreground">
-                    {lineLabel(line.kind, line.years)} · renews at {formatNaira(line.renewalKobo)}
-                    /yr
+                    {lineLabel(line.kind, line.years)} · renews at{' '}
+                    {formatRenewal(line.renewalKobo, line.renewalYears)}
                   </p>
                   {line.failed ? (
                     <p data-line-failed className="text-foreground">

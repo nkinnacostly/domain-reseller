@@ -187,7 +187,9 @@ describe('resultsCsv — the export (FR-S5, N8)', () => {
       row({
         price: {
           register: '₦18,200',
+          registerYears: 1,
           renew: '₦19,000',
+          renewYears: 1,
           renewalIsHigher: true,
           includesIcannFee: true,
           maxPeriod: 10,
@@ -216,11 +218,11 @@ describe('resultsCsv — the export (FR-S5, N8)', () => {
     expect(csv.startsWith(BOM)).toBe(true)
     expect(csv.slice(1).split('\r\n')).toEqual([
       CSV_HEADER.join(','),
-      'getpaid.com,com,available,18200.00,19000.00,getpaid.com',
-      'takenbrand.com,com,taken,,,takenbrand.com',
-      'café.com,com,not checked,,,xn--caf-dma.com',
-      'mid.xn--p1ai,рф,premium,,,mid.xn--p1ai',
-      "'=not a name,,not a domain,,,",
+      'getpaid.com,com,available,18200.00,1,19000.00,1,getpaid.com',
+      'takenbrand.com,com,taken,,,,,takenbrand.com',
+      'café.com,com,not checked,,,,,xn--caf-dma.com',
+      'mid.xn--p1ai,рф,premium,,,,,mid.xn--p1ai',
+      "'=not a name,,not a domain,,,,,",
       '',
     ])
   })

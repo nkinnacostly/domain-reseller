@@ -98,7 +98,7 @@ describe('getBulkRenewalView (FR-P4, FR-P5)', () => {
     const view = await getBulkRenewalView(['a', 'b', 'c', 'd', 'not-mine'])
 
     expect(view.lines.map((line) => [line.domainName, line.check])).toEqual([
-      ['first.com', { ok: true, maxYears: 9 }],
+      ['first.com', { ok: true, maxYears: 9, years: [1, 2, 3, 4, 5, 6, 7, 8, 9] }],
       [
         'second.com',
         { ok: false, reason: 'A renewal of this domain is already paid for and being made.' },

@@ -49,6 +49,12 @@ const line = (id: string, domain: string) => ({
   privacyOffered: true,
   payableKobo: 1_840_000,
   renewalKobo: 1_870_000,
+  // A one-year extension, sold every year from 1 to 10 (FR-C2).
+  status: 'current',
+  minPeriod: 1,
+  registerPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  unsoldYears: null,
+  renewYears: 1,
 })
 const LINES = [line('line-1', 'getpaid.com'), line('line-2', 'paidly.com')]
 const TOTALS = {

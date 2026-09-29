@@ -13,8 +13,10 @@ export type ReceiptLine = {
   kind: LineKind
   years: number
   priceKobo: number
-  /** N8 — the renewal price quoted with the line, shown beside its price. */
+  /** N8 — the renewal price quoted with the line, one year's, shown beside its price. */
   renewalKobo: number
+  /** The term that price renews in: a year, or 2 for .ai. */
+  renewalYears: number
   failed: boolean
 }
 
@@ -71,6 +73,8 @@ export type ReceiptRow = {
     period_years: number
     price_kobo: number | string
     renewal_kobo: number | string
+    /** Absent on a database before migration 37: a year. */
+    renewal_years?: number | null
     status: string
     created_at: string
   }[]
@@ -177,6 +181,7 @@ export function toReceipt(row: ReceiptRow, countryName?: (code: string) => strin
         years: item.period_years,
         priceKobo: Number(item.price_kobo),
         renewalKobo: Number(item.renewal_kobo),
+        renewalYears: item.renewal_years ?? 1,
         failed: item.status === 'failed',
       }),
     )

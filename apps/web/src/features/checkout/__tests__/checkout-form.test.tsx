@@ -14,14 +14,14 @@ const LINES: CheckoutLine[] = [
     domain: 'getpaid.com',
     years: 1,
     total: '₦18,400',
-    renewal: '₦18,700',
+    renewal: '₦18,700/yr',
     includesIcannFee: true,
   },
   {
     domain: 'getpaid.co',
     years: 2,
     total: '₦74,500',
-    renewal: '₦56,100',
+    renewal: '₦56,100/yr',
     includesIcannFee: false,
   },
 ]
@@ -47,10 +47,16 @@ const REGISTRANT: RegistrantForm = {
   country: 'NG',
 }
 
-function renderForm(overrides: { registrant?: Partial<RegistrantForm>; testMode?: boolean } = {}) {
+function renderForm(
+  overrides: {
+    registrant?: Partial<RegistrantForm>
+    testMode?: boolean
+    lines?: CheckoutLine[]
+  } = {},
+) {
   render(
     <CheckoutForm
-      lines={LINES}
+      lines={overrides.lines ?? LINES}
       summary={SUMMARY}
       registrant={{ ...REGISTRANT, ...overrides.registrant }}
       testMode={overrides.testMode ?? false}
@@ -274,6 +280,24 @@ describe('CheckoutForm — what the customer checks before paying', () => {
       'getpaid.com1 year · ₦18,400, then ₦18,700/yr · includes the ICANN fee',
       'getpaid.co2 years · ₦74,500, then ₦56,100/yr',
     ])
+  })
+
+  it('shows a block-sold domain’s renewal for its block, never per year (.ai)', () => {
+    renderForm({
+      lines: [
+        {
+          domain: 'getpaid.ai',
+          years: 2,
+          total: '₦273,000',
+          renewal: '₦273,000 every 2 years',
+          includesIcannFee: false,
+        },
+      ],
+    })
+    const [item] = within(
+      screen.getByRole('list', { name: 'Domains you are buying' }),
+    ).getAllByRole('listitem')
+    expect(item?.textContent).toBe('getpaid.ai2 years · ₦273,000, then ₦273,000 every 2 years')
   })
 
   it('itemises the subtotal, VAT and total, and pays exactly that total (FR-C5)', () => {

@@ -5,6 +5,7 @@ import type { Json } from '@dr/db/types'
 import { type TldPricing, userMessageFor } from '@dr/shared'
 import { z } from 'zod'
 import { checkoutOpenTo } from '@/features/checkout/lib/access'
+import { renewalTermColumn } from '@/features/checkout/lib/periods'
 import { defaultRegistrant } from '@/features/checkout/queries/registrant'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { env, requirePaymentEnv } from '@/lib/env'
@@ -18,6 +19,7 @@ import {
   paymentCustomer,
   renewability,
   renewalCostUsd,
+  renewalYearsRefusal,
   sharedRegistrant,
 } from '../lib/renewal'
 import { guardBulkRenewal } from '../queries/renewal-guard'
@@ -128,17 +130,15 @@ export const placeRenewals = authAction
         },
         {
           paymentTestMode: payment.testMode,
-          tldMaxPeriod: pricing.maxPeriod,
+          renewPeriods: pricing.renewPeriods,
           inProgress: inProgress.has(domain.id),
           now,
         },
       )
       if (!check.ok) return { error: `${domain.domain_name}: ${check.reason} ${NOT_CHARGED}` }
-      if (parsedInput.years > check.maxYears) {
-        return {
-          error: `${domain.domain_name} can be renewed for at most ${check.maxYears} ${check.maxYears === 1 ? 'year' : 'years'} now. ${NOT_CHARGED}`,
-        }
-      }
+      // Only a period the registry renews in, with room under the ten-year limit (N9b).
+      const refusal = renewalYearsRefusal(check, parsedInput.years, domain.domain_name)
+      if (refusal) return { error: `${refusal} ${NOT_CHARGED}` }
       pricings.push(pricing)
     }
 
@@ -227,6 +227,7 @@ export const placeRenewals = authAction
         auto_renew: domain.auto_renew,
         price_kobo: totals.lineKobo[index] ?? 0,
         renewal_kobo: pricings[index]?.renewal.priceKobo ?? 0,
+        ...renewalTermColumn(pricings[index]?.renewalTerm.years ?? 1),
       })),
     )
     if (lineError) {

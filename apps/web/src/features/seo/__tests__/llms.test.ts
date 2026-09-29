@@ -2,8 +2,31 @@ import { describe, expect, it } from 'vitest'
 import { llmsFullTxt, llmsTxt, type PriceLine } from '../lib/llms'
 
 const SITE = 'https://www.mydomainshub.com'
-const COM: PriceLine = { tld: 'com', register: '₦18,300', renew: '₦18,600', transfer: '₦17,000' }
-const AFRICA: PriceLine = { tld: 'africa', register: '₦21,000', renew: '₦21,000', transfer: null }
+const COM: PriceLine = {
+  tld: 'com',
+  register: '₦18,300',
+  registerYears: 1,
+  renew: '₦18,600',
+  renewYears: 1,
+  transfer: '₦17,000',
+}
+const AFRICA: PriceLine = {
+  tld: 'africa',
+  register: '₦21,000',
+  registerYears: 1,
+  renew: '₦21,000',
+  renewYears: 1,
+  transfer: null,
+}
+/** .ai: sold only in blocks, so its prices are for the whole term. */
+const AI: PriceLine = {
+  tld: 'ai',
+  register: '₦273,000',
+  registerYears: 2,
+  renew: '₦273,000',
+  renewYears: 2,
+  transfer: '₦136,500',
+}
 const prices = { vatPct: 7.5, extensionCount: 691, popular: [COM, AFRICA] }
 
 describe('llms.txt (llmstxt.org)', () => {
@@ -29,6 +52,13 @@ describe('llms.txt (llmstxt.org)', () => {
     for (const line of priceLines) expect(line).toMatch(/then ₦[\d,]+ a year to renew/)
     expect(text).toContain(
       `- [.com](${SITE}/domains/com): ₦18,300 for the first year, then ₦18,600 a year to renew; transfer in ₦17,000`,
+    )
+  })
+
+  it('states a block-sold extension by its real terms, never a year it does not sell (.ai)', () => {
+    const withAi = llmsTxt({ site: SITE, prices: { ...prices, popular: [COM, AI] } })
+    expect(withAi).toContain(
+      `- [.ai](${SITE}/domains/ai): ₦273,000 for 2 years (the shortest term .ai allows), then ₦273,000 every 2 years to renew; transfer in ₦136,500`,
     )
   })
 

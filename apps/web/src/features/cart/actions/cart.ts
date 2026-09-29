@@ -3,6 +3,7 @@
 import type { TldPricing } from '@dr/shared'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
+import { periodsText } from '@/features/pricing/lib/terms'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { packChecks } from '@/features/search/lib/bulk'
 import { toUnicodeHost } from '@/features/search/lib/idn'
@@ -14,7 +15,7 @@ import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
-import { clampPeriod, MAX_CART_ITEMS, quoteFor } from '../lib/lines'
+import { MAX_CART_ITEMS, nearestSoldPeriod, quoteFor, sellsPeriod } from '../lib/lines'
 import {
   CART_COOKIE,
   CART_COOKIE_MAX_AGE,
@@ -111,7 +112,8 @@ export const addToCart = actionClient
         return { error: `A cart holds up to ${MAX_CART_ITEMS} domains. Check out these first.` }
       }
 
-      const years = clampPeriod(pricing.minPeriod, pricing)
+      // The shortest term the registry sells — one year, or two for .ai (FR-C2).
+      const years = pricing.firstTerm.years
       const quote = quoteFor(pricing, years)
       await insertLine(cartId, {
         domain,
@@ -229,7 +231,7 @@ export const addDomainsToCart = actionClient
             continue
           }
 
-          const years = clampPeriod(entry.pricing.minPeriod, entry.pricing)
+          const years = entry.pricing.firstTerm.years
           const quote = quoteFor(entry.pricing, years)
           await insertLine(cartId, {
             domain: entry.domain,
@@ -279,8 +281,14 @@ export const updateCartLine = actionClient
         const priced = await getPricedCatalogue()
         const pricing = priced?.tlds.find((candidate) => candidate.tld === line.tld)
         if (!priced || !pricing) return { error: `We no longer sell .${line.tld}.` }
+        // Only a period the registry sells has a true price (FR-C2, N9b).
+        if (!sellsPeriod(pricing, parsedInput.periodYears)) {
+          return {
+            error: `.${line.tld} can be registered for ${periodsText(pricing.registerPeriods)}.`,
+          }
+        }
         // A new period is a new quote, at today's price, with a fresh lock.
-        const years = clampPeriod(parsedInput.periodYears, pricing)
+        const years = parsedInput.periodYears
         const quote = quoteFor(pricing, years)
         Object.assign(patch, {
           period_years: years,
@@ -328,8 +336,14 @@ export const acceptCurrentPrices = actionClient.action(
       for (const line of await loadLines(cartId)) {
         const pricing = byTld.get(line.tld)
         if (!pricing) continue
-        const quote = quoteFor(pricing, line.periodYears)
+        // A period the registry stopped selling moves to the one the cart
+        // showed in its place (priceLine), and that is the price accepted.
+        const years = sellsPeriod(pricing, line.periodYears)
+          ? line.periodYears
+          : nearestSoldPeriod(line.periodYears, pricing)
+        const quote = quoteFor(pricing, years)
         await updateLine(cartId, line.id, {
+          period_years: years,
           quoted_total_kobo: quote.totalKobo,
           quoted_renewal_kobo: quote.renewalKobo,
           quoted_fx_rate_id: priced.rateId,

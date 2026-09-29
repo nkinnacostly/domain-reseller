@@ -147,6 +147,7 @@ beforeEach(() => {
         isCountryCode: false,
         transfer: { priceKobo: TRANSFER_KOBO },
         renewal: { priceKobo: RENEWAL_KOBO },
+        renewalTerm: { years: 1, priceKobo: RENEWAL_KOBO },
       },
     ],
   } as never)
@@ -296,7 +297,14 @@ describe('placeTransfer — nothing is created or charged when a check fails', (
     }
     vi.mocked(getPricedCatalogue).mockResolvedValue({
       vatPct: 7.5,
-      tlds: [{ tld: 'com', transfer: null, renewal: { priceKobo: RENEWAL_KOBO } }],
+      tlds: [
+        {
+          tld: 'com',
+          transfer: null,
+          renewal: { priceKobo: RENEWAL_KOBO },
+          renewalTerm: { years: 1, priceKobo: RENEWAL_KOBO },
+        },
+      ],
     } as never)
     answers.tld = { transfer_usd: 10.61, is_country_code: false, is_transferable: true }
     expect((await placeTransfer(INPUT))?.data).toEqual({

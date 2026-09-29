@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import { Container } from '@/components/layout/site-shell'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
+import { renewalText, yearsText } from '@/features/pricing/lib/terms'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 
 /**
@@ -17,8 +18,10 @@ export async function PopularExtensions() {
   const tlds = (priced?.featured.slice(0, 6) ?? []).map((entry) => ({
     tld: entry.tld,
     blurb: entry.tagline,
-    firstYear: formatNaira(entry.registration.priceKobo),
-    renewal: formatNaira(entry.renewal.priceKobo),
+    firstYear: formatNaira(entry.firstTerm.priceKobo),
+    firstYears: entry.firstTerm.years,
+    renewal: formatNaira(entry.renewalTerm.priceKobo),
+    renewYears: entry.renewalTerm.years,
     renewalIsHigher: entry.renewalIsHigher,
   }))
 
@@ -62,14 +65,16 @@ export async function PopularExtensions() {
                     <p className="text-sm text-muted-foreground">
                       <span className="block text-2xl font-bold tracking-tight text-foreground">
                         {item.firstYear}
-                        <span className="text-sm font-normal text-muted-foreground">/yr</span>
+                        <span className="text-sm font-normal text-muted-foreground">
+                          {item.firstYears === 1 ? '/yr' : ` for ${yearsText(item.firstYears)}`}
+                        </span>
                       </span>
                       {/* N8 — the renewal price is never hidden. */}
                       Renews at{' '}
                       <span
                         className={item.renewalIsHigher ? 'font-medium text-foreground' : undefined}
                       >
-                        {item.renewal}/yr
+                        {renewalText(item.renewal, item.renewYears)}
                       </span>
                     </p>
                     <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-subtle text-brand-ink transition-colors group-hover:bg-brand group-hover:text-brand-foreground">

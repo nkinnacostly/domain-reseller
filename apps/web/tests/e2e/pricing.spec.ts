@@ -244,16 +244,20 @@ test.describe('flat margin', () => {
   test('the gap between cheap and expensive extensions is only their cost', async ({ page }) => {
     await page.goto('/pricing')
 
-    const priced = await page
-      .locator('tbody tr')
-      .evaluateAll((rows) =>
-        Object.fromEntries(
-          rows.map((row) => [
-            row.querySelector('th')?.childNodes[0]?.textContent?.trim() ?? '',
-            Number((row.querySelector('td')?.textContent ?? '').replace(/[^\d]/g, '')),
-          ]),
-        ),
-      )
+    const priced = await page.locator('tbody tr').evaluateAll((rows) =>
+      Object.fromEntries(
+        rows.map((row) => [
+          row.querySelector('th')?.childNodes[0]?.textContent?.trim() ?? '',
+          // The amount only: a block-sold extension's cell adds "for 2 years".
+          Number(
+            (row.querySelector('td')?.textContent?.match(/₦[\d,]+/)?.[0] ?? '').replace(
+              /[^\d]/g,
+              '',
+            ),
+          ),
+        ]),
+      ),
+    )
 
     // Pick the cheapest and dearest visible extensions.
     const values = Object.values(priced).filter((v) => v > 0)

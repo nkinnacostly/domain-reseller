@@ -93,7 +93,15 @@ beforeEach(() => {
   })
   vi.mocked(getPricedCatalogue).mockResolvedValue({
     vatPct: 7.5,
-    tlds: [{ tld: 'com', maxPeriod: 10, renewal: { priceKobo: RENEWAL_KOBO } }],
+    tlds: [
+      {
+        tld: 'com',
+        maxPeriod: 10,
+        renewPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        renewal: { priceKobo: RENEWAL_KOBO },
+        renewalTerm: { years: 1, priceKobo: RENEWAL_KOBO },
+      },
+    ],
   } as never)
   vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 500 })
   vi.mocked(createPaymentLink).mockResolvedValue('https://checkout.test/pay/1')
@@ -370,5 +378,70 @@ describe('placeRenewal — the order and the payment', () => {
       error: expect.stringMatching(/couldn't reach our payment provider/),
     })
     expect(orderUpdates).toEqual([{ status: 'cancelled' }])
+  })
+})
+
+/**
+ * .ai, whose registry renews only in blocks of 2, 4, 6, 8 or 10 years at
+ * $99.90 a year (29 Sept 2026). Only a period it sells can be paid for.
+ */
+describe('placeRenewal — an extension renewed only in blocks (.ai)', () => {
+  const AI_YEAR_KOBO = 13_650_000
+  const subtotal = 2 * AI_YEAR_KOBO
+  const total = subtotal + Math.round(subtotal * 0.075)
+
+  beforeEach(() => {
+    answers.domain = { ...DOMAIN, domain_name: 'getpaid.ai', tld: 'ai' }
+    answers.cost = { renew_usd: 99.9, is_country_code: true }
+    vi.mocked(getPricedCatalogue).mockResolvedValue({
+      vatPct: 7.5,
+      tlds: [
+        {
+          tld: 'ai',
+          maxPeriod: 10,
+          renewPeriods: [2, 4, 6, 8, 10],
+          renewal: { priceKobo: AI_YEAR_KOBO },
+          renewalTerm: { years: 2, priceKobo: subtotal },
+        },
+      ],
+    } as never)
+  })
+
+  it('refuses a year the registry does not renew in, before any money moves', async () => {
+    for (const years of [1, 3]) {
+      const result = await placeRenewal({ domainId: DOMAIN_ID, years, expectedTotalKobo: 1 })
+      expect(result?.data).toEqual({
+        error:
+          "This domain can be renewed for 2, 4, 6 or 8 years at a time. You haven't been charged.",
+      })
+    }
+    expect(callGateway).not.toHaveBeenCalled()
+    nothingCreated()
+  })
+
+  it('renews for two years and records the term its renewal price is for', async () => {
+    const result = await placeRenewal({ domainId: DOMAIN_ID, years: 2, expectedTotalKobo: total })
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(inserted.items).toEqual([
+      expect.objectContaining({
+        item_type: 'renew',
+        domain: 'getpaid.ai',
+        period_years: 2,
+        price_kobo: subtotal,
+        renewal_kobo: AI_YEAR_KOBO,
+        renewal_years: 2,
+      }),
+    ])
+  })
+
+  it('checks the float against the supplier’s two-year price, $199.80, to the cent (FR-C8)', async () => {
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 199.8 })
+    await placeRenewal({ domainId: DOMAIN_ID, years: 2, expectedTotalKobo: total })
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 199.79 })
+    await placeRenewal({ domainId: DOMAIN_ID, years: 2, expectedTotalKobo: total })
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({ float_check: 'covered' }),
+      expect.objectContaining({ float_check: 'shortfall_test_mode' }),
+    ])
   })
 })

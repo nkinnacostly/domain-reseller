@@ -1,4 +1,5 @@
 import type { PublicPriceRow } from '../lib/public-row'
+import { renewalText, yearsText } from '../lib/terms'
 
 /**
  * The featured extensions, in the order `tlds.featured_rank` sets. Every claim
@@ -18,14 +19,16 @@ export function FeaturedPricing({ rows, label }: { rows: PublicPriceRow[]; label
 
           <p className="mt-4 text-2xl font-bold tracking-tight text-foreground tabular-nums">
             {row.register}
-            <span className="ml-1 text-sm font-normal text-muted-foreground">/yr</span>
+            <span className="ml-1 text-sm font-normal text-muted-foreground">
+              {row.registerYears === 1 ? '/yr' : `for ${yearsText(row.registerYears)}`}
+            </span>
           </p>
 
           <p className="mt-2 text-sm text-muted-foreground">
-            {row.renew === row.register ? (
+            {row.renew === row.register && row.renewYears === row.registerYears ? (
               <span className="font-medium text-accent">Renews at the same price</span>
             ) : (
-              <>Renews at {row.renew}/yr</>
+              <>Renews at {renewalText(row.renew, row.renewYears)}</>
             )}
           </p>
 

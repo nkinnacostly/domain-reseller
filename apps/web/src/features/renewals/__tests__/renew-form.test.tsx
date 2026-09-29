@@ -38,7 +38,7 @@ function renderForm(
     <RenewForm
       domainId={DOMAIN_ID}
       domainName="getpaid.com"
-      perYear="₦18,700"
+      renewal={{ price: '₦18,700', years: 1 }}
       vatPct={7.5}
       options={overrides.options ?? OPTIONS}
       priceRise={overrides.priceRise ?? null}
@@ -94,6 +94,35 @@ describe('RenewForm — choosing how long (FR-RN1)', () => {
         .getAllByRole('option')
         .map((option) => option.textContent),
     ).toEqual(['1 year — ₦18,700', '2 years — ₦37,400'])
+  })
+
+  it('offers a block-sold domain only its blocks, and never a price for one year (.ai)', () => {
+    const block = (years: number, subtotal: string, totalKobo: number): RenewalOption => ({
+      years,
+      newExpiry: `24 September ${2027 + years}`,
+      subtotal,
+      vat: '₦0',
+      total: subtotal,
+      totalKobo,
+    })
+    render(
+      <RenewForm
+        domainId={DOMAIN_ID}
+        domainName="getpaid.ai"
+        renewal={{ price: '₦273,000', years: 2 }}
+        vatPct={7.5}
+        options={[block(2, '₦273,000', 27_300_000), block(4, '₦546,000', 54_600_000)]}
+        priceRise={null}
+        testMode={false}
+      />,
+    )
+    expect(
+      within(period())
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['2 years — ₦273,000', '4 years — ₦546,000'])
+    expect(breakdown()[0]).toEqual(['Renewal (2 years, at ₦273,000 every 2)', '₦273,000'])
+    expect(document.body).not.toHaveTextContent(/\/yr|1 year/)
   })
 
   it('re-dates and re-prices everything when another period is chosen (FR-C5)', async () => {
@@ -234,7 +263,7 @@ describe('RenewForm — what the customer is told before paying', () => {
   })
 
   it('says the renewal price has gone up, from what and to what, before paying (FR-RN7)', () => {
-    renderForm({ priceRise: { from: '₦15,000', to: '₦18,700' } })
+    renderForm({ priceRise: { from: '₦15,000/yr', to: '₦18,700/yr' } })
     expect(screen.getByText('The renewal price has gone up.').parentElement).toHaveTextContent(
       'The renewal price has gone up. It is now ₦18,700/yr, up from the ₦15,000/yr quoted when you last paid for getpaid.com.',
     )

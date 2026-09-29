@@ -9,18 +9,22 @@ import { summarise, syncCatalogue } from './sync'
  * nothing is written without --apply.
  */
 
+const YEARS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+/** Priced the same every year, 1 to 10, as most of the production listing is. */
 const tld = (name: string, register = 10): RawTld => ({
   name,
   prices: [
     {
-      register: [{ period: 1, price: register, currency: 'USD' }],
-      renew: [{ period: 1, price: register, currency: 'USD' }],
+      register: YEARS.map((period) => ({ period, price: register * period, currency: 'USD' })),
+      renew: YEARS.map((period) => ({ period, price: register * period, currency: 'USD' })),
       transfer: [{ period: 1, price: register, currency: 'USD' }],
     },
   ],
   attributes: [],
 })
 
+/** A row synced before migration 37: no periods listed, so every year from 1 to 10. */
 const stored = (name: string, register = 10): CurrentTld => ({
   name,
   register_usd: register,
@@ -29,6 +33,8 @@ const stored = (name: string, register = 10): CurrentTld => ({
   restore_usd: null,
   min_period: 1,
   max_period: 10,
+  register_periods: null,
+  renew_periods: null,
   redemption_days: 0,
   requires_extra_fields: false,
   min_chars: null,
@@ -130,6 +136,41 @@ describe('syncCatalogue', () => {
       priceChanges: 1,
       otherChanges: 0,
     })
+  })
+
+  it('adds an extension sold only in blocks with the periods it can be bought for, and says so', async () => {
+    const ai: RawTld = {
+      name: 'ai',
+      minRegistrationPeriod: 2,
+      maxRegistrationPeriod: 10,
+      registrationPeriods: [2, 4, 6, 8, 10],
+      renewalPeriods: [2, 4, 6, 8, 10],
+      prices: [
+        {
+          register: [2, 4, 6, 8, 10].map((period) => ({ period, price: 99.9 * period })),
+          renew: [2, 3, 4, 5].map((period) => ({
+            period,
+            price: period % 2 ? 999 : 99.9 * period,
+          })),
+          transfer: [{ period: 1, price: 99.9 }],
+        },
+      ],
+    }
+    const store = fakeStore([stored('com')])
+    const result = await sync(listing(tld('com'), ai), store, false)
+    expect(result.outcome).toBe('changes')
+    expect(result.diff?.added).toEqual([
+      expect.objectContaining({
+        name: 'ai',
+        register_usd: 99.9,
+        min_period: 2,
+        register_periods: [2, 4, 6, 8, 10],
+        renew_periods: [2, 4],
+      }),
+    ])
+    const text = result.report.join('\n')
+    expect(text).toContain('.ai              register 2 4 6 8 10 · renew 2 4')
+    expect(store.upsert).not.toHaveBeenCalled()
   })
 
   it('retires nothing when nothing went away', async () => {

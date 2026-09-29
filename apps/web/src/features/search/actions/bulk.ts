@@ -84,12 +84,14 @@ export const checkBulkNames = actionClient
       const row = toPublicRow(pricing)
       prices[tld] = {
         register: row.register,
+        registerYears: row.registerYears,
         renew: row.renew,
+        renewYears: row.renewYears,
         renewalIsHigher: row.renewalIsHigher,
         includesIcannFee: !row.isCountryCode,
         maxPeriod: row.maxPeriod,
-        registerKobo: pricing.registration.priceKobo,
-        renewKobo: pricing.renewal.priceKobo,
+        registerKobo: pricing.firstTerm.priceKobo,
+        renewKobo: pricing.renewalTerm.priceKobo,
       }
     }
     return {

@@ -112,6 +112,7 @@ describe('toReceipt — what it shows', () => {
         years: 1,
         priceKobo: 1_840_000,
         renewalKobo: 1_870_000,
+        renewalYears: 1,
         failed: false,
       },
       {
@@ -121,9 +122,23 @@ describe('toReceipt — what it shows', () => {
         years: 2,
         priceKobo: 1_840_000,
         renewalKobo: 1_870_000,
+        renewalYears: 1,
         failed: true,
       },
     ])
+  })
+
+  it('keeps the renewal term the line recorded, and reads a line without one as a year', () => {
+    const [first, second] = row().order_items
+    const receipt = toReceipt(
+      row({
+        order_items: [
+          { ...(first as ReceiptRow['order_items'][number]), renewal_years: 2 },
+          { ...(second as ReceiptRow['order_items'][number]), renewal_years: null },
+        ],
+      }),
+    )
+    expect(receipt?.lines.map((line) => line.renewalYears).sort()).toEqual([1, 2])
   })
 
   it('tells a renewal and a transfer from a registration', () => {

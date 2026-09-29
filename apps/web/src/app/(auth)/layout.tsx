@@ -17,7 +17,10 @@ import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
  */
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   const [priced, presets] = await Promise.all([getPricedCatalogue(), getNameserverPresets()])
-  const lead = priced?.featured[0]
+  // A year's registration, as the mockup shows it: never an extension sold only in longer terms.
+  const lead = priced?.featured.find(
+    (entry) => entry.firstTerm.years === 1 && entry.renewalTerm.years === 1,
+  )
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1fr_1.05fr]">

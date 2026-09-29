@@ -28,7 +28,7 @@ const PARTS = [
   {
     emoji: '🤝',
     title: 'Our margin',
-    body: 'How we stay in business and keep support answering. The same flat amount on every extension, whether you register, renew or transfer.',
+    body: 'How we stay in business and keep support answering. The same flat amount on every extension, for each year you register, renew or transfer.',
   },
   {
     emoji: '🌐',

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useDeferredValue, useEffect, useId, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { PublicPriceRow } from '../lib/public-row'
+import { yearsText } from '../lib/terms'
 
 const PAGE_SIZE = 40
 
@@ -118,13 +119,26 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
                     </span>
                   ) : null}
                 </th>
-                <td className="py-3 pr-4 text-right tabular-nums">{row.register}</td>
+                <td className="py-3 pr-4 text-right tabular-nums">
+                  {row.register}
+                  {/* A registry that sells no single year: the price is for its shortest term. */}
+                  {row.registerYears > 1 ? (
+                    <span className="block text-muted-foreground text-xs">
+                      for {yearsText(row.registerYears)}
+                    </span>
+                  ) : null}
+                </td>
                 <td className="py-3 pr-4 text-right tabular-nums">
                   <span className={row.renewalIsHigher ? 'font-semibold text-foreground' : ''}>
                     {row.renew}
                   </span>
                   {row.renewalIsHigher ? (
                     <span className="sr-only"> — higher than the first year</span>
+                  ) : null}
+                  {row.renewYears > 1 ? (
+                    <span className="block text-muted-foreground text-xs">
+                      every {yearsText(row.renewYears)}
+                    </span>
                   ) : null}
                 </td>
                 <td className="py-3 pr-4 text-right tabular-nums text-muted-foreground">
@@ -147,6 +161,13 @@ export function PricingTable({ rows }: { rows: PublicPriceRow[] }) {
           </tbody>
         </table>
       </div>
+
+      {shown.some((row) => row.registerYears > 1 || row.renewYears > 1) ? (
+        <p className="mt-4 text-pretty text-muted-foreground text-xs">
+          Where a price is for more than a year — “for 2 years”, “every 2 years” — it is for the
+          whole term: that registry sells nothing shorter.
+        </p>
+      ) : null}
 
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-muted-foreground text-sm">

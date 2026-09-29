@@ -1,4 +1,4 @@
-import { formatNaira } from '@dr/shared'
+import { formatNaira, formatRenewal } from '@dr/shared'
 import { ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { Container } from '@/components/layout/site-shell'
@@ -18,7 +18,8 @@ export async function TransferPrices() {
           {
             tld: entry.tld,
             transfer: formatNaira(entry.transfer.priceKobo),
-            renewal: formatNaira(entry.renewal.priceKobo),
+            // N8 — with its term: "/yr", or "every 2 years" where renewals come in blocks.
+            renewal: formatRenewal(entry.renewal.priceKobo, entry.renewalTerm.years),
           },
         ]
       : [],
@@ -67,7 +68,7 @@ export async function TransferPrices() {
                 <p className="mt-3 text-xl font-bold tracking-tight text-foreground tabular-nums">
                   {row.transfer}
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">Renews at {row.renewal}/yr</p>
+                <p className="mt-1 text-sm text-muted-foreground">Renews at {row.renewal}</p>
               </li>
             ))}
           </ul>

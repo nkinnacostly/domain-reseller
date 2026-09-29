@@ -15,6 +15,7 @@ import { mustTurnOnTwoFactor } from '@/features/auth/queries/two-factor'
 import { checkoutOpenTo } from '@/features/checkout/lib/access'
 import { allowanceRefusal, exceedsAllowance } from '@/features/checkout/lib/allowance'
 import { registrantFormSchema, toContact } from '@/features/checkout/lib/contact'
+import { renewalTermColumn } from '@/features/checkout/lib/periods'
 import { readAllowance } from '@/features/checkout/queries/allowance'
 import { saveDefaultContact } from '@/features/checkout/queries/registrant'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
@@ -304,6 +305,7 @@ export const placeTransfer = authAction
         auto_renew: true,
         price_kobo: subtotal,
         renewal_kobo: pricing.renewal.priceKobo,
+        ...renewalTermColumn(pricing.renewalTerm.years),
       })
       .select('id')
       .single()

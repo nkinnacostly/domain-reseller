@@ -4,13 +4,14 @@ import { randomUUID } from 'node:crypto'
 import { renewalTotalKobo, userMessageFor, vatKobo } from '@dr/shared'
 import { z } from 'zod'
 import { checkoutOpenTo } from '@/features/checkout/lib/access'
+import { renewalTermColumn } from '@/features/checkout/lib/periods'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { env, requirePaymentEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { LIMITS, withinLimit } from '@/lib/rate-limit'
 import { authAction } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
-import { paymentCustomer, renewability, renewalCostUsd } from '../lib/renewal'
+import { paymentCustomer, renewability, renewalCostUsd, renewalYearsRefusal } from '../lib/renewal'
 import { checkFloat, startRenewalPayment } from '../queries/renewal-order'
 
 /**
@@ -96,17 +97,15 @@ export const placeRenewal = authAction
       },
       {
         paymentTestMode: payment.testMode,
-        tldMaxPeriod: pricing.maxPeriod,
+        renewPeriods: pricing.renewPeriods,
         inProgress: (open ?? []).length > 0,
         now: new Date(),
       },
     )
     if (!check.ok) return { error: `${check.reason} ${NOT_CHARGED}` }
-    if (parsedInput.years > check.maxYears) {
-      return {
-        error: `This domain can be renewed for at most ${check.maxYears} ${check.maxYears === 1 ? 'year' : 'years'} now. ${NOT_CHARGED}`,
-      }
-    }
+    // Only a period the registry renews in, with room under the ten-year limit (N9b).
+    const refusal = renewalYearsRefusal(check, parsedInput.years)
+    if (refusal) return { error: `${refusal} ${NOT_CHARGED}` }
 
     // ── Price re-validation (FR-C4) ──────────────────────────────────────
     const subtotal = renewalTotalKobo(pricing, parsedInput.years)
@@ -185,6 +184,7 @@ export const placeRenewal = authAction
       auto_renew: domain.auto_renew,
       price_kobo: subtotal,
       renewal_kobo: pricing.renewal.priceKobo,
+      ...renewalTermColumn(pricing.renewalTerm.years),
     })
     if (lineError) {
       logger.error({ ...dbError(lineError), orderId: order.id }, 'renewal line insert failed')

@@ -1,4 +1,4 @@
-import { formatNaira, vatKobo } from '@dr/shared'
+import { formatNaira, formatRenewal, vatKobo } from '@dr/shared'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -157,7 +157,7 @@ async function TransferIn({ searchParams }: { searchParams: Search }) {
         testMode={view.testMode}
         summary={{
           transfer: formatNaira(subtotal),
-          renewal: formatNaira(pricing.renewal.priceKobo),
+          renewal: formatRenewal(pricing.renewal.priceKobo, pricing.renewalTerm.years),
           vatPct,
           vat: formatNaira(vat),
           total: formatNaira(subtotal + vat),

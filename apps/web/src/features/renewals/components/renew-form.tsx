@@ -23,7 +23,7 @@ export type RenewalOption = {
 export function RenewForm({
   domainId,
   domainName,
-  perYear,
+  renewal,
   vatPct,
   options,
   priceRise,
@@ -31,9 +31,11 @@ export function RenewForm({
 }: {
   domainId: string
   domainName: string
-  perYear: string
+  /** The shortest renewal the registry sells and its price: a year for most, 2 for .ai. */
+  renewal: { price: string; years: number }
   vatPct: number
   options: RenewalOption[]
+  /** FR-RN7 — the renewal price then and now, each with its term. */
   priceRise: { from: string; to: string } | null
   testMode: boolean
 }) {
@@ -68,7 +70,7 @@ export function RenewForm({
       {/* FR-RN7 — a higher renewal price is said before paying, never after. */}
       {priceRise ? (
         <PanelNote title="The renewal price has gone up.">
-          It is now {priceRise.to}/yr, up from the {priceRise.from}/yr quoted when you last paid for{' '}
+          It is now {priceRise.to}, up from the {priceRise.from} quoted when you last paid for{' '}
           {domainName}.
         </PanelNote>
       ) : null}
@@ -101,7 +103,9 @@ export function RenewForm({
       <dl className="space-y-2.5 border-border border-t pt-5 text-sm">
         <div className="flex justify-between gap-4">
           <dt className="text-muted-foreground">
-            Renewal ({chosen.years} × {perYear})
+            {renewal.years === 1
+              ? `Renewal (${chosen.years} × ${renewal.price})`
+              : `Renewal (${chosen.years} years, at ${renewal.price} every ${renewal.years})`}
           </dt>
           <dd className="font-medium text-foreground tabular-nums">{chosen.subtotal}</dd>
         </div>

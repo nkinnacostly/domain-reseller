@@ -22,7 +22,9 @@ const FEATURED = ['com', 'net']
 
 const price = (registerKobo: number, renewKobo = registerKobo): BulkPrice => ({
   register: `₦${registerKobo / 100}`,
+  registerYears: 1,
   renew: `₦${renewKobo / 100}`,
+  renewYears: 1,
   renewalIsHigher: renewKobo > registerKobo,
   includesIcannFee: true,
   maxPeriod: 10,

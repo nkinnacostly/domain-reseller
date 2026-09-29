@@ -580,6 +580,18 @@ export async function contactsForOrder(orderId) {
 }
 
 /**
+ * An order's lines as the database holds them, read with the secret key —
+ * every column, so `renewal_years` (migration 37) is there where it exists.
+ *
+ * @param {string} orderId
+ */
+export async function orderLines(orderId) {
+  const { data, error } = await admin().from('order_items').select('*').eq('order_id', orderId)
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+/**
  * The emails queued for a test user (migration 31). Test users live at
  * example.com, so every one is queued as skipped — never sent — which is
  * what lets e2e check that the right email was queued.

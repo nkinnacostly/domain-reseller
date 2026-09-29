@@ -53,6 +53,13 @@ export function CartLine({ line }: { line: LineView }) {
               Price changed: was {line.was}, now {line.total}
             </p>
           ) : null}
+          {line.unsoldYears ? (
+            <p className="mt-1 text-pretty text-sm text-muted-foreground">
+              The .{line.tld} registry no longer sells {line.unsoldYears}{' '}
+              {line.unsoldYears === 1 ? 'year' : 'years'} at a time, so this is now for{' '}
+              {line.periodYears} {line.periodYears === 1 ? 'year' : 'years'}.
+            </p>
+          ) : null}
           {unavailable ? (
             <p className="mt-1 flex items-center gap-1.5 text-sm text-foreground">
               <CircleAlert className="size-4 text-destructive" aria-hidden="true" />
@@ -82,6 +89,7 @@ export function CartLine({ line }: { line: LineView }) {
                 id={`${id}-period`}
                 value={line.periodYears}
                 disabled={busy || line.periodOptions.length < 2}
+                aria-describedby={line.periodNote ? `${id}-period-note` : undefined}
                 onChange={(event) =>
                   update.execute({ lineId: line.id, periodYears: Number(event.target.value) })
                 }
@@ -93,6 +101,14 @@ export function CartLine({ line }: { line: LineView }) {
                   </option>
                 ))}
               </select>
+              {line.periodNote ? (
+                <p
+                  id={`${id}-period-note`}
+                  className="mt-1.5 text-pretty text-xs text-muted-foreground"
+                >
+                  {line.periodNote}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-3">
@@ -113,8 +129,8 @@ export function CartLine({ line }: { line: LineView }) {
                     Renew automatically
                   </span>
                   <span id={`${id}-renew-note`} className="block text-muted-foreground">
-                    At {line.renewal}/yr. Automatic renewal isn’t switched on yet — this records
-                    what you want, and you renew from your account.
+                    At {line.renewal}. Automatic renewal isn’t switched on yet — this records what
+                    you want, and you renew from your account.
                   </span>
                 </span>
               </label>
@@ -151,7 +167,7 @@ export function CartLine({ line }: { line: LineView }) {
             </p>
             <p className="text-sm text-muted-foreground">
               for {line.periodYears} {line.periodYears === 1 ? 'year' : 'years'}, then{' '}
-              {line.renewal}/yr
+              {line.renewal}
             </p>
             {line.includesIcannFee ? (
               <p className="mt-1 text-xs text-muted-foreground">Includes the ICANN fee</p>

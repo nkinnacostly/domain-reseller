@@ -120,7 +120,7 @@ export async function getBulkRenewalView(ids: readonly string[]): Promise<BulkRe
             },
             {
               paymentTestMode: testMode,
-              tldMaxPeriod: pricing?.maxPeriod ?? null,
+              renewPeriods: pricing?.renewPeriods ?? null,
               inProgress,
               now,
             },
@@ -179,7 +179,7 @@ export async function getRenewalView(domainName: string): Promise<RenewalView | 
     open: checkoutOpenTo(user?.email, env.CHECKOUT_ALLOWLIST),
     check: renewability(domain, {
       paymentTestMode: testMode,
-      tldMaxPeriod: pricing?.maxPeriod ?? null,
+      renewPeriods: pricing?.renewPeriods ?? null,
       inProgress,
       now: new Date(),
     }),

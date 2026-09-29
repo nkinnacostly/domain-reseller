@@ -7,7 +7,7 @@ import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { logger } from '@/lib/logger'
 import { allRows } from '@/lib/supabase/all-rows'
 import { createPublicClient } from '@/lib/supabase/public'
-import { type ExtensionFacts, factsFromPricing } from '../lib/extension'
+import { type ExtensionFacts, factsFromPricing, registerPeriodsOf } from '../lib/extension'
 
 /**
  * Everything the catalogue says about every extension we sell, apart from
@@ -27,9 +27,9 @@ export async function loadCatalogueFacts(): Promise<ExtensionFacts[]> {
   const { data, error } = await allRows((from, to) =>
     client
       .from('tlds')
-      .select(
-        'name, is_country_code, min_period, max_period, requires_extra_fields, min_chars, max_chars, is_transferable, featured_tagline',
-      )
+      // Every column, so a database without migration 37's periods still
+      // reads (each row then sold every year from min to max, as before).
+      .select('*')
       .order('name')
       .range(from, to),
   )
@@ -40,6 +40,7 @@ export async function loadCatalogueFacts(): Promise<ExtensionFacts[]> {
     isCountryCode: Boolean(row.is_country_code),
     minPeriod: Number(row.min_period),
     maxPeriod: Number(row.max_period),
+    registerPeriods: registerPeriodsOf(row),
     requiresExtraFields: Boolean(row.requires_extra_fields),
     minChars: row.min_chars ?? null,
     maxChars: row.max_chars ?? null,

@@ -15,9 +15,9 @@ export type BulkRenewalDomain = {
   domainName: string
   /** Its expiry now, formatted. */
   expires: string
-  /** N8 — its renewal price a year, formatted. */
-  perYear: string
-  /** FR-RN7 — set when the renewal price is higher than last paid or promised. */
+  /** N8 — its renewal price with its term: "₦18,700/yr", "₦273,000 every 2 years". */
+  renewal: string
+  /** FR-RN7 — set when the renewal price is higher than last paid or promised, with its term. */
   priceRise: { from: string; to: string } | null
 }
 
@@ -101,7 +101,10 @@ export function BulkRenewForm({
         </select>
         <p id={`${id}-years-hint`} className="mt-2 text-pretty text-sm text-muted-foreground">
           The same for every domain, so the longest on offer is what the domain closest to the
-          ten-year limit can take.
+          ten-year limit can take
+          {options.some((option, index) => option.years !== index + 1)
+            ? ', and only periods every domain’s registry renews in.'
+            : '.'}
         </p>
       </div>
 
@@ -112,8 +115,7 @@ export function BulkRenewForm({
           <ul className="mt-1 list-disc pl-5">
             {rises.map((domain) => (
               <li key={domain.id}>
-                {domain.domainName}: now {domain.priceRise?.to}/yr, up from {domain.priceRise?.from}
-                /yr
+                {domain.domainName}: now {domain.priceRise?.to}, up from {domain.priceRise?.from}
               </li>
             ))}
           </ul>
@@ -136,7 +138,7 @@ export function BulkRenewForm({
                 <p className="text-muted-foreground">
                   Expires {domain.expires} →{' '}
                   <span className="text-foreground">{line?.newExpiry}</span> · renews at{' '}
-                  {domain.perYear}/yr
+                  {domain.renewal}
                 </p>
               </div>
               <p className="font-medium text-foreground tabular-nums">{line?.price}</p>

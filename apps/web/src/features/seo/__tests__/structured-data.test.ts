@@ -110,7 +110,9 @@ describe('an extension as a service (N8)', () => {
   const service = extensionServiceLd(SITE, {
     tld: 'com',
     registerKobo: 1_830_000,
+    registerYears: 1,
     renewKobo: 1_860_000,
+    renewYears: 1,
     priceText: '₦18,300 for the first year, then ₦18,600 a year to renew, before VAT.',
   })
 
@@ -131,15 +133,52 @@ describe('an extension as a service (N8)', () => {
       expect.objectContaining({
         name: 'First year',
         price: '18300.00',
+        referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'ANN' },
+        billingDuration: 1,
+        unitCode: 'ANN',
         valueAddedTaxIncluded: false,
       }),
       expect.objectContaining({
         name: 'Renewal, each year after the first',
         price: '18600.00',
+        referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'ANN' },
+        billingDuration: 1,
         billingStart: 1,
+        unitCode: 'ANN',
         valueAddedTaxIncluded: false,
       }),
     ])
     expect(String(service.description)).toContain('then ₦18,600 a year to renew')
+  })
+
+  it('states the real billing duration where the registry sells only blocks (.ai, N9b)', () => {
+    const ai = extensionServiceLd(SITE, {
+      tld: 'ai',
+      registerKobo: 27_300_000,
+      registerYears: 2,
+      renewKobo: 27_300_000,
+      renewYears: 2,
+      priceText:
+        '₦273,000 for 2 years (the shortest term .ai allows), then ₦273,000 every 2 years to renew, before VAT.',
+    })
+    const offers = ai.offers as { price: string; priceSpecification: Record<string, unknown>[] }
+    expect(offers.price).toBe('273000.00')
+    expect(offers.priceSpecification).toEqual([
+      expect.objectContaining({
+        name: 'First 2 years, the shortest term .ai is sold for',
+        price: '273000.00',
+        referenceQuantity: { '@type': 'QuantitativeValue', value: 2, unitCode: 'ANN' },
+        billingDuration: 2,
+        unitCode: 'ANN',
+      }),
+      expect.objectContaining({
+        name: 'Renewal, every 2 years after the first 2 years',
+        price: '273000.00',
+        referenceQuantity: { '@type': 'QuantitativeValue', value: 2, unitCode: 'ANN' },
+        billingDuration: 2,
+        billingStart: 2,
+        unitCode: 'ANN',
+      }),
+    ])
   })
 })

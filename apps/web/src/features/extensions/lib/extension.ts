@@ -1,4 +1,5 @@
-import { formatNaira, type TldPricing } from '@dr/shared'
+import { formatNaira, type TldPricing, yearsBetween } from '@dr/shared'
+import { firstTermPhrase, periodsText, renewalPhrase } from '@/features/pricing/lib/terms'
 
 /**
  * Per-extension landing pages (PRD FR-PUB1). Pure: the page reads the
@@ -13,6 +14,8 @@ export type ExtensionFacts = {
   isCountryCode: boolean
   minPeriod: number
   maxPeriod: number
+  /** Years a registration can be bought for — every year from min to max for most. */
+  registerPeriods: number[]
   requiresExtraFields: boolean
   /** Shortest and longest name the registry accepts. Null: not known yet. */
   minChars: number | null
@@ -30,6 +33,7 @@ export function factsFromPricing(pricing: TldPricing): ExtensionFacts {
     isCountryCode: pricing.isCountryCode,
     minPeriod: pricing.minPeriod,
     maxPeriod: pricing.maxPeriod,
+    registerPeriods: pricing.registerPeriods,
     requiresExtraFields: pricing.requiresExtraFields,
     minChars: null,
     maxChars: null,
@@ -131,11 +135,23 @@ export function icannFeeText(tld: string, isCountryCode: boolean): string {
     : 'Included: ICANN charges a small yearly fee on generic extensions, and it is already in the prices shown.'
 }
 
-export function periodText(minPeriod: number, maxPeriod: number): string {
-  const years = (n: number) => `${n} ${n === 1 ? 'year' : 'years'}`
-  return minPeriod === maxPeriod
-    ? `${years(minPeriod)} at a time`
-    : `${minPeriod} to ${years(maxPeriod)} at a time`
+/**
+ * "1 to 10 years at a time", or for .ai "2, 4, 6, 8 or 10 years at a time" —
+ * only the periods the registry sells.
+ */
+export function periodText(registerPeriods: readonly number[]): string {
+  return `${periodsText(registerPeriods)} at a time`
+}
+
+/** The periods a catalogue row sells, as the priced catalogue reads them (see soldPeriods). */
+export function registerPeriodsOf(row: {
+  min_period: number
+  max_period: number
+  register_periods?: readonly number[] | null
+}): number[] {
+  return row.register_periods
+    ? [...row.register_periods].map(Number)
+    : yearsBetween(Number(row.min_period), Number(row.max_period))
 }
 
 /** Null when the registry's length rules are not known yet — nothing is guessed. */
@@ -157,12 +173,24 @@ export function eligibilityText(tld: string, requiresExtraFields: boolean): stri
 
 /** Display strings only — the page does no money maths (N5). */
 export type ExtensionPrices = {
+  /** The shortest registration, for `registerYears` years: the first year for most. */
   register: string
-  /** N8: always shown beside the first-year price. */
+  registerYears: number
+  /** N8: always shown beside the first price. The shortest renewal, for `renewYears` years. */
   renew: string
+  renewYears: number
   /** Null when we cannot transfer this extension in. */
   transfer: string | null
   renewalIsHigher: boolean
+}
+
+/**
+ * "₦18,300 for the first year, then ₦18,700 a year" — or, where the registry
+ * sells no single year, "₦273,000 for 2 years (the shortest term .ai allows),
+ * then ₦273,000 every 2 years". The page, its metadata and its markup share it.
+ */
+export function priceSentence(tld: string, prices: ExtensionPrices): string {
+  return `${firstTermPhrase(tld, prices.register, prices.registerYears)}, then ${renewalPhrase(prices.renew, prices.renewYears)}`
 }
 
 /**
@@ -175,8 +203,10 @@ export function extensionPrices(
 ): ExtensionPrices | null {
   if (!pricing) return null
   return {
-    register: formatNaira(pricing.registration.priceKobo),
-    renew: formatNaira(pricing.renewal.priceKobo),
+    register: formatNaira(pricing.firstTerm.priceKobo),
+    registerYears: pricing.firstTerm.years,
+    renew: formatNaira(pricing.renewalTerm.priceKobo),
+    renewYears: pricing.renewalTerm.years,
     transfer:
       pricing.transfer && isTransferable !== false ? formatNaira(pricing.transfer.priceKobo) : null,
     renewalIsHigher: pricing.renewalIsHigher,
@@ -202,7 +232,7 @@ export function extensionFaqs({
     {
       q: `How much is a .${tld} domain?`,
       a: prices
-        ? `${prices.register} for the first year, then ${prices.renew} a year to renew.${
+        ? `${priceSentence(tld, prices)} to renew.${
             prices.renewalIsHigher
               ? ' Renewing costs more than the first year for this extension, so plan for the higher figure.'
               : ''
@@ -211,7 +241,7 @@ export function extensionFaqs({
     },
     {
       q: `How long can I register a .${tld} domain for?`,
-      a: `${periodText(facts.minPeriod, facts.maxPeriod).replace(/^./, (c) => c.toUpperCase())}. You choose the number of years in your cart, and you can renew from your account before it expires.`,
+      a: `${periodText(facts.registerPeriods).replace(/^./, (c) => c.toUpperCase())}. You choose the number of years in your cart, and you can renew from your account before it expires.`,
     },
     {
       q: `Who can register a .${tld} domain?`,
@@ -226,7 +256,7 @@ export function extensionFaqs({
       a: !prices
         ? 'Transfer prices are briefly unavailable. Try again in a few minutes.'
         : prices.transfer
-          ? `Transferring one in costs ${prices.transfer}, then ${prices.renew} a year. Our transfer page checks whether your domain can move and tells you what, if anything, is in the way.`
+          ? `Transferring one in costs ${prices.transfer}, then ${renewalPhrase(prices.renew, prices.renewYears)}. Our transfer page checks whether your domain can move and tells you what, if anything, is in the way.`
           : `We can't currently transfer .${tld} domains in.`,
     },
     {

@@ -1,4 +1,5 @@
 import { Container } from '@/components/layout/site-shell'
+import { renewalPhrase } from '@/features/pricing/lib/terms'
 import {
   describeKind,
   type ExtensionFacts,
@@ -25,7 +26,7 @@ export function ExtensionDetails({
   const length = lengthText(facts.minChars, facts.maxChars)
 
   const rows = [
-    { label: 'Registration period', value: `${periodText(facts.minPeriod, facts.maxPeriod)}.` },
+    { label: 'Registration period', value: `${periodText(facts.registerPeriods)}.` },
     length ? { label: 'Name length', value: `${length}.` } : null,
     { label: 'ICANN fee', value: icannFeeText(tld, facts.isCountryCode) },
     { label: 'Eligibility', value: eligibilityText(tld, facts.requiresExtraFields) },
@@ -33,7 +34,7 @@ export function ExtensionDetails({
       ? {
           label: 'Transfers in',
           value: prices.transfer
-            ? `Yes, for ${prices.transfer}, then ${prices.renew} a year.`
+            ? `Yes, for ${prices.transfer}, then ${renewalPhrase(prices.renew, prices.renewYears)}.`
             : `We can't currently transfer .${tld} domains in.`,
         }
       : null,

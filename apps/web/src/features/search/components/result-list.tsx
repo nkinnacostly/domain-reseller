@@ -1,4 +1,5 @@
 import { AddToCartButton } from '@/features/cart/components/add-to-cart-button'
+import { renewalText, yearsText } from '@/features/pricing/lib/terms'
 import { refusalNote, type SearchRow } from '../lib/rows'
 import { AsciiForm, LookalikeWarning } from './idn-notes'
 import { ResultStatus } from './result-status'
@@ -65,12 +66,17 @@ export function ResultItem({
             <span className="text-base font-semibold text-foreground tabular-nums">
               {row.price.register}
             </span>
+            {row.price.registerYears > 1 ? (
+              <span className="text-muted-foreground">
+                for {yearsText(row.price.registerYears)}
+              </span>
+            ) : null}
             <span className="text-muted-foreground">
               then{' '}
               <span
                 className={row.price.renewalIsHigher ? 'font-medium text-foreground' : undefined}
               >
-                {row.price.renew}/yr
+                {renewalText(row.price.renew, row.price.renewYears)}
               </span>
             </span>
           </p>

@@ -5,8 +5,8 @@ import {
   bulkRenewHref,
   parseRenewIds,
   paymentCustomer,
-  sharedMaxYears,
   sharedRegistrant,
+  sharedYears,
 } from '../lib/renewal'
 
 const A = '4f5d3c1a-7b2e-4c8d-9a6f-1e2b3c4d5e6f'
@@ -32,26 +32,47 @@ describe('bulk renewal addresses (FR-P4, FR-P5)', () => {
   })
 })
 
-describe('sharedMaxYears', () => {
+describe('sharedYears', () => {
+  const upTo = (max: number) => Array.from({ length: max }, (_, index) => index + 1)
+
   it('offers up to what the tightest domain can take', () => {
     expect(
-      sharedMaxYears([
-        { ok: true, maxYears: 9 },
-        { ok: true, maxYears: 4 },
+      sharedYears([
+        { ok: true, maxYears: 9, years: upTo(9) },
+        { ok: true, maxYears: 4, years: upTo(4) },
         { ok: false, reason: 'Demo domains can’t be renewed.' },
       ]),
-    ).toBe(4)
+    ).toEqual([1, 2, 3, 4])
+  })
+
+  it('offers only the periods every domain renews in — a .com with a .ai renews in 2s', () => {
+    expect(
+      sharedYears([
+        { ok: true, maxYears: 9, years: upTo(9) },
+        { ok: true, maxYears: 8, years: [2, 4, 6, 8] },
+      ]),
+    ).toEqual([2, 4, 6, 8])
+  })
+
+  it('offers no period when the domains share none', () => {
+    expect(
+      sharedYears([
+        { ok: true, maxYears: 1, years: [1] },
+        { ok: true, maxYears: 8, years: [2, 4, 6, 8] },
+      ]),
+    ).toEqual([])
   })
 
   it('offers nothing when no domain can be renewed', () => {
-    expect(sharedMaxYears([{ ok: false, reason: 'x' }])).toBeNull()
-    expect(sharedMaxYears([])).toBeNull()
+    expect(sharedYears([{ ok: false, reason: 'x' }])).toBeNull()
+    expect(sharedYears([])).toBeNull()
   })
 })
 
 describe('bulkRenewalTotals (N5: kobo, integers)', () => {
-  const com = { renewal: { priceKobo: 1_870_000 } }
-  const ng = { renewal: { priceKobo: 1_050_000 } }
+  const EVERY_YEAR = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  const com = { renewal: { priceKobo: 1_870_000 }, renewPeriods: EVERY_YEAR }
+  const ng = { renewal: { priceKobo: 1_050_000 }, renewPeriods: EVERY_YEAR }
 
   it('prices each line as the one-domain renewal does, and VAT once on the subtotal', () => {
     expect(bulkRenewalTotals([com, ng], 2, 7.5)).toEqual({
@@ -63,13 +84,19 @@ describe('bulkRenewalTotals (N5: kobo, integers)', () => {
   })
 
   it('rounds VAT half-up to the kobo, as checkout does', () => {
-    const odd = { renewal: { priceKobo: 1_001 } }
+    const odd = { renewal: { priceKobo: 1_001 }, renewPeriods: EVERY_YEAR }
     // 7.5% of 1,001 is 75.075 kobo.
     expect(bulkRenewalTotals([odd], 1, 7.5)).toMatchObject({ vatKobo: 75, totalKobo: 1_076 })
   })
 
   it('refuses a period that is not a whole number of years', () => {
     expect(() => bulkRenewalTotals([com], 0, 7.5)).toThrow(RangeError)
+  })
+
+  it('refuses a period one of the domains is not renewed in (.ai sells no 3-year renewal)', () => {
+    const ai = { renewal: { priceKobo: 13_650_000 }, renewPeriods: [2, 4, 6, 8, 10] }
+    expect(bulkRenewalTotals([com, ai], 2, 7.5).lineKobo).toEqual([3_740_000, 27_300_000])
+    expect(() => bulkRenewalTotals([com, ai], 3, 7.5)).toThrow(RangeError)
   })
 })
 

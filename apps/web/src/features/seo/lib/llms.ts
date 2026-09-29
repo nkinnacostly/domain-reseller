@@ -1,5 +1,6 @@
 import { BRAND_NAME } from '@/components/layout/brand'
 import { LEGAL_DOCUMENTS } from '@/features/legal/lib/documents'
+import { firstTermPhrase, renewalPhrase } from '@/features/pricing/lib/terms'
 import { BUSINESS, SPONSORING_REGISTRAR } from '@/lib/business'
 import type { QA } from './structured-data'
 
@@ -15,8 +16,12 @@ import type { QA } from './structured-data'
 
 export type PriceLine = {
   tld: string
+  /** The shortest registration's price, for `registerYears` years. */
   register: string
+  registerYears: number
+  /** The shortest renewal's price, for `renewYears` years. */
   renew: string
+  renewYears: number
   transfer: string | null
 }
 
@@ -32,12 +37,12 @@ export const LLMS_PAGES = [
   {
     path: '/',
     title: 'Search for a domain',
-    note: 'type a name to see whether it is free, across extensions, each with its first-year and renewal price',
+    note: 'type a name to see whether it is free, across extensions, each with its registration and renewal price',
   },
   {
     path: '/pricing',
     title: 'Pricing',
-    note: 'every extension with its first-year, renewal and transfer price, and what makes up a price',
+    note: 'every extension with its registration, renewal and transfer price, and what makes up a price',
   },
   { path: '/domains', title: 'All domain extensions', note: 'one page per extension we sell' },
   {
@@ -58,7 +63,7 @@ export const LLMS_PAGES = [
 
 function priceLine(site: string, line: PriceLine): string {
   const transfer = line.transfer ? `; transfer in ${line.transfer}` : ''
-  return `- [.${line.tld}](${link(site, `/domains/${line.tld}`)}): ${line.register} for the first year, then ${line.renew} a year to renew${transfer}`
+  return `- [.${line.tld}](${link(site, `/domains/${line.tld}`)}): ${firstTermPhrase(line.tld, line.register, line.registerYears)}, then ${renewalPhrase(line.renew, line.renewYears)} to renew${transfer}`
 }
 
 function header({ site, prices }: LlmsInput): string[] {

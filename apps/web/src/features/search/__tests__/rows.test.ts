@@ -12,7 +12,9 @@ import {
 const price = (tld: string, overrides: Partial<PublicPriceRow> = {}): PublicPriceRow => ({
   tld,
   register: '₦18,400',
+  registerYears: 1,
   renew: '₦18,700',
+  renewYears: 1,
   transfer: '₦17,500',
   renewalIsHigher: true,
   isCountryCode: tld.length === 2,
