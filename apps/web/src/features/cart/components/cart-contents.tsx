@@ -5,10 +5,11 @@ import { PricingUnavailable } from '@/features/pricing/components/pricing-unavai
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { createClient } from '@/lib/supabase/server'
 import { CartCountSync } from '../lib/count'
-import { toLineView } from '../lib/view'
+import { toLineView, toSslLineView } from '../lib/view'
 import { getCartView } from '../queries/cart'
 import { AcceptPricesButton } from './accept-prices-button'
 import { CartLine } from './cart-line'
+import { SslCartLine } from './ssl-cart-line'
 
 export async function CartContents() {
   const view = await getCartView()
@@ -46,17 +47,30 @@ export async function CartContents() {
     )
   }
 
-  const [priced, supabase] = await Promise.all([getPricedCatalogue(), createClient()])
+  const [priced, supabase] = await Promise.all([
+    view.lines.length > 0 ? getPricedCatalogue() : null,
+    createClient(),
+  ])
   const {
     data: { user },
   } = await supabase.auth.getUser()
   const byTld = new Map(priced?.tlds.map((tld) => [tld.tld, tld]) ?? [])
   const lines = view.lines.map((line) => toLineView(line, byTld.get(line.tld)))
+  // FR-SSL-6: certificates are listed apart from domains, with their own terms.
+  const certificates = view.certificates.map(toSslLineView)
   const { totals } = view
+  const summary = [
+    lines.length > 0 ? `${lines.length} ${lines.length === 1 ? 'domain' : 'domains'}` : null,
+    certificates.length > 0
+      ? `${certificates.length} ${certificates.length === 1 ? 'certificate' : 'certificates'}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <div className="grid gap-10 lg:grid-cols-[1.7fr_1fr] lg:gap-14">
-      <CartCountSync count={lines.length} />
+      <CartCountSync count={lines.length + certificates.length} />
 
       <div>
         {totals.needsAcknowledgement ? (
@@ -72,11 +86,27 @@ export async function CartContents() {
           </div>
         ) : null}
 
-        <ul aria-label="Domains in your cart" className="divide-y divide-border/70">
-          {lines.map((line) => (
-            <CartLine key={line.id} line={line} />
-          ))}
-        </ul>
+        {lines.length > 0 ? (
+          <ul aria-label="Domains in your cart" className="divide-y divide-border/70">
+            {lines.map((line) => (
+              <CartLine key={line.id} line={line} />
+            ))}
+          </ul>
+        ) : null}
+        {certificates.length > 0 ? (
+          <ul
+            aria-label="SSL certificates in your cart"
+            className={
+              lines.length > 0
+                ? 'mt-6 divide-y divide-border/70 border-border border-t pt-6'
+                : 'divide-y divide-border/70'
+            }
+          >
+            {certificates.map((line) => (
+              <SslCartLine key={line.id} line={line} />
+            ))}
+          </ul>
+        ) : null}
       </div>
 
       <aside
@@ -88,9 +118,7 @@ export async function CartContents() {
         </h2>
         <dl className="mt-5 space-y-3 text-sm">
           <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">
-              {lines.length} {lines.length === 1 ? 'domain' : 'domains'}
-            </dt>
+            <dt className="text-muted-foreground">{summary}</dt>
             <dd className="font-medium text-foreground tabular-nums">
               {formatNaira(totals.subtotalKobo)}
             </dd>
@@ -110,8 +138,8 @@ export async function CartContents() {
         </dl>
         {totals.unavailableCount > 0 ? (
           <p className="mt-3 text-xs text-muted-foreground">
-            Leaves out {totals.unavailableCount} domain{totals.unavailableCount === 1 ? '' : 's'} we
-            no longer sell.
+            Leaves out {totals.unavailableCount} {certificates.length > 0 ? 'item' : 'domain'}
+            {totals.unavailableCount === 1 ? '' : 's'} we no longer sell.
           </p>
         ) : null}
 

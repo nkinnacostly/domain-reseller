@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { StoredLine } from '../lib/lines'
+import type { StoredSslLine } from '../lib/ssl-lines'
 import { CART_COOKIE, hashCartToken } from '../lib/token'
 
 /**
@@ -97,12 +98,79 @@ export async function loadLines(cartId: string): Promise<StoredLine[]> {
   return (data ?? []).map(toLine)
 }
 
+/** Every line in the cart — domains and SSL certificates (FR-SSL-6) — for the badge and the cap. */
 export async function countLines(cartId: string): Promise<number> {
-  const { count } = await createServiceClient()
-    .from('cart_items')
-    .select('id', { count: 'exact', head: true })
+  const service = createServiceClient()
+  const [domains, certificates] = await Promise.all([
+    service.from('cart_items').select('id', { count: 'exact', head: true }).eq('cart_id', cartId),
+    service
+      .from('cart_ssl_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('cart_id', cartId),
+  ])
+  return (domains.count ?? 0) + (certificates.count ?? 0)
+}
+
+// ── SSL certificate lines (FR-SSL-6, migration 39) ──────────────────────────
+
+export async function loadSslLines(cartId: string): Promise<StoredSslLine[]> {
+  const { data, error } = await createServiceClient()
+    .from('cart_ssl_items')
+    .select('id, product_code, common_name, quoted_total_kobo, quoted_at')
     .eq('cart_id', cartId)
-  return count ?? 0
+    .order('created_at')
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    productCode: row.product_code,
+    commonName: row.common_name,
+    quotedTotalKobo: Number(row.quoted_total_kobo),
+    quotedAt: row.quoted_at,
+  }))
+}
+
+export type NewSslLine = {
+  productCode: string
+  commonName: string
+  quotedTotalKobo: number
+  quotedFxRateId: string
+}
+
+/** Adds a certificate; one for a name already in the cart is a no-op (the supplier knows it by name). */
+export async function insertSslLine(cartId: string, line: NewSslLine): Promise<void> {
+  const { error } = await createServiceClient().from('cart_ssl_items').upsert(
+    {
+      cart_id: cartId,
+      product_code: line.productCode,
+      common_name: line.commonName,
+      quoted_total_kobo: line.quotedTotalKobo,
+      quoted_fx_rate_id: line.quotedFxRateId,
+    },
+    { onConflict: 'cart_id,common_name', ignoreDuplicates: true },
+  )
+  if (error) throw error
+}
+
+export async function requoteSslLine(
+  cartId: string,
+  lineId: string,
+  quote: { quoted_total_kobo: number; quoted_fx_rate_id: string; quoted_at: string },
+): Promise<void> {
+  const { error } = await createServiceClient()
+    .from('cart_ssl_items')
+    .update(quote)
+    .eq('cart_id', cartId)
+    .eq('id', lineId)
+  if (error) throw error
+}
+
+export async function deleteSslLine(cartId: string, lineId: string): Promise<void> {
+  const { error } = await createServiceClient()
+    .from('cart_ssl_items')
+    .delete()
+    .eq('cart_id', cartId)
+    .eq('id', lineId)
+  if (error) throw error
 }
 
 export type NewLine = {

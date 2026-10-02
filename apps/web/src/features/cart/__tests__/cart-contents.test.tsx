@@ -21,6 +21,7 @@ vi.mock('../actions/cart', () => ({
   removeCartLine: vi.fn(),
   updateCartLine: vi.fn(),
 }))
+vi.mock('../actions/ssl', () => ({ removeSslCartLine: vi.fn() }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
@@ -70,6 +71,7 @@ function readyCart(lines: StoredLine[]) {
   const totals = cartTotals(priced, (amount) => vatKobo(amount, 7.5))
   vi.mocked(getCartView).mockResolvedValue({
     state: 'ready',
+    certificates: [],
     lines: priced,
     totals,
     vatPct: 7.5,
@@ -228,5 +230,66 @@ describe('CartSkeleton', () => {
   it('is hidden from assistive technology while the cart loads', () => {
     const { container } = render(<CartSkeleton />)
     expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true')
+  })
+})
+
+describe('CartContents — SSL certificates (FR-SSL-6)', () => {
+  const certificate = {
+    id: 'ssl-1',
+    productCode: '351',
+    commonName: 'getpaid.com',
+    quotedTotalKobo: 1_350_000,
+    quotedAt: '2026-09-23T10:00:00.000Z',
+    status: 'held' as const,
+    productName: 'Sectigo PositiveSSL Certificate',
+    kind: 'single' as const,
+    includedNames: 1,
+    payableKobo: 1_350_000,
+    renewalKobo: 1_350_000,
+    currentKobo: 1_350_000,
+    heldUntil: '2026-09-23T10:30:00.000Z',
+  }
+
+  it('lists certificates apart from domains, and counts both in the summary and badge', async () => {
+    const domains = [priceLine(stored(), com, NOW, 30)]
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: domains,
+      certificates: [certificate],
+      totals: cartTotals(domains, (amount) => vatKobo(amount, 7.5), [certificate]),
+      vatPct: 7.5,
+      lockMinutes: 30,
+    })
+    render(await CartContents())
+    expect(screen.getByRole('list', { name: 'SSL certificates in your cart' })).toHaveTextContent(
+      'getpaid.com',
+    )
+    expect(screen.getByRole('list', { name: 'Domains in your cart' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary')).toHaveTextContent('1 domain, 1 certificate')
+    expect(document.cookie).toContain('dr_cart_count=2')
+  })
+
+  it('shows a cart of certificates only, without reading the domain catalogue', async () => {
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: [],
+      certificates: [
+        certificate,
+        {
+          ...certificate,
+          id: 'ssl-2',
+          commonName: 'shop.getpaid.com',
+          status: 'unavailable',
+          payableKobo: 0,
+        },
+      ],
+      totals: cartTotals([], (amount) => vatKobo(amount, 7.5), [certificate]),
+      vatPct: 7.5,
+      lockMinutes: 30,
+    })
+    render(await CartContents())
+    expect(screen.queryByRole('list', { name: 'Domains in your cart' })).not.toBeInTheDocument()
+    expect(screen.getByRole('complementary')).toHaveTextContent('2 certificates')
+    expect(getPricedCatalogue).not.toHaveBeenCalled()
   })
 })

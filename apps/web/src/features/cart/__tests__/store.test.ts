@@ -296,3 +296,98 @@ describe('mergeAnonymousCart', () => {
     )
   })
 })
+
+describe('SSL certificate lines (FR-SSL-6, migration 39)', () => {
+  it('loads a cart’s certificates as numbers, oldest first', async () => {
+    const { queries } = fakeService({
+      cart_ssl_items: [
+        {
+          data: [
+            {
+              id: 's1',
+              product_code: '351',
+              common_name: '*.example.com',
+              quoted_total_kobo: '13500000',
+              quoted_at: 'x',
+            },
+          ],
+        },
+      ],
+    })
+    await expect(store.loadSslLines('cart-1')).resolves.toEqual([
+      {
+        id: 's1',
+        productCode: '351',
+        commonName: '*.example.com',
+        quotedTotalKobo: 13_500_000,
+        quotedAt: 'x',
+      },
+    ])
+    expect(queries[0]?.steps).toContainEqual(['eq', 'cart_id', 'cart-1'])
+    fakeService({ cart_ssl_items: [{ data: null, error: new Error('down') }] })
+    await expect(store.loadSslLines('cart-1')).rejects.toThrow('down')
+  })
+
+  it('adds a certificate once per name, re-quotes and removes it within the cart', async () => {
+    const { queries } = fakeService()
+    await store.insertSslLine('cart-1', {
+      productCode: '351',
+      commonName: 'example.com',
+      quotedTotalKobo: 1,
+      quotedFxRateId: 'rate-1',
+    })
+    await store.requoteSslLine('cart-1', 's1', {
+      quoted_total_kobo: 2,
+      quoted_fx_rate_id: 'rate-1',
+      quoted_at: 'now',
+    })
+    await store.deleteSslLine('cart-1', 's1')
+    expect(queries[0]?.steps[0]).toEqual([
+      'upsert',
+      {
+        cart_id: 'cart-1',
+        product_code: '351',
+        common_name: 'example.com',
+        quoted_total_kobo: 1,
+        quoted_fx_rate_id: 'rate-1',
+      },
+      { onConflict: 'cart_id,common_name', ignoreDuplicates: true },
+    ])
+    expect(queries[1]?.steps).toContainEqual(['eq', 'id', 's1'])
+    expect(queries[2]?.steps).toContainEqual(['delete'])
+    expect(queries[2]?.steps).toContainEqual(['eq', 'cart_id', 'cart-1'])
+  })
+
+  it('passes a failed write on', async () => {
+    fakeService({
+      cart_ssl_items: [
+        { error: new Error('a') },
+        { error: new Error('b') },
+        { error: new Error('c') },
+      ],
+    })
+    await expect(
+      store.insertSslLine('c', {
+        productCode: '1',
+        commonName: 'a.com',
+        quotedTotalKobo: 1,
+        quotedFxRateId: 'r',
+      }),
+    ).rejects.toThrow('a')
+    await expect(
+      store.requoteSslLine('c', 'l', {
+        quoted_total_kobo: 1,
+        quoted_fx_rate_id: 'r',
+        quoted_at: 'n',
+      }),
+    ).rejects.toThrow('b')
+    await expect(store.deleteSslLine('c', 'l')).rejects.toThrow('c')
+  })
+
+  it('counts domains and certificates together for the badge and the cap', async () => {
+    fakeService({ cart_items: [{ count: 2 }], cart_ssl_items: [{ count: 1 }] })
+    await expect(store.countLines('cart-1')).resolves.toBe(3)
+    fakeService({ cart_items: [{ count: null }], cart_ssl_items: [{ count: null }] })
+    await expect(store.countLines('cart-1')).resolves.toBe(0)
+  })
+})

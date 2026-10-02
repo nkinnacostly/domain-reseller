@@ -6,6 +6,7 @@ import { env } from '@/lib/env'
 import * as store from '../queries/store'
 
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
+vi.mock('@/features/ssl/queries/catalogue', () => ({ getSslCatalogue: vi.fn() }))
 vi.mock('@/features/search/queries/availability', () => ({ checkAvailability: vi.fn() }))
 vi.mock('../queries/store', () => ({
   currentOwner: vi.fn(),
@@ -17,6 +18,8 @@ vi.mock('../queries/store', () => ({
   updateLine: vi.fn(),
   deleteLine: vi.fn(),
   mergeAnonymousCart: vi.fn(),
+  loadSslLines: vi.fn(),
+  requoteSslLine: vi.fn(),
 }))
 const jar = { get: vi.fn(), set: vi.fn(), delete: vi.fn() }
 vi.mock('next/headers', () => ({ headers: async () => new Headers(), cookies: async () => jar }))
@@ -73,6 +76,7 @@ beforeEach(() => {
     version: 'test',
   })
   vi.mocked(checkAvailability).mockResolvedValue(available())
+  vi.mocked(store.loadSslLines).mockResolvedValue([])
   vi.mocked(store.currentOwner).mockResolvedValue({
     owner: { kind: 'user', userId: 'user-1' },
     anonToken: null,
@@ -232,6 +236,69 @@ describe('updateCartLine', () => {
 })
 
 describe('acceptCurrentPrices', () => {
+  it('re-quotes SSL certificates at today’s price too, and leaves one we no longer sell (FR-SSL-6)', async () => {
+    const { getSslCatalogue } = await import('@/features/ssl/queries/catalogue')
+    vi.mocked(store.loadLines).mockResolvedValue([])
+    vi.mocked(store.loadSslLines).mockResolvedValue([
+      {
+        id: 's1',
+        productCode: '351',
+        commonName: 'getpaid.com',
+        quotedTotalKobo: 1,
+        quotedAt: '2026-09-23T10:00:00.000Z',
+      },
+      {
+        id: 's2',
+        productCode: '999',
+        commonName: 'other.com',
+        quotedTotalKobo: 1,
+        quotedAt: '2026-09-23T10:00:00.000Z',
+      },
+    ])
+    vi.mocked(getSslCatalogue).mockResolvedValue({
+      products: [
+        {
+          productCode: '351',
+          name: 'Sectigo PositiveSSL Certificate',
+          vendor: 'Sectigo',
+          validationType: 'DV',
+          isWildcard: false,
+          isMultiDomain: false,
+          includedNames: 1,
+          isReissueFree: true,
+          createUsd: 6.99,
+          price: { costKobo: 1_048_500, priceKobo: 1_350_000, marginKobo: 301_500 },
+        },
+      ],
+      rateId: 'rate-1',
+      vatPct: 7.5,
+      version: 'v',
+    })
+    await expect(acceptCurrentPrices()).resolves.toMatchObject({ data: { ok: true } })
+    expect(store.requoteSslLine).toHaveBeenCalledTimes(1)
+    expect(store.requoteSslLine).toHaveBeenCalledWith(
+      'cart-1',
+      's1',
+      expect.objectContaining({ quoted_total_kobo: 1_350_000, quoted_fx_rate_id: 'rate-1' }),
+    )
+  })
+
+  it('refuses to accept prices it cannot read for certificates', async () => {
+    const { getSslCatalogue } = await import('@/features/ssl/queries/catalogue')
+    vi.mocked(store.loadSslLines).mockResolvedValue([
+      {
+        id: 's1',
+        productCode: '351',
+        commonName: 'getpaid.com',
+        quotedTotalKobo: 1,
+        quotedAt: '2026-09-23T10:00:00.000Z',
+      },
+    ])
+    vi.mocked(getSslCatalogue).mockResolvedValue(null)
+    await expect(acceptCurrentPrices()).resolves.toMatchObject({ data: { error: FAILED } })
+    expect(store.requoteSslLine).not.toHaveBeenCalled()
+  })
+
   it('re-quotes every line we still sell', async () => {
     vi.mocked(store.loadLines).mockResolvedValue([
       {

@@ -1,6 +1,7 @@
 import { revalidateTag } from 'next/cache'
 import { NextResponse } from 'next/server'
 import { loadPricedCatalogue, readPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { loadSslCatalogue, readSslCatalogue } from '@/features/ssl/queries/catalogue'
 import { logger } from '@/lib/logger'
 import { LIMITS, withinLimit } from '@/lib/rate-limit'
 
@@ -21,9 +22,15 @@ export async function POST() {
   let cached: string
   let current: string
   try {
-    const [before, now] = await Promise.all([loadPricedCatalogue(), readPricedCatalogue()])
-    cached = before?.version ?? 'none'
-    current = now?.version ?? 'none'
+    // Domain and SSL certificate prices (FR-SSL-2) share the `pricing` tag.
+    const [before, now, sslBefore, sslNow] = await Promise.all([
+      loadPricedCatalogue(),
+      readPricedCatalogue(),
+      loadSslCatalogue(),
+      readSslCatalogue(),
+    ])
+    cached = `${before?.version ?? 'none'}:${sslBefore?.version ?? 'none'}`
+    current = `${now?.version ?? 'none'}:${sslNow?.version ?? 'none'}`
   } catch (err) {
     logger.error(
       { err: err instanceof Error ? err.message : String(err) },

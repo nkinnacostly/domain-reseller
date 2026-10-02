@@ -1,12 +1,17 @@
 import { revalidateTag } from 'next/cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadPricedCatalogue, readPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { loadSslCatalogue, readSslCatalogue } from '@/features/ssl/queries/catalogue'
 import { withinLimit } from '@/lib/rate-limit'
 
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 vi.mock('@/features/pricing/queries/pricing', () => ({
   loadPricedCatalogue: vi.fn(),
   readPricedCatalogue: vi.fn(),
+}))
+vi.mock('@/features/ssl/queries/catalogue', () => ({
+  loadSslCatalogue: vi.fn(),
+  readSslCatalogue: vi.fn(),
 }))
 vi.mock('@/lib/rate-limit', async (original) => ({
   ...(await original<typeof import('@/lib/rate-limit')>()),
@@ -21,6 +26,8 @@ const priced = (version: string) => ({ version }) as never
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(withinLimit).mockResolvedValue(true)
+  vi.mocked(loadSslCatalogue).mockResolvedValue(priced('ssl'))
+  vi.mocked(readSslCatalogue).mockResolvedValue(priced('ssl'))
 })
 
 describe('POST /api/pricing/refresh (L8)', () => {
@@ -50,6 +57,14 @@ describe('POST /api/pricing/refresh (L8)', () => {
     vi.mocked(readPricedCatalogue).mockRejectedValue(new Error('fetch failed'))
     expect((await POST()).status).toBe(503)
     expect(revalidateTag).not.toHaveBeenCalled()
+  })
+
+  it('expires the cache when only certificate prices changed (FR-SSL-2)', async () => {
+    vi.mocked(loadPricedCatalogue).mockResolvedValue(priced('same'))
+    vi.mocked(readPricedCatalogue).mockResolvedValue(priced('same'))
+    vi.mocked(readSslCatalogue).mockResolvedValue(priced('ssl-new'))
+    expect(await (await POST()).json()).toEqual({ ok: true, refreshed: true })
+    expect(revalidateTag).toHaveBeenCalledWith('pricing', { expire: 0 })
   })
 
   it('is rate-limited', async () => {
