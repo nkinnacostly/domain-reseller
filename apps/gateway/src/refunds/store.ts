@@ -19,6 +19,10 @@ const claimSchema = z.object({
     'registration_failed',
     'renewal_failed',
     'transfer_failed',
+    // FR-SSL-3 (migration 38): a certificate the supplier would not sell. The
+    // order job fails a line only on a refusal, or before anything was sent —
+    // never after an unknown answer (N3) — so there is nothing to read first.
+    'ssl_failed',
     'duplicate_charge',
     'overpayment',
     'underpayment',
