@@ -46,8 +46,11 @@ type Props = {
   problem: string | null
 }
 
-const SECTION = 'space-y-4 border-border border-t pt-6 first:border-t-0 first:pt-0'
-const LEGEND = 'text-base font-semibold text-foreground'
+// A floated legend no longer sits in the fieldset's top border (which drew a
+// rule beside the heading); the first thing after it clears it.
+const SECTION =
+  'space-y-4 border-border border-t pt-6 first:border-t-0 first:pt-0 [&>legend+*]:clear-both'
+const LEGEND = 'float-left w-full text-base font-semibold text-foreground'
 const SMALL_BUTTON = cn(
   'inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground transition-colors hover:bg-muted active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60',
   FOCUS,
@@ -421,11 +424,7 @@ export function CertificateSetupForm({
             </button>
           </div>
         ) : (
-          <div
-            role="radiogroup"
-            aria-label="Approval address"
-            className="grid gap-2 sm:grid-cols-2"
-          >
+          <div role="radiogroup" aria-label="Approval address" className="grid gap-2">
             {(emails ?? []).map((email) => (
               <label
                 key={email}
@@ -444,7 +443,7 @@ export function CertificateSetupForm({
                   onChange={() => setApprover(email)}
                   className="size-4 shrink-0 accent-[var(--accent)]"
                 />
-                <span className="font-mono text-xs break-all text-foreground sm:text-sm">
+                <span className="min-w-0 font-mono text-xs [overflow-wrap:anywhere] text-foreground sm:text-sm">
                   {email}
                 </span>
               </label>

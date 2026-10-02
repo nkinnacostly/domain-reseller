@@ -61,13 +61,16 @@ export function SslOffers({
                 </p>
                 <p className="text-sm text-muted-foreground">{offer.term}</p>
                 <p className="mt-2 text-pretty text-xs/5 text-muted-foreground">{offer.renewal}</p>
-                <div className="mt-6 border-border border-t pt-5 lg:mt-auto">
-                  <AddCertificateForm
-                    productCode={offer.productCode}
-                    productName={offer.name}
-                    label={offer.nameLabel}
-                    placeholder={offer.namePlaceholder}
-                  />
+                {/* Pushed to the card's foot, so the three boxes line up — never touching the text above. */}
+                <div className="mt-auto pt-6">
+                  <div className="border-border border-t pt-5">
+                    <AddCertificateForm
+                      productCode={offer.productCode}
+                      productName={offer.name}
+                      label={offer.nameLabel}
+                      placeholder={offer.namePlaceholder}
+                    />
+                  </div>
                 </div>
               </li>
             ))}
