@@ -19,6 +19,7 @@ export default {
         'nameservers',
         'transfers',
         'renewals',
+        'ssl',
         'billing',
         'auth',
         'admin',
