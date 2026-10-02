@@ -18,6 +18,11 @@ export const env = createEnv({
     SUPABASE_SECRET_KEY: z.string().min(1).optional(),
     GATEWAY_URL: z.url().default('http://localhost:8787'),
     GATEWAY_SHARED_SECRET: z.string().min(16).optional(),
+    /**
+     * The gateway's admin routes' own secret (ADMIN-SPEC §4.1), sent only with
+     * an audited note. Unset, the dashboard's live reads say they are off.
+     */
+    GATEWAY_ADMIN_SECRET: z.string().min(32).optional(),
     /** Pre-launch: only these accounts (comma-separated emails) may pay. Unset = open. */
     CHECKOUT_ALLOWLIST: z.string().optional(),
 
@@ -134,4 +139,13 @@ export function requireGatewayEnv() {
   }
 
   return { url: env.GATEWAY_URL, sharedSecret }
+}
+
+/** The admin routes' secret, asserted where a live read is made (ADMIN-SPEC §4.1). */
+export function requireAdminGatewayEnv() {
+  const adminSecret = env.GATEWAY_ADMIN_SECRET
+  if (!adminSecret) {
+    throw new Error('Admin live reads are not configured: set GATEWAY_ADMIN_SECRET.')
+  }
+  return { adminSecret }
 }

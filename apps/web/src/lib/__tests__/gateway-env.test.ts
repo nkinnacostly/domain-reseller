@@ -38,3 +38,23 @@ describe('requireGatewayEnv', () => {
     })
   })
 })
+
+describe('requireAdminGatewayEnv (ADMIN-SPEC §4.1)', () => {
+  async function adminEnv(value: string | undefined) {
+    vi.resetModules()
+    vi.stubEnv('GATEWAY_ADMIN_SECRET', value)
+    const { requireAdminGatewayEnv } = await import('../env')
+    return requireAdminGatewayEnv
+  }
+
+  it('says the admin reads are off without their secret', async () => {
+    expect(await adminEnv(undefined).then((require) => () => require())).toThrow(
+      /GATEWAY_ADMIN_SECRET/,
+    )
+  })
+
+  it('hands back the admin secret when set', async () => {
+    const require = await adminEnv('f'.repeat(64))
+    expect(require()).toEqual({ adminSecret: 'f'.repeat(64) })
+  })
+})

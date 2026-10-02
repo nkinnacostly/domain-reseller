@@ -3,6 +3,7 @@ import { HttpResponse, http } from 'msw'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { server } from '../../../tests/mocks/server'
 import { callGateway } from '../gateway'
+import { logger } from '../logger'
 
 // env.ts reads process.env once, at import: point it at a test gateway first.
 vi.hoisted(() => {
@@ -148,5 +149,56 @@ describe('callGateway', () => {
 
     expect(error.code).toBe('SUPPLIER_UNAVAILABLE')
     expect(seen).toHaveLength(0)
+  })
+
+  it('sends extra headers and the method asked for, and logs only the template it is given (N13)', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => undefined)
+    try {
+      const seen = capture('admin/supplier/domains/secret-client.com/transfer', () =>
+        HttpResponse.json({ ok: true, data: { state: 'unknown' } }),
+      )
+      await callGateway({
+        path: 'admin/supplier/domains/secret-client.com/transfer?side=live',
+        method: 'GET',
+        headers: { 'x-admin-audit-id': '41' },
+        logPath: 'admin/supplier/domains/:name/transfer',
+      })
+      expect(seen[0]?.method).toBe('GET')
+      expect(seen[0]?.headers.get('x-admin-audit-id')).toBe('41')
+      expect(debug).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'admin/supplier/domains/:name/transfer' }),
+        'gateway ok',
+      )
+      capture('admin/supplier/domains/secret-client.com', () =>
+        HttpResponse.json(
+          { ok: false, code: 'ADMIN_NOTE_REFUSED', reason: 'EXPIRED' },
+          { status: 403 },
+        ),
+      )
+      const error = await failure(
+        callGateway({
+          path: 'admin/supplier/domains/secret-client.com',
+          logPath: 'admin/supplier/domains/:name',
+        }),
+      )
+      expect(error.code).toBe('ADMIN_NOTE_REFUSED')
+      expect(error.message).toBe('The registrar service failed.')
+      expect((error as GatewayError & { reason?: string }).reason).toBe('EXPIRED')
+      const logged = JSON.stringify([warn.mock.calls, debug.mock.calls])
+      expect(logged).not.toContain('secret-client')
+    } finally {
+      warn.mockRestore()
+      debug.mockRestore()
+    }
+  })
+
+  it('posts with no body when told to', async () => {
+    const seen = capture('admin/supplier/catalogue/apply', () =>
+      HttpResponse.json({ ok: true, data: {} }),
+    )
+    await callGateway({ path: 'admin/supplier/catalogue/apply', method: 'POST' })
+    expect(seen[0]?.method).toBe('POST')
+    expect(seen[0]?.body).toBe('')
   })
 })

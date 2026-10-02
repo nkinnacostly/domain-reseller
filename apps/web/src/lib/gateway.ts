@@ -17,6 +17,16 @@ type GatewayRequest = {
   /** Idempotency key for write operations. Required for anything that costs money. */
   idempotencyKey?: string
   signal?: AbortSignal
+  /** Extra headers: the admin routes' secret, audit note and label (ADMIN-SPEC §4.1). */
+  headers?: Readonly<Record<string, string>>
+  /** POST with a body and GET without, unless said otherwise (an admin POST read has none). */
+  method?: 'GET' | 'POST'
+  /**
+   * What the logs name instead of `path` — a route template such as
+   * `admin/supplier/domains/:name`, so a filled path with a domain name in
+   * it never reaches a log line (N13).
+   */
+  logPath?: string
 }
 
 export async function callGateway<T>({
@@ -24,12 +34,17 @@ export async function callGateway<T>({
   body,
   idempotencyKey,
   signal,
+  headers: extra,
+  method,
+  logPath,
 }: GatewayRequest): Promise<T> {
   const { url: baseUrl, sharedSecret } = requireGatewayEnv()
   const started = performance.now()
   const url = `${baseUrl}/v1/${path.replace(/^\//, '')}`
+  const logged = logPath ?? path
 
   const headers: Record<string, string> = {
+    ...extra,
     'content-type': 'application/json',
     authorization: `Bearer ${sharedSecret}`,
   }
@@ -37,7 +52,7 @@ export async function callGateway<T>({
 
   const init: RequestInit = {
     // The same test as for the body below, so the two can never disagree.
-    method: body !== undefined ? 'POST' : 'GET',
+    method: method ?? (body !== undefined ? 'POST' : 'GET'),
     headers,
     cache: 'no-store',
   }
@@ -48,7 +63,7 @@ export async function callGateway<T>({
   try {
     response = await fetch(url, init)
   } catch (cause) {
-    logger.error({ path, cause }, 'gateway unreachable')
+    logger.error({ path: logged, cause }, 'gateway unreachable')
     throw new GatewayError('SUPPLIER_UNAVAILABLE', 'The registrar service is unreachable.', {
       retryable: true,
       cause,
@@ -58,19 +73,25 @@ export async function callGateway<T>({
   const durationMs = Math.round(performance.now() - started)
   const payload = (await response.json().catch(() => null)) as
     | { ok: true; data: T }
-    | { ok: false; code: string; message: string; retryable?: boolean }
+    | { ok: false; code: string; message?: string; reason?: string; retryable?: boolean }
     | null
 
   if (!response.ok || !payload || payload.ok === false) {
     const code = payload && payload.ok === false ? payload.code : 'SUPPLIER_UNAVAILABLE'
     const message =
-      payload && payload.ok === false ? payload.message : 'The registrar service failed.'
+      (payload && payload.ok === false ? payload.message : undefined) ??
+      'The registrar service failed.'
     const retryable = payload && payload.ok === false ? Boolean(payload.retryable) : true
 
-    logger.warn({ path, code, durationMs, status: response.status }, 'gateway error')
-    throw new GatewayError(code, message, { retryable })
+    logger.warn({ path: logged, code, durationMs, status: response.status }, 'gateway error')
+    const error = new GatewayError(code, message, { retryable })
+    // The admin routes say why a note was refused (ADMIN_NOTE_REFUSED).
+    if (payload && payload.ok === false && payload.reason) {
+      Object.assign(error, { reason: payload.reason })
+    }
+    throw error
   }
 
-  logger.debug({ path, durationMs }, 'gateway ok')
+  logger.debug({ path: logged, durationMs }, 'gateway ok')
   return payload.data
 }
