@@ -26,6 +26,8 @@ export type DueAlert = {
   kind: string
   summary: string
   firstSeenAt: string
+  /** `job:<id>`, `refund:<id>`… — for the admin link (ADMIN-SPEC §4.5). sync_alerts returns none. */
+  key?: string
 }
 
 export interface AlertStore {
@@ -78,7 +80,24 @@ export function createAlertStore(
     async sync(testMode) {
       const { data, error } = await client.rpc('sync_alerts', { p_test_mode: testMode })
       if (error) throw new Error(error.message)
-      return toDueAlerts(data)
+      const due = toDueAlerts(data)
+      if (due.length === 0) return due
+      // sync_alerts is unchanged and returns no key; the service key reads
+      // them from ops_alerts for the admin links. Without them the alerts
+      // still go out, unlinked.
+      const { data: keys, error: keyError } = await client
+        .from('ops_alerts')
+        .select('id, key')
+        .in(
+          'id',
+          due.map((alert) => alert.id),
+        )
+      if (keyError) return due
+      const byId = new Map((keys ?? []).map((row) => [Number(row.id), row.key]))
+      return due.map((alert) => {
+        const key = byId.get(alert.id)
+        return key ? { ...alert, key } : alert
+      })
     },
     markNotified: (alertIds, resolvedIds) =>
       rpc(

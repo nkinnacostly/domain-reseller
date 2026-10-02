@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app'
+import { logger } from './lib/logger'
 
 describe('gateway app', () => {
   it('answers the health check without the shared secret', async () => {
@@ -37,5 +38,34 @@ describe('gateway app', () => {
       retryable: true,
     })
     expect(body).not.toContain('internal detail')
+  })
+
+  it('logs the route template on an error, never the filled path (N13)', async () => {
+    const spy = vi.spyOn(logger, 'error').mockImplementation(() => undefined)
+    try {
+      const exploding = new Hono().get('/supplier/domains/:name', () => {
+        throw new Error('boom')
+      })
+      const response = await createApp({ admin: exploding }).request(
+        '/v1/admin/supplier/domains/secret-client.com',
+        { headers: { authorization: `Bearer ${process.env.GATEWAY_SHARED_SECRET}` } },
+      )
+      expect(response.status).toBe(500)
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ route: '/v1/admin/supplier/domains/:name' }),
+        'unhandled gateway error',
+      )
+      expect(JSON.stringify(spy.mock.calls)).not.toContain('secret-client')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('mounts the admin routes, off until an admin secret is set', async () => {
+    const response = await createApp().request('/v1/admin/supplier/balance?side=test', {
+      headers: { authorization: `Bearer ${process.env.GATEWAY_SHARED_SECRET}` },
+    })
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ code: 'ADMIN_DISABLED' })
   })
 })

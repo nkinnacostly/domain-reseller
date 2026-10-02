@@ -56,7 +56,17 @@ export function judgePreset(hosts: HostCheck[]): 'pass' | 'fail' | 'inconclusive
   return 'pass'
 }
 
-export type PresetRun = { checked: number; inconclusive: number } & Record<PresetOutcome, number>
+export type PresetRun = { checked: number; inconclusive: number; drafts: number } & Record<
+  PresetOutcome,
+  number
+>
+
+/** One draft checked on demand from the admin dashboard (§4.3). */
+export type DraftCheckResult = {
+  /** Null: the resolvers did not answer, and nothing was recorded. */
+  verdict: 'pass' | 'fail' | 'inconclusive'
+  hosts: HostCheck[]
+}
 
 export type PresetCheckerOptions = {
   store: PresetStore
@@ -83,6 +93,7 @@ export function createPresetChecker(options: PresetCheckerOptions) {
     const run: PresetRun = {
       checked: 0,
       inconclusive: 0,
+      drafts: 0,
       ok: 0,
       failing: 0,
       hidden: 0,
@@ -121,8 +132,30 @@ export function createPresetChecker(options: PresetCheckerOptions) {
       }
     }
 
-    if (run.checked > 0 || run.inconclusive > 0) log.info(run, 'preset check finished')
+    // D21: open drafts are checked on the same pass, so an owner can publish
+    // within six hours of saving one without asking for a check.
+    for (const draft of (await store.dueDrafts?.()) ?? []) {
+      const result = await checkDraft(draft)
+      if (result.verdict === 'inconclusive') run.inconclusive += 1
+      else run.drafts += 1
+    }
+
+    if (run.checked > 0 || run.inconclusive > 0 || run.drafts > 0) {
+      log.info(run, 'preset check finished')
+    }
     return run
+  }
+
+  /** Looks a draft's hosts up and records the verdict on the draft; never on a live preset. */
+  async function checkDraft(draft: DuePreset): Promise<DraftCheckResult> {
+    const hosts = await inspect(draft)
+    const verdict = judgePreset(hosts)
+    if (verdict !== 'inconclusive' && store.recordDraft) {
+      const unresolved = hosts.filter((host) => host.verdict === 'fails').map((host) => host.host)
+      await store.recordDraft(draft.id, verdict === 'pass', { unresolved, hosts })
+    }
+    log.info({ draftId: draft.id, provider: draft.provider, verdict }, 'preset draft checked')
+    return { verdict, hosts }
   }
 
   let timer: NodeJS.Timeout | null = null
@@ -143,6 +176,7 @@ export function createPresetChecker(options: PresetCheckerOptions) {
 
   return {
     runOnce,
+    checkDraft,
     start() {
       if (running) return
       running = true

@@ -1,5 +1,8 @@
 import { hostname } from 'node:os'
+import type { Database } from '@dr/db'
 import { serve } from '@hono/node-server'
+import { createClient } from '@supabase/supabase-js'
+import { createAdminSupplier } from './admin/supplier'
 import { createAlertMonitor } from './alerts/monitor'
 import { createAlertStore } from './alerts/store'
 import { createTelegramNotifier } from './alerts/telegram'
@@ -11,6 +14,9 @@ import { emailSetupFor } from './email/provider'
 import { createEmailSender } from './email/sender'
 import { createEmailStore } from './email/store'
 import { env } from './env'
+import { createLedgerSource } from './ledger/source'
+import { createLedgerStore } from './ledger/store'
+import { createLedgerSync } from './ledger/sync'
 import { logger } from './lib/logger'
 import { supplierSlots } from './lib/semaphore'
 import { checkPayment } from './payments/charge-check'
@@ -219,6 +225,9 @@ const monitor = target
           : null,
       testMode: target === 'ote',
       everyMs: env.ALERT_EVERY_MINUTES * 60_000,
+      // FR-FLOAT-1: a snapshot every 15 minutes, so the ledger gap check has
+      // one inside each hourly read window (ADMIN-SPEC §4.4).
+      balanceEveryMs: 15 * 60_000,
       log: logger,
       heartbeatName: `gateway:${target}`,
       readBalanceUsd: async () => {
@@ -246,6 +255,31 @@ const emailSender =
         siteUrl: env.APP_URL ?? 'https://www.mydomainshub.com',
         pollMs: env.EMAIL_POLL_MS,
         deliveryEveryMs: env.EMAIL_DELIVERY_CHECK_MINUTES * 60_000,
+        log: logger,
+      })
+    : null
+
+// ADMIN-SPEC §4.4: the supplier's statement mirrored hourly on this side,
+// read through the admin allowlist in the low lane, with this side's key.
+const ledgerKey = target === 'ote' ? env.DNA_API_TEST_KEY : env.DNA_API_KEY
+const ledgerSync =
+  target && ledgerKey
+    ? createLedgerSync({
+        source: createLedgerSource({
+          supplier: createAdminSupplier({
+            environment: target,
+            apiKey: ledgerKey,
+            resellerId: env.DNA_RESELLER_ID,
+            run: (task, lane) => supplierSlots.run(task, lane),
+          }),
+        }),
+        store: createLedgerStore(
+          createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          }),
+        ),
+        testMode: target === 'ote',
+        everyMs: env.LEDGER_SYNC_MINUTES * 60_000,
         log: logger,
       })
     : null
@@ -280,6 +314,7 @@ catalogueSync?.start()
 sslCatalogueSync?.start()
 delegationCheck?.start()
 presetCheck?.start()
+ledgerSync?.start()
 emailSender?.start()
 if (emailSender && email) {
   // Which provider, never its keys (N13).
@@ -316,6 +351,7 @@ async function shutdown(signal: string) {
     sslCatalogueSync?.stop(),
     delegationCheck?.stop(),
     presetCheck?.stop(),
+    ledgerSync?.stop(),
     emailSender?.stop(),
   ])
   server.close()
