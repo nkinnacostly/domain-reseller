@@ -2032,8 +2032,7 @@ export type Database = {
           validation_type?: string | null
           vendor?: string | null
         }
-        Relationships: [
-        ]
+        Relationships: []
       }
       supplier_balance_snapshots: {
         Row: {
@@ -2470,15 +2469,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      fail_ssl_job: {
-        Args: {
-          p_code: string
-          p_job_id: string
-          p_message: string
-          p_needs_attention?: boolean
-        }
-        Returns: undefined
-      }
       fail_reconcile: {
         Args: { p_error: string; p_run_id: string }
         Returns: undefined
@@ -2491,6 +2481,15 @@ export type Database = {
           p_provider_refund_id?: string
           p_refund_id: string
           p_worker: string
+        }
+        Returns: undefined
+      }
+      fail_ssl_job: {
+        Args: {
+          p_code: string
+          p_job_id: string
+          p_message: string
+          p_needs_attention?: boolean
         }
         Returns: undefined
       }
@@ -2581,11 +2580,11 @@ export type Database = {
         Args: { p_expires_at: string; p_job_id: string }
         Returns: string
       }
-      note_ssl_job_sent: { Args: { p_job_id: string }; Returns: string }
       note_sign_in: {
         Args: { p_device: string; p_user_id: string }
         Returns: boolean
       }
+      note_ssl_job_sent: { Args: { p_job_id: string }; Returns: string }
       orders_to_check: {
         Args: { p_limit: number; p_test_mode: boolean }
         Returns: {
@@ -2769,10 +2768,6 @@ export type Database = {
         }
         Returns: string
       }
-      refuse_ssl_setup: {
-        Args: { p_code: string; p_job_id: string; p_message: string }
-        Returns: undefined
-      }
       refund_hold_reason: {
         Args: {
           p_amount_kobo: number
@@ -2781,16 +2776,27 @@ export type Database = {
         }
         Returns: string
       }
-      reschedule_job: {
-        Args: {
-          p_code: string
-          p_delay_seconds: number
-          p_job_id: string
-          p_message: string
-        }
+      refuse_ssl_setup: {
+        Args: { p_code: string; p_job_id: string; p_message: string }
         Returns: undefined
       }
-      reschedule_ssl_job: {
+      request_ssl_reissue: {
+        Args: { p_certificate_id: string; p_user_id: string }
+        Returns: string
+      }
+      request_ssl_setup: {
+        Args: {
+          p_approver_email: string
+          p_certificate_id: string
+          p_contact: Json
+          p_csr: string
+          p_san_names: string[]
+          p_user_id: string
+          p_web_server: string
+        }
+        Returns: string
+      }
+      reschedule_job: {
         Args: {
           p_code: string
           p_delay_seconds: number
@@ -2810,32 +2816,25 @@ export type Database = {
         }
         Returns: undefined
       }
+      reschedule_ssl_job: {
+        Args: {
+          p_code: string
+          p_delay_seconds: number
+          p_job_id: string
+          p_message: string
+        }
+        Returns: undefined
+      }
       resolve_payment_incident: {
         Args: { p_by: string; p_incident_id: number }
         Returns: undefined
       }
-      request_ssl_reissue: {
-        Args: { p_certificate_id: string; p_user_id: string }
-        Returns: string
-      }
-      request_ssl_setup: {
-        Args: {
-          p_approver_email: string
-          p_certificate_id: string
-          p_contact: Json
-          p_csr: string
-          p_san_names: string[]
-          p_user_id: string
-          p_web_server: string
-        }
-        Returns: string
-      }
       retry_job: { Args: { p_job_id: string }; Returns: undefined }
-      retry_ssl_job: { Args: { p_job_id: string }; Returns: undefined }
       retry_refund: {
         Args: { p_by: string; p_refund_id: string }
         Returns: undefined
       }
+      retry_ssl_job: { Args: { p_job_id: string }; Returns: undefined }
       revoke_my_session: { Args: { p_session_id: string }; Returns: boolean }
       same_nameservers: {
         Args: { p_a: string[]; p_b: string[] }

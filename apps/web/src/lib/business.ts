@@ -36,7 +36,7 @@ export const BUSINESS = {
    * are usually quicker (the owner's choice, 25 Sept 2026: follow Flutterwave).
    */
   cardRefundBusinessDays: 15,
-  lastUpdated: '25 September 2026',
+  lastUpdated: '2 October 2026',
   /** The same date for machines (the sitemap's lastmod). */
   lastUpdatedOn: '2026-10-02',
 } as const
