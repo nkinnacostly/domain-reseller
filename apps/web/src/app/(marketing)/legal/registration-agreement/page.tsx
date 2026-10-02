@@ -24,6 +24,11 @@ export const metadata: Metadata = pageMetadata({
  * contacts, the transfer lock and the transfer code are self-serve in the
  * account (FR-DS1, FR-DS4, FR-DS5); automatic renewal and restores are not
  * built, so the agreement says so and gives the way that works now.
+ *
+ * The SSL section (FR-SSL-1 – FR-SSL-9) states the term as the supplier's
+ * record shows it and the 200-day cap as the CA/Browser Forum sets it; the
+ * no-refund-once-ordered rule is the owner's conservative choice. New legal
+ * copy: flagged for the owner's lawyer in docs/BACKLOG.md.
  */
 export default function RegistrationAgreementPage() {
   return (
@@ -192,6 +197,47 @@ export default function RegistrationAgreementPage() {
           <PolicyLink href={POLICY_LINKS.transferPolicy}>ICANN Transfer Policy</PolicyLink> applies;
           see <Link href="/legal/transfer-disputes">transfer disputes</Link>.
         </p>
+      </LegalSection>
+
+      <LegalSection id="ssl" title="SSL certificates">
+        <p>
+          An SSL certificate is issued by <strong>Sectigo</strong>, the certificate authority,
+          through our supplier DomainNameAPI. When you buy one you are also bound by Sectigo’s
+          subscriber agreement and certification practices, published in its{' '}
+          <PolicyLink href={POLICY_LINKS.sectigoLegal}>legal repository</PolicyLink>.
+        </p>
+        <ul>
+          <li>
+            <strong>What you buy:</strong> a one-year subscription with the certificate authority,
+            for the names you give. Since 15 March 2026 a publicly trusted certificate lasts at most
+            200 days (100 from March 2027), so one certificate does not cover the year: you reissue
+            it, free, during the subscription. We show the subscription’s dates and each
+            certificate’s expiry in your account.
+          </li>
+          <li>
+            <strong>It never renews by itself.</strong> When the subscription ends you can buy a new
+            certificate at the price shown then.
+          </li>
+          <li>
+            <strong>Approval:</strong> the certificate authority confirms that you control the
+            domain by emailing an address there that you choose. You must control the domain and
+            that mailbox, and only ask for certificates for names you are entitled to use.
+          </li>
+          <li>
+            <strong>Your key:</strong> keep the private key secret. If you ask us to make it, we
+            show it to you once and do not keep it; we cannot recover it for you. If it is lost or
+            stolen, tell us and we ask the supplier to revoke the certificate.
+          </li>
+          <li>
+            <strong>Installing it is up to you.</strong> We do not install certificates or host
+            websites.
+          </li>
+          <li>
+            <strong>Refunds:</strong> if the certificate cannot be ordered, you get back what you
+            paid for it; once ordered it is not refundable. See the{' '}
+            <Link href="/legal/refunds#ssl">refund policy</Link>.
+          </li>
+        </ul>
       </LegalSection>
 
       <LegalSection id="liability" title="Our liability">

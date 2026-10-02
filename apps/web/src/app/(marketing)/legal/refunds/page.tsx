@@ -16,7 +16,9 @@ export const metadata: Metadata = pageMetadata({
  * what the order page and refund emails say. Refunds for failed
  * registrations, renewals and transfers, second charges and short payments
  * are automatic (FR-R3, migrations 15–16, 23, 26), back to the payment method
- * used — as this says.
+ * used — as this says. So is a certificate the CA's supplier would not sell
+ * (FR-SSL-3, migration 39); one it sold is not refundable, by the owner's
+ * conservative rule — reissue and revocation instead.
  */
 export default function RefundsPage() {
   const sendDays = BUSINESS.refundSendBusinessDays
@@ -50,12 +52,17 @@ export default function RefundsPage() {
             it was, and your order says why.
           </li>
           <li>
+            <strong>An SSL certificate could not be ordered</strong> — the certificate authority’s
+            supplier refused it, or already holds a certificate for that name. Your order says why.
+          </li>
+          <li>
             <strong>You were charged twice</strong> for the same order.
           </li>
         </ul>
         <p>
-          You get the <strong>full amount you paid for that domain, VAT included</strong>, back to
-          the payment method you used. If only some domains in an order fail, only those are
+          You get the{' '}
+          <strong>full amount you paid for that domain or certificate, VAT included</strong>, back
+          to the payment method you used. If only some domains in an order fail, only those are
           refunded; the rest stay registered. Flutterwave’s processing fee, added on its payment
           page, is Flutterwave’s and is not part of the refund.
         </p>
@@ -80,6 +87,10 @@ export default function RefundsPage() {
           <li>A domain with a spelling mistake — it is registered exactly as it was typed.</li>
           <li>A renewal the registry has accepted.</li>
           <li>A transfer that has completed — the domain is then registered with us.</li>
+          <li>
+            An SSL certificate that has been ordered from the certificate authority — whether or not
+            you set it up, approve it or install it.
+          </li>
         </ul>
         <p>
           That is why checkout shows every name in large type and asks you to confirm the spelling
@@ -87,13 +98,23 @@ export default function RefundsPage() {
         </p>
       </LegalSection>
 
+      <LegalSection id="ssl" title="SSL certificates">
+        <p>
+          A certificate is bought from the certificate authority’s supplier the moment we order it,
+          and is not refundable once ordered. If it cannot be ordered at all, you get back what you
+          paid for it automatically, as above. While its subscription lasts you can reissue it free
+          — for example if you lose its private key. If a certificate’s key is lost or stolen, email{' '}
+          <EmailLink /> and we ask the supplier to revoke it; revoking does not refund it.
+        </p>
+      </LegalSection>
+
       <LegalSection id="how" title="How to ask">
         <p>
-          Refunds for failed registrations, renewals and transfers need no request. If your order
-          does not show a refund as sent within {sendDays} business days, if a card refund has not
-          arrived {cardDays} business days after it was sent, or if you think you were charged
-          twice, email <EmailLink /> with your order number (it starts with “ND-”). You can find it
-          under <Link href="/app/orders">your orders</Link>.
+          Refunds for failed registrations, renewals, transfers and certificate orders need no
+          request. If your order does not show a refund as sent within {sendDays} business days, if
+          a card refund has not arrived {cardDays} business days after it was sent, or if you think
+          you were charged twice, email <EmailLink /> with your order number (it starts with “ND-”).
+          You can find it under <Link href="/app/orders">your orders</Link>.
         </p>
       </LegalSection>
     </LegalPage>
