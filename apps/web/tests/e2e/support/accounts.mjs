@@ -136,8 +136,18 @@ export async function deleteTestCarts() {
     .select('cart_id')
     .like('domain', `${TEST_DOMAIN_PREFIX}%`)
   if (error) throw error
-  const ids = [...new Set((items ?? []).map((item) => item.cart_id))]
-  if (ids.length) await client.from('carts').delete().in('id', ids)
+  const ids = new Set((items ?? []).map((item) => item.cart_id))
+  // Certificates for test names too (migration 39); before it, there are none.
+  const { data: certificates } = await client
+    .from('cart_ssl_items')
+    .select('cart_id')
+    .like('common_name', `%${TEST_DOMAIN_PREFIX}%`)
+  for (const line of certificates ?? []) ids.add(line.cart_id)
+  if (ids.size)
+    await client
+      .from('carts')
+      .delete()
+      .in('id', [...ids])
 
   const since = new Date(Date.now() - 3 * 3_600_000).toISOString()
   const { data: recent } = await client
@@ -614,4 +624,112 @@ export async function authProviders() {
   })
   const body = await response.json()
   return { google: body?.external?.google === true }
+}
+
+// ── SSL certificates (FR-SSL-3 – FR-SSL-7, migration 39) ────────────────────
+// The gateway's SSL worker and poller, done by hand: the queue functions the
+// gateway calls, with the secret key, so e2e never reaches a supplier (N12).
+
+/**
+ * Whether a certificate can be bought: migration 39 applied and the SSL sync
+ * has priced a product the owner sells. The SSL journeys skip without it.
+ */
+export async function hasSslSchema() {
+  const { data, error } = await admin()
+    .from('ssl_products')
+    .select('product_code')
+    .eq('is_sellable', true)
+    .not('create_usd', 'is', null)
+    .limit(1)
+  return !error && (data?.length ?? 0) > 0
+}
+
+/**
+ * Settles the order job of every certificate in an order: `bought` records
+ * the purchase as the gateway does after `initialize`; anything else fails
+ * the line with that code, refunded like a failed registration.
+ *
+ * @param {string} orderId
+ * @param {'bought' | string} outcome
+ */
+export async function settleSslOrder(orderId, outcome) {
+  const client = admin()
+  const { data: certificates, error } = await client
+    .from('ssl_certificates')
+    .select('id, test_mode, order_items!inner(order_id)')
+    .eq('order_items.order_id', orderId)
+  if (error) throw error
+  if (!certificates?.length) throw new Error(`No certificates for order ${orderId}`)
+  for (const certificate of certificates) {
+    const { data: job } = await client
+      .from('ssl_jobs')
+      .select('id')
+      .eq('certificate_id', certificate.id)
+      .eq('kind', 'ssl_initialize')
+      .single()
+    const claim = await client.rpc('claim_ssl_job', {
+      p_worker: 'e2e',
+      p_test_mode: certificate.test_mode,
+      p_job_id: job.id,
+    })
+    if (claim.error) throw claim.error
+    const result =
+      outcome === 'bought'
+        ? await client.rpc('complete_ssl_initialize', {
+            p_job_id: job.id,
+            p_supplier_id: null,
+            p_supplier_status: 'WaitingForInstall',
+            p_purchased_at: new Date().toISOString(),
+            p_subscription_ends_at: new Date(Date.now() + 365 * DAY_MS).toISOString(),
+            p_recovered: false,
+          })
+        : await client.rpc('fail_ssl_job', {
+            p_job_id: job.id,
+            p_code: outcome,
+            p_message: 'e2e',
+            p_needs_attention: false,
+          })
+    if (result.error) throw result.error
+  }
+  return certificates.map((certificate) => certificate.id)
+}
+
+/** The set-up job the customer queued, taken by the supplier: the CA now emails the approver. */
+export async function settleSslSetup(certificateId) {
+  const client = admin()
+  const { data: job, error } = await client
+    .from('ssl_jobs')
+    .select('id, test_mode')
+    .eq('certificate_id', certificateId)
+    .eq('kind', 'ssl_configure')
+    .eq('status', 'queued')
+    .single()
+  if (error) throw error
+  const claim = await client.rpc('claim_ssl_job', {
+    p_worker: 'e2e',
+    p_test_mode: job.test_mode,
+    p_job_id: job.id,
+  })
+  if (claim.error) throw claim.error
+  const done = await client.rpc('record_ssl_configured', {
+    p_job_id: job.id,
+    p_supplier_status: 'WaitingForValidation',
+    p_recovered: false,
+  })
+  if (done.error) throw done.error
+}
+
+/** The poller's answer once the approver has approved: issued, with its text. */
+export async function issueSslCertificate(certificateId, certificate, chain) {
+  const { error } = await admin().rpc('record_ssl_status', {
+    p_certificate_id: certificateId,
+    p_supplier_status: 'Active',
+    p_state: 'issued',
+    p_issued_at: new Date().toISOString(),
+    p_expires_at: new Date(Date.now() + 199 * DAY_MS).toISOString(),
+    p_certificate: certificate,
+    p_ca_bundle: chain,
+    p_next_check_seconds: 3600,
+  })
+  if (error) throw error
 }

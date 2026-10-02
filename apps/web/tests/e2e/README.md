@@ -11,6 +11,7 @@ Journeys that cross boundaries and must not break:
 - nameserver setup → delegation verification
 - transfer-in eligibility → transfer → status
 - renewal and expiry recovery
+- SSL certificate: storefront → cart → checkout → set-up with a CSR → approval → download
 - auth: sign-up, sign-in, 2FA enrolment, AAL2 step-up
 
 ## What does not
