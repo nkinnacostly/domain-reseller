@@ -98,6 +98,42 @@ export const handlers = [
     HttpResponse.json({ ok: true, data: { authCode: 'test-transfer-code' } }),
   ),
 
+  // Registrar gateway — the SSL set-up's reads (FR-SSL-4, /v1/ssl). The
+  // approver list, the CA's reading of a CSR (for whatever name the test's
+  // CSR names), and a generated key and CSR — a made-up key, never a real one.
+  http.get('*/v1/ssl/approvers', ({ request }) => {
+    const name = (new URL(request.url).searchParams.get('name') ?? '').replace(/^\*\./, '')
+    return HttpResponse.json({
+      ok: true,
+      data: {
+        emails: ['admin', 'administrator', 'hostmaster', 'postmaster', 'webmaster'].map(
+          (box) => `${box}@${name}`,
+        ),
+      },
+    })
+  }),
+  http.post('*/v1/ssl/csr/check', () =>
+    HttpResponse.json({
+      ok: true,
+      data: {
+        commonName: 'shop.example.com',
+        alternativeNames: [],
+        isWildcard: false,
+        organization: 'Example Ltd',
+        country: 'NG',
+      },
+    }),
+  ),
+  http.post('*/v1/ssl/csr/generate', () =>
+    HttpResponse.json({
+      ok: true,
+      data: {
+        csr: '-----BEGIN CERTIFICATE REQUEST-----\nMIICtest\n-----END CERTIFICATE REQUEST-----',
+        privateKey: '-----BEGIN RSA PRIVATE KEY-----\nMIIEtestONLY\n-----END RSA PRIVATE KEY-----',
+      },
+    }),
+  ),
+
   // Gateway health
   http.get('*/health', () => HttpResponse.json({ ok: true, data: { status: 'healthy' } })),
 

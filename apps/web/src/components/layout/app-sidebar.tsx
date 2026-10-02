@@ -9,6 +9,7 @@ import {
   Receipt,
   Search,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   Tag,
 } from 'lucide-react'
@@ -35,6 +36,8 @@ const TILES = [
   { href: '/app/orders', label: 'Orders', icon: Receipt },
   { href: '/cart', label: 'Cart', icon: ShoppingCart },
   { href: '/app/transfers', label: 'Transfers', icon: ArrowLeftRight },
+  // FR-SSL-7: the account's SSL certificates.
+  { href: '/app/ssl', label: 'Certificates', icon: ShieldCheck },
   { href: '/app/settings', label: 'Settings', icon: Settings },
 ] as const
 
@@ -115,7 +118,8 @@ function SidebarContent({
       <nav aria-label="Account">
         <ul className="grid grid-cols-2 gap-2">
           {TILES.map(({ href, label, icon: Icon }) => (
-            <li key={href}>
+            // An odd tile out spans the row, so the grid stays even.
+            <li key={href} className="odd:last:col-span-2">
               <NavLink
                 href={href}
                 className={cn(
