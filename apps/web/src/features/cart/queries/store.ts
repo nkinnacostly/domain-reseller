@@ -3,6 +3,7 @@ import 'server-only'
 import type { Database } from '@dr/db/types'
 import { cookies } from 'next/headers'
 import { logger } from '@/lib/logger'
+import { isMissingTable } from '@/lib/supabase/missing-table'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { StoredLine } from '../lib/lines'
@@ -119,6 +120,8 @@ export async function loadSslLines(cartId: string): Promise<StoredSslLine[]> {
     .select('id, product_code, common_name, quoted_total_kobo, quoted_at')
     .eq('cart_id', cartId)
     .order('created_at')
+  // Before migration 39 no cart holds a certificate; the domains still show.
+  if (isMissingTable(error)) return []
   if (error) throw error
   return (data ?? []).map((row) => ({
     id: row.id,

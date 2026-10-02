@@ -9,6 +9,7 @@ import {
 } from '@dr/shared'
 import { cacheLife, cacheTag } from 'next/cache'
 import { logger } from '@/lib/logger'
+import { isMissingTable } from '@/lib/supabase/missing-table'
 import { createServiceClient } from '@/lib/supabase/service'
 
 /**
@@ -61,6 +62,8 @@ export async function readSslCatalogue(): Promise<SslCatalogue | null> {
     supabase.from('pricing_settings').select('margin_ngn, icann_fee_usd, vat_pct').maybeSingle(),
     supabase.from('ssl_products').select('*').eq('is_sellable', true).order('create_usd'),
   ])
+  // Before migration 39 there is nothing to sell: missing data, not a failure.
+  if (isMissingTable(products.error)) return null
   for (const [table, error] of [
     ['fx_rates', rate.error],
     ['pricing_settings', settings.error],

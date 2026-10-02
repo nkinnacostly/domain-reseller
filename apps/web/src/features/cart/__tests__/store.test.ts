@@ -328,6 +328,13 @@ describe('SSL certificate lines (FR-SSL-6, migration 39)', () => {
     await expect(store.loadSslLines('cart-1')).rejects.toThrow('down')
   })
 
+  it('reads a database without migration 39 as a cart with no certificates', async () => {
+    fakeService({
+      cart_ssl_items: [{ data: null, error: { code: 'PGRST205', message: 'no table' } }],
+    })
+    await expect(store.loadSslLines('cart-1')).resolves.toEqual([])
+  })
+
   it('adds a certificate once per name, re-quotes and removes it within the cart', async () => {
     const { queries } = fakeService()
     await store.insertSslLine('cart-1', {

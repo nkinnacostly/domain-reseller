@@ -86,6 +86,17 @@ describe('the SSL catalogue (FR-SSL-2, N5b)', () => {
     await expect(readSslCatalogue()).rejects.toThrow('ssl_products: relation does not exist')
     await expect(getSslCatalogue()).resolves.toBeNull()
   })
+
+  it('sells nothing, without failing, on a database without migration 39', async () => {
+    for (const code of ['PGRST205', '42P01']) {
+      service({
+        fx_rates: { data: { id: 'rate-1', costing_rate: 1500, buffer_pct: 0 }, error: null },
+        pricing_settings: { data: { margin_ngn: 3000, vat_pct: 7.5 }, error: null },
+        ssl_products: { data: null, error: { code, message: 'no such table' } },
+      })
+      await expect(readSslCatalogue()).resolves.toBeNull()
+    }
+  })
 })
 
 describe('whether a name is taken', () => {
