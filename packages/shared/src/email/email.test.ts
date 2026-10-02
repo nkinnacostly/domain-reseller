@@ -272,6 +272,14 @@ describe('renderNotice', () => {
     expect(certificate.text).toContain('already holds a certificate for this name')
     expect(certificate.text).toContain('back what you paid for it, VAT included')
     expect(certificate.version).toBe('order_line_failed@2')
+    // Never "the registry" for a certificate.
+    const unknownCode = render('order_line_failed', {
+      domain: 'a.com',
+      action: 'certificate',
+      code: 'X',
+    })
+    expect(unknownCode.text).toContain('Our certificate supplier would not take the order.')
+    expect(unknownCode.text).not.toContain('registry')
   })
 
   it('sends people to set up a certificate once it is ordered, and to download it once issued', () => {

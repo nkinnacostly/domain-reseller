@@ -74,15 +74,23 @@ const FAILURE_REASON: Record<string, string> = {
   NOT_TRANSFERABLE: 'The registry would not let this domain transfer.',
   TRANSFER_REJECTED: 'The transfer was refused or cancelled before it completed.',
   ALREADY_HERE: 'This domain is already registered with us on another account.',
-  // FR-SSL-3: why a certificate could not be ordered from the CA.
-  NAME_HAS_CERTIFICATE:
-    'Our certificate supplier already holds a certificate for this name, so a second one could not be ordered.',
-  SSL_REFUSED: 'The certificate authority’s supplier would not accept the order.',
 }
 const FAILURE_FALLBACK = 'The registry could not complete it.'
 
 export function failureReason(code: string | null | undefined): string {
   return (code && FAILURE_REASON[code]) || FAILURE_FALLBACK
+}
+
+/** FR-SSL-3: why a certificate could not be ordered, in our words (N10). */
+const CERTIFICATE_FAILURE: Record<string, string> = {
+  NAME_HAS_CERTIFICATE:
+    'Our certificate supplier already holds a certificate for this name, so a second one could not be ordered.',
+  SUPPLIER_INSUFFICIENT_FUNDS: 'Our account with the certificate supplier could not cover it.',
+  NAME_INVALID: 'The certificate supplier did not accept the name.',
+}
+
+export function certificateFailureReason(code: string | null | undefined): string {
+  return (code && CERTIFICATE_FAILURE[code]) || 'Our certificate supplier would not take the order.'
 }
 
 // ── Shared pieces ────────────────────────────────────────────────────────────
@@ -395,7 +403,11 @@ export const NOTICE_TEMPLATES = {
               ? `No certificate for ${d.domain}`
               : `${d.domain} was not transferred`,
       blocks: [
-        { kind: 'text', text: failureReason(d.code) },
+        {
+          kind: 'text',
+          text:
+            d.action === 'certificate' ? certificateFailureReason(d.code) : failureReason(d.code),
+        },
         {
           kind: 'text',
           text: 'You get back what you paid for it, VAT included. The refund goes to the card or account you paid with, automatically, and we will email you when it is sent.',
