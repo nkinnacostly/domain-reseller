@@ -5,6 +5,8 @@ import { HELP_TOPICS } from '@/features/legal/components/help-topics'
 import { HOME_FAQS } from '@/features/marketing/components/faq'
 import { POPULAR_TLDS, sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { toSslOffers } from '@/features/ssl/lib/offers'
+import { getSslCatalogue } from '@/features/ssl/queries/catalogue'
 import { env } from '@/lib/env'
 import { type LlmsInput, llmsFullTxt, llmsTxt, type PriceLine } from '../lib/llms'
 import { plainText } from '../lib/plain-text'
@@ -14,8 +16,15 @@ import { plainText } from '../lib/plain-text'
  * `pricing` tag refreshes them together — so the figures always agree.
  */
 async function inputs(): Promise<LlmsInput & { all: PriceLine[] }> {
-  const priced = await getPricedCatalogue()
-  if (!priced) return { site: env.NEXT_PUBLIC_APP_URL, prices: null, all: [] }
+  const [priced, ssl] = await Promise.all([getPricedCatalogue(), getSslCatalogue()])
+  const certificates = ssl
+    ? toSslOffers(ssl.products).map((offer) => ({
+        name: offer.name,
+        price: offer.price,
+        covers: offer.covers,
+      }))
+    : []
+  if (!priced) return { site: env.NEXT_PUBLIC_APP_URL, prices: null, all: [], certificates }
 
   const rows = sortForDisplay(
     priced.tlds.map(toPublicRow),
@@ -38,6 +47,7 @@ async function inputs(): Promise<LlmsInput & { all: PriceLine[] }> {
       popular: rows.filter((row) => leading.has(row.tld)).map(line),
     },
     all: [...rows].sort((a, b) => a.tld.localeCompare(b.tld)).map(line),
+    certificates,
   }
 }
 

@@ -1,3 +1,4 @@
+import { SSL_TERM } from '@dr/shared'
 import { BRAND_NAME } from '@/components/layout/brand'
 import { LEGAL_DOCUMENTS } from '@/features/legal/lib/documents'
 import { firstTermPhrase, renewalPhrase } from '@/features/pricing/lib/terms'
@@ -25,10 +26,15 @@ export type PriceLine = {
   transfer: string | null
 }
 
+/** An SSL certificate as the SSL page shows it (FR-SSL-1). */
+export type CertificateLine = { name: string; price: string; covers: string }
+
 export type LlmsInput = {
   site: string
   /** Null when prices are withheld (N5b): the file then says so instead. */
   prices: { vatPct: number; extensionCount: number; popular: PriceLine[] } | null
+  /** The SSL certificates on sale; empty when their prices are withheld. */
+  certificates?: CertificateLine[]
 }
 
 const link = (site: string, path: string) => new URL(path, site).toString()
@@ -50,6 +56,11 @@ export const LLMS_PAGES = [
     title: 'Transfer a domain in',
     note: 'checks at the registry whether a domain can move here, and what is in the way',
   },
+  {
+    path: '/ssl',
+    title: 'SSL certificates',
+    note: 'Sectigo PositiveSSL certificates priced in naira, set up and downloaded from your account; you install them yourself',
+  },
   { path: '/search/bulk', title: 'Bulk domain search', note: 'check up to 500 names at once' },
   {
     path: '/whois',
@@ -66,6 +77,24 @@ function priceLine(site: string, line: PriceLine): string {
   return `- [.${line.tld}](${link(site, `/domains/${line.tld}`)}): ${firstTermPhrase(line.tld, line.register, line.registerYears)}, then ${renewalPhrase(line.renew, line.renewYears)} to renew${transfer}`
 }
 
+/**
+ * FR-SSL-1: each certificate with its price and the term in the page's words
+ * — a one-year subscription that never renews by itself (N8, N9b).
+ */
+function certificateSection(site: string, certificates: CertificateLine[]): string[] {
+  if (certificates.length === 0) return []
+  return [
+    '## SSL certificates',
+    '',
+    `Prices in naira, before VAT. Each is a ${SSL_TERM.short} with the certificate authority; certificates now last at most 200 days, so you reissue (free) within the year. It never renews by itself.`,
+    '',
+    ...certificates.map(
+      (line) => `- [${line.name}](${link(site, '/ssl')}): ${line.price} — ${line.covers}`,
+    ),
+    '',
+  ]
+}
+
 function header({ site, prices }: LlmsInput): string[] {
   const count = prices ? `${prices.extensionCount.toLocaleString('en-NG')} ` : ''
   const vat = prices ? `VAT at ${prices.vatPct}%` : 'VAT'
@@ -78,7 +107,7 @@ function header({ site, prices }: LlmsInput): string[] {
     `- Operator: ${BUSINESS.operator}, trading as ${BRAND_NAME} — an authorised reseller, not itself ICANN-accredited. .com registrations are sponsored by ${SPONSORING_REGISTRAR.name} (IANA ID ${SPONSORING_REGISTRAR.ianaId}).`,
     `- Prices are in naira (NGN), before ${vat}, which checkout adds as its own line. Payment is through Flutterwave (card, bank transfer and its other methods), which adds its own processing fee on its payment page.`,
     '- A price is our supplier’s US-dollar price at the day’s exchange rate, plus the ICANN fee on generic extensions and the same flat margin on every extension.',
-    '- We register and manage domains; we do not host websites or email.',
+    '- We register and manage domains, and sell SSL certificates that you install on your own server or hosting; we do not host websites or email.',
     `- Checking a name: ${link(site, '/search')}?q=yourname.com shows whether it is free, with prices. A transfer check is ${link(site, '/transfer')}?domain=yourname.com.`,
     `- Contact: ${BUSINESS.email}`,
     '',
@@ -99,6 +128,7 @@ export function llmsTxt(input: LlmsInput): string {
       ? prices.popular.map((line) => priceLine(site, line))
       : ['Prices are briefly unavailable; see the pricing page.']),
     '',
+    ...certificateSection(site, input.certificates ?? []),
     '## Optional',
     '',
     `- [Every extension and price, with the help centre’s answers](${link(site, '/llms-full.txt')})`,

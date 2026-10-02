@@ -23,6 +23,7 @@ const COLUMNS = [
       { href: '/search', label: 'Search' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/transfer', label: 'Transfer in' },
+      { href: '/ssl', label: 'SSL certificates' },
       { href: '/whois', label: 'WHOIS lookup' },
     ],
   },

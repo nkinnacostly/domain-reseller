@@ -20,6 +20,7 @@ export const PUBLIC_PAGES: readonly { path: string; stamp: Stamp }[] = [
   { path: '/pricing', stamp: 'prices' },
   { path: '/domains', stamp: null },
   { path: '/transfer', stamp: null },
+  { path: '/ssl', stamp: 'prices' },
   { path: '/whois', stamp: null },
   { path: '/search/bulk', stamp: null },
   { path: '/help', stamp: null },
