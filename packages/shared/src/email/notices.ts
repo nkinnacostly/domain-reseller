@@ -74,6 +74,10 @@ const FAILURE_REASON: Record<string, string> = {
   NOT_TRANSFERABLE: 'The registry would not let this domain transfer.',
   TRANSFER_REJECTED: 'The transfer was refused or cancelled before it completed.',
   ALREADY_HERE: 'This domain is already registered with us on another account.',
+  // Set by an administrator's Fail, after a fresh registry read (docs/ADMIN-SPEC.md §3.1.2).
+  NOT_AT_REGISTRY: 'The registry did not register it, so nothing was bought.',
+  TRANSFER_REFUSED: 'The registry refused the transfer, so the domain did not move to us.',
+  STOPPED_BY_ADMIN: 'We stopped this change. Your domain keeps the settings the registry shows.',
 }
 const FAILURE_FALLBACK = 'The registry could not complete it.'
 
@@ -87,6 +91,8 @@ const CERTIFICATE_FAILURE: Record<string, string> = {
     'Our certificate supplier already holds a certificate for this name, so a second one could not be ordered.',
   SUPPLIER_INSUFFICIENT_FUNDS: 'Our account with the certificate supplier could not cover it.',
   NAME_INVALID: 'The certificate supplier did not accept the name.',
+  // An administrator's Fail on an order that was never sent (docs/ADMIN-SPEC.md §3.1.2).
+  FAILED_BY_ADMIN: 'The certificate was not ordered, so nothing was bought.',
 }
 
 export function certificateFailureReason(code: string | null | undefined): string {
