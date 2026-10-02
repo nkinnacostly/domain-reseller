@@ -1,6 +1,6 @@
 'use client'
 
-import { BookUser, ChevronUp, LogOut, Menu, Receipt, Settings } from 'lucide-react'
+import { BookUser, ChevronUp, LogOut, Menu, Receipt, Settings, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
@@ -26,7 +26,14 @@ import { signOut } from '@/features/auth/actions/session'
  * is followed — including one to the page already open — and on any
  * navigation.
  */
-export function MobileNav({ children }: { children: React.ReactNode }) {
+export function MobileNav({
+  children,
+  description = 'Pages in your account',
+}: {
+  children: React.ReactNode
+  /** What the drawer holds, for screen readers. */
+  description?: string
+}) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
@@ -52,7 +59,7 @@ export function MobileNav({ children }: { children: React.ReactNode }) {
         }}
       >
         <SheetTitle className="sr-only">Menu</SheetTitle>
-        <SheetDescription className="sr-only">Pages in your account</SheetDescription>
+        <SheetDescription className="sr-only">{description}</SheetDescription>
         {children}
       </SheetContent>
     </Sheet>
@@ -64,10 +71,13 @@ export function AccountMenu({
   name,
   email,
   initials,
+  showAdmin = false,
 }: {
   name: string
   email: string
   initials: string
+  /** An admin's way into the back office; nothing public links there (ADMIN-SPEC §2.3). */
+  showAdmin?: boolean
 }) {
   const leave = useAction(signOut)
 
@@ -114,6 +124,14 @@ export function AccountMenu({
               Orders
             </Link>
           </DropdownMenuItem>
+          {showAdmin ? (
+            <DropdownMenuItem asChild>
+              <Link href="/admin">
+                <ShieldCheck aria-hidden="true" />
+                Admin
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={leave.isPending}
