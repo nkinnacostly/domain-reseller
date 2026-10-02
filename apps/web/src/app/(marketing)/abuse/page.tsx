@@ -1,3 +1,4 @@
+import { EnvelopeSimple, Flag, ShieldCheck } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmailLink, LegalPage, LegalSection } from '@/features/legal/components/legal-page'
@@ -21,7 +22,7 @@ export default function AbusePage() {
       path="/abuse"
       title="Report abuse"
       nav="none"
-      icons={['🚩', '🛡️', '✉️']}
+      icons={[Flag, ShieldCheck, EnvelopeSimple]}
       intro={
         <p>
           If a domain registered through {BUSINESS.brand} is being used for phishing, malware, spam,

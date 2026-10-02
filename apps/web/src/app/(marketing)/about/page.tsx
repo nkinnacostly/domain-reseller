@@ -1,3 +1,4 @@
+import { Globe, Handshake, MapPin } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmailLink, LegalPage, LegalSection } from '@/features/legal/components/legal-page'
@@ -25,7 +26,7 @@ export default function AboutPage() {
       path="/about"
       title={`About ${BUSINESS.brand}`}
       nav="none"
-      icons={['🇳🇬', '🌐', '🤝']}
+      icons={[MapPin, Globe, Handshake]}
       intro={
         <p>
           {BUSINESS.brand} is where people and businesses in Nigeria buy and look after domain

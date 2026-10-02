@@ -1,3 +1,4 @@
+import { ArrowsLeftRight, LockKeyOpen, SealCheck } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { PageHero } from '@/components/layout/page-hero'
@@ -40,7 +41,7 @@ export default function TransferPage({
           eyebrow="Transfer"
           title="Bring your domain here"
           intro="Check whether it can move. We look it up at the registry and tell you exactly what, if anything, is in the way."
-          icons={['🔁', '🔓', '✅']}
+          icons={[ArrowsLeftRight, LockKeyOpen, SealCheck]}
         >
           <TransferCheckForm />
         </PageHero>

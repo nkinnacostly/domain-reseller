@@ -1,3 +1,4 @@
+import { Compass, GlobeHemisphereEast, MagnifyingGlass } from '@phosphor-icons/react/ssr'
 import { ArrowUpRight } from 'lucide-react'
 import Link from 'next/link'
 import { PageHero } from '@/components/layout/page-hero'
@@ -22,7 +23,7 @@ export default function ExtensionNotFound() {
           eyebrow="Domain extensions"
           title={<MissingExtensionTitle />}
           intro="It isn't one of the extensions we can register for you at the moment. Search for a name in one we do sell, or browse every extension and its price."
-          icons={['🧭', '🔍', '🌍']}
+          icons={[Compass, MagnifyingGlass, GlobeHemisphereEast]}
         >
           <DomainSearch />
         </PageHero>

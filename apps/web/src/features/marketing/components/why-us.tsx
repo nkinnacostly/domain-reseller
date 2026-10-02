@@ -1,3 +1,4 @@
+import { CurrencyNgn, LockKey, Receipt, ShieldCheck } from '@phosphor-icons/react/ssr'
 import { BRAND_NAME } from '@/components/layout/brand'
 import { Container } from '@/components/layout/site-shell'
 
@@ -10,12 +11,12 @@ import { Container } from '@/components/layout/site-shell'
 export function WhyUs({ rate }: { rate: number | null }) {
   const points = [
     {
-      emoji: '🧾',
+      icon: Receipt,
       title: 'The renewal price, upfront',
       body: 'What a domain renews at sits next to what it costs today — in search results, in your cart and at checkout. The second year is never a surprise.',
     },
     {
-      emoji: '💵',
+      icon: CurrencyNgn,
       title: 'Naira at a published rate',
       body:
         rate === null
@@ -23,12 +24,12 @@ export function WhyUs({ rate }: { rate: number | null }) {
           : `Registries bill in US dollars. We convert at one rate — ₦${rate.toLocaleString('en-NG')} to the dollar today — and publish it on our pricing page.`,
     },
     {
-      emoji: '🛡️',
+      icon: ShieldCheck,
       title: 'Contact privacy at no charge',
       body: 'Where the extension allows it, your name, address and phone number stay out of the public registration record, at no extra cost.',
     },
     {
-      emoji: '🔐',
+      icon: LockKey,
       title: 'Your domain stays yours',
       body: 'Transfer lock on by default, two-factor authentication for sensitive changes, and your transfer code within five days of asking — never held over a bill.',
     },
@@ -58,9 +59,9 @@ export function WhyUs({ rate }: { rate: number | null }) {
             >
               <span
                 aria-hidden="true"
-                className="grid size-[4.5rem] place-items-center rounded-2xl bg-brand-foreground text-[2.5rem] shadow-[0_12px_24px_-14px_rgb(0_0_0/0.3)]"
+                className="grid size-[4.5rem] place-items-center rounded-2xl bg-brand-foreground shadow-[0_12px_24px_-14px_rgb(0_0_0/0.3)]"
               >
-                {point.emoji}
+                <point.icon weight="duotone" className="size-10 text-brand" />
               </span>
               <h3 className="mt-6 text-xl font-semibold text-foreground">{point.title}</h3>
               <p className="mt-2 text-pretty text-sm/6 text-muted-foreground">{point.body}</p>

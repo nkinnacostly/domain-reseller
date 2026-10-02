@@ -1,3 +1,4 @@
+import { GlobeHemisphereEast, MagnifyingGlass, SealCheck } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { PageHero } from '@/components/layout/page-hero'
@@ -42,7 +43,7 @@ export default function SearchPage({
       <SiteHeader />
 
       <main id="main">
-        <PageHero icons={['🔍', '🌍', '✅']}>
+        <PageHero icons={[MagnifyingGlass, GlobeHemisphereEast, SealCheck]}>
           <Suspense fallback={<SearchHeadingSkeleton />}>
             <SearchHeading searchParams={searchParams} />
           </Suspense>

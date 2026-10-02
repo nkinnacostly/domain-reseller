@@ -1,3 +1,5 @@
+import type { Icon } from '@phosphor-icons/react'
+import { LockKey, Scales, Scroll } from '@phosphor-icons/react/ssr'
 import { JsonLd } from '@/components/common/json-ld'
 import { NavLink } from '@/components/layout/nav-link'
 import { PageHero } from '@/components/layout/page-hero'
@@ -31,7 +33,7 @@ export function LegalPage({
   intro,
   children,
   nav = 'legal',
-  icons = ['📜', '⚖️', '🔒'],
+  icons = [Scroll, Scales, LockKey],
   structuredData = [],
 }: {
   title: string
@@ -42,7 +44,7 @@ export function LegalPage({
   /** Legal documents list the others beside them; help pages do not. */
   nav?: 'legal' | 'none'
   /** Emoji floating beside the heading on wide screens. */
-  icons?: string[]
+  icons?: Icon[]
   /** More structured data for this page (an FAQ, the organization). */
   structuredData?: (JsonLdNode | null)[]
 }) {

@@ -1,3 +1,4 @@
+import type { Icon } from '@phosphor-icons/react'
 import { Container, PAGE_INSET_POSITION } from '@/components/layout/site-shell'
 import { cn } from '@/lib/utils'
 
@@ -41,13 +42,17 @@ export function BrandPanel({
   )
 }
 
-/** A white disc with an emoji in it, bobbing gently. Always decorative. */
+/**
+ * A white disc with a Phosphor icon in it, duotone in brand blue, bobbing
+ * gently. Always decorative. (Emoji were used before: they render
+ * differently on every device and read as generic.)
+ */
 export function FloatingIcon({
-  emoji,
+  icon: Icon,
   className,
   delay = '0s',
 }: {
-  emoji: string
+  icon: Icon
   className?: string
   delay?: string
 }) {
@@ -59,16 +64,16 @@ export function FloatingIcon({
         className,
       )}
     >
-      {emoji}
+      <Icon weight="duotone" className="size-1/2 text-brand" />
     </span>
   )
 }
 
 /** Where a page hero's icons sit: to the right of the text, from `lg` up. */
 const ICON_SLOTS = [
-  { className: 'top-[26%] right-[5%] size-[4.5rem] text-4xl rotate-6', delay: '0s' },
-  { className: 'top-[54%] right-[19%] size-16 text-3xl -rotate-6', delay: '1.4s' },
-  { className: 'top-[70%] right-[2%] size-14 text-2xl rotate-3', delay: '2.8s' },
+  { className: 'top-[26%] right-[5%] size-[4.5rem] rotate-6', delay: '0s' },
+  { className: 'top-[54%] right-[19%] size-16 -rotate-6', delay: '1.4s' },
+  { className: 'top-[70%] right-[2%] size-14 rotate-3', delay: '2.8s' },
 ] as const
 
 /**
@@ -87,8 +92,8 @@ export function PageHero({
   title?: React.ReactNode
   intro?: React.ReactNode
   children?: React.ReactNode
-  /** Up to three emoji floating to the right of the heading. */
-  icons?: string[]
+  /** Up to three icons floating to the right of the heading. */
+  icons?: Icon[]
 }) {
   return (
     <BrandPanel
@@ -105,10 +110,10 @@ export function PageHero({
             aria-hidden="true"
             className="absolute inset-x-10 inset-y-0 hidden select-none lg:block"
           >
-            {icons.slice(0, ICON_SLOTS.length).map((emoji, index) => (
+            {icons.slice(0, ICON_SLOTS.length).map((icon, index) => (
               <FloatingIcon
-                key={emoji}
-                emoji={emoji}
+                key={ICON_SLOTS[index]?.delay}
+                icon={icon}
                 className={ICON_SLOTS[index]?.className}
                 delay={ICON_SLOTS[index]?.delay}
               />

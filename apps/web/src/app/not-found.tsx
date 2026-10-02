@@ -1,3 +1,4 @@
+import { Compass, GlobeHemisphereEast, MagnifyingGlass } from '@phosphor-icons/react/ssr'
 import Link from 'next/link'
 import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
@@ -15,7 +16,7 @@ export default function NotFound() {
           eyebrow="Error 404"
           title="Page not found"
           intro="That page doesn't exist or has moved. Search for a domain instead, or head back to the home page."
-          icons={['🧭', '🔍', '🌍']}
+          icons={[Compass, MagnifyingGlass, GlobeHemisphereEast]}
         >
           <DomainSearch />
         </PageHero>

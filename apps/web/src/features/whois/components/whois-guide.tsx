@@ -1,29 +1,30 @@
+import { Buildings, CalendarBlank, Compass, LockKey, PushPin } from '@phosphor-icons/react/ssr'
 import { Container } from '@/components/layout/site-shell'
 import { POLICY_LINKS } from '@/lib/business'
 
 const SHOWN = [
   {
-    emoji: '📌',
+    icon: PushPin,
     title: 'Whether it is registered',
     body: 'And if it is not, a link to check it and register it.',
   },
   {
-    emoji: '🏢',
+    icon: Buildings,
     title: 'The registrar',
     body: 'The company the domain is registered through — the one to contact about it.',
   },
   {
-    emoji: '📅',
+    icon: CalendarBlank,
     title: 'Key dates',
     body: 'When it was registered, when it expires, and when it last moved registrar.',
   },
   {
-    emoji: '🔒',
+    icon: LockKey,
     title: 'Status codes',
     body: 'Locks and pending changes, each explained in plain words.',
   },
   {
-    emoji: '🧭',
+    icon: Compass,
     title: 'Nameservers',
     body: 'Where the domain points — usually the company hosting its website or email.',
   },
@@ -56,9 +57,9 @@ export function WhoisGuide() {
               <li key={item.title} className="rounded-3xl border border-border bg-card p-6">
                 <span
                   aria-hidden="true"
-                  className="grid size-12 place-items-center rounded-2xl bg-brand-subtle text-2xl"
+                  className="grid size-12 place-items-center rounded-2xl bg-brand-subtle"
                 >
-                  {item.emoji}
+                  <item.icon weight="duotone" className="size-6 text-brand-ink" />
                 </span>
                 <h3 className="mt-4 font-semibold text-foreground">{item.title}</h3>
                 <p className="mt-2 text-pretty text-sm/6 text-muted-foreground">{item.body}</p>

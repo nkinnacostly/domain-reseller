@@ -1,3 +1,4 @@
+import { ListChecks, MagnifyingGlass, SealCheck } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { PageHero } from '@/components/layout/page-hero'
@@ -41,7 +42,7 @@ export default function BulkSearchPage({
           <PageHero
             title="Search many names at once"
             intro="Paste a list or upload a CSV — each name gets its own answer, with its first-year and renewal price."
-            icons={['📋', '🔍', '✅']}
+            icons={[ListChecks, MagnifyingGlass, SealCheck]}
           >
             <Suspense fallback={<BulkSearchPanelSkeleton />}>
               <BulkSearchPanel searchParams={searchParams} />

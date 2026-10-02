@@ -1,3 +1,4 @@
+import { Receipt, SealCheck, ShoppingCart } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { PageHero } from '@/components/layout/page-hero'
@@ -25,7 +26,7 @@ export default function CartPage() {
         <PageHero
           title="Your cart"
           intro="Every domain shows what it costs now and what it renews at. VAT is added as its own line."
-          icons={['🛒', '🧾', '✅']}
+          icons={[ShoppingCart, Receipt, SealCheck]}
         />
         <Container className="py-12 sm:py-16">
           <Suspense fallback={<CartSkeleton />}>

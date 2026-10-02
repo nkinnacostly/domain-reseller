@@ -1,3 +1,4 @@
+import { Pulse, Timer, Wrench } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
@@ -32,7 +33,7 @@ export default function StatusPage() {
           eyebrow="Service status"
           title="Is everything working?"
           intro="How the parts that act on your domains are doing right now. This page reads them live every time you open it."
-          icons={['🟢', '⏱️', '🛠️']}
+          icons={[Pulse, Timer, Wrench]}
         />
 
         <Container className="py-12 sm:py-16">

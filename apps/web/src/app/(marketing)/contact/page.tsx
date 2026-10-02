@@ -1,3 +1,4 @@
+import { ChatsCircle, EnvelopeSimple, Handshake } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { EmailLink, LegalPage, LegalSection } from '@/features/legal/components/legal-page'
@@ -18,7 +19,7 @@ export default function ContactPage() {
       path="/contact"
       title="Contact us"
       nav="none"
-      icons={['✉️', '💬', '🤝']}
+      icons={[EnvelopeSimple, ChatsCircle, Handshake]}
       structuredData={[
         organizationLd(env.NEXT_PUBLIC_APP_URL),
         aboutPageLd(env.NEXT_PUBLIC_APP_URL, {

@@ -1,3 +1,4 @@
+import { BookOpenText, ChatsCircle, SealCheck } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { FaqItem } from '@/components/common/faq-item'
@@ -21,7 +22,7 @@ export default function HelpPage() {
       path="/help"
       title="Help centre"
       nav="none"
-      icons={['💬', '📘', '✅']}
+      icons={[ChatsCircle, BookOpenText, SealCheck]}
       intro={
         <p>
           Answers to common questions. Cannot find yours? <Link href="/contact">Contact us</Link>.

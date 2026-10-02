@@ -1,3 +1,4 @@
+import { FileMagnifyingGlass, Folders, Globe } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { PageHero } from '@/components/layout/page-hero'
@@ -39,7 +40,7 @@ export default function WhoisPage({
           eyebrow="WHOIS lookup"
           title="Look up any domain"
           intro="Whether it is registered, who it is registered through, when it expires and where it points — straight from the registry’s public record."
-          icons={['🔎', '🗂️', '🌐']}
+          icons={[FileMagnifyingGlass, Folders, Globe]}
         >
           <WhoisForm />
         </PageHero>

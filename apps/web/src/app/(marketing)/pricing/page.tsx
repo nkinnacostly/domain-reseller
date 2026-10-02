@@ -1,4 +1,12 @@
 import { formatNaira } from '@dr/shared'
+import {
+  Bank,
+  CurrencyNgn,
+  Globe,
+  GlobeHemisphereEast,
+  Handshake,
+  Receipt,
+} from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PageHero } from '@/components/layout/page-hero'
@@ -24,22 +32,22 @@ export const metadata: Metadata = pageMetadata({
 
 const PARTS = [
   {
-    emoji: '🏛️',
+    icon: Bank,
     title: 'The registry fee',
     body: 'What the registry charges to hold the name — Verisign for .com, Public Interest Registry for .org, and so on. It is the bulk of what you pay.',
   },
   {
-    emoji: '🤝',
+    icon: Handshake,
     title: 'Our margin',
     body: 'How we stay in business and keep support answering. The same flat amount on every extension, for each year you register, renew or transfer.',
   },
   {
-    emoji: '🌐',
+    icon: Globe,
     title: 'The ICANN fee',
     body: 'USD 0.20 per year on generic extensions such as .com and .org, already included in the prices shown. Country extensions such as .co do not carry it.',
   },
   {
-    emoji: '🧾',
+    icon: Receipt,
     title: 'VAT at 7.5%',
     body: 'Added at checkout as its own line, as Nigerian law requires. Prices on this page are shown before VAT.',
   },
@@ -91,7 +99,7 @@ export default async function PricingPage() {
           eyebrow="Pricing"
           title="Every price, including the one most registrars hide"
           intro="The renewal price sits next to the first-year price on every row. Where an extension renews higher than it registers, we say so rather than letting you find out in twelve months."
-          icons={['🧾', '💵', '🌍']}
+          icons={[Receipt, CurrencyNgn, GlobeHemisphereEast]}
         />
 
         {/* ── Featured ───────────────────────────────────────────────── */}
@@ -128,9 +136,9 @@ export default async function PricingPage() {
                 <div key={part.title} className="rounded-3xl bg-background p-6">
                   <span
                     aria-hidden="true"
-                    className="grid size-12 place-items-center rounded-2xl bg-brand-subtle text-2xl"
+                    className="grid size-12 place-items-center rounded-2xl bg-brand-subtle"
                   >
-                    {part.emoji}
+                    <part.icon weight="duotone" className="size-6 text-brand-ink" />
                   </span>
                   <dt className="mt-4 font-semibold text-foreground">{part.title}</dt>
                   <dd className="mt-2 text-sm/6 text-muted-foreground">{part.body}</dd>

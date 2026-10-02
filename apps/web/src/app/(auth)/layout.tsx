@@ -1,4 +1,5 @@
 import { formatNaira } from '@dr/shared'
+import { GlobeHemisphereEast, LockKey, SealCheck } from '@phosphor-icons/react/ssr'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { BRAND_NAME, Brand } from '@/components/layout/brand'
@@ -53,15 +54,15 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
       <div aria-hidden="true" className="hidden select-none p-5 lg:block">
         <div className="sticky top-5 flex h-[calc(100dvh-2.5rem)] min-h-[40rem] flex-col overflow-hidden rounded-[2.5rem] bg-brand text-brand-foreground">
           <div className="absolute bottom-0 left-1/2 aspect-square w-[56rem] -translate-x-1/2 translate-y-[64%] rounded-full bg-brand-arc/55" />
-          <FloatingIcon emoji="🔒" className="top-[14%] left-[8%] size-16 text-3xl -rotate-6" />
+          <FloatingIcon icon={LockKey} className="top-[14%] left-[8%] size-16 -rotate-6" />
           <FloatingIcon
-            emoji="🌍"
-            className="top-[10%] right-[10%] size-[4.5rem] text-4xl rotate-6"
+            icon={GlobeHemisphereEast}
+            className="top-[10%] right-[10%] size-[4.5rem] rotate-6"
             delay="1.4s"
           />
           <FloatingIcon
-            emoji="✅"
-            className="top-[42%] right-[6%] size-14 text-2xl rotate-3"
+            icon={SealCheck}
+            className="top-[42%] right-[6%] size-14 rotate-3"
             delay="2.8s"
           />
 

@@ -1,3 +1,4 @@
+import { Globe, MagnifyingGlass, SealCheck } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { PageHero } from '@/components/layout/page-hero'
@@ -107,7 +108,7 @@ export default async function ExtensionPage({ params }: { params: Params }) {
               <p>{describeKind(tld, facts.isCountryCode)}</p>
             )
           }
-          icons={['🌐', '🔍', '✅']}
+          icons={[Globe, MagnifyingGlass, SealCheck]}
         >
           <DomainSearch extension={tld} formLabel={`.${tld} domain search`} />
         </PageHero>

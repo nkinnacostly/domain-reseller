@@ -1,3 +1,4 @@
+import { GlobeHemisphereEast, LinkSimple, TextAa } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PageHero } from '@/components/layout/page-hero'
@@ -45,7 +46,7 @@ export default async function DomainsIndexPage() {
               .
             </p>
           }
-          icons={['🌍', '🔤', '🔗']}
+          icons={[GlobeHemisphereEast, TextAa, LinkSimple]}
         />
         {directory ? (
           <ExtensionDirectory directory={directory} />

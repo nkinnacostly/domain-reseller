@@ -1,3 +1,4 @@
+import { GlobeHemisphereEast } from '@phosphor-icons/react/ssr'
 import { Container } from '@/components/layout/site-shell'
 import { DomainSearch } from '@/features/search/components/domain-search'
 import { cn } from '@/lib/utils'
@@ -42,8 +43,8 @@ export function FinalCta({ tlds }: { tlds: string[] }) {
               aria-hidden="true"
               className="relative mx-auto hidden aspect-square w-full max-w-[20rem] select-none lg:block"
             >
-              <div className="absolute inset-[18%] grid place-items-center rounded-full bg-brand-foreground text-[5.5rem] shadow-[0_30px_60px_-24px_rgb(0_0_0/0.45)]">
-                🌍
+              <div className="absolute inset-[18%] grid place-items-center rounded-full bg-brand-foreground shadow-[0_30px_60px_-24px_rgb(0_0_0/0.45)]">
+                <GlobeHemisphereEast weight="duotone" className="size-1/2 text-brand" />
               </div>
               {tlds.slice(0, ORBIT.length).map((tld, index) => (
                 <span

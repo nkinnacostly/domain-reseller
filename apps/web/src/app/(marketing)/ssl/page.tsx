@@ -1,3 +1,4 @@
+import { Certificate, EnvelopeSimple, LockKey } from '@phosphor-icons/react/ssr'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PageHero } from '@/components/layout/page-hero'
@@ -56,7 +57,7 @@ export default async function SslPage() {
               free — <Link href="#ssl-faq-heading">check first</Link>.
             </p>
           }
-          icons={['🔒', '📜', '✉️']}
+          icons={[LockKey, Certificate, EnvelopeSimple]}
         />
         <SslOffers offers={offers} vatPct={catalogue?.vatPct ?? null} />
         <SslGuide />

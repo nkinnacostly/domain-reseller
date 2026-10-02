@@ -1,3 +1,11 @@
+import {
+  CreditCard,
+  GlobeHemisphereEast,
+  LockKey,
+  MagnifyingGlass,
+  RocketLaunch,
+  SealCheck,
+} from '@phosphor-icons/react/ssr'
 import { BrandPanel, FloatingIcon } from '@/components/layout/page-hero'
 import { Container } from '@/components/layout/site-shell'
 import { DomainSearch } from '@/features/search/components/domain-search'
@@ -9,12 +17,16 @@ import { DomainsScreen, type Quote } from './phone-screens'
  * that the headline fills the width and they would sit on the text.
  */
 const ICONS = [
-  { emoji: '🔍', className: 'top-[30%] left-[4%] size-[4.5rem] text-4xl -rotate-6', delay: '0s' },
-  { emoji: '💳', className: 'top-[62%] left-[0%] size-16 text-3xl rotate-6', delay: '1.2s' },
-  { emoji: '🚀', className: 'top-[92%] left-[9%] size-14 text-2xl -rotate-3', delay: '2.4s' },
-  { emoji: '🌍', className: 'top-[28%] right-[4%] size-[4.5rem] text-4xl rotate-6', delay: '0.6s' },
-  { emoji: '🔒', className: 'top-[60%] right-[0%] size-16 text-3xl -rotate-6', delay: '1.8s' },
-  { emoji: '✅', className: 'top-[90%] right-[9%] size-14 text-2xl rotate-3', delay: '3s' },
+  { icon: MagnifyingGlass, className: 'top-[30%] left-[4%] size-[4.5rem] -rotate-6', delay: '0s' },
+  { icon: CreditCard, className: 'top-[62%] left-[0%] size-16 rotate-6', delay: '1.2s' },
+  { icon: RocketLaunch, className: 'top-[92%] left-[9%] size-14 -rotate-3', delay: '2.4s' },
+  {
+    icon: GlobeHemisphereEast,
+    className: 'top-[28%] right-[4%] size-[4.5rem] rotate-6',
+    delay: '0.6s',
+  },
+  { icon: LockKey, className: 'top-[60%] right-[0%] size-16 -rotate-6', delay: '1.8s' },
+  { icon: SealCheck, className: 'top-[90%] right-[9%] size-14 rotate-3', delay: '3s' },
 ] as const
 
 /** The home page's hero: the shared blue panel, centred, with the product below. */
@@ -41,7 +53,7 @@ export function Hero({
           className="absolute inset-x-10 inset-y-0 hidden select-none lg:block"
         >
           {ICONS.map((icon) => (
-            <FloatingIcon key={icon.emoji} {...icon} />
+            <FloatingIcon key={icon.delay} {...icon} />
           ))}
         </div>
 
