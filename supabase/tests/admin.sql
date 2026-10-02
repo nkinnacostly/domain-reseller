@@ -1,0 +1,879 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 40, tried as the database owner and, where the grant is the
+-- point, as `authenticated` and `service_role` (docs/ADMIN-SPEC.md §3.3).
+-- Admins, factors, sessions and claims are made up inside the transaction;
+-- live payments and refunds are inserted directly, never through
+-- record_order_payment, because the invoice sequence does not roll back.
+-- Each check raises on failure. Everything is rolled back.
+--
+--   supabase db query --linked -f supabase/tests/admin.sql
+-- ─────────────────────────────────────────────────────────────────────────────
+begin;
+
+-- Claims for a session: who, which session, how fresh the code is, how they signed in.
+create function pg_temp.act(p_uid uuid, p_sid uuid, p_totp_age interval default interval '1 minute',
+                            p_aal text default 'aal2', p_methods text[] default array['password'])
+returns void language plpgsql as $f$
+declare
+  v_amr jsonb;
+begin
+  select coalesce(jsonb_agg(jsonb_build_object('method', m, 'timestamp',
+                    extract(epoch from now() - interval '2 hours')::bigint)), '[]'::jsonb)
+    into v_amr from unnest(p_methods) m;
+  if p_totp_age is not null then
+    v_amr := v_amr || jsonb_build_array(jsonb_build_object('method', 'totp',
+               'timestamp', extract(epoch from now() - p_totp_age)::bigint));
+  end if;
+  perform set_config('request.jwt.claims', jsonb_build_object(
+    'sub', p_uid, 'role', 'authenticated', 'aal', p_aal, 'session_id', p_sid, 'amr', v_amr)::text, true);
+end $f$;
+
+-- A paid order with one register line, its payment recorded directly.
+create function pg_temp.paid_order(p_user uuid, p_test boolean, p_domain text, p_line_status text, p_ref text)
+returns table (o_order uuid, o_payment uuid, o_item uuid) language plpgsql as $f$
+declare
+  v_order uuid;
+  v_pay   uuid;
+  v_item  uuid;
+begin
+  insert into public.orders (user_id, subtotal_kobo, vat_pct, vat_kobo, total_kobo, fx_rate_id, tx_ref,
+                             registrant, float_check, test_mode, status, paid_at)
+  values (p_user, 100000, 7.5, 7500, 107500, (select f.id from public.fx_rates f order by f.created_at limit 1),
+          'MDH-m40-' || p_ref, '{}', 'covered', p_test, 'provisioning', now())
+  returning id into v_order;
+  insert into public.order_items (order_id, domain, tld, item_type, period_years, price_kobo, renewal_kobo,
+                                  privacy, auto_renew, status)
+  values (v_order, p_domain, 'com', 'register', 1, 100000, 100000, false, false,
+          p_line_status::public.order_item_status)
+  returning id into v_item;
+  insert into public.payments (order_id, user_id, provider, provider_reference, tx_ref, amount_kobo,
+                               currency, status, method, raw)
+  values (v_order, p_user, 'flutterwave', 'm40-' || p_ref, 'MDH-m40-' || p_ref, 107500, 'NGN', 'successful',
+          'card', '{}')
+  returning id into v_pay;
+  update public.orders set payment_id = v_pay where id = v_order;
+  return query select v_order, v_pay, v_item;
+end $f$;
+
+-- Runs a statement that must raise; its message must match.
+create function pg_temp.expect_raise(p_sql text, p_like text) returns void language plpgsql as $f$
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    if sqlerrm not like p_like then
+      raise exception 'expected "%" from %, got "%"', p_like, p_sql, sqlerrm;
+    end if;
+    return;
+  end;
+  raise exception 'expected "%" from %, but it ran', p_like, p_sql;
+end $f$;
+
+create function pg_temp.audit_count(p_label text, p_action text, p_outcome text, p_code text default null)
+returns integer language sql as $f$
+  select count(*)::integer from public.admin_audit_log a
+   where a.admin_label = p_label and a.action = p_action and a.outcome = p_outcome
+     and (p_code is null or a.error_code = p_code)
+$f$;
+
+do $$
+declare
+  v_tag      text := left(replace(gen_random_uuid()::text, '-', ''), 8);
+  u_owner    uuid := gen_random_uuid();
+  u_op       uuid := gen_random_uuid();
+  u_view     uuid := gen_random_uuid();
+  u_test     uuid := gen_random_uuid();
+  u_none     uuid := gen_random_uuid();
+  u_rev      uuid := gen_random_uuid();
+  u_real     uuid := gen_random_uuid();
+  u_nofactor uuid := gen_random_uuid();
+  f_o1       uuid := gen_random_uuid();
+  f_o2       uuid := gen_random_uuid();
+  f_o3       uuid := gen_random_uuid();   -- verified, never pinned
+  f_op       uuid := gen_random_uuid();
+  f_view     uuid := gen_random_uuid();
+  f_test     uuid := gen_random_uuid();
+  f_none     uuid := gen_random_uuid();
+  f_rev      uuid := gen_random_uuid();
+  f_real     uuid := gen_random_uuid();
+  s_owner    uuid := gen_random_uuid();
+  s_op       uuid := gen_random_uuid();
+  s_view     uuid := gen_random_uuid();
+  s_test     uuid := gen_random_uuid();
+  s_none     uuid := gen_random_uuid();
+  s_rev      uuid := gen_random_uuid();
+  l_owner    text := 'm40-owner-' || v_tag;
+  l_op       text := 'm40-op-' || v_tag;
+  l_view     text := 'm40-view-' || v_tag;
+  l_test     text;
+  v_j        jsonb;
+  v_text     text;
+  v_count    integer;
+  v_key      uuid;
+  v_key2     uuid;
+  v_ord      record;
+  v_ord2     record;
+  v_refund   uuid;
+  v_refund2  uuid;
+  v_domain   uuid;
+  v_job      uuid;
+  v_job2     uuid;
+  v_cert     uuid;
+  v_ssl_job  uuid;
+  v_check    bigint;
+  v_note     bigint;
+  v_note2    bigint;
+  v_rate     uuid;
+  v_rate2    uuid;
+  v_rate3    uuid;
+  v_preset   uuid;
+  v_draft    uuid;
+  v_incident bigint;
+  v_audit    bigint;
+  v_sql      text;
+  v_expected jsonb;
+  v_row      record;
+  v_want     text;
+  v_n        integer := 0;
+  v_passed   integer := 0;
+begin
+  -- ── People: an owner with two pinned devices, an operator, a viewer, a test
+  -- admin, a revoked admin, a stranger, a real address, and one with no factor.
+  insert into auth.users (id, aud, role, email, created_at, updated_at) values
+    (u_owner, 'authenticated', 'authenticated', 'e2e-admin-o-' || v_tag || '@example.com', now(), now()),
+    (u_op, 'authenticated', 'authenticated', 'e2e-admin-p-' || v_tag || '@example.com', now(), now()),
+    (u_view, 'authenticated', 'authenticated', 'e2e-admin-v-' || v_tag || '@example.com', now(), now()),
+    (u_test, 'authenticated', 'authenticated', 'e2e-admin-t-' || v_tag || '@example.com', now(), now()),
+    (u_none, 'authenticated', 'authenticated', 'e2e-admin-n-' || v_tag || '@example.com', now(), now()),
+    (u_rev, 'authenticated', 'authenticated', 'e2e-admin-r-' || v_tag || '@example.com', now(), now()),
+    (u_real, 'authenticated', 'authenticated', 'm40-real-' || v_tag || '@mydomainshub.com', now(), now()),
+    (u_nofactor, 'authenticated', 'authenticated', 'e2e-admin-x-' || v_tag || '@example.com', now(), now());
+  insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret) values
+    (f_o1, u_owner, 'm40 phone', 'totp', 'verified', now() - interval '2 days', now(), 'x'),
+    (f_o2, u_owner, 'm40 backup', 'totp', 'verified', now() - interval '1 day', now(), 'x'),
+    (f_o3, u_owner, 'm40 spare', 'totp', 'verified', now(), now(), 'x'),
+    (f_op, u_op, 'm40', 'totp', 'verified', now(), now(), 'x'),
+    (f_view, u_view, 'm40', 'totp', 'verified', now(), now(), 'x'),
+    (f_test, u_test, 'm40', 'totp', 'verified', now(), now(), 'x'),
+    (f_none, u_none, 'm40', 'totp', 'verified', now(), now(), 'x'),
+    (f_rev, u_rev, 'm40', 'totp', 'verified', now(), now(), 'x'),
+    (f_real, u_real, 'm40', 'totp', 'verified', now(), now(), 'x');
+  insert into auth.sessions (id, user_id, created_at, updated_at, factor_id, aal) values
+    (s_owner, u_owner, now(), now(), f_o2, 'aal2'),
+    (s_op, u_op, now(), now(), f_op, 'aal2'),
+    (s_view, u_view, now(), now(), f_view, 'aal2'),
+    (s_test, u_test, now(), now(), f_test, 'aal2'),
+    (s_none, u_none, now(), now(), f_none, 'aal2'),
+    (s_rev, u_rev, now(), now(), f_rev, 'aal2');
+  insert into auth.mfa_amr_claims (id, session_id, created_at, updated_at, authentication_method)
+  select gen_random_uuid(), s, now(), now(), m
+    from unnest(array[s_owner, s_op, s_view, s_test, s_none, s_rev]) s, unnest(array['password', 'totp']) m;
+
+  insert into public.admins (user_id, label, role, mfa_factor_ids, added_by) values
+    (u_owner, l_owner, 'owner', array[f_o1, f_o2], 'm40-check'),
+    (u_op, l_op, 'operator', array[f_op], 'm40-check'),
+    (u_view, l_view, 'viewer', array[f_view], 'm40-check'),
+    (u_rev, 'm40-rev-' || v_tag, 'operator', array[f_rev], 'm40-check');
+  l_test := public.grant_test_admin(u_test);
+
+  -- ── 1. A stranger: not_admin, and no wrapper or note runs, as `authenticated`.
+  perform pg_temp.act(u_none, s_none);
+  execute 'set local role authenticated';
+  if public.admin_status() <> 'not_admin' then
+    raise exception 'FAILED 1: a non-admin''s status is %', public.admin_status();
+  end if;
+  foreach v_sql in array array[
+    'select public.admin_whoami(null)',
+    'select public.admin_note(''supplier.balance'', ''live'', ''side'', ''live'')',
+    'select public.admin_redact_reason(1, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_approve_refund(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_retry_refund(gen_random_uuid(), true, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_cancel_refund(gen_random_uuid(), true, true, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_record_manual_refund(gen_random_uuid(), 1, ''abc'', true, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_resolve_payment_incident(1, null, null, null, false, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_retry_job(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_retry_ssl_job(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_fail_job(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_fail_ssl_job(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_activate_fx_rate(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_reject_fx_rate(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_update_pricing_settings(''{}'', ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_update_ops_settings(''{}'', ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_set_tld_flags(''com'', false, null, null, null, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_set_ssl_sellable(''x'', false, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_save_preset_draft(null, ''x'', ''{}'', ''https://x.test'', null, false, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_publish_preset_draft(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_discard_preset_draft(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_set_preset_hidden(gen_random_uuid(), true, ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_requeue_email(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_queue_deep_sync(gen_random_uuid(), ''a reason of ten'', gen_random_uuid())',
+    'select public.admin_find_customers(''someone@example.com'')',
+    'select public.admin_reveal_customer(gen_random_uuid(), null, gen_random_uuid())',
+    'select public.admin_reveal_registrant(gen_random_uuid(), null, gen_random_uuid())'
+  ] loop
+    begin
+      execute v_sql;
+      raise exception 'FAILED 1: % ran for a non-admin', v_sql;
+    exception when insufficient_privilege then
+      if sqlerrm <> 'admin:not_admin' then
+        raise exception 'FAILED 1: % said % (a missing grant?)', v_sql, sqlerrm;
+      end if;
+    end;
+  end loop;
+  execute 'reset role';
+  if exists (select 1 from public.admin_audit_log a where a.admin_id = u_none) then
+    raise exception 'FAILED 1: a stranger left audit rows';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 2. aal1 claims: needs_code.
+  perform pg_temp.act(u_owner, s_owner, interval '1 minute', 'aal1');
+  if public.admin_status() <> 'needs_code' then
+    raise exception 'FAILED 2: aal1 status %', public.admin_status();
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 3. A code 13 hours old is too old to view; 20 minutes old views, but not money.
+  perform pg_temp.act(u_owner, s_owner, interval '13 hours');
+  perform pg_temp.expect_raise('select public.admin_whoami(null)', 'admin:needs_code');
+  perform pg_temp.act(u_owner, s_owner, interval '20 minutes');
+  v_j := public.admin_whoami(null);
+  if v_j ->> 'label' <> l_owner or v_j ->> 'role' <> 'owner' or (v_j ->> 'factorId')::uuid <> f_o2
+     or (v_j ->> 'testOnly')::boolean or char_length(v_j ->> 'sessionHash') <> 64 then
+    raise exception 'FAILED 3: whoami %', v_j;
+  end if;
+  perform pg_temp.expect_raise('select public.admin_whoami(5)', 'admin:needs_code');
+  v_j := public.admin_update_ops_settings('{"stuck_order_minutes": 20}', 'a reason of ten words', gen_random_uuid());
+  if v_j ->> 'code' <> 'NEEDS_CODE' or pg_temp.audit_count(l_owner, 'settings.update', 'refused', 'NEEDS_CODE') <> 1 then
+    raise exception 'FAILED 3: a 20-minute code passed a money wrapper (%)', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 4. Factor pinning: the second device passes; an unpinned or unverified one,
+  -- or a session that is gone, does not.
+  perform pg_temp.act(u_owner, s_owner);
+  if public.admin_status() <> 'ok' then raise exception 'FAILED 4: the second pinned device %', public.admin_status(); end if;
+  update auth.sessions set factor_id = f_o3 where id = s_owner;
+  if public.admin_status() <> 'factor_mismatch' then raise exception 'FAILED 4: an unpinned device passed'; end if;
+  update auth.sessions set factor_id = f_o2 where id = s_owner;
+  update auth.mfa_factors set status = 'unverified' where id = f_o2;
+  if public.admin_status() <> 'factor_mismatch' then raise exception 'FAILED 4: an unverified pinned device passed'; end if;
+  update auth.mfa_factors set status = 'verified' where id = f_o2;
+  delete from auth.sessions where id = s_owner;
+  if public.admin_status() <> 'needs_code' then raise exception 'FAILED 4: a deleted session %', public.admin_status(); end if;
+  insert into auth.sessions (id, user_id, created_at, updated_at, factor_id, aal)
+  values (s_owner, u_owner, now(), now(), f_o2, 'aal2');
+  if public.admin_status() <> 'ok' then raise exception 'FAILED 4: restored session'; end if;
+  v_passed := v_passed + 1;
+
+  -- ── 5. An email-link sign-in (otp) plus a code is not a strong sign-in.
+  perform pg_temp.act(u_owner, s_owner, interval '1 minute', 'aal2', array['otp']);
+  if public.admin_status() <> 'weak_sign_in' then
+    raise exception 'FAILED 5: otp+totp status %', public.admin_status();
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 6. A password reset in the last day holds money actions, not viewing.
+  update public.profiles set password_reset_at = now() - interval '1 hour' where id = u_owner;
+  perform pg_temp.act(u_owner, s_owner);
+  perform public.admin_whoami(null);
+  v_j := public.admin_update_ops_settings('{"stuck_order_minutes": 20}', 'a reason of ten words', gen_random_uuid());
+  if v_j ->> 'code' <> 'HELD' or pg_temp.audit_count(l_owner, 'settings.update', 'refused', 'HELD') <> 1 then
+    raise exception 'FAILED 6: a held account %', v_j;
+  end if;
+  update public.profiles set password_reset_at = null where id = u_owner;
+  v_passed := v_passed + 1;
+
+  -- ── 7. Revoked is not an admin; a viewer is refused operator and owner work, recorded.
+  update public.admins set revoked_at = now() where user_id = u_rev;
+  perform pg_temp.act(u_rev, s_rev);
+  if public.admin_status() <> 'not_admin' then raise exception 'FAILED 7: a revoked admin %', public.admin_status(); end if;
+  perform pg_temp.act(u_view, s_view);
+  v_j := public.admin_queue_deep_sync((select d.id from public.domains d limit 1), null, gen_random_uuid());
+  if v_j ->> 'code' <> 'ROLE' or pg_temp.audit_count(l_view, 'domain.deep_sync', 'refused', 'ROLE') <> 1 then
+    raise exception 'FAILED 7: a viewer on an operator wrapper %', v_j;
+  end if;
+  v_j := public.admin_note('supplier.catalogue_apply', 'global', 'catalogue', null);
+  if v_j ->> 'code' <> 'ROLE' or (v_j ->> 'ok')::boolean then
+    raise exception 'FAILED 7: a viewer noted a catalogue apply %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 8. The secret key cannot act as an admin or write the record.
+  execute 'set local role service_role';
+  begin
+    perform public.admin_approve_refund(gen_random_uuid(), 'a reason of ten words', gen_random_uuid());
+    raise exception 'FAILED 8: service_role ran an admin wrapper';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.admins (user_id, label, role, mfa_factor_ids, added_by)
+    values (u_none, 'm40-sneak', 'owner', array[f_none], 'key');
+    raise exception 'FAILED 8: service_role wrote admins';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.admin_audit_log (admin_id, admin_label, admin_role, test_actor, action, outcome)
+    values (u_none, 'm40-sneak', 'owner', false, 'refund.approve', 'ok');
+    raise exception 'FAILED 8: service_role wrote the audit log';
+  exception when insufficient_privilege then null;
+  end;
+  execute 'reset role';
+  if has_function_privilege('service_role', 'public.approve_refund(uuid, text)', 'execute') then
+    raise exception 'FAILED 8: approve_refund is granted to service_role';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 9. Replay: one approval per request key, refused keys free again.
+  select * into v_ord from pg_temp.paid_order(u_none, true, 'm40-a-' || v_tag || '.com', 'failed', 'a' || v_tag);
+  insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status, last_error_code)
+  values (v_ord.o_order, v_ord.o_payment, v_ord.o_item, u_none, 'registration_failed', 107500, true, 'held', 'OVER_SINGLE_LIMIT')
+  returning id into v_refund;
+  perform pg_temp.act(u_owner, s_owner);
+  v_key := gen_random_uuid();
+  execute 'set local role authenticated';
+  v_j := public.admin_approve_refund(v_refund, 'customer confirmed by phone', v_key);
+  execute 'reset role';
+  if not (v_j ->> 'ok')::boolean
+     or (select r.status::text from public.refunds r where r.id = v_refund) <> 'queued'
+     or (select r.approved_by from public.refunds r where r.id = v_refund) <> l_owner
+     or pg_temp.audit_count(l_owner, 'refund.approve', 'ok') <> 1 then
+    raise exception 'FAILED 9: approve %', v_j;
+  end if;
+  v_j := public.admin_approve_refund(v_refund, 'customer confirmed by phone', v_key);
+  if not coalesce((v_j ->> 'replayed')::boolean, false)
+     or (select count(*) from public.admin_audit_log a where a.request_key = v_key) <> 1 then
+    raise exception 'FAILED 9: a replay wrote again %', v_j;
+  end if;
+  select * into v_ord2 from pg_temp.paid_order(u_none, true, 'm40-b-' || v_tag || '.com', 'failed', 'b' || v_tag);
+  insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status)
+  values (v_ord2.o_order, v_ord2.o_payment, v_ord2.o_item, u_none, 'registration_failed', 107500, true, 'queued')
+  returning id into v_refund2;
+  perform pg_temp.expect_raise(format('select public.admin_approve_refund(%L, %L, %L)', v_refund2,
+                                      'customer confirmed by phone', v_key), 'admin:request_key_mismatch');
+  v_key2 := gen_random_uuid();
+  v_j := public.admin_approve_refund(v_refund2, 'customer confirmed by phone', v_key2);
+  -- ── 10. Approving a refund that is not held: refused, and recorded.
+  if v_j ->> 'code' <> 'NOT_HELD' or pg_temp.audit_count(l_owner, 'refund.approve', 'refused', 'NOT_HELD') <> 1 then
+    raise exception 'FAILED 10: approve a queued refund %', v_j;
+  end if;
+  update public.refunds set status = 'held' where id = v_refund2;
+  v_j := public.admin_approve_refund(v_refund2, 'customer confirmed by phone', v_key2);
+  if not (v_j ->> 'ok')::boolean then
+    raise exception 'FAILED 9: a refused key did not run again once fixed %', v_j;
+  end if;
+  v_passed := v_passed + 2;
+
+  -- ── 11. A test admin: never a live refund, never settings.
+  select * into v_ord from pg_temp.paid_order(u_none, false, 'm40-c-' || v_tag || '.com', 'failed', 'c' || v_tag);
+  insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status)
+  values (v_ord.o_order, v_ord.o_payment, v_ord.o_item, u_none, 'registration_failed', 107500, false, 'held')
+  returning id into v_refund;
+  perform pg_temp.act(u_test, s_test);
+  v_j := public.admin_approve_refund(v_refund, 'customer confirmed by phone', gen_random_uuid());
+  if v_j ->> 'code' <> 'TEST_ADMIN' then raise exception 'FAILED 11: test admin on a live refund %', v_j; end if;
+  v_j := public.admin_update_ops_settings('{"stuck_order_minutes": 20}', 'a reason of ten words', gen_random_uuid());
+  if v_j ->> 'code' <> 'TEST_ADMIN' then raise exception 'FAILED 11: test admin on settings %', v_j; end if;
+  if (select r.status::text from public.refunds r where r.id = v_refund) <> 'held' then
+    raise exception 'FAILED 11: the live refund moved';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 12. Retry: only failed or waiting jobs; never a failed transfer.
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status)
+  values (u_none, 'm40-q-' || v_tag || '.com', 'com', 'registration', true, 'active')
+  returning id into v_domain;
+  insert into public.jobs (kind, idempotency_key, domain_id, test_mode, status)
+  values ('set_privacy', 'm40-q:' || v_tag, v_domain, true, 'queued') returning id into v_job;
+  perform pg_temp.act(u_op, s_op);
+  v_j := public.admin_retry_job(v_job, 'the registry is back now', gen_random_uuid());
+  if v_j ->> 'code' <> 'NOT_RETRYABLE' then raise exception 'FAILED 12: retry a queued job %', v_j; end if;
+  select * into v_ord from pg_temp.paid_order(u_none, true, 'm40-t-' || v_tag || '.com', 'failed', 't' || v_tag);
+  update public.order_items set item_type = 'transfer' where id = v_ord.o_item;
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, order_item_id)
+  values (u_none, 'm40-t-' || v_tag || '.com', 'com', 'transfer', true, 'transfer_cancelled', v_ord.o_item)
+  returning id into v_domain;
+  insert into public.jobs (kind, idempotency_key, domain_id, order_item_id, test_mode, status)
+  values ('transfer_domain', 'm40-t:' || v_tag, v_domain, v_ord.o_item, true, 'failed') returning id into v_job;
+  v_j := public.admin_retry_job(v_job, 'the registry is back now', gen_random_uuid());
+  if v_j ->> 'code' <> 'TRANSFER_CODE_GONE' then raise exception 'FAILED 12: retry a failed transfer %', v_j; end if;
+  v_passed := v_passed + 1;
+
+  -- ── 13. Fail a registration only on fresh evidence that nothing was bought.
+  select * into v_ord from pg_temp.paid_order(u_none, true, 'm40-r-' || v_tag || '.com', 'provisioning', 'r' || v_tag);
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, order_item_id)
+  values (u_none, 'm40-r-' || v_tag || '.com', 'com', 'registration', true, 'pending', v_ord.o_item)
+  returning id into v_domain;
+  insert into public.jobs (kind, idempotency_key, domain_id, order_item_id, test_mode, status, last_error_code, created_at)
+  values ('register_domain', 'm40-r:' || v_tag, v_domain, v_ord.o_item, true, 'needs_attention', 'SUPPLIER_TIMEOUT',
+          now() - interval '30 minutes')
+  returning id into v_job;
+  v_j := public.admin_fail_job(v_job, 'registry shows nothing at all', gen_random_uuid());
+  if v_j ->> 'code' <> 'READ_REGISTRY_FIRST' then raise exception 'FAILED 13: fail with no read %', v_j; end if;
+  insert into public.supplier_calls (job_id, environment, operation, domain_name, outcome, duration_ms, created_at)
+  values (v_job, 'ote', 'RegisterWithContactInfo', 'm40-r-' || v_tag || '.com', 'unknown', 5000, now() - interval '5 minutes'),
+         (null, 'ote', 'GetDetails', 'm40-r-' || v_tag || '.com', 'not_found', 300, now() - interval '10 minutes');
+  v_j := public.admin_fail_job(v_job, 'registry shows nothing at all', gen_random_uuid());
+  if v_j ->> 'code' <> 'READ_REGISTRY_FIRST' then raise exception 'FAILED 13: a read older than the attempt %', v_j; end if;
+  insert into public.supplier_calls (job_id, environment, operation, domain_name, outcome, duration_ms, created_at)
+  values (null, 'ote', 'AdminGetDetails', 'm40-r-' || v_tag || '.com', 'not_found', 300, now() - interval '1 minute');
+  insert into public.supplier_ledger_entries (test_mode, trace_id, occurred_at, type, status, charge_type, product_type,
+                                              description, old_balance_cents, balance_cents)
+  values (true, gen_random_uuid(), now() - interval '20 minutes', 1, 1, 1, 1, 'e2e-m40-r-' || v_tag || '.com', 5000, 3869);
+  v_j := public.admin_fail_job(v_job, 'registry shows nothing at all', gen_random_uuid());
+  if v_j ->> 'code' <> 'LEDGER_SHOWS_CHARGE' then raise exception 'FAILED 13: a supplier charge was ignored %', v_j; end if;
+  delete from public.supplier_ledger_entries where test_mode and description = 'e2e-m40-r-' || v_tag || '.com';
+  v_j := public.admin_fail_job(v_job, 'registry shows nothing at all', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean
+     or (select j.status::text from public.jobs j where j.id = v_job) <> 'failed'
+     or (select j.last_error_code from public.jobs j where j.id = v_job) <> 'NOT_AT_REGISTRY'
+     or (select oi.status::text from public.order_items oi where oi.id = v_ord.o_item) <> 'failed'
+     or not exists (select 1 from public.refunds r where r.order_item_id = v_ord.o_item and r.status in ('queued', 'held')) then
+    raise exception 'FAILED 13: a fail with fresh evidence %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 16 (on 13's line). A line retried and then registered: its cancelled
+  -- refund cannot be retried or recorded as paid.
+  select r.id into v_refund from public.refunds r where r.order_item_id = v_ord.o_item;
+  perform public.retry_job(v_job);
+  update public.jobs set status = 'running' where id = v_job;
+  perform public.complete_registration(v_job, now(), now() + interval '1 year', '{}', true, false, false, 'none');
+  if (select r.status::text from public.refunds r where r.id = v_refund) <> 'cancelled'
+     or (select oi.status::text from public.order_items oi where oi.id = v_ord.o_item) <> 'completed' then
+    raise exception 'FAILED 16: setting up a retried, registered line';
+  end if;
+  perform pg_temp.act(u_owner, s_owner);
+  v_j := public.admin_retry_refund(v_refund, true, 'send it to the customer again', gen_random_uuid());
+  if v_j ->> 'code' <> 'LINE_NOT_FAILED' then raise exception 'FAILED 16: owner retry %', v_j; end if;
+  v_j := public.admin_record_manual_refund(v_refund, null, 'flw-123', true, 'paid back by hand today', gen_random_uuid());
+  if v_j ->> 'code' <> 'LINE_NOT_FAILED' then raise exception 'FAILED 16: record manual %', v_j; end if;
+  perform pg_temp.act(u_op, s_op);
+  v_j := public.admin_retry_refund(v_refund, true, 'send it to the customer again', gen_random_uuid());
+  if v_j ->> 'code' <> 'OWNER_ONLY' then raise exception 'FAILED 16: operator retry of a cancelled refund %', v_j; end if;
+  v_passed := v_passed + 1;
+
+  -- ── 14. A charge that could not be confirmed is never failed from the dashboard.
+  select * into v_ord from pg_temp.paid_order(u_none, true, 'm40-p-' || v_tag || '.com', 'provisioning', 'p' || v_tag);
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, order_item_id)
+  values (u_none, 'm40-p-' || v_tag || '.com', 'com', 'registration', true, 'pending', v_ord.o_item)
+  returning id into v_domain;
+  insert into public.jobs (kind, idempotency_key, domain_id, order_item_id, test_mode, status, last_error_code)
+  values ('register_domain', 'm40-p:' || v_tag, v_domain, v_ord.o_item, true, 'needs_attention', 'PAYMENT_NOT_VERIFIED')
+  returning id into v_job2;
+  v_j := public.admin_fail_job(v_job2, 'registry shows nothing at all', gen_random_uuid());
+  if v_j ->> 'code' <> 'PAYMENT_NOT_VERIFIED' or exists (select 1 from public.refunds r where r.order_item_id = v_ord.o_item) then
+    raise exception 'FAILED 14: fail an unverified charge %', v_j;
+  end if;
+  insert into public.ssl_products (product_code, name, vendor, validation_type, is_wildcard, is_multi_domain,
+                                   included_names, create_usd, is_sellable)
+  values ('M40' || upper(left(v_tag, 4)), 'M40 test certificate', 'M40', 'DV', false, false, 1, null, false);
+  insert into public.orders (user_id, subtotal_kobo, vat_pct, vat_kobo, total_kobo, fx_rate_id, tx_ref,
+                             registrant, float_check, test_mode, status, paid_at)
+  values (u_none, 100000, 7.5, 7500, 107500, (select f.id from public.fx_rates f order by f.created_at limit 1),
+          'MDH-m40-s' || v_tag, '{}', 'covered', true, 'provisioning', now())
+  returning id into v_ord2.o_order;
+  insert into public.order_items (order_id, domain, tld, item_type, period_years, price_kobo, renewal_kobo,
+                                  privacy, auto_renew, ssl_product_code)
+  values (v_ord2.o_order, 'm40-s-' || v_tag || '.com', 'com', 'ssl', 1, 100000, 100000, false, false,
+          'M40' || upper(left(v_tag, 4)))
+  returning id into v_ord2.o_item;
+  insert into public.ssl_certificates (user_id, order_item_id, product_code, product_name, common_name, test_mode)
+  values (u_none, v_ord2.o_item, 'M40' || upper(left(v_tag, 4)), 'M40 test certificate', 'm40-s-' || v_tag || '.com', true)
+  returning id into v_cert;
+  insert into public.ssl_jobs (kind, idempotency_key, certificate_id, test_mode, status, last_error_code)
+  values ('ssl_initialize', 'm40-s:' || v_tag, v_cert, true, 'needs_attention', 'PAYMENT_NOT_VERIFIED')
+  returning id into v_ssl_job;
+  v_j := public.admin_fail_ssl_job(v_ssl_job, 'nothing was ordered at all', gen_random_uuid());
+  if v_j ->> 'code' <> 'PAYMENT_NOT_VERIFIED' or exists (select 1 from public.refunds r where r.order_item_id = v_ord2.o_item) then
+    raise exception 'FAILED 14: fail an unverified certificate charge %', v_j;
+  end if;
+  update public.ssl_jobs set last_error_code = 'SUPPLIER_TIMEOUT', sent_at = now() where id = v_ssl_job;
+  v_j := public.admin_fail_ssl_job(v_ssl_job, 'nothing was ordered at all', gen_random_uuid());
+  if v_j ->> 'code' <> 'ALREADY_SENT' then raise exception 'FAILED 14: fail a sent certificate order %', v_j; end if;
+  v_passed := v_passed + 1;
+
+  -- ── 15. N14 and half-recorded changes: an unlock, nameservers, and a
+  -- transfer without a fresh refused-transfer read.
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, pending_transfer_lock)
+  values (u_none, 'm40-u-' || v_tag || '.com', 'com', 'registration', true, 'active', false)
+  returning id into v_domain;
+  insert into public.jobs (kind, idempotency_key, domain_id, test_mode, status)
+  values ('set_transfer_lock', 'm40-u:' || v_tag, v_domain, true, 'needs_attention') returning id into v_job;
+  v_j := public.admin_fail_job(v_job, 'stop it, the customer asked', gen_random_uuid());
+  if v_j ->> 'code' <> 'TRANSFER_OUT_PROTECTED' then raise exception 'FAILED 15: fail an unlock %', v_j; end if;
+  insert into public.jobs (kind, idempotency_key, domain_id, test_mode, status)
+  values ('apply_nameservers', 'm40-n:' || v_tag, v_domain, true, 'needs_attention') returning id into v_job;
+  v_j := public.admin_fail_job(v_job, 'stop it, the customer asked', gen_random_uuid());
+  if v_j ->> 'code' <> 'USE_RETRY' then raise exception 'FAILED 15: fail a nameserver change %', v_j; end if;
+  select * into v_ord from pg_temp.paid_order(u_none, true, 'm40-x-' || v_tag || '.com', 'provisioning', 'x' || v_tag);
+  update public.order_items set item_type = 'transfer' where id = v_ord.o_item;
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, order_item_id)
+  values (u_none, 'm40-x-' || v_tag || '.com', 'com', 'transfer', true, 'transfer_pending', v_ord.o_item)
+  returning id into v_domain;
+  insert into public.jobs (kind, idempotency_key, domain_id, order_item_id, test_mode, status)
+  values ('transfer_domain', 'm40-x:' || v_tag, v_domain, v_ord.o_item, true, 'needs_attention') returning id into v_job;
+  v_j := public.admin_fail_job(v_job, 'the registry refused the move', gen_random_uuid());
+  if v_j ->> 'code' <> 'READ_TRANSFER_FIRST' then raise exception 'FAILED 15: fail a transfer unread %', v_j; end if;
+  insert into public.supplier_calls (environment, operation, domain_name, outcome, message, duration_ms, created_at)
+  values ('ote', 'AdminTransferQuery', 'm40-x-' || v_tag || '.com', 'ok', 'rejected', 200, now() - interval '1 minute');
+  v_j := public.admin_fail_job(v_job, 'the registry refused the move', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean or (select j.last_error_code from public.jobs j where j.id = v_job) <> 'TRANSFER_REFUSED' then
+    raise exception 'FAILED 15: fail a refused transfer %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 17. Cancel is the owner's, and needs the Flutterwave check once a call was made.
+  select * into v_ord from pg_temp.paid_order(u_none, true, 'm40-k-' || v_tag || '.com', 'failed', 'k' || v_tag);
+  insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status,
+                              provider_called_at, last_error_code)
+  values (v_ord.o_order, v_ord.o_payment, v_ord.o_item, u_none, 'registration_failed', 107500, true, 'failed',
+          now() - interval '1 hour', 'PROVIDER_ERROR')
+  returning id into v_refund;
+  perform pg_temp.act(u_op, s_op);
+  v_j := public.admin_cancel_refund(v_refund, true, false, 'the bank reversed the charge', gen_random_uuid());
+  if v_j ->> 'code' <> 'ROLE' then raise exception 'FAILED 17: an operator cancelled %', v_j; end if;
+  perform pg_temp.act(u_owner, s_owner);
+  v_j := public.admin_cancel_refund(v_refund, true, false, 'the bank reversed the charge', gen_random_uuid());
+  if v_j ->> 'code' <> 'CHECK_PROVIDER' then raise exception 'FAILED 17: cancel without the check %', v_j; end if;
+  v_passed := v_passed + 1;
+
+  -- ── 18. Recording a Flutterwave refund needs a matching, fresh, completed read.
+  v_j := public.admin_record_manual_refund(v_refund, null, 'flw-777', true, 'paid back from the dashboard', gen_random_uuid());
+  if v_j ->> 'code' <> 'FLW_NOT_VERIFIED' then raise exception 'FAILED 18: no check %', v_j; end if;
+  foreach v_sql in array array['wrong amount', 'wrong tx', 'bare completed', 'too old'] loop
+    insert into public.flw_refund_checks (test_mode, target_type, target_id, flw_refund_id, tx_id, amount_kobo,
+                                          currency, status, disburse_status, state, created_at)
+    values (true, 'refund', v_refund::text, 'flw-777',
+            case when v_sql = 'wrong tx' then 'm40-other' else 'm40-k' || v_tag end,
+            case when v_sql = 'wrong amount' then 100 else 107500 end,
+            'NGN', case when v_sql = 'bare completed' then 'completed' else 'completed-successful' end, null,
+            case when v_sql = 'bare completed' then 'pending' else 'done' end,
+            case when v_sql = 'too old' then now() - interval '16 minutes' else now() end)
+    returning id into v_check;
+    v_j := public.admin_record_manual_refund(v_refund, v_check, 'flw-777', true, 'paid back from the dashboard', gen_random_uuid());
+    if v_j ->> 'code' <> 'FLW_NOT_VERIFIED' then raise exception 'FAILED 18: a bad check (%) passed: %', v_sql, v_j; end if;
+  end loop;
+  insert into public.flw_refund_checks (test_mode, target_type, target_id, flw_refund_id, tx_id, amount_kobo,
+                                        currency, status, state)
+  values (true, 'refund', v_refund::text, 'flw-777', 'm40-k' || v_tag, 107500, 'NGN', 'completed-successful', 'done')
+  returning id into v_check;
+  v_j := public.admin_record_manual_refund(v_refund, v_check, 'flw-777', true, 'paid back from the dashboard', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean
+     or (select r.status::text from public.refunds r where r.id = v_refund) <> 'completed'
+     or (select oi.status::text from public.order_items oi where oi.id = v_ord.o_item) <> 'refunded' then
+    raise exception 'FAILED 18: a matching check %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 19. FX: too old, not pending, older than the active rate.
+  update public.fx_rates set quoted_at = now() - interval '1 hour'
+   where status = 'active' and base = 'USD' and quote = 'NGN';
+  insert into public.fx_rates (source, buy_rate, sell_rate, costing_rate, status, quoted_at) values
+    ('manual', 1500, 1500, 1520, 'pending_review', now() - interval '3 days'),
+    ('manual', 1500, 1500, 1520, 'superseded', now() - interval '10 minutes'),
+    ('manual', 1500, 1500, 1520, 'pending_review', now() - interval '2 hours');
+  select f.id into v_rate from public.fx_rates f where f.status = 'pending_review' and f.quoted_at = now() - interval '3 days' limit 1;
+  select f.id into v_rate2 from public.fx_rates f where f.status = 'superseded' and f.quoted_at = now() - interval '10 minutes' limit 1;
+  select f.id into v_rate3 from public.fx_rates f where f.status = 'pending_review' and f.quoted_at = now() - interval '2 hours' limit 1;
+  if public.admin_activate_fx_rate(v_rate, 'the daily job held this rate', gen_random_uuid()) ->> 'code' <> 'RATE_TOO_OLD'
+     or public.admin_activate_fx_rate(v_rate2, 'the daily job held this rate', gen_random_uuid()) ->> 'code' <> 'NOT_PENDING'
+     or public.admin_activate_fx_rate(v_rate3, 'the daily job held this rate', gen_random_uuid()) ->> 'code' <> 'NEWER_RATE_ACTIVE' then
+    raise exception 'FAILED 19: FX guards';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 20. Limits within their ceilings; a raise is its own action. Pricing keys.
+  if public.admin_update_ops_settings('{"auto_refund_max_kobo": 200000000}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'OUT_OF_RANGE'
+     or public.admin_update_ops_settings('{"auto_refund_daily_max_kobo": 1000}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'OUT_OF_RANGE'
+     or public.admin_update_ops_settings('{"refund_delay_minutes": 0}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'OUT_OF_RANGE'
+     or public.admin_update_ops_settings('{"stuck_order_minutes": 12.5}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'OUT_OF_RANGE'
+     or public.admin_update_ops_settings('{"nope": 1}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'UNKNOWN_KEY' then
+    raise exception 'FAILED 20: ops settings bounds';
+  end if;
+  v_j := public.admin_update_ops_settings(
+    jsonb_build_object('auto_refund_max_kobo', (select s.auto_refund_max_kobo + 100 from public.ops_settings s)),
+    'a larger refund this week', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean or pg_temp.audit_count(l_owner, 'settings.refund_limit_raise', 'ok') <> 1 then
+    raise exception 'FAILED 20: a raise %', v_j;
+  end if;
+  if public.admin_update_pricing_settings('{"vat_pct": 10}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'UNKNOWN_KEY'
+     or public.admin_update_pricing_settings('{"margin_ngn": 500}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'OUT_OF_RANGE'
+     or public.admin_update_pricing_settings('{"fx_buffer_pct": 1.234}', 'a reason of ten words', gen_random_uuid()) ->> 'code' <> 'OUT_OF_RANGE' then
+    raise exception 'FAILED 20: pricing keys';
+  end if;
+  v_j := public.admin_update_pricing_settings('{"icann_fee_cents": 20}', 'the fee is unchanged here', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean or (select p.icann_fee_usd from public.pricing_settings p) <> 0.20 then
+    raise exception 'FAILED 20: icann fee in cents %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 21. A certificate with no price cannot be sold.
+  v_j := public.admin_set_ssl_sellable('M40' || upper(left(v_tag, 4)), true, 'start selling this one now', gen_random_uuid());
+  if v_j ->> 'code' <> 'NO_PRICE' then raise exception 'FAILED 21: %', v_j; end if;
+  v_passed := v_passed + 1;
+
+  -- ── 22. Presets are drafts: an allowlisted source, a passing check, then publish.
+  select p.id into v_preset from public.nameserver_presets p where p.provider = 'Vercel';
+  v_j := public.admin_save_preset_draft(v_preset, null, array['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+                                        'https://example.com/vercel', null, false, 'vercel changed its docs', gen_random_uuid());
+  if v_j ->> 'code' <> 'SOURCE_NOT_ALLOWED' then raise exception 'FAILED 22: a foreign source %', v_j; end if;
+  v_j := public.admin_save_preset_draft(v_preset, null, array['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
+                                        'https://user@vercel.com/docs', null, false, 'vercel changed its docs', gen_random_uuid());
+  if v_j ->> 'code' <> 'SOURCE_NOT_ALLOWED' then raise exception 'FAILED 22: a source with a user part %', v_j; end if;
+  insert into public.nameserver_preset_sources (provider, host) values ('M40 Host ' || v_tag, 'docs.m40host.test');
+  v_j := public.admin_save_preset_draft(null, 'M40 Host ' || v_tag, array['NS1.m40host.test', 'ns2.m40host.test'],
+                                        'https://docs.m40host.test/nameservers', 'from their docs', false,
+                                        'a new host customers asked for', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean then raise exception 'FAILED 22: save a draft %', v_j; end if;
+  select d.id into v_draft from public.nameserver_preset_drafts d where d.provider = 'M40 Host ' || v_tag;
+  if (select d.nameservers from public.nameserver_preset_drafts d where d.id = v_draft) <> array['ns1.m40host.test', 'ns2.m40host.test']
+     or exists (select 1 from public.nameserver_presets p where p.provider = 'M40 Host ' || v_tag) then
+    raise exception 'FAILED 22: a draft changed the live presets';
+  end if;
+  update public.nameserver_preset_drafts set saved_at = now() - interval '1 minute' where id = v_draft;
+  v_j := public.admin_publish_preset_draft(v_draft, 'checked and ready to go', gen_random_uuid());
+  if v_j ->> 'code' <> 'NOT_CHECKED' then raise exception 'FAILED 22: publish unchecked %', v_j; end if;
+  perform public.record_preset_draft_check(v_draft, true, '{"hosts": []}');
+  v_j := public.admin_publish_preset_draft(v_draft, 'checked and ready to go', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean
+     or not exists (select 1 from public.nameserver_presets p
+                     where p.provider = 'M40 Host ' || v_tag and not p.is_hidden and p.verified_at is not null)
+     or pg_temp.audit_count(l_owner, 'preset.publish', 'ok') <> 1 then
+    raise exception 'FAILED 22: publish %', v_j;
+  end if;
+  select a.id into v_audit from public.admin_audit_log a where a.admin_label = l_owner and a.action = 'preset.publish' and a.outcome = 'ok';
+  if not exists (select 1 from public.admin_alert_conditions(false) c where c.key = 'admin_preset_changed:' || v_audit) then
+    raise exception 'FAILED 22: no preset-changed alert';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 23. Incidents: an owed kind needs an outcome; handled outside is the owner's.
+  select * into v_ord from pg_temp.paid_order(u_none, true, 'm40-i-' || v_tag || '.com', 'completed', 'i' || v_tag);
+  insert into public.payment_incidents (test_mode, kind, order_id, provider_reference)
+  values (true, 'unrecorded_payment', v_ord.o_order, 'm40-inc-' || v_tag) returning id into v_incident;
+  perform pg_temp.act(u_op, s_op);
+  if public.admin_resolve_payment_incident(v_incident, null, null, null, false, 'looked at it closely', gen_random_uuid()) ->> 'code' <> 'OUTCOME_REQUIRED'
+     or public.admin_resolve_payment_incident(v_incident, 'handled_outside', null, null, true, 'looked at it closely', gen_random_uuid()) ->> 'code' <> 'ROLE' then
+    raise exception 'FAILED 23: incident guards';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 24. A deep sync only for a live, syncable domain.
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status)
+  values (u_none, 'm40-d-' || v_tag || '.com', 'com', 'registration', true, 'pending') returning id into v_domain;
+  v_j := public.admin_queue_deep_sync(v_domain, null, gen_random_uuid());
+  if v_j ->> 'code' <> 'NOT_SYNCABLE' then raise exception 'FAILED 24: %', v_j; end if;
+  v_passed := v_passed + 1;
+
+  -- ── 25. The gateway's claim on a note.
+  v_j := public.admin_note('supplier.balance', 'test', 'side', 'test', '{}');
+  v_note := (v_j ->> 'auditId')::bigint;
+  if not (v_j ->> 'ok')::boolean then raise exception 'FAILED 25: note %', v_j; end if;
+  execute 'set local role service_role';
+  if public.admin_claim_note(v_note, 'supplier.domain_lookup', l_op, 'test', 'test') ->> 'code' <> 'ACTION_MISMATCH'
+     or public.admin_claim_note(v_note, 'supplier.balance', l_op, 'test', 'other') ->> 'code' <> 'TARGET_MISMATCH'
+     or public.admin_claim_note(v_note, 'supplier.balance', l_owner, 'test', 'test') ->> 'code' <> 'LABEL_MISMATCH'
+     or public.admin_claim_note(v_note, 'supplier.balance', l_op, 'live', 'test') ->> 'code' <> 'SIDE_MISMATCH'
+     or not (public.admin_claim_note(v_note, 'supplier.balance', l_op, 'test', 'test') ->> 'ok')::boolean
+     or public.admin_claim_note(v_note, 'supplier.balance', l_op, 'test', 'test') ->> 'code' <> 'USED' then
+    raise exception 'FAILED 25: claims';
+  end if;
+  perform public.admin_note_result(v_note, 'ok', null, '{"cents": 4338}');
+  execute 'reset role';
+  perform pg_temp.expect_raise(format('select public.admin_note_result(%s, ''ok'', null, ''{}'')', v_note), '%duplicate key%');
+  insert into public.admin_audit_log (created_at, admin_id, admin_label, admin_role, test_actor, action, side, target_id, outcome)
+  values (now() - interval '61 seconds', u_op, l_op, 'operator', false, 'supplier.balance', 'test', 'test', 'intent')
+  returning id into v_note2;
+  if public.admin_claim_note(v_note2, 'supplier.balance', l_op, 'test', 'test') ->> 'code' <> 'EXPIRED' then
+    raise exception 'FAILED 25: an old note was claimed';
+  end if;
+  perform pg_temp.act(u_test, s_test);
+  v_j := public.admin_note('supplier.balance', 'live', 'side', 'live', '{}');
+  if v_j ->> 'code' <> 'TEST_ADMIN' then raise exception 'FAILED 25: a test admin noted the live side %', v_j; end if;
+  v_j := public.admin_note('supplier.balance', 'test', 'side', 'test', '{}');
+  if not (v_j ->> 'ok')::boolean
+     or not (public.admin_claim_note((v_j ->> 'auditId')::bigint, 'supplier.balance', l_test, 'test', 'test') ->> 'ok')::boolean then
+    raise exception 'FAILED 25: a test admin on the test side %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 26. The record is final: no edits, no early deletes; redaction is narrow.
+  select a.id into v_audit from public.admin_audit_log a
+   where a.admin_label = l_owner and a.action = 'refund.approve' and a.outcome = 'ok';
+  perform pg_temp.expect_raise(format('update public.admin_audit_log set outcome = ''refused'' where id = %s', v_audit), '%never rewritten%');
+  perform pg_temp.expect_raise(format('delete from public.admin_audit_log where id = %s', v_audit), '%never rewritten%');
+  perform pg_temp.expect_raise(format('delete from public.admin_audit_log where test_actor and admin_label = %L', l_test), '%never rewritten%');
+  perform pg_temp.act(u_owner, s_owner);
+  v_j := public.admin_redact_reason(v_audit, 'it named the customer', gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean
+     or (select a.reason from public.admin_audit_log a where a.id = v_audit) is not null
+     or (select a.redacted_at from public.admin_audit_log a where a.id = v_audit) is null
+     or (select a.outcome from public.admin_audit_log a where a.id = v_audit) <> 'ok'
+     or pg_temp.audit_count(l_owner, 'audit.redact', 'ok') <> 1 then
+    raise exception 'FAILED 26: redact %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 27. Test admins only for e2e users with a verified authenticator.
+  perform pg_temp.expect_raise(format('select public.grant_test_admin(%L)', u_real), '%only an e2e%');
+  perform pg_temp.expect_raise(format('select public.grant_test_admin(%L)', u_nofactor), '%verified authenticator%');
+  v_passed := v_passed + 1;
+
+  -- ── 28. Pins are the user's own; every change is logged and alerted.
+  perform pg_temp.expect_raise(
+    format('insert into public.admins (user_id, label, role, mfa_factor_ids, added_by) values (%L, %L, ''viewer'', array[%L]::uuid[], ''x'')',
+           u_none, 'm40-wrong-' || v_tag, f_op),
+    '%verified authenticator of that user%');
+  select count(*) into v_count from public.admin_changes c where c.label = l_owner;
+  update public.admins set role = 'owner', mfa_factor_ids = array[f_o1, f_o2, f_o3] where user_id = u_owner;
+  if (select count(*) from public.admin_changes c where c.label = l_owner) <> v_count + 1 then
+    raise exception 'FAILED 28: an update was not logged';
+  end if;
+  if not exists (select 1 from public.admin_alert_conditions(false) c
+                  where c.key like 'admin_changed:%' and c.severity = 'critical' and c.summary like '%' || l_owner || '%')
+     or exists (select 1 from public.admin_alert_conditions(false) c where c.summary like '%' || l_test || '%') then
+    raise exception 'FAILED 28: the change alert';
+  end if;
+  if exists (select 1 from public.admin_changes c, jsonb_each_text(to_jsonb(c)) kv
+              where c.label = l_owner and (kv.value like '%' || f_o1::text || '%' or kv.value like '%@%')) then
+    raise exception 'FAILED 28: the change log holds a factor id or an email';
+  end if;
+  update auth.mfa_factors set status = 'unverified' where id = f_o3;
+  if not exists (select 1 from public.admin_alert_conditions(false) c
+                  where c.key = 'admin_factor_missing:' || l_owner and c.severity = 'warning') then
+    raise exception 'FAILED 28: a removed device was not alerted';
+  end if;
+  update auth.mfa_factors set status = 'verified' where id = f_o3;
+  v_passed := v_passed + 1;
+
+  -- ── 29. Thirty lookups an hour; a test admin sees reserved profiles only.
+  insert into public.admin_audit_log (created_at, admin_id, admin_label, admin_role, test_actor, action, side, outcome)
+  select now() - interval '10 minutes', u_op, l_op, 'operator', false, 'customer.search', 'global', 'ok'
+    from generate_series(1, 30);
+  perform pg_temp.act(u_op, s_op);
+  v_j := public.admin_find_customers('e2e-admin-o-' || v_tag || '@example.com');
+  if v_j ->> 'code' <> 'RATE_LIMITED' then raise exception 'FAILED 29: the 31st lookup %', v_j; end if;
+  v_j := public.admin_reveal_customer(u_none, null, gen_random_uuid());
+  if v_j ->> 'code' <> 'RATE_LIMITED' or v_j ? 'contact' and v_j -> 'contact' <> 'null'::jsonb then
+    raise exception 'FAILED 29: a rate-limited reveal %', v_j;
+  end if;
+  perform pg_temp.act(u_test, s_test);
+  v_j := public.admin_reveal_customer(u_real, null, gen_random_uuid());
+  if v_j ->> 'code' <> 'TEST_ADMIN' or (v_j -> 'contact') is not null and v_j -> 'contact' <> 'null'::jsonb then
+    raise exception 'FAILED 29: a test admin revealed a real profile %', v_j;
+  end if;
+  v_j := public.admin_reveal_customer(u_none, null, gen_random_uuid());
+  if not (v_j ->> 'ok')::boolean or v_j #>> '{contact,email}' <> 'e2e-admin-n-' || v_tag || '@example.com' then
+    raise exception 'FAILED 29: a test admin on a reserved profile %', v_j;
+  end if;
+  v_j := public.admin_find_customers('m40-real-' || v_tag || '@mydomainshub.com');
+  if not (v_j ->> 'ok')::boolean or jsonb_array_length(v_j -> 'rows') <> 0 then
+    raise exception 'FAILED 29: a test admin found a real profile %', v_j;
+  end if;
+  v_j := public.admin_find_customers('e2e-admin-n-' || v_tag || '@example.com');
+  if jsonb_array_length(v_j -> 'rows') <> 1 or v_j #>> '{rows,0,maskedEmail}' <> 'e•••@example.com'
+     or exists (select 1 from public.admin_audit_log a where a.detail::text like '%' || 'admin-n-' || v_tag || '%') then
+    raise exception 'FAILED 29: masked search, or the query was stored %', v_j;
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 30. Grants: every function and view in migrations 40 and 41 (§3.0).
+  v_expected := '{
+    "admins_factor_is_theirs":"none", "admins_log_change":"none", "admin_changes_final":"none",
+    "admin_audit_is_final":"none", "append_only_final":"none", "admin_tier":"none", "admin_session":"none",
+    "admin_gate":"none", "admin_replay":"none", "admin_record":"none", "admin_reason_problem":"none",
+    "purge_test_admin_audit":"none", "admin_flw_check_done":"none", "admin_json_number":"none",
+    "admin_url_host":"none", "admin_lookup_rate_limited":"none",
+    "admin_status":"authenticated", "admin_whoami":"authenticated", "admin_note":"authenticated",
+    "admin_redact_reason":"authenticated", "admin_approve_refund":"authenticated",
+    "admin_retry_refund":"authenticated", "admin_cancel_refund":"authenticated",
+    "admin_record_manual_refund":"authenticated", "admin_resolve_payment_incident":"authenticated",
+    "admin_retry_job":"authenticated", "admin_retry_ssl_job":"authenticated", "admin_fail_job":"authenticated",
+    "admin_fail_ssl_job":"authenticated", "admin_activate_fx_rate":"authenticated",
+    "admin_reject_fx_rate":"authenticated", "admin_update_pricing_settings":"authenticated",
+    "admin_update_ops_settings":"authenticated", "admin_set_tld_flags":"authenticated",
+    "admin_set_ssl_sellable":"authenticated", "admin_save_preset_draft":"authenticated",
+    "admin_publish_preset_draft":"authenticated", "admin_discard_preset_draft":"authenticated",
+    "admin_set_preset_hidden":"authenticated", "admin_requeue_email":"authenticated",
+    "admin_queue_deep_sync":"authenticated", "admin_find_customers":"authenticated",
+    "admin_reveal_customer":"authenticated", "admin_reveal_registrant":"authenticated",
+    "admin_claim_note":"service_role", "admin_note_result":"service_role", "grant_test_admin":"service_role",
+    "record_flw_refund_check":"service_role", "preset_drafts_for_check":"service_role",
+    "record_preset_draft_check":"service_role", "admin_mask_email":"service_role",
+    "supplier_ledger_is_final":"none", "ledger_int":"none", "ledger_guid":"none", "match_supplier_ledger":"none",
+    "order_item_costs_final":"none", "record_metrics_daily":"none", "try_timestamptz":"none",
+    "float_runway":"none", "ledger_alert_conditions":"none", "admin_alert_conditions":"none",
+    "cron_alert_conditions":"none", "admin_read_gate":"none", "admin_sales_since":"none",
+    "admin_record_float_topup":"authenticated", "admin_correct_float_topup":"authenticated",
+    "admin_attention_counts":"authenticated", "admin_overview":"authenticated", "admin_revenue":"authenticated",
+    "admin_margin":"authenticated", "admin_funnel":"authenticated", "admin_provisioning":"authenticated",
+    "admin_refund_stats":"authenticated", "admin_float":"authenticated", "admin_ledger_daily":"authenticated",
+    "admin_customer_stats":"authenticated", "admin_customers":"authenticated", "admin_customer":"authenticated",
+    "admin_domain_stats":"authenticated", "admin_tld_held_counts":"authenticated",
+    "admin_preset_usage":"authenticated", "admin_email_stats":"authenticated", "admin_alert_stats":"authenticated",
+    "admin_pricing_status":"authenticated", "admin_ssl_stats":"authenticated", "admin_list_admins":"authenticated",
+    "record_supplier_ledger":"service_role", "bump_funnel":"service_role", "seed_test_failed_email":"service_role",
+    "hold_test_refund":"service_role", "purge_test_ledger_entries":"service_role",
+    "current_alert_conditions":"service_role", "activate_fx_rate":"service_role"
+  }';
+  for v_row in select p.oid, p.proname from pg_proc p
+            where p.pronamespace = 'public'::regnamespace
+              and (p.proname like 'admin\_%' or v_expected ? p.proname) loop
+    v_want := v_expected ->> v_row.proname;
+    if v_want is null then raise exception 'FAILED 30: function % has no expected grant', v_row.proname; end if;
+    if has_function_privilege('anon', v_row.oid, 'execute') then raise exception 'FAILED 30: % is anon-executable', v_row.proname; end if;
+    if has_function_privilege('authenticated', v_row.oid, 'execute') <> (v_want = 'authenticated')
+       or has_function_privilege('service_role', v_row.oid, 'execute') <> (v_want = 'service_role') then
+      raise exception 'FAILED 30: % has the wrong grants', v_row.proname;
+    end if;
+    v_n := v_n + 1;
+  end loop;
+  if v_n < (select count(*) from jsonb_object_keys(v_expected)) then
+    raise exception 'FAILED 30: an expected function is missing (% of %)', v_n, (select count(*) from jsonb_object_keys(v_expected));
+  end if;
+  foreach v_text in array array['admin_payments_v', 'admin_email_outbox_v', 'admin_compliance_notices_v',
+                                'admin_ssl_certificates_v', 'admin_domains_v'] loop
+    if has_table_privilege('anon', 'public.' || v_text, 'select')
+       or has_table_privilege('authenticated', 'public.' || v_text, 'select')
+       or not has_table_privilege('service_role', 'public.' || v_text, 'select') then
+      raise exception 'FAILED 30: view % grants', v_text;
+    end if;
+  end loop;
+  foreach v_text in array array['admins', 'admin_changes', 'admin_audit_log', 'admin_note_claims', 'flw_refund_checks',
+                                'nameserver_preset_sources', 'nameserver_preset_drafts', 'order_item_costs',
+                                'supplier_ledger_entries', 'supplier_ledger_revisions', 'float_topups',
+                                'funnel_daily', 'metrics_daily'] loop
+    if has_table_privilege('anon', 'public.' || v_text, 'select, insert, update, delete, truncate')
+       or has_table_privilege('authenticated', 'public.' || v_text, 'select, insert, update, delete, truncate') then
+      raise exception 'FAILED 30: table % is open to the API roles', v_text;
+    end if;
+  end loop;
+  if has_table_privilege('service_role', 'public.admins', 'select, insert, update, delete')
+     or has_table_privilege('service_role', 'public.admin_audit_log', 'insert, update, delete')
+     or has_table_privilege('service_role', 'public.order_item_costs', 'update, delete') then
+    raise exception 'FAILED 30: service_role can write admin tables';
+  end if;
+  foreach v_text in array array['fx_rates', 'pricing_settings', 'tlds', 'ssl_products', 'nameserver_presets',
+                                'market_references'] loop
+    if has_table_privilege('anon', 'public.' || v_text, 'insert, update, delete, truncate')
+       or has_table_privilege('authenticated', 'public.' || v_text, 'insert, update, delete, truncate') then
+      raise exception 'FAILED 30: % is writable with the publishable key', v_text;
+    end if;
+  end loop;
+  if exists (select 1 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'
+               and (has_table_privilege('anon', c.oid, 'truncate') or has_table_privilege('authenticated', c.oid, 'truncate'))) then
+    raise exception 'FAILED 30: a table is truncatable by an API role';
+  end if;
+  if has_function_privilege('anon', 'public.activate_fx_rate(uuid, uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.activate_fx_rate(uuid, uuid)', 'execute')
+     or not has_function_privilege('service_role', 'public.activate_fx_rate(uuid, uuid)', 'execute') then
+    raise exception 'FAILED 30: activate_fx_rate grants';
+  end if;
+  v_passed := v_passed + 1;
+
+  raise notice 'migration 40: % checks passed', v_passed;
+end;
+$$;
+
+rollback;

@@ -376,6 +376,14 @@ Rank by: availability → TLD popularity score → price band → string length 
 
 **Interface to the app:** authenticated internal HTTP + a shared secret, called only from Supabase Edge Functions / Next.js server actions. Never from the client.
 
+### 6.5 Admin authorisation (ADR-006)
+
+*Signed off by the owner on 2 Oct 2026; amends the [§12.2](#122-rls-posture) hard rule. Full design: `docs/ADMIN-SPEC.md`.*
+
+**Decision.** An admin is a row in `public.admins`, read in SQL on every request — not a JWT claim in `app_metadata`, and not a custom access-token hook. `admin_session()` checks the identity (an admin row, AAL2, a session whose authenticator is one the admin pinned, a password or Google sign-in, a code within 12 hours); `admin_tier()` holds each action's role, money tier and test-admin rule, and every `admin_*` function applies it. Money actions need a code typed into the confirm dialog within the last 5 minutes. There is no RLS bypass: admin writes are `admin_*` SECURITY DEFINER functions granted to `authenticated`, each writing an append-only audit row; the refund and incident functions underneath stay revoked from `service_role`.
+
+**Why.** Removing an admin takes effect at once (a claim lives up to an hour); any holder of the secret key can write `app_metadata`, but cannot add an authenticator the admin pinned; and a failing hook would block every sign-in. Admins are added and removed in the SQL editor (DEPLOY.md §6b), and every change raises a critical alert.
+
 ---
 
 ## 7. Regulatory and compliance requirements
@@ -1205,7 +1213,7 @@ abuse_reports(
 
 | Table | Policy |
 |---|---|
-| `profiles`, `contact_profiles`, `domains`, `orders`, `order_items`, `payments`, `wallet_ledger`, `invoices`, `domain_labels` | `user_id = auth.uid()`; admin role bypass via a checked claim |
+| `profiles`, `contact_profiles`, `domains`, `orders`, `order_items`, `payments`, `wallet_ledger`, `invoices`, `domain_labels` | `user_id = auth.uid()`; no admin bypass — admins read through `admin_*` functions and masked views (ADR-006) |
 | `domain_events`, `nameserver_history`, `dns_observations` | Read own via domain ownership join; **no client insert/update/delete** |
 | `tlds`, `price_versions` | Public read of merchandised rows only |
 | `nameserver_presets` | Public read of `is_active = true` rows; write admin only |
@@ -1214,7 +1222,7 @@ abuse_reports(
 
 **Hard rules:**
 - `service_role` key never reaches Vercel's client bundle, never reaches the browser, and is scoped to Edge Functions and the registrar gateway.
-- Admin authorisation is a **JWT custom claim in `app_metadata`**, checked in policy, not a client-settable field.
+- Admin authorisation is the **`admins` table checked in SQL** (`admin_session`), with no claim and no RLS bypass (ADR-006, [§6.5](#65-admin-authorisation-adr-006)).
 - Every money table is **append-only**; balances are derived, never mutated in place.
 
 ---
@@ -1513,7 +1521,7 @@ Purposeful only: state transitions, list reordering, skeleton→content. Spring 
 
 ## 17. Admin back-office
 
-A real internal tool, not a Supabase Studio session. Separate route group, separate auth claim, full audit logging.
+A real internal tool, not a Supabase Studio session. Separate route group, admins checked in SQL (ADR-006), full audit logging. Built to `docs/ADMIN-SPEC.md`: Package A (the foundation) and packages B1–B15 (the pages). Deferred, and done in the SQL editor meanwhile (ADMIN-SPEC D20): impersonation, force-refund, status override, manual supplier operations, abuse, risk scores, the DSAR queue and SSL revoke.
 
 | Module | Capability |
 |---|---|
