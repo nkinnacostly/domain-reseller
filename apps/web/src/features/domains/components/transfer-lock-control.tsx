@@ -3,13 +3,14 @@
 import { TriangleAlert } from 'lucide-react'
 import { useAction } from 'next-safe-action/hooks'
 import { useEffect, useId, useRef, useState } from 'react'
+import { ActionError, QUIET_BUTTON, useOutcome } from '@/components/common/action-parts'
 import { FormMessage } from '@/components/common/form-parts'
 import { FOCUS } from '@/components/layout/panel'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { lockTransfers, unlockTransfers } from '../actions/settings'
 import { pendingLabel } from '../lib/settings'
-import { ActionError, NeedsTwoFactor, QUIET_BUTTON, SWITCH_ROW, useOutcome } from './settings-parts'
+import { NeedsTwoFactor, SWITCH_ROW } from './settings-parts'
 
 /**
  * FR-DS4: the transfer lock. Turning it on needs only a session; turning it

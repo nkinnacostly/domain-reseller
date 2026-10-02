@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
 import { useEffect, useId, useRef, useState } from 'react'
+import { ActionError, QUIET_BUTTON } from '@/components/common/action-parts'
 import { STATUS_LABEL } from '@/components/common/domain-status-pill'
 import {
   describedBy,
@@ -32,7 +33,7 @@ import type { PortfolioDomain } from '../lib/portfolio'
 import type { NameserverPreset } from '../queries/domains'
 import { useBulkSelection } from './bulk-selection'
 import { LabelChip } from './label-chip'
-import { ActionError, NeedsTwoFactor, QUIET_BUTTON } from './settings-parts'
+import { NeedsTwoFactor } from './settings-parts'
 
 type Action = 'auto_renew' | 'nameservers' | 'transfer_lock' | 'privacy' | 'labels'
 

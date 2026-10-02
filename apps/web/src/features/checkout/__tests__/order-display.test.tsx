@@ -1,9 +1,9 @@
 import { formatNaira } from '@dr/shared'
 import { render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { RefreshWhile } from '@/components/common/refresh-while'
 import { OrderRefunds } from '../components/order-refunds'
 import { OrderStatus } from '../components/order-status'
-import { RefreshWhile } from '../components/refresh-while'
 import type { OrderRefund } from '../queries/orders'
 
 const refresh = vi.fn()

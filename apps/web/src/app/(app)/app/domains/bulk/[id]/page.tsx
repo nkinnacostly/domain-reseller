@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { FormMessage } from '@/components/common/form-parts'
+import { RefreshWhile } from '@/components/common/refresh-while'
 import {
   FOCUS,
   PANEL_HEADING,
@@ -12,7 +13,6 @@ import {
   PanelPage,
   PanelPageSkeleton,
 } from '@/components/layout/panel'
-import { RefreshWhile } from '@/features/checkout/components/refresh-while'
 import { BulkResults, BulkSummary } from '@/features/domains/components/bulk-results'
 import { type BulkLine, bulkTitle, isBulkSettling } from '@/features/domains/lib/bulk'
 import { type BulkOperation, getBulkOperation } from '@/features/domains/queries/bulk'

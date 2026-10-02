@@ -1,6 +1,7 @@
 'use client'
 
 import { useAction } from 'next-safe-action/hooks'
+import { ActionError, useOutcome } from '@/components/common/action-parts'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { RoleChoiceFields } from '@/features/contacts/components/role-choice-fields'
 import { errorAt } from '@/features/contacts/lib/errors'
@@ -12,7 +13,6 @@ import {
   roleChoiceFromForm,
 } from '@/features/contacts/lib/roles'
 import { changeContactRole } from '../actions/settings'
-import { ActionError, useOutcome } from './settings-parts'
 
 /**
  * FR-DS1: change one of the other three contacts. Saved as a request and

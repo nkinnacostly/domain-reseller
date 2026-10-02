@@ -3,6 +3,7 @@
 import { BookUser, Pencil, Plus, Star, Trash2 } from 'lucide-react'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useRef, useState } from 'react'
+import { QUIET_BUTTON } from '@/components/common/action-parts'
 import {
   describedBy,
   Field,
@@ -15,7 +16,6 @@ import { FOCUS, PANEL, PANEL_HEADING } from '@/components/layout/panel'
 import { RegistrantFields } from '@/features/checkout/components/registrant-fields'
 import { registrantFromForm } from '@/features/checkout/lib/contact'
 import { RegistrantSummary } from '@/features/domains/components/registrant-summary'
-import { QUIET_BUTTON } from '@/features/domains/components/settings-parts'
 import { cn } from '@/lib/utils'
 import {
   deleteContactProfile,

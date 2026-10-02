@@ -2,11 +2,12 @@
 
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useState } from 'react'
+import { ActionError, useOutcome } from '@/components/common/action-parts'
 import { FormMessage } from '@/components/common/form-parts'
 import { Switch } from '@/components/ui/switch'
 import { setPrivacy } from '../actions/settings'
 import { pendingLabel } from '../lib/settings'
-import { ActionError, SWITCH_ROW, useOutcome } from './settings-parts'
+import { SWITCH_ROW } from './settings-parts'
 
 /**
  * FR-DS3: contact privacy, offered where checkout offers it — generic

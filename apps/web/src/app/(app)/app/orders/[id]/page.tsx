@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import { DomainName } from '@/components/common/domain-name'
 import { FormMessage } from '@/components/common/form-parts'
+import { RefreshWhile } from '@/components/common/refresh-while'
 import {
   PANEL_HEADING,
   Panel,
@@ -17,7 +18,6 @@ import { ReceiptLink } from '@/features/billing/components/receipt-link'
 import { LineNameservers } from '@/features/checkout/components/line-nameservers'
 import { OrderRefunds } from '@/features/checkout/components/order-refunds'
 import { OrderStatus } from '@/features/checkout/components/order-status'
-import { RefreshWhile } from '@/features/checkout/components/refresh-while'
 import { ownNameservers } from '@/features/checkout/lib/line-hosts'
 import {
   isSettling,
