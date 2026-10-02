@@ -57,7 +57,7 @@ export type JsonResponse = { status: number; body: unknown }
 export function requestJson(
   url: string,
   init: {
-    method?: 'GET' | 'POST'
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
     headers?: Record<string, string>
     body?: unknown
     timeoutMs?: number

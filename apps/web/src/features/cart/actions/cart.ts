@@ -1,7 +1,6 @@
 'use server'
 
 import type { TldPricing } from '@dr/shared'
-import { cookies } from 'next/headers'
 import { z } from 'zod'
 import { periodsText } from '@/features/pricing/lib/terms'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
@@ -11,28 +10,20 @@ import { describeLengthIssue, lengthIssue } from '@/features/search/lib/length'
 import { parseSearchQuery } from '@/features/search/lib/query'
 import { checkAvailability } from '@/features/search/queries/availability'
 import { getLengthRules } from '@/features/search/queries/length-rules'
-import { env } from '@/lib/env'
+import { getSslCatalogue } from '@/features/ssl/queries/catalogue'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
 import { MAX_CART_ITEMS, nearestSoldPeriod, quoteFor, sellsPeriod } from '../lib/lines'
-import {
-  CART_COOKIE,
-  CART_COOKIE_MAX_AGE,
-  CART_COUNT_COOKIE,
-  hashCartToken,
-  newCartToken,
-} from '../lib/token'
+import { existingCartId, ownerForWrite, setCountCookie } from '../queries/owner'
 import {
   countLines,
-  currentOwner,
   deleteLine,
-  findCartId,
   findOrCreateCartId,
   insertLine,
   loadLines,
-  mergeAnonymousCart,
-  type Owner,
+  loadSslLines,
+  requoteSslLine,
   updateLine,
 } from '../queries/store'
 
@@ -44,44 +35,6 @@ import {
 
 type Failure = { error: string }
 const FAILED = 'Something went wrong updating your cart. Please try again.'
-
-async function setCountCookie(count: number) {
-  ;(await cookies()).set(CART_COUNT_COOKIE, String(count), {
-    path: '/',
-    sameSite: 'lax',
-    secure: env.NODE_ENV === 'production',
-    maxAge: CART_COOKIE_MAX_AGE,
-  })
-}
-
-/** The shopper's cart owner, minting an anonymous cart cookie if there is none. */
-async function ownerForWrite(): Promise<Owner> {
-  const { owner, anonToken } = await currentOwner()
-  if (owner?.kind === 'user') {
-    if (anonToken) {
-      await mergeAnonymousCart(anonToken, owner.userId)
-      ;(await cookies()).delete(CART_COOKIE)
-    }
-    return owner
-  }
-  if (owner) return owner
-
-  const token = newCartToken()
-  ;(await cookies()).set(CART_COOKIE, token, {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: env.NODE_ENV === 'production',
-    maxAge: CART_COOKIE_MAX_AGE,
-  })
-  return { kind: 'anon', tokenHash: hashCartToken(token) }
-}
-
-/** The cart the shopper already has — lines can only be changed in your own. */
-async function existingCartId(): Promise<string | null> {
-  const { owner } = await currentOwner()
-  return owner ? findCartId(owner) : null
-}
 
 export const addToCart = actionClient
   .inputSchema(z.object({ domain: z.string().min(3).max(253) }))
@@ -333,6 +286,22 @@ export const acceptCurrentPrices = actionClient.action(
 
       const byTld = new Map(priced.tlds.map((tld) => [tld.tld, tld]))
       const now = new Date().toISOString()
+      // SSL certificates (FR-SSL-6) are re-quoted at today's price too.
+      const sslLines = await loadSslLines(cartId)
+      if (sslLines.length > 0) {
+        const ssl = await getSslCatalogue()
+        if (!ssl) return { error: FAILED }
+        const byCode = new Map(ssl.products.map((product) => [product.productCode, product]))
+        for (const line of sslLines) {
+          const product = byCode.get(line.productCode)
+          if (!product) continue
+          await requoteSslLine(cartId, line.id, {
+            quoted_total_kobo: product.price.priceKobo,
+            quoted_fx_rate_id: ssl.rateId,
+            quoted_at: now,
+          })
+        }
+      }
       for (const line of await loadLines(cartId)) {
         const pricing = byTld.get(line.tld)
         if (!pricing) continue

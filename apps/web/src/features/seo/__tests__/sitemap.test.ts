@@ -15,6 +15,7 @@ describe('sitemap', () => {
       '/pricing',
       '/domains',
       '/transfer',
+      '/ssl',
       '/help',
       '/about',
       '/contact',
@@ -37,8 +38,10 @@ describe('sitemap', () => {
   it('dates price pages by the prices and legal pages by their last update — nothing else', () => {
     expect(byPath.get('/domains/com')?.lastModified).toEqual(PRICES_FROM)
     expect(byPath.get('/pricing')?.lastModified).toEqual(PRICES_FROM)
+    // FR-SSL-1: the SSL page shows prices, so it changes when they do.
+    expect(byPath.get('/ssl')?.lastModified).toEqual(PRICES_FROM)
     expect(byPath.get('/legal/privacy')?.lastModified).toEqual(
-      new Date('2026-09-25T00:00:00+01:00'),
+      new Date('2026-10-02T00:00:00+01:00'),
     )
     expect(byPath.get('/help')).not.toHaveProperty('lastModified')
   })

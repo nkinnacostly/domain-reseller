@@ -30,6 +30,16 @@ export type CheckoutLine = {
   includesIcannFee: boolean
 }
 
+/** An SSL certificate being bought (FR-SSL-6). */
+export type CheckoutCertificate = {
+  name: string
+  product: string
+  total: string
+  /** N8: what a new one costs when the subscription ends, never charged by itself. */
+  renewal: string
+  term: string
+}
+
 type Summary = { subtotal: string; vatPct: number; vat: string; total: string; totalKobo: number }
 
 /** next-safe-action's formatted errors, one level of nesting deep. */
@@ -45,6 +55,7 @@ function topError(errors: unknown, field: string): string | undefined {
 
 export function CheckoutForm({
   lines,
+  certificates = [],
   summary,
   registrant,
   testMode,
@@ -52,6 +63,7 @@ export function CheckoutForm({
   profiles = [],
 }: {
   lines: CheckoutLine[]
+  certificates?: CheckoutCertificate[]
   summary: Summary
   registrant: RegistrantForm
   testMode: boolean
@@ -74,6 +86,8 @@ export function CheckoutForm({
   const redirecting = Boolean(data && 'redirectTo' in data)
   // FR-D4 — seen once before paying; a changed choice is checked afresh.
   const hostWarnings = data && 'warnings' in data ? data.warnings : null
+  // Certificates only: no registrant, no nameservers — the details are the buyer's.
+  const domains = lines.length > 0
 
   return (
     <form
@@ -82,11 +96,13 @@ export function CheckoutForm({
       className="grid gap-4 xl:grid-cols-[1.6fr_1fr]"
       onSubmit={onSubmitWith((form) => {
         const value = (name: string) => String(form.get(name) ?? '')
-        const hosts = hostRequest(
-          value,
-          lines.map((line) => line.domain),
-          presets,
-        )
+        const hosts = domains
+          ? hostRequest(
+              value,
+              lines.map((line) => line.domain),
+              presets,
+            )
+          : ({ ok: true, input: {} } as const)
         if (!hosts.ok) {
           setHostProblem(hosts.problem)
           return
@@ -107,18 +123,18 @@ export function CheckoutForm({
         {testMode ? (
           <FormMessage tone="success">
             <span className="font-medium">Test mode.</span> Payments use Flutterwave test keys — no
-            real money moves, and no domain is registered.
+            real money moves, and nothing is registered or bought.
           </FormMessage>
         ) : null}
 
         <section aria-labelledby={`${id}-registrant`}>
           <h2 id={`${id}-registrant`} className="text-lg font-semibold text-foreground">
-            Who owns the domains
+            {domains ? 'Who owns the domains' : 'Your details'}
           </h2>
           <p className="mt-1.5 text-pretty text-sm/6 text-muted-foreground">
-            The registrant — the legal owner the registry records. Use your real details: an owner
-            the registry cannot verify can lose the domain. Contact privacy keeps them out of public
-            lookups where it is on.
+            {domains
+              ? 'The registrant — the legal owner the registry records. Use your real details: an owner the registry cannot verify can lose the domain. Contact privacy keeps them out of public lookups where it is on.'
+              : 'Who is buying, for the receipt. The certificate authority asks for its own contact when you set each certificate up.'}
           </p>
 
           <div className="mt-6">
@@ -129,18 +145,20 @@ export function CheckoutForm({
             />
           </div>
 
-          <ContactRoles profiles={profiles} errors={errors} failure={failure} />
+          {domains ? <ContactRoles profiles={profiles} errors={errors} failure={failure} /> : null}
         </section>
 
-        <NameserverChoice
-          presets={presets}
-          domains={lines.map((line) => line.domain)}
-          problem={hostProblem ?? hostFailure(failure, errors)}
-          onChange={() => {
-            setHostProblem(null)
-            if (hostWarnings) place.reset()
-          }}
-        />
+        {domains ? (
+          <NameserverChoice
+            presets={presets}
+            domains={lines.map((line) => line.domain)}
+            problem={hostProblem ?? hostFailure(failure, errors)}
+            onChange={() => {
+              setHostProblem(null)
+              if (hostWarnings) place.reset()
+            }}
+          />
+        ) : null}
       </div>
 
       <aside
@@ -152,25 +170,48 @@ export function CheckoutForm({
         </h2>
 
         {/* FR-C6 — every name in large type, so a typo is caught while it is still free. */}
-        <ul aria-label="Domains you are buying" className="space-y-4">
-          {lines.map((line) => (
-            <li key={line.domain}>
-              <p className="text-xl font-bold tracking-tight break-all text-foreground">
-                <DomainName name={line.domain} />
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {line.years} {line.years === 1 ? 'year' : 'years'} · {line.total}, then{' '}
-                {line.renewal}
-                {line.includesIcannFee ? ' · includes the ICANN fee' : ''}
-              </p>
-            </li>
-          ))}
-        </ul>
+        {domains ? (
+          <ul aria-label="Domains you are buying" className="space-y-4">
+            {lines.map((line) => (
+              <li key={line.domain}>
+                <p className="text-xl font-bold tracking-tight break-all text-foreground">
+                  <DomainName name={line.domain} />
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {line.years} {line.years === 1 ? 'year' : 'years'} · {line.total}, then{' '}
+                  {line.renewal}
+                  {line.includesIcannFee ? ' · includes the ICANN fee' : ''}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {certificates.length > 0 ? (
+          <ul aria-label="SSL certificates you are buying" className="space-y-4">
+            {certificates.map((line) => (
+              <li key={line.name}>
+                <p className="text-xl font-bold tracking-tight break-all text-foreground">
+                  {line.name}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {line.product} · {line.term} · {line.total}
+                </p>
+                <p className="text-xs/5 text-muted-foreground">{line.renewal}</p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         {/* FR-C5 — every line itemised, nothing behind a tooltip. */}
         <dl className="space-y-2.5 border-border border-t pt-5 text-sm">
           <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Domains</dt>
+            <dt className="text-muted-foreground">
+              {domains && certificates.length > 0
+                ? 'Domains and certificates'
+                : domains
+                  ? 'Domains'
+                  : 'Certificates'}
+            </dt>
             <dd className="font-medium text-foreground tabular-nums">{summary.subtotal}</dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -192,7 +233,12 @@ export function CheckoutForm({
             className="mt-1 size-4 shrink-0 accent-[var(--accent)]"
           />
           <span className="text-foreground">
-            I've checked the spelling. Domain registrations cannot be cancelled or refunded.
+            I've checked the spelling.{' '}
+            {domains ? 'Domain registrations cannot be cancelled or refunded.' : null}
+            {domains && certificates.length > 0 ? ' ' : null}
+            {certificates.length > 0
+              ? 'A certificate is refunded only if it cannot be ordered.'
+              : null}
           </span>
         </label>
         {topError(errors, 'confirmed') ? (
@@ -242,8 +288,8 @@ export function CheckoutForm({
           By paying you agree to the{' '}
           <Link href="/legal/registration-agreement" className="underline hover:text-foreground">
             registration agreement
-          </Link>{' '}
-          and{' '}
+          </Link>
+          {certificates.length > 0 ? ' (its SSL certificate terms included)' : null} and{' '}
           <Link href="/legal/refunds" className="underline hover:text-foreground">
             refund policy
           </Link>

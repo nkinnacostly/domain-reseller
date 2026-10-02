@@ -43,8 +43,14 @@
  *   GOOD-…   → transferable
  *   LOCKED-… → TRANSFER_LOCKED
  *   anything else → AUTH_CODE_INVALID
+ *
+ * And the SSL set-up's reads (FR-SSL-4, /v1/ssl): the five approval
+ * addresses for a name, the CA's reading of a CSR, and a generated key and
+ * CSR. A test CSR carries its name readably (`mockCsr`), as the real one
+ * carries it in ASN.1: check-csr reads it back; anything else is CSR_INVALID.
  */
 import { createServer } from 'node:http'
+import { mockCsrName as csrName, mockCsr } from './ssl.mjs'
 
 const PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 8788)
 /** The supplier's ceiling per CheckAvailability call (AVAILABILITY_LIMITS.maxChecksPerCall). */
@@ -256,6 +262,55 @@ createServer((req, res) => {
     }
     const side = transferCode[2] === 'sandbox' ? 'OTE' : 'LIVE'
     return send(res, 200, { ok: true, data: { authCode: `E2E-${side}-7qX!code` } })
+  }
+
+  if (req.url?.startsWith('/v1/ssl/')) {
+    if (!req.headers.authorization?.startsWith('Bearer ')) {
+      return send(res, 401, { ok: false, code: 'SUPPLIER_AUTH', message: 'Unauthorised' })
+    }
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    if (req.method === 'GET' && url.pathname === '/v1/ssl/approvers') {
+      const name = (url.searchParams.get('name') ?? '').replace(/^\*\./, '')
+      return send(res, 200, {
+        ok: true,
+        data: {
+          emails: ['admin', 'administrator', 'hostmaster', 'postmaster', 'webmaster'].map(
+            (box) => `${box}@${name}`,
+          ),
+        },
+      })
+    }
+    if (req.method === 'POST' && url.pathname === '/v1/ssl/csr/check') {
+      return void readBody(req).then(({ csr = '' }) => {
+        const name = csrName(csr)
+        if (!name) {
+          return send(res, 422, { ok: false, code: 'CSR_INVALID', message: 'Invalid CSR code' })
+        }
+        send(res, 200, {
+          ok: true,
+          data: {
+            commonName: name,
+            alternativeNames: [],
+            isWildcard: name.startsWith('*.'),
+            organization: 'E2E Ltd',
+            country: 'NG',
+          },
+        })
+      })
+    }
+    if (req.method === 'POST' && url.pathname === '/v1/ssl/csr/generate') {
+      return void readBody(req).then(({ name = '' }) =>
+        send(res, 200, {
+          ok: true,
+          data: {
+            csr: mockCsr(name),
+            privateKey:
+              '-----BEGIN PRIVATE KEY-----\nMOCKKEYforE2EonlyNOTREAL\n-----END PRIVATE KEY-----',
+          },
+        }),
+      )
+    }
+    return send(res, 404, { ok: false, code: 'NOT_FOUND', message: 'Unknown route' })
   }
 
   if (req.method === 'POST' && req.url === '/v1/transfers/check') {

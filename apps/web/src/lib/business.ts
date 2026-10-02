@@ -38,7 +38,7 @@ export const BUSINESS = {
   cardRefundBusinessDays: 15,
   lastUpdated: '25 September 2026',
   /** The same date for machines (the sitemap's lastmod). */
-  lastUpdatedOn: '2026-09-25',
+  lastUpdatedOn: '2026-10-02',
 } as const
 
 /**
@@ -69,5 +69,7 @@ export const POLICY_LINKS = {
   registrationDataPolicy:
     'https://www.icann.org/en/contracted-parties/consensus-policies/registration-data-policy',
   icannLookup: 'https://lookup.icann.org/en',
+  // FR-SSL-1: Sectigo's legal repository — its subscriber agreement and CPS (read 2 Oct 2026).
+  sectigoLegal: 'https://www.sectigo.com/legal',
   ndpc: 'https://ndpc.gov.ng/',
 } as const

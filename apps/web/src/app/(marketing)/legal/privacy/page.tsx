@@ -28,6 +28,10 @@ export const metadata: Metadata = pageMetadata({
  * them unset nothing reaches Cloudflare, and N9b forbids saying it does.
  * Likewise the email processor is the one EMAIL_PROVIDER names — Brevo in
  * France, or Amazon SES in London — never both, never the one not in use.
+ *
+ * SSL certificates (FR-SSL-4, migration 39): the CSR, names, approval
+ * address and certificate contact go to DomainNameAPI and Sectigo; a key we
+ * make for the customer passes through once and is never stored or logged.
  */
 export default function PrivacyPage() {
   const hasBotCheck = isTurnstileEnabled()
@@ -79,8 +83,15 @@ export default function PrivacyPage() {
             <strong>We never receive your card details</strong>; Flutterwave handles them.
           </li>
           <li>
-            <strong>Your cart:</strong> the domains in it, found through a random code in a cookie
-            if you are not signed in.
+            <strong>SSL certificates:</strong> the names each certificate is for, the certificate
+            request (CSR) you send, the address you chose to approve it, the contact you give for
+            it, and the issued certificate. If you ask us to make the private key and CSR for you,
+            our supplier makes the key and we pass it to your browser once —{' '}
+            <strong>we do not store or log it</strong>.
+          </li>
+          <li>
+            <strong>Your cart:</strong> the domains and certificates in it, found through a random
+            code in a cookie if you are not signed in.
           </li>
           <li>
             <strong>Where you are signed in:</strong> for each device signed in to your account, the
@@ -124,6 +135,12 @@ export default function PrivacyPage() {
             registry’s and ICANN’s rules.
           </li>
           <li>
+            <strong>To order and manage your SSL certificates</strong> — sending the certificate
+            request, names, approval address and contact to our supplier and the certificate
+            authority — necessary to perform the contract, and required by the certificate
+            authority’s rules.
+          </li>
+          <li>
             <strong>To take payments and keep tax and accounting records</strong> — contract and
             legal obligation.
           </li>
@@ -151,6 +168,14 @@ export default function PrivacyPage() {
           <li>
             <strong>The registry for your extension</strong> — for example Verisign (United States)
             for .com. Registries receive registrant details and may publish some of them.
+          </li>
+          <li>
+            <strong>For SSL certificates: DomainNameAPI and Sectigo</strong>, the certificate
+            authority — the certificate request, the names, the approval address and the certificate
+            contact. Sectigo emails the approval address, and publishes every certificate it issues,
+            with the names in it, in public Certificate Transparency logs, as browsers require. A
+            private key made for you passes through DomainNameAPI’s system and ours on its way to
+            your browser.
           </li>
           <li>
             <strong>Flutterwave</strong> — to process your payment. Its payment notifications reach
@@ -224,6 +249,10 @@ export default function PrivacyPage() {
             close your account.
           </li>
           <li>Orders and payments: for as long as tax and accounting law requires.</li>
+          <li>
+            SSL certificates, with their request, approval address and contact: while your account
+            is open. A private key made for you: not at all.
+          </li>
           <li>The cart cookie: 60 days.</li>
           <li>
             Records of the emails we send: 90 days. Renewal reminders: three years, because we must

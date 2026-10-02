@@ -22,6 +22,12 @@ const schema = z
      */
     DNA_WRITE_ENV: z.enum(['off', 'ote', 'production']).default('off'),
     PROVISION_POLL_MS: z.coerce.number().int().min(500).default(5_000),
+    /**
+     * How often certificates waiting on their approver, or issued without
+     * their text yet, are read from the supplier (FR-SSL-7). Each is asked
+     * less often the longer it waits (ssl/poller.ts).
+     */
+    SSL_CHECK_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
     /** How often the portfolio is compared with the registry (PRD §13.5: hourly). */
     RECONCILE_EVERY_MINUTES: z.coerce.number().int().min(5).default(60),
     /**

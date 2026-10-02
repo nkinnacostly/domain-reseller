@@ -10,7 +10,12 @@ import { createServiceClient } from '@/lib/supabase/service'
 
 vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
 vi.mock('@/features/cart/queries/cart', () => ({ getCartView: vi.fn() }))
-vi.mock('@/features/cart/queries/store', () => ({ findCartId: vi.fn(), deleteLine: vi.fn() }))
+vi.mock('@/features/cart/queries/store', () => ({
+  findCartId: vi.fn(),
+  deleteLine: vi.fn(),
+  deleteSslLine: vi.fn(),
+}))
+vi.mock('@/features/ssl/queries/names', () => ({ sslNameInUse: vi.fn(async () => false) }))
 vi.mock('@/features/search/queries/availability', () => ({ checkAvailability: vi.fn() }))
 // FR-D4 looks typed nameservers up in public DNS: the network boundary.
 vi.mock('@/features/domains/queries/dns', () => ({ lookupHost: async () => 'resolves' }))
@@ -89,6 +94,7 @@ let answers: {
   order: { data: unknown; error: unknown }
   itemsError: unknown
   preset: { data: unknown; error: unknown }
+  ssl?: unknown
 }
 /** Every `nameserver_presets` lookup, as [column, value]. */
 let presetLookups: unknown[][]
@@ -163,6 +169,7 @@ beforeEach(() => {
   })
   vi.mocked(getCartView).mockResolvedValue({
     state: 'ready',
+    certificates: [],
     lines: [LINE],
     totals: TOTALS,
     vatPct: 7.5,
@@ -199,6 +206,7 @@ beforeEach(() => {
     }),
     from: (table: string) => {
       if (table === 'tlds') return chain({ data: answers.tlds })
+      if (table === 'ssl_products') return chain({ data: answers.ssl ?? [] })
       if (table === 'pricing_settings') return chain({ data: answers.settings })
       if (table === 'fx_rates') return chain({ data: answers.fxRate })
       if (table === 'nameserver_presets') {
@@ -438,6 +446,7 @@ describe('placeOrder — the cart must be ready to buy', () => {
   ])('refuses when %s (FR-C4)', async (_, change) => {
     vi.mocked(getCartView).mockResolvedValue({
       state: 'ready',
+      certificates: [],
       lines: [LINE],
       totals: { ...TOTALS, ...change },
       vatPct: 7.5,
@@ -471,6 +480,7 @@ describe('placeOrder — more checks that stop it before money moves', () => {
     const second = { ...LINE, id: 'line-2', domain: 'paidly.com' }
     vi.mocked(getCartView).mockResolvedValue({
       state: 'ready',
+      certificates: [],
       lines: [LINE, second],
       totals: TOTALS,
       vatPct: 7.5,
@@ -603,6 +613,7 @@ describe('placeOrder — creating the order', () => {
     }
     vi.mocked(getCartView).mockResolvedValue({
       state: 'ready',
+      certificates: [],
       lines: [LINE, ccTld],
       totals: TOTALS,
       vatPct: 7.5,
@@ -858,6 +869,7 @@ describe('placeOrder — an extension sold only in blocks (.ai)', () => {
   const cart = (line: Record<string, unknown>) =>
     vi.mocked(getCartView).mockResolvedValue({
       state: 'ready',
+      certificates: [],
       lines: [line],
       totals,
       vatPct: 7.5,
@@ -933,5 +945,128 @@ describe('placeOrder — an extension sold only in blocks (.ai)', () => {
     const [line] = (inserted.items[0] as Record<string, unknown>[] | undefined) ?? []
     expect(line).toMatchObject({ domain: 'getpaid.com', period_years: 1 })
     expect(Object.keys(line ?? {})).not.toContain('renewal_years')
+  })
+})
+
+describe('placeOrder — SSL certificates (FR-SSL-6)', () => {
+  const CERT = {
+    id: 'ssl-1',
+    productCode: '351',
+    commonName: 'getpaid.com',
+    quotedTotalKobo: 1_350_000,
+    quotedAt: '2026-10-02T10:00:00.000Z',
+    status: 'current',
+    productName: 'Sectigo PositiveSSL Certificate',
+    kind: 'single',
+    includedNames: 1,
+    payableKobo: 1_350_000,
+    renewalKobo: 1_350_000,
+    currentKobo: 1_350_000,
+    heldUntil: null,
+  }
+  const ONLY_CERT_TOTALS = {
+    subtotalKobo: 1_350_000,
+    vatKobo: 101_250,
+    totalKobo: 1_451_250,
+    needsAcknowledgement: false,
+    unavailableCount: 0,
+  }
+
+  async function ssl(over: { lines?: unknown[]; totals?: typeof TOTALS } = {}) {
+    const { sslNameInUse } = await import('@/features/ssl/queries/names')
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: over.lines ?? [],
+      certificates: [CERT],
+      totals: over.totals ?? ONLY_CERT_TOTALS,
+      vatPct: 7.5,
+      lockMinutes: 30,
+    } as never)
+    answers.ssl = [{ product_code: '351', create_usd: 6.99 }]
+    return vi.mocked(sslNameInUse)
+  }
+
+  it('orders a certificate alone: an ssl line with its product, one term, and the price of a new one', async () => {
+    const nameInUse = await ssl()
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: 1_451_250 })
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(nameInUse).toHaveBeenCalledWith('getpaid.com')
+    // No domain: nothing to check for availability or count against the daily cap.
+    expect(checkAvailability).not.toHaveBeenCalled()
+    expect(inserted.items[0]).toEqual([
+      {
+        order_id: 'order-1',
+        item_type: 'ssl',
+        ssl_product_code: '351',
+        domain: 'getpaid.com',
+        tld: 'com',
+        period_years: 1,
+        privacy: false,
+        auto_renew: false,
+        price_kobo: 1_350_000,
+        renewal_kobo: 1_350_000,
+      },
+    ])
+  })
+
+  it('orders a domain and a certificate for it together', async () => {
+    await ssl({
+      lines: [LINE],
+      totals: { ...TOTALS, subtotalKobo: 3_190_000, vatKobo: 239_250, totalKobo: 3_429_250 },
+    })
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: 3_429_250 })
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    const rows = inserted.items[0] as { item_type?: string; domain: string }[]
+    expect(rows.map((row) => [row.item_type ?? 'register', row.domain])).toEqual([
+      ['register', 'getpaid.com'],
+      ['ssl', 'getpaid.com'],
+    ])
+  })
+
+  it('counts the certificate’s cost in the float check, and refuses live orders the float cannot cover', async () => {
+    await ssl()
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 5 })
+    vi.mocked(requirePaymentEnv).mockReturnValue({
+      secretKey: 'FLWSECK-live',
+      publicKey: 'FLWPUBK-live',
+      webhookHash: 'hash',
+      testMode: false,
+    })
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: 1_451_250 })
+    expect(result?.data).toMatchObject({ error: expect.stringContaining("haven't been charged") })
+    expect(inserted.orders).toHaveLength(0)
+  })
+
+  it('refuses a certificate whose product has no cost, rather than guessing (N5b)', async () => {
+    await ssl()
+    answers.ssl = [{ product_code: '351', create_usd: null }]
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: 1_451_250 })
+    expect(result?.data).toMatchObject({
+      error: expect.stringContaining("couldn't complete checkout"),
+    })
+    expect(inserted.orders).toHaveLength(0)
+  })
+
+  it('takes out a certificate whose name was bought here meanwhile, and charges nothing', async () => {
+    const nameInUse = await ssl()
+    nameInUse.mockResolvedValueOnce(true)
+    vi.mocked(findCartId).mockResolvedValue('cart-1')
+    const { deleteSslLine } = await import('@/features/cart/queries/store')
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: 1_451_250 })
+    expect(result?.data).toMatchObject({
+      error: expect.stringContaining('bought through us in the meantime'),
+    })
+    expect(deleteSslLine).toHaveBeenCalledWith('cart-1', 'ssl-1')
+    expect(inserted.orders).toHaveLength(0)
+  })
+
+  it('charges nothing when a certificate name cannot be checked', async () => {
+    const nameInUse = await ssl()
+    nameInUse.mockResolvedValueOnce(null)
+    const result = await placeOrder({ ...INPUT, expectedTotalKobo: 1_451_250 })
+    expect(result?.data).toMatchObject({
+      error: expect.stringContaining("couldn't check your certificates"),
+    })
+    expect(inserted.orders).toHaveLength(0)
   })
 })

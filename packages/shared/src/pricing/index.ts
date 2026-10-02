@@ -76,18 +76,35 @@ function costUsdFor(tld: TldCost, kind: TradeKind): number | null {
   }
 }
 
-export function priceFor(tld: TldCost, kind: TradeKind, inputs: PricingInputs): Price | null {
-  const costUsd = costUsdFor(tld, kind)
+/** A retail price built from a USD cost: the one rule every product is priced by. */
+export type Retail = { costKobo: number; priceKobo: number; marginKobo: number }
+
+/**
+ * USD cost (plus any pass-through fee) at the effective rate, plus the flat
+ * margin, rounded up to the next ₦100. Domains and SSL certificates alike
+ * (FR-SSL-2): one formula, every input from the database (N5b). Null for a
+ * cost that is missing or not positive — no price is better than a wrong one.
+ */
+export function retailFromUsd(
+  costUsd: number | null,
+  inputs: PricingInputs,
+  feeUsd = 0,
+): Retail | null {
   if (costUsd === null || !Number.isFinite(costUsd) || costUsd <= 0) return null
-
   const rate = effectiveFxRate(inputs.fxRate, inputs.fxBufferPct)
-  // ccTLDs such as .ng carry no ICANN fee.
-  const icannUsd = tld.isCountryCode ? 0 : inputs.icannFeeUsd
-
-  const costKobo = Math.round((costUsd + icannUsd) * rate * KOBO_PER_NAIRA)
+  const costKobo = Math.round((costUsd + feeUsd) * rate * KOBO_PER_NAIRA)
   const priceKobo = roundUpToHundred(costKobo + inputs.marginNgn * KOBO_PER_NAIRA)
+  return { costKobo, priceKobo, marginKobo: priceKobo - costKobo }
+}
 
-  return { tld: tld.name, kind, costKobo, priceKobo, marginKobo: priceKobo - costKobo }
+export function priceFor(tld: TldCost, kind: TradeKind, inputs: PricingInputs): Price | null {
+  // ccTLDs such as .ng carry no ICANN fee.
+  const retail = retailFromUsd(
+    costUsdFor(tld, kind),
+    inputs,
+    tld.isCountryCode ? 0 : inputs.icannFeeUsd,
+  )
+  return retail ? { tld: tld.name, kind, ...retail } : null
 }
 
 /** A registry holds a domain at most ten years ahead, so no term is longer. */

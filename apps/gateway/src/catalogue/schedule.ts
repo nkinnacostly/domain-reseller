@@ -25,14 +25,21 @@ type Log = {
   error(fields: object, message: string): void
 }
 
-export type ScheduleResult =
+/** What any scheduled sync reports: the domain catalogue's, or the SSL products' (migration 39). */
+type Outcome = { outcome: string; reason: string | null }
+
+export type ScheduleResult<R extends Outcome = SyncResult> =
   | { status: 'skipped' }
   | { status: 'failed'; reason: string }
-  | { status: 'done'; result: SyncResult; pricesRefreshed: boolean | null }
+  | { status: 'done'; result: R; pricesRefreshed: boolean | null }
 
-export type CatalogueScheduleOptions = {
+export type CatalogueScheduleOptions<R extends Outcome = SyncResult> = {
   /** One sync that writes what it finds. */
-  sync: () => Promise<SyncResult>
+  sync: () => Promise<R>
+  /** The counts a log line and the heartbeat carry. Default: the domain catalogue's. */
+  summarise?: (result: R) => Record<string, unknown>
+  /** What the log calls it. */
+  label?: string
   runs: RunLog
   /** How long a successful sync lasts before the next is due. */
   everyMs: number
@@ -64,9 +71,13 @@ export function isDue(last: LastRun | null, now: Date, everyMs: number, retryMs:
   return !(failed && now.getTime() - last.at.getTime() < retryMs)
 }
 
-export function createCatalogueSchedule(options: CatalogueScheduleOptions) {
+export function createCatalogueSchedule<R extends Outcome = SyncResult>(
+  options: CatalogueScheduleOptions<R>,
+) {
   const {
     sync,
+    summarise: count = (result: R) => summarise(result as unknown as SyncResult),
+    label = 'catalogue sync',
     runs,
     everyMs,
     checkEveryMs = 30 * 60_000,
@@ -80,39 +91,39 @@ export function createCatalogueSchedule(options: CatalogueScheduleOptions) {
     try {
       await runs.record(detail)
     } catch (error) {
-      log.error({ err: error }, 'catalogue sync outcome not recorded')
+      log.error({ err: error }, `${label} outcome not recorded`)
     }
   }
 
   /** One look: syncs if one is due. */
-  async function runOnce(): Promise<ScheduleResult> {
+  async function runOnce(): Promise<ScheduleResult<R>> {
     let last: LastRun | null
     try {
       last = await runs.last()
     } catch (error) {
       // Without the last run we cannot tell whether this week's is done.
-      log.error({ err: error }, 'catalogue sync not started: last run unknown')
+      log.error({ err: error }, `${label} not started: last run unknown`)
       return { status: 'failed', reason: error instanceof Error ? error.message : String(error) }
     }
     const started = now()
     if (!isDue(last, started, everyMs, retryMs)) return { status: 'skipped' }
     const previousSuccess = lastSuccess(last)?.toISOString() ?? null
 
-    let result: SyncResult
+    let result: R
     try {
       result = await sync()
     } catch (error) {
       const reason = (error instanceof Error ? error.message : String(error)).slice(0, 300)
-      log.error({ reason }, 'catalogue sync failed; costs unchanged')
+      log.error({ reason }, `${label} failed; costs unchanged`)
       await record({ outcome: 'failed', reason, lastSuccessAt: previousSuccess })
       return { status: 'failed', reason }
     }
 
-    const counts = summarise(result)
+    const counts = count(result)
     if (result.outcome === 'refused') {
       log.error(
         { reason: result.reason, ...counts },
-        'catalogue sync refused the listing; costs unchanged',
+        `${label} refused the listing; costs unchanged`,
       )
       await record({
         outcome: 'refused',
@@ -128,7 +139,7 @@ export function createCatalogueSchedule(options: CatalogueScheduleOptions) {
       pricesRefreshed = await refreshPrices()
       if (!pricesRefreshed) log.warn({}, 'site did not refresh its prices; it will within the hour')
     }
-    log.info({ outcome: result.outcome, ...counts, pricesRefreshed }, 'catalogue sync finished')
+    log.info({ outcome: result.outcome, ...counts, pricesRefreshed }, `${label} finished`)
     await record({
       outcome: result.outcome,
       ...counts,

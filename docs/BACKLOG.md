@@ -53,6 +53,19 @@ Built 25 Sept 2026 (migration 34): `EMAIL_PROVIDER=ses` sends the auth emails an
 | E3 | **Cut over to SES** | Subscribe `/api/email/ses-events` to the `mydomainshub-ses-events` topic (HTTPS, raw delivery off) with `SES_EVENTS_TOPIC_ARN` on Vercel; then `EMAIL_PROVIDER=ses` and the `AWS_SES_*` values on Vercel and Fly, the SMTP fallback (E2), and a few days of watching deliveries. | Owner, `docs/DEPLOY.md` §5c |
 | E4 | **Retire Brevo** | Once SES has run clean for a couple of weeks: remove `BREVO_*` from Vercel, Fly and `.env`, delete Brevo's DNS records on `notify.mydomainshub.com` (keeping SES's DKIM, MAIL FROM and DMARC) and close the account, so a second sender is not left authorised for the domain. | Owner, Vercel, Fly, Cloudflare, Brevo |
 
+## 1d. SSL certificates — owner steps
+
+Built 2 Oct 2026 (PRD E15, migrations 38–39): three Sectigo PositiveSSL products, bought, set up, approved, downloaded and reissued through the panel. Not live until these are done.
+
+| # | Item | Why it matters | Where |
+|---|---|---|---|
+| C1 | **Apply migrations 38–39, then deploy the gateway, then the web** | In that order: the gateway must know the SSL job kinds and `/v1/ssl/*` routes before the web can queue or call them. Its first start prices the three products. | Owner, `docs/DEPLOY.md` §5b "SSL certificates" |
+| C2 | **Confirm the term wording** | The site sells "a 1-year subscription" and says certificates last at most 200 days, reissued free before they expire, and never "valid for one year". Confirm that is how you want it put, and that a reissue near the end of the subscription is acceptable to customers (see C5, question 3). | Owner |
+| C3 | **Confirm the refund rule** | As built: a certificate is refunded automatically only if the supplier will not sell it (the order fails); once bought, it is not refundable — the refund policy and checkout say so. If you want a window (e.g. before set-up), say so and it will be built. | Owner |
+| C4 | **Lawyer review of the SSL terms** | New copy: the registration agreement's SSL section (`/legal/registration-agreement#ssl`), the refund policy's (`/legal/refunds#ssl`) and the privacy notice's SSL paragraphs (what Sectigo and DomainNameAPI receive; Certificate Transparency logs publish every issued certificate's names). | Owner, with the other legal review below |
+| C5 | **Questions for DomainNameAPI support** | 1) A reissue takes no CSR: how does a customer who lost the key reissue with a new one? 2) Revoke answers `Ssl:10003` "Package is not supported" for PositiveSSL — how is one revoked? 3) Does a reissue late in the subscription run to the subscription's end or a full 200 days? 4) After the subscription ends, can a new certificate be bought for the same name while the old one is still listed (every call is by name)? 5) Their contact takes a 2-character phone country code — +234 does not fit; is the whole number in `phone` right? 6) Is HTTP or DNS (CNAME) validation available, and where are its instructions? Only email was accepted in the sandbox. 7) Does the Multi Domain's `defaultSanCount` of 4 include the main name (we assume it does), and may extra names be on other domains? 8) The sandbox returns empty certificate text once issued — confirm live returns the PEM and chain. | Owner, DomainNameAPI ticket |
+| C6 | **Float for certificates** | A certificate is bought from the same USD float as domains (Wildcard USD 87.99); live orders are refused before payment while the float is short (L6). | Owner |
+
 ## 2. Deferred features
 
 ### Catalogue

@@ -1,4 +1,5 @@
 import { periodTotalKobo, type TldPricing } from '@dr/shared'
+import type { PricedSslLine } from './ssl-lines'
 
 /**
  * Pricing a cart line and deciding whether its quote still stands (FR-C2, FR-C4).
@@ -156,15 +157,24 @@ export type CartTotals = {
   unavailableCount: number
 }
 
-export function cartTotals(lines: PricedLine[], vat: (amountKobo: number) => number): CartTotals {
-  const payable = lines.filter((line) => line.status !== 'unavailable')
+/**
+ * Domains and SSL certificates (FR-SSL-6) add up alike: every line we can
+ * still sell, VAT once on the subtotal, and any changed price to accept first.
+ */
+export function cartTotals(
+  lines: PricedLine[],
+  vat: (amountKobo: number) => number,
+  certificates: readonly Pick<PricedSslLine, 'status' | 'payableKobo'>[] = [],
+): CartTotals {
+  const all = [...lines, ...certificates]
+  const payable = all.filter((line) => line.status !== 'unavailable')
   const subtotalKobo = payable.reduce((sum, line) => sum + line.payableKobo, 0)
   const vatKobo = vat(subtotalKobo)
   return {
     subtotalKobo,
     vatKobo,
     totalKobo: subtotalKobo + vatKobo,
-    needsAcknowledgement: lines.some((line) => line.status === 'changed'),
-    unavailableCount: lines.length - payable.length,
+    needsAcknowledgement: all.some((line) => line.status === 'changed'),
+    unavailableCount: all.length - payable.length,
   }
 }

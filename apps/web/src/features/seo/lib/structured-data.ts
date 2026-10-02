@@ -217,3 +217,48 @@ export function extensionServiceLd(site: string, offer: ExtensionOffer): JsonLdN
     },
   }
 }
+
+export type CertificateOffer = {
+  productCode: string
+  name: string
+  priceKobo: number
+  /** The page's own words for what it covers and how long it lasts (N9b). */
+  description: string
+}
+
+/**
+ * One SSL certificate as a service we sell (FR-SSL-1): its price before VAT
+ * and the term as the page states it — a one-year subscription, each
+ * certificate within it lasting at most 200 days. Nothing the page does not
+ * say: no rating, no warranty, no "valid for a year".
+ */
+export function certificateServiceLd(site: string, offer: CertificateOffer): JsonLdNode {
+  const url = siteUrl(site, '/ssl')
+  return {
+    '@type': 'Service',
+    '@id': `${url}#ssl-${offer.productCode}`,
+    name: offer.name,
+    serviceType: 'SSL/TLS certificate',
+    description: offer.description,
+    url,
+    brand: { '@type': 'Brand', name: BRAND_NAME },
+    provider: { '@type': 'Organization', name: BRAND_NAME, url: siteUrl(site) },
+    areaServed: { '@type': 'Country', name: 'Nigeria' },
+    offers: {
+      '@type': 'Offer',
+      url,
+      price: koboToDecimal(offer.priceKobo),
+      priceCurrency: 'NGN',
+      availability: 'https://schema.org/InStock',
+      description: offer.description,
+      priceSpecification: {
+        '@type': 'UnitPriceSpecification',
+        name: 'One-year subscription; it does not renew by itself',
+        price: koboToDecimal(offer.priceKobo),
+        priceCurrency: 'NGN',
+        referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'ANN' },
+        valueAddedTaxIncluded: false,
+      },
+    },
+  }
+}

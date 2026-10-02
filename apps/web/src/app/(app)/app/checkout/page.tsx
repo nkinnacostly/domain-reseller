@@ -1,4 +1,4 @@
-import { formatNaira, formatRenewal } from '@dr/shared'
+import { formatNaira, formatRenewal, SSL_TERM } from '@dr/shared'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -46,7 +46,7 @@ async function Checkout() {
       "Checkout isn't open yet. Your domains stay in your cart, and nothing has been charged.",
     )
   }
-  const { lines, totals } = view.cart
+  const { lines, certificates, totals } = view.cart
   if (totals.needsAcknowledgement || totals.unavailableCount > 0) {
     return back(
       'Something in your cart changed — a price, or an extension we no longer sell. Review it first.',
@@ -65,6 +65,14 @@ async function Checkout() {
         total: formatNaira(line.payableKobo),
         renewal: formatRenewal(line.renewalKobo, line.renewYears),
         includesIcannFee: line.includesIcannFee,
+      }))}
+      // FR-SSL-6: certificates, each with its term and what a new one costs (N8).
+      certificates={certificates.map((line) => ({
+        name: line.commonName,
+        product: line.productName,
+        total: formatNaira(line.payableKobo),
+        renewal: SSL_TERM.renewal(formatNaira(line.renewalKobo)),
+        term: SSL_TERM.short,
       }))}
       summary={{
         subtotal: formatNaira(totals.subtotalKobo),
@@ -87,7 +95,7 @@ export default function CheckoutPage() {
           { label: 'Checkout' },
         ]}
         title="Checkout"
-        description="Who owns the domains, then payment with Flutterwave. Every name is checked again, and the price confirmed, before you pay."
+        description="Your details, then payment with Flutterwave. Every name is checked again, and the price confirmed, before you pay."
       />
       <Suspense fallback={<PanelSkeleton height="h-[32rem]" />}>
         <Checkout />

@@ -6,10 +6,11 @@ import { z } from 'zod'
 import { purchaseNeedsTwoFactor } from '@/features/auth/lib/security'
 import { mustTurnOnTwoFactor } from '@/features/auth/queries/two-factor'
 import { getCartView } from '@/features/cart/queries/cart'
-import { deleteLine, findCartId } from '@/features/cart/queries/store'
+import { deleteLine, deleteSslLine, findCartId } from '@/features/cart/queries/store'
 import { contactRolesInputSchema } from '@/features/contacts/lib/roles'
 import { resolveContactRoles } from '@/features/contacts/queries/profiles'
 import { checkAvailability } from '@/features/search/queries/availability'
+import { sslNameInUse } from '@/features/ssl/queries/names'
 import { BUSINESS } from '@/lib/business'
 import { env, requirePaymentEnv } from '@/lib/env'
 import { createPaymentLink } from '@/lib/flutterwave'
@@ -21,7 +22,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { checkoutOpenTo } from '../lib/access'
 import { allowanceRefusal, exceedsAllowance } from '../lib/allowance'
 import { registrantFormSchema, toContact } from '../lib/contact'
-import { type SupplierCost, wholesaleCostUsd } from '../lib/cost'
+import { type SupplierCost, sslCostUsd, wholesaleCostUsd } from '../lib/cost'
 import { lineHostsSchema } from '../lib/line-hosts'
 import { renewalTermColumn, unsoldPeriods } from '../lib/periods'
 import { readAllowance } from '../queries/allowance'
@@ -113,7 +114,8 @@ export const placeOrder = authAction
     // ── Price re-validation (FR-C4) ──────────────────────────────────────
     const cart = await getCartView()
     if (cart.state !== 'ready') return { error: 'Your cart is empty.' }
-    const { lines, totals } = cart
+    // Domains, and SSL certificates (FR-SSL-6): one order, one payment.
+    const { lines, certificates, totals } = cart
     if (totals.needsAcknowledgement || totals.unavailableCount > 0) {
       return {
         error: 'Your cart needs a look before checkout — some prices or extensions changed.',
@@ -136,7 +138,9 @@ export const placeOrder = authAction
     // ── Velocity (SEC-11) ────────────────────────────────────────────────
     // Stolen cards buy domains in bulk for phishing: a cap on domains per
     // account per day limits what one account can do before a person looks.
-    // Counted on the side this order is paid on — test against test.
+    // Counted on the side this order is paid on — test against test. An SSL
+    // certificate is not a domain and is not counted (FR-SSL-6): the CA's
+    // own validation stands between it and misuse.
     const allowance = await readAllowance(service, ctx.user.id, payment.testMode)
     if (!allowance) {
       return { error: `We couldn't complete checkout just now. ${NOT_CHARGED} Try again shortly.` }
@@ -182,6 +186,33 @@ export const placeOrder = authAction
         if (result.status !== 'available') taken.push(result.domain)
       }
     }
+    // ── Certificate names (FR-SSL-6) ─────────────────────────────────────
+    // The supplier reaches only the first certificate on a name, so one
+    // already bought through us — by anyone — blocks another (Appendix E).
+    const heldNames: string[] = []
+    for (const line of certificates) {
+      const inUse = await sslNameInUse(line.commonName)
+      if (inUse === null) {
+        return {
+          error: `We couldn't check your certificates just now. ${NOT_CHARGED} Try again in a moment.`,
+        }
+      }
+      if (inUse) heldNames.push(line.commonName)
+    }
+    if (heldNames.length > 0) {
+      const cartId = await findCartId({ kind: 'user', userId: ctx.user.id })
+      if (cartId) {
+        for (const line of certificates.filter((candidate) =>
+          heldNames.includes(candidate.commonName),
+        )) {
+          await deleteSslLine(cartId, line.id)
+        }
+      }
+      return {
+        error: `A certificate for ${heldNames.join(', ')} was bought through us in the meantime, so it was removed from your cart. ${NOT_CHARGED} Check your new total.`,
+      }
+    }
+
     if (taken.length > 0) {
       const cartId = await findCartId({ kind: 'user', userId: ctx.user.id })
       if (cartId) {
@@ -195,12 +226,18 @@ export const placeOrder = authAction
     }
 
     // ── Float pre-flight (FR-C8) ─────────────────────────────────────────
-    const [{ data: tldRows }, { data: settings }] = await Promise.all([
+    const [{ data: tldRows }, { data: settings }, { data: sslRows }] = await Promise.all([
       service
         .from('tlds')
         .select('name, register_usd, renew_usd, is_country_code')
         .in('name', [...byTld.keys()]),
       service.from('pricing_settings').select('icann_fee_usd').single(),
+      certificates.length > 0
+        ? service
+            .from('ssl_products')
+            .select('product_code, create_usd')
+            .in('product_code', [...new Set(certificates.map((line) => line.productCode))])
+        : Promise.resolve({ data: [] as { product_code: string; create_usd: number | null }[] }),
     ])
     // The first term comes from the catalogue the cart was priced with.
     const firstTerms = new Map(lines.map((line) => [line.tld, line.minPeriod]))
@@ -218,7 +255,12 @@ export const placeOrder = authAction
     let costUsd: number
     let balanceUsd: number
     try {
-      costUsd = wholesaleCostUsd(lines, costs, Number(settings?.icann_fee_usd ?? 0))
+      costUsd =
+        wholesaleCostUsd(lines, costs, Number(settings?.icann_fee_usd ?? 0)) +
+        sslCostUsd(
+          certificates,
+          new Map((sslRows ?? []).map((row) => [row.product_code, row.create_usd])),
+        )
       const balance = accountBalanceSchema.parse(
         await callGateway<unknown>({
           path: 'account/balance',
@@ -284,8 +326,8 @@ export const placeOrder = authAction
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }
 
-    const { error: itemsError } = await service.from('order_items').insert(
-      lines.map((line) => ({
+    const { error: itemsError } = await service.from('order_items').insert([
+      ...lines.map((line) => ({
         order_id: order.id,
         domain: line.domain,
         tld: line.tld,
@@ -298,7 +340,22 @@ export const placeOrder = authAction
         // FR-C10 — a domain's own host wins over the order's (migration 29).
         ...hosts.columnsFor(line.domain),
       })),
-    )
+      // FR-SSL-6 (migration 39): one subscription term; its "renewal" is what a
+      // new certificate cost today (N8). Paid, it becomes a certificate and an
+      // order job in the payment's transaction.
+      ...certificates.map((line) => ({
+        order_id: order.id,
+        item_type: 'ssl',
+        ssl_product_code: line.productCode,
+        domain: line.commonName,
+        tld: line.commonName.split('.').at(-1) ?? 'ssl',
+        period_years: 1,
+        privacy: false,
+        auto_renew: false,
+        price_kobo: line.payableKobo,
+        renewal_kobo: line.renewalKobo,
+      })),
+    ])
     if (itemsError) {
       logger.error({ ...dbError(itemsError), orderId: order.id }, 'order items insert failed')
       await service.from('orders').update({ status: 'cancelled' }).eq('id', order.id)

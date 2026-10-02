@@ -40,6 +40,16 @@ const SAMPLES: Record<NoticeKind, Record<string, unknown>> = {
   domain_renewed: { domain: 'getpaid.com', years: 2, expires_at: '2029-09-24T11:44:10Z' },
   transfer_started: { domain: 'getpaid.com' },
   transfer_completed: { domain: 'getpaid.com', expires_at: '2027-03-01T00:00:00Z' },
+  ssl_ready: {
+    certificate_id: 'cert-1',
+    name: 'getpaid.com',
+    product: 'Sectigo PositiveSSL Certificate',
+  },
+  ssl_issued: {
+    certificate_id: 'cert-1',
+    name: '*.getpaid.com',
+    expires_at: '2027-04-20T11:00:00Z',
+  },
   order_line_failed: { domain: 'getpaid.com', action: 'registration', code: 'DOMAIN_TAKEN' },
   refund_sent: {
     order_id: 'order-1',
@@ -156,7 +166,40 @@ describe('renderNotice', () => {
       'getpaid.ai (Registration, 2 years · renews at ₦273,000 every 2 years): ₦273,000',
     )
     expect(text).not.toContain('/yr')
-    expect(version).toBe('order_receipt@2')
+    expect(version).toBe('order_receipt@3')
+  })
+
+  it('words a certificate line by its term and the price of a new one (FR-SSL-6, N8)', () => {
+    const { text } = render('order_receipt', {
+      ...SAMPLES.order_receipt,
+      lines: [
+        {
+          domain: 'getpaid.com',
+          kind: 'ssl',
+          years: 1,
+          price_kobo: 1350000,
+          renewal_kobo: 1350000,
+          product: 'Sectigo PositiveSSL Certificate',
+        },
+      ],
+    })
+    expect(text).toContain(
+      'getpaid.com (Sectigo PositiveSSL Certificate, 1-year subscription · a new one is ₦13,500 at today’s price): ₦13,500',
+    )
+    expect(text).toContain('as each certificate is done')
+    expect(text).not.toMatch(/renews at|valid for/)
+  })
+
+  it('says "item" for an order of domains and certificates together', () => {
+    const { text } = render('order_receipt', {
+      ...SAMPLES.order_receipt,
+      lines: [
+        ...(SAMPLES.order_receipt.lines as unknown[]),
+        { domain: 'getpaid.com', kind: 'ssl', years: 1, price_kobo: 1, renewal_kobo: 1 },
+      ],
+    })
+    expect(text).toContain('as each item is done')
+    expect(text).toContain('getpaid.com (SSL certificate, 1-year subscription')
   })
 
   it('marks a test-mode email in the subject and the body', () => {
@@ -218,6 +261,41 @@ describe('renderNotice', () => {
     )
   })
 
+  it('says a certificate could not be ordered, why, and that it is refunded (FR-SSL-3)', () => {
+    const certificate = render('order_line_failed', {
+      domain: 'getpaid.com',
+      action: 'certificate',
+      code: 'NAME_HAS_CERTIFICATE',
+    })
+    expect(certificate.subject).toBe('We could not order the SSL certificate for getpaid.com')
+    expect(certificate.text).toContain('No certificate for getpaid.com')
+    expect(certificate.text).toContain('already holds a certificate for this name')
+    expect(certificate.text).toContain('back what you paid for it, VAT included')
+    expect(certificate.version).toBe('order_line_failed@2')
+    // Never "the registry" for a certificate.
+    const unknownCode = render('order_line_failed', {
+      domain: 'a.com',
+      action: 'certificate',
+      code: 'X',
+    })
+    expect(unknownCode.text).toContain('Our certificate supplier would not take the order.')
+    expect(unknownCode.text).not.toContain('registry')
+  })
+
+  it('sends people to set up a certificate once it is ordered, and to download it once issued', () => {
+    const ready = render('ssl_ready', SAMPLES.ssl_ready)
+    expect(ready.subject).toBe('Set up your SSL certificate for getpaid.com')
+    expect(ready.text).toContain('https://www.mydomainshub.com/app/ssl/cert-1')
+    expect(ready.text).toContain('at most 200 days')
+    const issued = render('ssl_issued', SAMPLES.ssl_issued)
+    expect(issued.subject).toBe('Your SSL certificate for *.getpaid.com is issued')
+    expect(issued.text).toContain('It expires on 20 April 2027.')
+    expect(issued.text).toContain('We do not install certificates for you.')
+    expect(render('ssl_issued', { ...SAMPLES.ssl_issued, expires_at: null }).text).toContain(
+      'The certificate authority issued your certificate.',
+    )
+  })
+
   it('says how much is refunded, why, and how long a card refund takes', () => {
     const notice = render('refund_sent', SAMPLES.refund_sent)
     expect(notice.subject).toBe('Your refund of ₦19,673 is on its way')
@@ -238,6 +316,7 @@ describe('renderNotice', () => {
     ['overpayment', 'for the amount you paid over the order total'],
     ['underpayment', 'less than the order total, which paid for nothing'],
     ['empty_order', 'an order with nothing in it'],
+    ['ssl_failed', 'because the SSL certificate for getpaid.com could not be ordered'],
   ])('gives the reason for a %s refund', (reason, words) => {
     expect(render('refund_sent', { ...SAMPLES.refund_sent, reason }).text).toContain(words)
   })

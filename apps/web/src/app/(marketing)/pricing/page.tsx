@@ -1,4 +1,6 @@
+import { formatNaira } from '@dr/shared'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { PageHero } from '@/components/layout/page-hero'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
@@ -10,6 +12,7 @@ import { sortForDisplay, toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { PageJsonLd } from '@/features/seo/components/breadcrumb-json-ld'
 import { pageMetadata } from '@/features/seo/lib/metadata'
+import { getSslCatalogue } from '@/features/ssl/queries/catalogue'
 import { env } from '@/lib/env'
 
 export const metadata: Metadata = pageMetadata({
@@ -43,7 +46,13 @@ const PARTS = [
 ] as const
 
 export default async function PricingPage() {
-  const priced = await getPricedCatalogue()
+  const [priced, ssl] = await Promise.all([getPricedCatalogue(), getSslCatalogue()])
+  // FR-SSL-1: the cheapest certificate, as a pointer to the SSL page — which has the terms.
+  const cheapestCertificate = ssl?.products.reduce<number | null>(
+    (least, product) =>
+      least === null ? product.price.priceKobo : Math.min(least, product.price.priceKobo),
+    null,
+  )
 
   if (!priced) {
     return (
@@ -162,6 +171,17 @@ export default async function PricingPage() {
             renewal — registries set that fee themselves and it varies by extension, so we quote it
             at the time. Renewing on time always costs less.
           </p>
+          {cheapestCertificate ? (
+            <p className="mt-4 max-w-2xl text-pretty text-sm/6 text-muted-foreground">
+              <strong className="font-semibold text-foreground">SSL certificates</strong> are priced
+              the same way — the supplier’s dollar price at this rate, plus the same flat margin —
+              from {formatNaira(cheapestCertificate)} for a one-year subscription.{' '}
+              <Link href="/ssl" className="font-medium text-brand-ink underline underline-offset-4">
+                See SSL certificates
+              </Link>
+              .
+            </p>
+          ) : null}
         </Container>
       </main>
 

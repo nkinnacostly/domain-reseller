@@ -14,6 +14,7 @@
     "clean": "rm -rf dist node_modules coverage",
     "verify:supplier": "tsx scripts/verify-supplier.ts",
     "sync:catalogue": "tsx scripts/sync-catalogue.ts",
+    "sync:ssl": "tsx scripts/sync-ssl.ts",
     "fx:update": "tsx scripts/update-fx-rate.ts",
     "check:competitiveness": "tsx scripts/check-competitiveness.ts",
     "reconcile": "tsx --env-file-if-exists=../../.env scripts/reconcile.ts"

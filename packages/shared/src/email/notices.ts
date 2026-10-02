@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { formatNaira, formatRenewal } from '../pricing/index'
+import { SSL_TERM } from '../ssl/index'
 import { EMAIL_BRAND, type EmailBlock, type EmailContent, renderEmail } from './layout'
 
 /**
@@ -80,6 +81,18 @@ export function failureReason(code: string | null | undefined): string {
   return (code && FAILURE_REASON[code]) || FAILURE_FALLBACK
 }
 
+/** FR-SSL-3: why a certificate could not be ordered, in our words (N10). */
+const CERTIFICATE_FAILURE: Record<string, string> = {
+  NAME_HAS_CERTIFICATE:
+    'Our certificate supplier already holds a certificate for this name, so a second one could not be ordered.',
+  SUPPLIER_INSUFFICIENT_FUNDS: 'Our account with the certificate supplier could not cover it.',
+  NAME_INVALID: 'The certificate supplier did not accept the name.',
+}
+
+export function certificateFailureReason(code: string | null | undefined): string {
+  return (code && CERTIFICATE_FAILURE[code]) || 'Our certificate supplier would not take the order.'
+}
+
 // ── Shared pieces ────────────────────────────────────────────────────────────
 
 /** An absolute link on the site; `path` starts with `/`. */
@@ -87,6 +100,7 @@ const link = (context: NoticeContext, path: string) =>
   `${context.siteUrl.replace(/\/+$/, '')}${path}`
 const domainPath = (domain: string, tab = '') =>
   `/app/domains/${encodeURIComponent(domain)}${tab ? `/${tab}` : ''}`
+const certificatePath = (id: string) => `/app/ssl/${encodeURIComponent(id)}`
 
 const SECURITY_FOOTER =
   'This is a security notice. We send one for every sign-in from a new device and every change to your password, two-factor authentication, or a domain’s nameservers, transfer lock or contacts — so they cannot be switched off.'
@@ -116,12 +130,31 @@ const LINE_LABEL: Record<string, string> = {
   register: 'Registration',
   renew: 'Renewal',
   transfer: 'Transfer',
+  ssl: 'SSL certificate',
+}
+
+/**
+ * One receipt line's detail, renewal included (N8). A certificate never
+ * renews itself: its "renewal" is buying a new one, at the price on the line.
+ */
+function receiptDetail(line: {
+  kind: string
+  years: number
+  product?: string | null | undefined
+  renewal_kobo: number
+  renewal_years: number
+}): string {
+  if (line.kind === 'ssl') {
+    return `${line.product ?? LINE_LABEL.ssl}, ${SSL_TERM.short} · a new one is ${formatNaira(line.renewal_kobo)} at today’s price`
+  }
+  return `${LINE_LABEL[line.kind] ?? 'Domain'}, ${years(line.years)} · renews at ${formatRenewal(line.renewal_kobo, line.renewal_years)}`
 }
 
 const REFUND_REASON: Record<string, (domainName: string | null) => string> = {
   registration_failed: (d) => `because ${d ?? 'a domain'} could not be registered`,
   renewal_failed: (d) => `because ${d ?? 'a domain'} could not be renewed`,
   transfer_failed: (d) => `because the transfer of ${d ?? 'a domain'} did not complete`,
+  ssl_failed: (d) => `because the SSL certificate for ${d ?? 'your site'} could not be ordered`,
   duplicate_charge: () => 'because you were charged twice for this order',
   overpayment: () => 'for the amount you paid over the order total',
   underpayment: () => 'for a payment that was less than the order total, which paid for nothing',
@@ -131,7 +164,8 @@ const REFUND_REASON: Record<string, (domainName: string | null) => string> = {
 export const NOTICE_TEMPLATES = {
   order_receipt: template({
     // 2: a renewal sold only in blocks reads "every 2 years", not "/yr" (migration 37).
-    version: 2,
+    // 3: SSL certificate lines, with the price of a new one beside them (FR-SSL-6, N8).
+    version: 3,
     category: 'transactional',
     schema: z.object({
       order_id: z.string().min(1),
@@ -153,6 +187,8 @@ export const NOTICE_TEMPLATES = {
             renewal_kobo: naira,
             /** The shortest renewal the extension sells; absent before migration 37. */
             renewal_years: z.coerce.number().int().min(1).max(10).default(1),
+            /** An SSL line's product name (migration 39). */
+            product: z.string().max(200).nullish(),
           }),
         )
         .min(1),
@@ -164,7 +200,7 @@ export const NOTICE_TEMPLATES = {
         ...(context.testMode ? [{ kind: 'note', text: TEST_NOTE } as const] : []),
         {
           kind: 'text',
-          text: `We received ${formatNaira(d.total_kobo)} for order ${d.order_number} on ${lagosDate(d.paid_at)}. We are working on it now and will email you as each domain is done.`,
+          text: `We received ${formatNaira(d.total_kobo)} for order ${d.order_number} on ${lagosDate(d.paid_at)}. We are working on it now and will email you as each ${d.lines.every((line) => line.kind === 'ssl') ? 'certificate' : d.lines.some((line) => line.kind === 'ssl') ? 'item' : 'domain'} is done.`,
         },
         {
           kind: 'rows',
@@ -172,7 +208,7 @@ export const NOTICE_TEMPLATES = {
             ...d.lines.map((line) => ({
               label: line.domain,
               // N8 — every line carries its renewal price.
-              detail: `${LINE_LABEL[line.kind] ?? 'Domain'}, ${years(line.years)} · renews at ${formatRenewal(line.renewal_kobo, line.renewal_years)}`,
+              detail: receiptDetail(line),
               value: formatNaira(line.price_kobo),
             })),
             { label: 'Subtotal', value: formatNaira(d.subtotal_kobo) },
@@ -276,12 +312,77 @@ export const NOTICE_TEMPLATES = {
     }),
   }),
 
-  order_line_failed: template({
+  // FR-SSL-4: bought from the CA; the customer's turn to set it up.
+  ssl_ready: template({
     version: 1,
     category: 'transactional',
     schema: z.object({
+      certificate_id: z.string().min(1),
+      name: domain,
+      product: z.string().min(1).max(200),
+    }),
+    subject: (d) => `Set up your SSL certificate for ${d.name}`,
+    content: (d, context) => ({
+      heading: `Your certificate for ${d.name} is ordered`,
+      blocks: [
+        {
+          kind: 'text',
+          text: `We ordered your ${d.product} from the certificate authority. Before it can be issued, it needs a certificate request (CSR) — paste one from your server, or let us make one — and the address that approves it.`,
+        },
+        {
+          kind: 'text',
+          text: 'The certificate authority then emails that address to confirm you control the domain. Once approved, you download the certificate and install it on your server or hosting.',
+        },
+      ],
+      action: {
+        label: 'Set up the certificate',
+        href: link(context, certificatePath(d.certificate_id)),
+      },
+      footer: [SSL_TERM.long],
+    }),
+  }),
+
+  // FR-SSL-7: issued by the CA; ready to download.
+  ssl_issued: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      certificate_id: z.string().min(1),
+      name: domain,
+      expires_at: iso.nullish(),
+    }),
+    subject: (d) => `Your SSL certificate for ${d.name} is issued`,
+    content: (d, context) => ({
+      heading: `${d.name} has its certificate`,
+      blocks: [
+        {
+          kind: 'text',
+          text: d.expires_at
+            ? `The certificate authority issued your certificate. It expires on ${lagosDate(d.expires_at)}.`
+            : 'The certificate authority issued your certificate.',
+        },
+        {
+          kind: 'text',
+          text: 'Download it, with its chain, and install it on your server or hosting with the private key you made the request with. Visitors see it only once it is installed.',
+        },
+      ],
+      action: {
+        label: 'Download the certificate',
+        href: link(context, certificatePath(d.certificate_id)),
+      },
+      footer: [
+        'Before it expires, reissue it from the same page — reissues are free while your subscription lasts. We do not install certificates for you.',
+      ],
+    }),
+  }),
+
+  order_line_failed: template({
+    // 2: a certificate that could not be ordered (FR-SSL-3).
+    version: 2,
+    category: 'transactional',
+    schema: z.object({
       domain,
-      action: z.enum(['registration', 'renewal', 'transfer']),
+      action: z.enum(['registration', 'renewal', 'transfer', 'certificate']),
       code: z.string().nullish(),
     }),
     subject: (d) =>
@@ -289,16 +390,24 @@ export const NOTICE_TEMPLATES = {
         ? `We could not register ${d.domain}`
         : d.action === 'renewal'
           ? `We could not renew ${d.domain}`
-          : `The transfer of ${d.domain} did not complete`,
+          : d.action === 'certificate'
+            ? `We could not order the SSL certificate for ${d.domain}`
+            : `The transfer of ${d.domain} did not complete`,
     content: (d, context) => ({
       heading:
         d.action === 'registration'
           ? `${d.domain} was not registered`
           : d.action === 'renewal'
             ? `${d.domain} was not renewed`
-            : `${d.domain} was not transferred`,
+            : d.action === 'certificate'
+              ? `No certificate for ${d.domain}`
+              : `${d.domain} was not transferred`,
       blocks: [
-        { kind: 'text', text: failureReason(d.code) },
+        {
+          kind: 'text',
+          text:
+            d.action === 'certificate' ? certificateFailureReason(d.code) : failureReason(d.code),
+        },
         {
           kind: 'text',
           text: 'You get back what you paid for it, VAT included. The refund goes to the card or account you paid with, automatically, and we will email you when it is sent.',
@@ -309,7 +418,8 @@ export const NOTICE_TEMPLATES = {
   }),
 
   refund_sent: template({
-    version: 1,
+    // 2: a refund for a certificate that could not be ordered (FR-SSL-3).
+    version: 2,
     category: 'transactional',
     schema: z.object({
       order_id: z.string().min(1),

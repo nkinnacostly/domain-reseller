@@ -161,6 +161,16 @@ describe('sending a refund', () => {
     expect(flutterwave.createRefund).toHaveBeenCalled()
   })
 
+  it('refunds a certificate the supplier would not sell without reading the registry (FR-SSL-3)', async () => {
+    // The order job fails a line only on a refusal, or before anything was
+    // sent — never after an unknown answer — so there is no purchase to find.
+    const certificate = claimed({ reason: 'ssl_failed', domainName: 'getpaid.com' })
+    const { refunder, lookup, flutterwave } = setup(certificate)
+    await refunder.tick()
+    expect(lookup).not.toHaveBeenCalled()
+    expect(flutterwave.createRefund).toHaveBeenCalledWith('908790', 1_967_250)
+  })
+
   it('completes at once when Flutterwave reports the money returned', async () => {
     const { refunder, store, flutterwave } = setup(claimed())
     flutterwave.createRefund.mockResolvedValueOnce(ok(refundAt({ status: 'completed-mpgs' })))

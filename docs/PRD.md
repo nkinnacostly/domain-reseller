@@ -611,7 +611,7 @@ Domain registration is **non-refundable once the registry has accepted it** — 
 
 - **Managed DNS / DNS record editing** — customers bring their own nameservers ([ADR-001](#61-dns-decision-adr-001))
 - Hosting, email hosting, site builder
-- SSL certificate sales (supplier supports it; deferred)
+- ~~SSL certificate sales~~ — brought into scope 2 Oct 2026 with three Sectigo PositiveSSL products: see [E15](#e15--ssl-certificates) and Appendix E
 - Sub-reseller / white-label tiers
 - Aftermarket, marketplace, backorders, brokerage
 - Public API for customers (v2 — design the internal service boundaries so this is additive)
@@ -925,6 +925,28 @@ See [§17](#17-admin-back-office).
 **FR-PUB3 — Pricing page.** Full catalogue with register/renew/transfer prices, searchable and filterable. Includes the plain-language FX policy statement.
 
 **FR-PUB4 — Legal pages.** Registration agreement (identifying the sponsoring registrar), Registrants' Benefits and Responsibilities, privacy notice, refund policy, abuse policy, UDRP link, transfer dispute policy.
+
+### E15 — SSL certificates
+
+Added 2 Oct 2026. We resell domain-validated certificates from DomainNameAPI's SSL service (Sectigo as the certificate authority), alongside domains: browse → buy → set up and approve → download → reissue. The supplier's behaviour is recorded in [Appendix E](#appendix-e--domainnameapi-ssl-service-sandbox-2-oct-2026). Data: `ssl_products`, `cart_ssl_items`, `ssl_certificates`, `ssl_jobs` (migrations 38–39); the gateway's `apps/gateway/src/ssl/`; the web's `features/ssl/`.
+
+**FR-SSL-1 — Storefront.** A public `/ssl` page lists the products the owner sells — `ssl_products.is_sellable`, set by the owner and never by the sync — with what each covers (one name; a main name plus up to its included names under one domain; every name one level under a domain), its price, its term and what buying again costs. It says plainly that the customer installs the certificate on their own server or hosting, and that many hosts already give one free. Linked from the header, footer, pricing page, help centre, sitemap and `llms.txt`; its structured data is a `Service` per product carrying the page's price and term, nothing more. Launch set (owner, 2 Oct 2026): Sectigo PositiveSSL Certificate (351), PositiveSSL Wildcard (352), PositiveSSL Multi Domain (371).
+
+**FR-SSL-2 — Pricing.** Exactly as a domain's first year: the supplier's Reseller-group `create` price for period 1 (`ssl_products.create_usd`, synced weekly) × the active FX costing rate (with its buffer) + the flat margin, rounded up to the next ₦100; VAT at checkout. Nothing is hardcoded (N5b): without a rate, settings or a synced cost, no certificate is offered. The sync reports every change before writing and refuses a listing it cannot trust — empty, more than half the priced products gone, a sold product's price moving more than threefold, or a sold product changing shape.
+
+**FR-SSL-3 — Ordering is a queue job.** A paid certificate line creates its certificate row and an `ssl_initialize` job in the payment's transaction. The gateway confirms the charge with Flutterwave before buying (as for registrations), reads the supplier first, notes the send (`sent_at`) before `initialize`, and after a timeout only reads — never buys again (N3). A refusal fails the line and queues its refund (`ssl_failed`); an outcome it cannot settle goes to a person. Test payments buy in the sandbox only. One certificate per name per side at a time: the supplier names certificates by domain, so a second purchase for a name we hold is refused before payment.
+
+**FR-SSL-4 — Set-up.** On the certificate's page (`/app/ssl/{id}`), the customer pastes a CSR — checked with the supplier, which must read it as exactly the certificate's name — or has the supplier generate a key and CSR. A generated private key is shown once, never stored or logged, cleared when the page is left, and must be confirmed as saved before the set-up is sent. They choose an approval address from the supplier's list, their server type (Apache-style or IIS — the only two the supplier accepts) and the contact the CA records. The set-up is a `ssl_configure` job, sent once.
+
+**FR-SSL-5 — Approval.** Validation is by email to the chosen approver (the only method the supplier accepted in the sandbox). The page says who was emailed and what to do. A multi-domain certificate's extra names must sit under the main name's domain, so one approval covers them all; up to the product's included names, the main one counted.
+
+**FR-SSL-6 — Cart, checkout, orders, receipts.** Certificates sit in the cart beside domains (held at the quoted price like a domain line), are paid in the same checkout and Flutterwave payment, with the same float check, and appear on the order, the receipt and the receipt email with their term and "a new one costs ₦X at today's price" (N8: a certificate never renews by itself; renewal is buying again). A checkout of certificates only asks for the buyer's details, not nameservers.
+
+**FR-SSL-7 — Status and download.** The gateway's poller reads each certificate's status in the low-priority supplier lane, more often while the customer is waiting, and stores the issued certificate and chain (public material only). The page shows each state with a next action, and once issued offers the certificate, the chain and both in one file to copy or download, with the issue and expiry dates. An unknown supplier status is kept, never guessed, and alerts after a day.
+
+**FR-SSL-8 — Reissue and revocation.** A reissue for the same names is free while the subscription lasts; it is asked for, confirmed, and queued as an `ssl_reissue` job. Revocation is by email to us (the supplier refused revoke for these products in the sandbox — Appendix E).
+
+**FR-SSL-9 — Terms.** The registration agreement carries the SSL terms (one-year subscription, the 200-day certificate limit and free reissues, installation on the customer's own server, the CA's own terms), the refund policy says a certificate is refunded only if it cannot be ordered, and the privacy notice says what the CA and supplier receive (including that issued certificates are published in Certificate Transparency logs). Copy never says a certificate is "valid for one year": since 15 March 2026 a publicly trusted certificate lasts at most 200 days (100 from March 2027, 47 from March 2029), so the subscription covers the year through reissues.
 
 ---
 
@@ -1771,6 +1793,43 @@ The full numeric table (100+ codes, ranges 101–211 system, 400–451 contact, 
 | **TEAC** | Transfer Emergency Action Contact — 4-hour response obligation |
 | **UDRP** | Uniform Domain-Name Dispute-Resolution Policy |
 | **WDRP / RDRP** | Registration Data Reminder Policy |
+
+### Appendix E — DomainNameAPI SSL service (sandbox, 2 Oct 2026)
+
+Read from the OpenAPI document (`https://api.domainresellerapi.com/swagger/v1/swagger.json`), the live product list (GET only) and calls in the sandbox (`https://ote.domainresellerapi.com/api/v1`, `DNA_API_TEST_KEY`). Same headers as the domain API (`X-API-KEY`, `__reseller`). The SDK has no SSL methods; the gateway calls these itself (`apps/gateway/src/ssl/client.ts`).
+
+**Products — `GET /products/ssls`.** 35 products, each priced per group (Reseller, Premium, Platinum, VIP) for period 1 only; we buy at Reseller. Two codes are listed twice (412 with different names and prices; 503 twice the same), so a code alone is not a key — the sync leaves an ambiguous one alone and reports it. The launch set, live, 2 Oct 2026:
+
+| Code | Name | Shape | Reseller `create`, period 1 |
+|---|---|---|---|
+| 351 | Sectigo PositiveSSL Certificate | DV, one name (`defaultSanCount` 1, max 1) | USD 6.99 |
+| 352 | Sectigo PositiveSSL Wildcard | DV, wildcard (`defaultSanCount` 1, max 100) | USD 87.99 |
+| 371 | Sectigo PositiveSSL Multi Domain Certificate | DV, multi-domain (`defaultSanCount` 4, max 100) | USD 36.99 |
+
+All three: `isReissueFree: true`, `requiresCsr: true`, warranty 0.
+
+**Every call names the certificate by its domain.** There is no certificate id in any path or query; the id returned by `initialize` is never asked for again. So one certificate per name is all the API can reach (FR-SSL-3).
+
+| Endpoint | Seen |
+|---|---|
+| `POST /ssls/initialize` `{ packageCode, domainName }` | Buys it: 200 `{ success, message, certificateId, status: "WaitingForInstall" }`. A wildcard must be initialised as `*.example.com`: one initialised as the bare name could not then be configured with a wildcard CSR (`Ssl:10019`) — the orphan `mdh-ssl-probe-1007.com` remains in the sandbox. |
+| `PUT /ssls/check-status` `{ domainName }` | Works for every name, wildcards included: `{ domainName, status, statusMessage, isConfigured, isIssued, certificateExpiresAt }`. |
+| `GET /ssls/certificate?DomainName=` | Details: `status`, `packageCode`, `subscription { purchasedAt, expiresAt }` (one year apart), `configuration` (echoes the CSR, approver, web server), `certificate { issuedAt, validUntil }`, `contacts`. Refuses a `*.` name, so wildcards have check-status only. |
+| `GET /ssls/certificate-content?DomainName=` | `{ certificate, intermediateCertificate1, intermediateCertificate2, rootCertificate }` — empty strings in the sandbox even once "issued". |
+| `GET /ssls/approvers?DomainName=&PackageCode=` | The approval addresses for the name (admin@, administrator@, hostmaster@, postmaster@, webmaster@). |
+| `POST /ssls/check-csr` `{ csr }` | The CA's reading of a CSR: common name, alternative names, wildcard flag, organisation, country. Garbage → `Ssl:10004`. |
+| `POST /ssls/generate-csr` | A new key and CSR each call (not a purchase). The answer carries the private key — never logged or stored by us. |
+| `POST /ssls/configure` | Takes the CSR, `approverMail`, `webServer`, `authenticationType: "Email"`, `sanList` and a contact. `webServer` accepts only Apache and IIS (any other word → `Ssl:10037`). The contact's `phoneCountryCode` is at most **2** characters (so +234 does not fit — we send the whole number in `phone` and the country in the code field), city and state at most 20, postcode 10; **without a fax it failed with an internal error**, so the fax is the phone. No private key is needed. 200 → `WaitingForValidation`. |
+| `POST /ssls/reissue` `{ domainName, approverMail? }` | With an approver: 200, and the sandbox reissued at once (a new `issuedAt`). Without one: 403 with an empty error code (internal). |
+| `DELETE /ssls/revoke?DomainName=` | `Ssl:10003` "Package is not supported" for PositiveSSL — revocation is by request (FR-SSL-8). |
+
+**Lifecycle words.** `WaitingForInstall` after the purchase, `WaitingForValidation` after the set-up, `Active` once issued. The sandbox issues immediately after configure (no email is sent) with a `validUntil` four years out — a sandbox artefact; live certificates are capped at 200 days (CA/Browser Forum, from 15 March 2026). Other words are kept and alerted, never guessed.
+
+**Errors.** Bodies are ABP-style `{ error: { code, message, validationErrors } }`. "Not found" is **403 `Ssl:10026`**; an internal error is 403 `Ssl:10048`, 403 with an empty code, or 500 — none settles anything (read again). Refusals mapped to customer wording: `Ssl:10004` CSR invalid, `Ssl:10014` approver invalid, `Ssl:10019` CSR not wildcard, `Ssl:10027` wrong state, `Ssl:10035` validation method unsupported, `Ssl:10037` server type, `Ssl:10040` CSR name mismatch, `Domain:10044` name invalid; 400 validation errors name the field.
+
+**Dates.** The SSL service's zoneless dates are **UTC** (a purchase at 11:45 UTC came back as `11:45:37`), unlike the domain API's UTC+3; issue dates carry an explicit `+03:00`.
+
+**Sandbox certificates left behind** (they cannot be deleted): `mydomainshubtest1.com` and `mdh-ssl-probe-1002…1012.com`, bought while probing.
 
 ---
 

@@ -15,6 +15,7 @@ export function refundLabel(refund: { reason: string; domain: string | null }): 
   if (refund.reason === 'registration_failed' && refund.domain) return refund.domain
   if (refund.reason === 'renewal_failed' && refund.domain) return `Renewal of ${refund.domain}`
   if (refund.reason === 'transfer_failed' && refund.domain) return `Transfer of ${refund.domain}`
+  if (refund.reason === 'ssl_failed' && refund.domain) return `SSL certificate for ${refund.domain}`
   return REASONS[refund.reason] ?? 'Refund'
 }
 

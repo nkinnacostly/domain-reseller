@@ -27,6 +27,11 @@ import { createReconciler } from './reconcile/reconciler'
 import { createReconcileStore } from './reconcile/store'
 import { createRefunder } from './refunds/refunder'
 import { createRefundStore } from './refunds/store'
+import { createSslClient } from './ssl/client'
+import { createSslPoller } from './ssl/poller'
+import { sslCatalogueScheduleFor } from './ssl/schedule'
+import { createSslStore } from './ssl/store'
+import { createSslWorker } from './ssl/worker'
 
 /**
  * Registrar gateway — PRD §6.4 (ADR-004).
@@ -90,6 +95,47 @@ const worker =
             environment: target,
             audit: (call) => store.recordCall(job.id, target, call),
           }),
+      })
+    : null
+
+// FR-SSL-3 – FR-SSL-8: certificates, on the same side as registrations —
+// test orders in the sandbox, live ones in production — through the same
+// supplier slots. Every call is recorded against its job (I7).
+const sslKey = target === 'ote' ? env.DNA_API_TEST_KEY : env.DNA_API_KEY
+const sslStore = target ? createSslStore() : null
+const sslWorker =
+  target && sslStore && flutterwave && sslKey
+    ? createSslWorker({
+        store: sslStore,
+        checkPayment: (job) => checkPayment(flutterwave, job.payment),
+        testMode: target === 'ote',
+        workerId: `${hostname()}:${process.pid}:ssl`,
+        pollMs: env.PROVISION_POLL_MS,
+        log: logger,
+        clientFor: (job) =>
+          createSslClient({
+            environment: target,
+            apiKey: sslKey,
+            resellerId: env.DNA_RESELLER_ID,
+            audit: (call) => sslStore.recordCall(job.id, target, call),
+          }),
+      })
+    : null
+// FR-SSL-7: where each certificate stands, read in the low lane every few minutes.
+const sslPoller =
+  target && sslStore && sslKey
+    ? createSslPoller({
+        store: sslStore,
+        client: createSslClient({
+          environment: target,
+          apiKey: sslKey,
+          resellerId: env.DNA_RESELLER_ID,
+          audit: (call) => sslStore.recordCall(null, target, call),
+          slotWait: { waitMs: 5 * 60_000, priority: 'low' },
+        }),
+        testMode: target === 'ote',
+        everyMs: env.SSL_CHECK_MINUTES * 60_000,
+        log: logger,
       })
     : null
 
@@ -206,6 +252,8 @@ const emailSender =
 
 // N5b: the weekly supplier catalogue sync — here, so it keeps working once the supplier allowlists this address.
 const catalogueSync = catalogueScheduleFor(env, logger)
+// FR-SSL-1: the SSL product list, weekly, on the same rules.
+const sslCatalogueSync = sslCatalogueScheduleFor(env, logger)
 // FR-D5: live domains' delegation, checked against public resolvers.
 const delegationCheck = delegationCheckerFor(env, logger)
 // FR-D2: host presets whose nameservers stop resolving are hidden from customers.
@@ -218,12 +266,18 @@ if (worker) {
     'provisioning worker started',
   )
 }
+if (sslWorker) {
+  sslWorker.start()
+  logger.info({ target }, 'SSL worker started')
+}
+sslPoller?.start()
 reconciler?.start()
 deepSync?.start()
 refunder?.start()
 sweeper?.start()
 monitor?.start()
 catalogueSync?.start()
+sslCatalogueSync?.start()
 delegationCheck?.start()
 presetCheck?.start()
 emailSender?.start()
@@ -251,12 +305,15 @@ async function shutdown(signal: string) {
   logger.info({ signal }, 'shutting down')
   await Promise.all([
     worker?.stop(),
+    sslWorker?.stop(),
+    sslPoller?.stop(),
     reconciler?.stop(),
     deepSync?.stop(),
     refunder?.stop(),
     sweeper?.stop(),
     monitor?.stop(),
     catalogueSync?.stop(),
+    sslCatalogueSync?.stop(),
     delegationCheck?.stop(),
     presetCheck?.stop(),
     emailSender?.stop(),

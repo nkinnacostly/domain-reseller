@@ -1,4 +1,4 @@
-import { TRANSFER_LOCK_DAYS } from '@dr/shared'
+import { SSL_TERM, TRANSFER_LOCK_DAYS } from '@dr/shared'
 import Link from 'next/link'
 import { TWO_FACTOR_REQUIRED_ABOVE_DOMAINS } from '@/features/auth/lib/security'
 import { BUSINESS } from '@/lib/business'
@@ -284,6 +284,50 @@ export const HELP_TOPICS: {
             cannot reach the registry, email <EmailLink /> and we send the code within five days. A
             domain cannot usually move for {TRANSFER_LOCK_DAYS} days after it is registered or
             changes owner. We never hold a domain back over a billing dispute.
+          </p>
+        ),
+      },
+    ],
+  },
+  {
+    // FR-SSL-1 – FR-SSL-9: certificates, as the product sells and sets them up.
+    id: 'ssl',
+    title: 'SSL certificates',
+    questions: [
+      {
+        q: 'Do I need to buy an SSL certificate?',
+        a: (
+          <p>
+            Often not: Vercel, Netlify and Cloudflare set one up for your site automatically, and
+            many hosts include one free. Buy one from the <Link href="/ssl">SSL page</Link> when
+            your host does not provide one, or for a server you run yourself. The domain can be
+            registered anywhere.
+          </p>
+        ),
+      },
+      {
+        q: 'How do I set up a certificate I bought?',
+        a: (
+          <p>
+            Open it under Certificates in your account. Paste the certificate request (CSR) from
+            your server — or let us make a key and CSR, shown to you once — choose the address that
+            approves it, and send it. The certificate authority emails that address; once you
+            approve, the certificate appears on the same page to download, with its chain. You
+            install it on your server or hosting yourself.
+          </p>
+        ),
+      },
+      {
+        q: 'How long does a certificate last?',
+        a: <p>{SSL_TERM.long}</p>,
+      },
+      {
+        q: 'I lost the private key. What now?',
+        a: (
+          <p>
+            We cannot recover it — we never keep a key. Reissue the certificate from its page (free
+            while the subscription lasts) with a new request. If the key may have been stolen, email{' '}
+            <EmailLink /> and we ask the supplier to revoke the certificate.
           </p>
         ),
       },

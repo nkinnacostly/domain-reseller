@@ -11,6 +11,7 @@ const PAGES = [
   '/pricing',
   '/search?q=getpaid',
   '/transfer',
+  '/ssl',
   '/domains/com',
   '/domains',
   '/about',

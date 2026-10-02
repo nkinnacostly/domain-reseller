@@ -5,6 +5,7 @@ import { createAccountRoute } from './routes/account'
 import { createAvailabilityRoute } from './routes/availability'
 import { createDomainsRoute } from './routes/domains'
 import { health } from './routes/health'
+import { createSslRoute } from './routes/ssl'
 import { createTransfersRoute } from './routes/transfers'
 
 /**
@@ -12,7 +13,13 @@ import { createTransfersRoute } from './routes/transfers'
  * real app — auth included — without opening a port.
  */
 export function createApp(
-  routes: { availability?: Hono; account?: Hono; domains?: Hono; transfers?: Hono } = {},
+  routes: {
+    availability?: Hono
+    account?: Hono
+    domains?: Hono
+    transfers?: Hono
+    ssl?: Hono
+  } = {},
 ) {
   const app = new Hono()
 
@@ -24,6 +31,8 @@ export function createApp(
   v1.route('/account', routes.account ?? createAccountRoute())
   v1.route('/domains', routes.domains ?? createDomainsRoute())
   v1.route('/transfers', routes.transfers ?? createTransfersRoute())
+  // FR-SSL-4: the set-up's reads — approvers, CSR check, a generated key and CSR.
+  v1.route('/ssl', routes.ssl ?? createSslRoute())
   app.route('/v1', v1)
 
   app.notFound((c) => c.json({ ok: false, code: 'NOT_FOUND', message: 'Unknown route' }, 404))

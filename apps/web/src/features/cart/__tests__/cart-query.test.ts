@@ -7,12 +7,14 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { hashCartToken } from '../lib/token'
 
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
+vi.mock('@/features/ssl/queries/catalogue', () => ({ getSslCatalogue: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/supabase/service', () => ({ createServiceClient: vi.fn() }))
 const jar = { get: vi.fn() }
 vi.mock('next/headers', () => ({ cookies: async () => jar }))
 
 const { getCartView } = await import('../queries/cart')
+const { getSslCatalogue } = await import('@/features/ssl/queries/catalogue')
 
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
 const record = (name: string): TldRecord => ({
@@ -194,5 +196,63 @@ describe('getCartView', () => {
     })
     expect((await getCartView()).state).toBe('ready')
     expect(rpc).not.toHaveBeenCalled()
+  })
+})
+
+describe('getCartView — SSL certificates (FR-SSL-6)', () => {
+  const sslRow = {
+    id: 'ssl-1',
+    product_code: '351',
+    common_name: '*.example.com',
+    quoted_total_kobo: 13_500_000,
+    quoted_at: '2026-09-23T10:00:00.000Z',
+  }
+  const SSL = {
+    products: [
+      {
+        productCode: '351',
+        name: 'Sectigo PositiveSSL Wildcard',
+        vendor: 'Sectigo',
+        validationType: 'DV',
+        isWildcard: true,
+        isMultiDomain: false,
+        includedNames: 1,
+        isReissueFree: true,
+        createUsd: 87.99,
+        price: { costKobo: 1, priceKobo: 13_500_000, marginKobo: 1 },
+      },
+    ],
+    rateId: 'rate-1',
+    vatPct: 7.5,
+    version: 'v',
+  }
+
+  it('prices a cart of certificates alone from the SSL catalogue, VAT on the subtotal', async () => {
+    fakeService({
+      carts: [{ data: { id: 'cart-1' } }],
+      cart_items: [{ data: [] }],
+      cart_ssl_items: [{ data: [sslRow] }],
+    })
+    vi.mocked(getSslCatalogue).mockResolvedValue(SSL)
+    const view = await getCartView()
+    if (view.state !== 'ready') throw new Error(`expected a ready cart, got ${view.state}`)
+    expect(view.lines).toEqual([])
+    expect(view.certificates[0]).toMatchObject({
+      status: 'held',
+      kind: 'wildcard',
+      payableKobo: 13_500_000,
+    })
+    expect(view.totals).toMatchObject({ subtotalKobo: 13_500_000, vatKobo: 1_012_500 })
+    expect(getPricedCatalogue).not.toHaveBeenCalled()
+  })
+
+  it('withholds the cart when certificate prices cannot be read (N5b)', async () => {
+    fakeService({
+      carts: [{ data: { id: 'cart-1' } }],
+      cart_items: [{ data: [row()] }],
+      cart_ssl_items: [{ data: [sslRow] }],
+    })
+    vi.mocked(getSslCatalogue).mockResolvedValue(null)
+    expect(await getCartView()).toEqual({ state: 'unpriced' })
   })
 })

@@ -54,6 +54,12 @@ describe('toClaimedRefund', () => {
     expect(toClaimedRefund(ROW)).toMatchObject({ renewalBaseline: null, renewalYears: null })
   })
 
+  it('reads a certificate refund (migration 38)', () => {
+    expect(toClaimedRefund({ ...ROW, reason: 'ssl_failed' })).toMatchObject({
+      reason: 'ssl_failed',
+    })
+  })
+
   it('refuses anything it does not recognise rather than guessing', () => {
     expect(() => toClaimedRefund({ ...ROW, action: 'refund_everything' })).toThrow()
     expect(() => toClaimedRefund({ ...ROW, amount_kobo: -1 })).toThrow()
