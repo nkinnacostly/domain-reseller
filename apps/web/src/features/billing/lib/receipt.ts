@@ -5,7 +5,9 @@
  * Pure: no I/O, so every rule here is tested directly.
  */
 
-export type LineKind = 'register' | 'renew' | 'transfer'
+import { formatNaira, formatRenewal, SSL_TERM } from '@dr/shared'
+
+export type LineKind = 'register' | 'renew' | 'transfer' | 'ssl'
 
 export type ReceiptLine = {
   id: string
@@ -91,23 +93,38 @@ const KINDS: Record<string, LineKind> = {
   register: 'register',
   renew: 'renew',
   transfer: 'transfer',
+  ssl: 'ssl',
 }
 
 const KIND_LABEL: Record<LineKind, string> = {
   register: 'Registration',
   renew: 'Renewal',
   transfer: 'Transfer',
+  ssl: 'SSL certificate',
 }
 
 const NOT_DONE: Record<LineKind, string> = {
   register: 'Not registered',
   renew: 'Not renewed',
   transfer: 'Not transferred',
+  ssl: 'Not ordered',
 }
 
-/** "Registration, 2 years" — what the line bought. */
+/** "Registration, 2 years" — what the line bought; a certificate by its term (FR-SSL-6). */
 export function lineLabel(kind: LineKind, years: number): string {
+  if (kind === 'ssl') return `${KIND_LABEL.ssl}, ${SSL_TERM.short}`
   return `${KIND_LABEL[kind]}, ${years} ${years === 1 ? 'year' : 'years'}`
+}
+
+/**
+ * N8 — the renewal beside the price: the term it renews in, or for a
+ * certificate, which never renews by itself, what a new one cost that day.
+ */
+export function renewalText(
+  line: Pick<ReceiptLine, 'kind' | 'renewalKobo' | 'renewalYears'>,
+): string {
+  if (line.kind === 'ssl') return `a new one is ${formatNaira(line.renewalKobo)} at today’s price`
+  return `renews at ${formatRenewal(line.renewalKobo, line.renewalYears)}`
 }
 
 /** FR-R2 — a line that failed says so on the receipt; its refund is listed below. */

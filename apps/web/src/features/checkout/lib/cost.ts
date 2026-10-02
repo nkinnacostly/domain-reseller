@@ -37,3 +37,23 @@ export function wholesaleCostUsd(
   }
   return cents / 100
 }
+
+/**
+ * What an order's SSL certificates cost us, in USD (FR-SSL-6, FR-C8): the
+ * supplier's price for each, from `ssl_products`. A product with no cost is
+ * not sold — the order is refused rather than checked against a guess (N5b).
+ */
+export function sslCostUsd(
+  lines: readonly { productCode: string }[],
+  costs: ReadonlyMap<string, number | string | null>,
+): number {
+  let cents = 0
+  for (const line of lines) {
+    const cost = Number(costs.get(line.productCode) ?? Number.NaN)
+    if (!Number.isFinite(cost) || cost <= 0) {
+      throw new Error(`No supplier cost for SSL product ${line.productCode}`)
+    }
+    cents += Math.round(cost * 100)
+  }
+  return cents / 100
+}

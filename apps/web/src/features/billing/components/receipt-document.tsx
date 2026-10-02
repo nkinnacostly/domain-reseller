@@ -1,4 +1,4 @@
-import { formatNaira, formatRenewal } from '@dr/shared'
+import { formatNaira } from '@dr/shared'
 import { DomainName } from '@/components/common/domain-name'
 import { Brand } from '@/components/layout/brand'
 import { PANEL } from '@/components/layout/panel'
@@ -6,7 +6,7 @@ import { OrderRefunds } from '@/features/checkout/components/order-refunds'
 import type { OrderRefund } from '@/features/checkout/queries/orders'
 import { BUSINESS } from '@/lib/business'
 import { cn } from '@/lib/utils'
-import { lineLabel, notDoneLabel, type Receipt, receiptDate } from '../lib/receipt'
+import { lineLabel, notDoneLabel, type Receipt, receiptDate, renewalText } from '../lib/receipt'
 
 const LABEL = 'text-xs font-medium tracking-wide text-muted-foreground uppercase'
 
@@ -125,8 +125,7 @@ export function ReceiptDocument({
                     <DomainName name={line.domain} />
                   </p>
                   <p className="text-muted-foreground">
-                    {lineLabel(line.kind, line.years)} · renews at{' '}
-                    {formatRenewal(line.renewalKobo, line.renewalYears)}
+                    {lineLabel(line.kind, line.years)} · {renewalText(line)}
                   </p>
                   {line.failed ? (
                     <p data-line-failed className="text-foreground">

@@ -120,6 +120,7 @@ beforeEach(() => {
   })
   vi.mocked(getCartView).mockResolvedValue({
     state: 'ready',
+    certificates: [],
     lines: LINES,
     totals: TOTALS,
     vatPct: 7.5,

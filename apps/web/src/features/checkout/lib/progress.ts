@@ -6,8 +6,12 @@
 
 export type OrderNotice = { tone: 'success' | 'error'; text: string }
 
-/** A new registration, a renewal of a domain already held (FR-RN1), or a transfer in (E9). */
-export type OrderKind = 'register' | 'renew' | 'transfer'
+/**
+ * A new registration, a renewal of a domain already held (FR-RN1), a
+ * transfer in (E9), or SSL certificates alone (FR-SSL-6). Domains bought
+ * with certificates read as a registration.
+ */
+export type OrderKind = 'register' | 'renew' | 'transfer' | 'ssl'
 
 const TEST_NOTE =
   'This was a test payment, so no money moved. Test orders go to the registrar’s test system, never the live registry.'
@@ -25,6 +29,7 @@ const CLOSED: OrderNotice = {
 export function orderKind(items: { item_type: string }[]): OrderKind {
   if (items.some((item) => item.item_type === 'renew')) return 'renew'
   if (items.some((item) => item.item_type === 'transfer')) return 'transfer'
+  if (items.length > 0 && items.every((item) => item.item_type === 'ssl')) return 'ssl'
   return 'register'
 }
 
@@ -43,6 +48,7 @@ export function orderNotice(
   if (kind === 'renew')
     return lines > 1 ? bulkRenewalNotice(status, testMode) : renewalNotice(status, testMode)
   if (kind === 'transfer') return transferNotice(status, testMode)
+  if (kind === 'ssl') return certificateNotice(status, testMode, lines)
   const test = testMode ? ` ${TEST_NOTE}` : ''
   switch (status) {
     case 'paid':
@@ -204,6 +210,45 @@ function transferNotice(status: string, testMode: boolean): OrderNotice | null {
   }
 }
 
+/**
+ * Certificates alone (FR-SSL-6): the order is done when the certificate
+ * authority's supplier has them — setting each up is the customer's next
+ * step, on the certificate's own page.
+ */
+function certificateNotice(status: string, testMode: boolean, lines: number): OrderNotice | null {
+  const test = testMode
+    ? ' This was a test payment, so no money moved. Test certificates are ordered in the supplier’s test system and are not trusted by browsers.'
+    : ''
+  const them = lines > 1 ? 'them' : 'it'
+  switch (status) {
+    case 'paid':
+    case 'provisioning':
+      return {
+        tone: 'success',
+        text: `Your payment is in and we are ordering your ${lines > 1 ? 'certificates' : 'certificate'} from the certificate authority’s supplier. This page updates when that is done.${test}`,
+      }
+    case 'completed':
+      return {
+        tone: 'success',
+        text: `Ordered. Next, set ${them} up — open ${lines > 1 ? 'each certificate' : 'the certificate'} below.${test}`,
+      }
+    case 'partially_failed':
+    case 'failed':
+      return {
+        tone: 'error',
+        text: `We could not order ${status === 'failed' ? (lines > 1 ? 'these certificates' : 'this certificate') : 'some of these certificates'} — each one says why below. ${
+          testMode
+            ? 'No money moved.'
+            : 'What you paid for those is refunded automatically — see Refunds below.'
+        }`,
+      }
+    case 'cancelled':
+      return CLOSED
+    default:
+      return null
+  }
+}
+
 export const LINE_STATUS: Record<string, string> = {
   pending: 'Queued',
   provisioning: 'Registering',
@@ -224,13 +269,22 @@ const TRANSFER_LINE_STATUS: Record<string, string> = {
   completed: 'Transferred',
 }
 
+/** FR-SSL-6: "Ordered" — bought from the CA's supplier; the certificate's page takes it from there. */
+const CERTIFICATE_LINE_STATUS: Record<string, string> = {
+  ...LINE_STATUS,
+  provisioning: 'Ordering',
+  completed: 'Ordered',
+}
+
 export function lineStatus(itemType: string, status: string): string {
   const labels =
     itemType === 'renew'
       ? RENEWAL_LINE_STATUS
       : itemType === 'transfer'
         ? TRANSFER_LINE_STATUS
-        : LINE_STATUS
+        : itemType === 'ssl'
+          ? CERTIFICATE_LINE_STATUS
+          : LINE_STATUS
   return labels[status] ?? status
 }
 
@@ -251,7 +305,9 @@ export function paymentNotice(
         : 'You can try again from the domain’s Renew tab.'
       : kind === 'transfer'
         ? 'You can start the transfer again from the transfer page.'
-        : 'Your domains are still in your cart.'
+        : kind === 'ssl'
+          ? 'Your certificates are still in your cart.'
+          : 'Your domains are still in your cart.'
   switch (payment) {
     case 'paid':
       return { tone: 'success', text: 'Payment received — thank you.' }
@@ -261,7 +317,7 @@ export function paymentNotice(
       return {
         tone: 'error',
         text: `The payment did not go through. Nothing was charged. ${
-          kind === 'register' ? 'You can try again from your cart.' : retry
+          kind === 'register' || kind === 'ssl' ? 'You can try again from your cart.' : retry
         }`,
       }
     case 'pending':
@@ -273,7 +329,13 @@ export function paymentNotice(
       return {
         tone: 'error',
         text: `We received less than this order’s total, so it hasn’t been applied and nothing has been ${
-          kind === 'renew' ? 'renewed' : kind === 'transfer' ? 'transferred' : 'registered'
+          kind === 'renew'
+            ? 'renewed'
+            : kind === 'transfer'
+              ? 'transferred'
+              : kind === 'ssl'
+                ? 'ordered'
+                : 'registered'
         }. The full amount is being refunded to the card or account you paid with — nothing is needed from you.`,
       }
     case 'mismatch':

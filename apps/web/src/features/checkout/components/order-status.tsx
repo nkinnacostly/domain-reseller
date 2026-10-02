@@ -23,10 +23,17 @@ const TRANSFER_LABELS: Record<string, { label: string; tone: string }> = {
   provisioning: { label: 'Transferring', tone: 'bg-accent/10 text-foreground' },
 }
 
+const CERTIFICATE_LABELS: Record<string, { label: string; tone: string }> = {
+  ...LABELS,
+  paid: { label: 'Paid — order queued', tone: 'bg-accent/10 text-foreground' },
+  provisioning: { label: 'Ordering', tone: 'bg-accent/10 text-foreground' },
+}
+
 const BY_KIND: Record<OrderKind, Record<string, { label: string; tone: string }>> = {
   register: LABELS,
   renew: RENEWAL_LABELS,
   transfer: TRANSFER_LABELS,
+  ssl: CERTIFICATE_LABELS,
 }
 
 export function OrderStatus({

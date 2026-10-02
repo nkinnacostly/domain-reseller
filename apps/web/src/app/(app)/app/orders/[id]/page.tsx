@@ -1,4 +1,5 @@
-import { type Contact, formatNaira, formatRenewal } from '@dr/shared'
+import { type Contact, formatNaira, formatRenewal, SSL_TERM } from '@dr/shared'
+import { certificateFailureReason } from '@dr/shared/email'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -27,6 +28,7 @@ import {
 } from '@/features/checkout/lib/progress'
 import { getOrder, getOrderRefunds } from '@/features/checkout/queries/orders'
 import { failureReason } from '@/features/domains/lib/registration'
+import { getOrderCertificates } from '@/features/ssl/queries/certificates'
 import { BUSINESS } from '@/lib/business'
 import { cn } from '@/lib/utils'
 
@@ -47,6 +49,10 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
   const [{ id }, { payment }] = await Promise.all([params, searchParams])
   const [order, refunds] = await Promise.all([getOrder(id), getOrderRefunds(id)])
   if (!order) notFound()
+  // FR-SSL-6: each paid certificate line links to its certificate's page.
+  const certificates = await getOrderCertificates(
+    order.order_items.filter((item) => item.item_type === 'ssl').map((item) => item.id),
+  )
 
   const registrant = order.registrant as Contact
   const kind = orderKind(order.order_items)
@@ -65,7 +71,11 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
         : 'Renewal'
       : kind === 'transfer'
         ? 'Transfer'
-        : 'Domains'
+        : kind === 'ssl'
+          ? lines > 1
+            ? 'Certificates'
+            : 'Certificate'
+          : 'Domains'
   // FR-C10 — some domains were given their own host; the order's covers the rest.
   const ownHosts = order.order_items.some((item) =>
     ownNameservers(item.nameservers, order.nameservers),
@@ -106,10 +116,21 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
               >
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2">
-                    {item.status === 'completed' ||
-                    item.item_type === 'renew' ||
-                    // A paid transfer has a domain page from the start: it shows each step.
-                    (item.item_type === 'transfer' && order.paid_at) ? (
+                    {item.item_type === 'ssl' ? (
+                      certificates.get(item.id) ? (
+                        <Link
+                          href={`/app/ssl/${certificates.get(item.id)?.id}`}
+                          className="font-medium break-all text-foreground underline-offset-4 hover:underline"
+                        >
+                          {item.domain}
+                        </Link>
+                      ) : (
+                        <span className="font-medium break-all text-foreground">{item.domain}</span>
+                      )
+                    ) : item.status === 'completed' ||
+                      item.item_type === 'renew' ||
+                      // A paid transfer has a domain page from the start: it shows each step.
+                      (item.item_type === 'transfer' && order.paid_at) ? (
                       <Link
                         href={`/app/domains/${item.domain}`}
                         className="font-medium break-all text-foreground underline-offset-4 hover:underline"
@@ -133,7 +154,14 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                       </span>
                     ) : null}
                   </p>
-                  {item.item_type === 'transfer' ? (
+                  {item.item_type === 'ssl' ? (
+                    // N8: a certificate's "renewal" is buying a new one, never automatic.
+                    <p className="text-sm text-muted-foreground">
+                      {certificates.get(item.id)?.product_name ?? 'SSL certificate'} ·{' '}
+                      {SSL_TERM.short} · a new one is {formatNaira(Number(item.renewal_kobo))} at
+                      today’s price
+                    </p>
+                  ) : item.item_type === 'transfer' ? (
                     <p className="text-sm text-muted-foreground">
                       Transfer in · renews at{' '}
                       {formatRenewal(Number(item.renewal_kobo), termOf(item))}
@@ -150,7 +178,9 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
                   <LineNameservers line={item.nameservers} order={order.nameservers} />
                   {item.status === 'failed' ? (
                     <p className="mt-1 text-sm text-foreground">
-                      {failureReason(item.failure_code)}
+                      {item.item_type === 'ssl'
+                        ? certificateFailureReason(item.failure_code)
+                        : failureReason(item.failure_code)}
                     </p>
                   ) : null}
                 </div>
@@ -197,6 +227,16 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
           </Panel>
         ) : (
           <Panel labelledBy="owner-heading" className="h-fit text-sm/6">
+            {kind === 'ssl' ? (
+              <div className="mb-5">
+                <h2 className={PANEL_HEADING}>About SSL certificates</h2>
+                <p className="mt-2 text-pretty text-muted-foreground">{SSL_TERM.long}</p>
+                <p className="mt-2 text-pretty text-muted-foreground">
+                  You set each one up and install it on your own server or hosting; we do not
+                  install certificates.
+                </p>
+              </div>
+            ) : null}
             {kind === 'transfer' ? (
               // FR-T3: the expected window, not a guess at a finish date.
               <div className="mb-5">
@@ -210,7 +250,7 @@ async function Order({ params, searchParams }: { params: Params; searchParams: S
               </div>
             ) : null}
             <h2 id="owner-heading" className={PANEL_HEADING}>
-              Registrant
+              {kind === 'ssl' ? 'Your details' : 'Registrant'}
             </h2>
             <p className="mt-2 text-muted-foreground">
               {registrant.firstName} {registrant.lastName}
