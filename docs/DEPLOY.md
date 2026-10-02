@@ -143,6 +143,38 @@ reach the storefront once the catalogue sync writes their periods:
    `CATALOGUE_SYNC_EVERY_HOURS=1` on Fly, wait for the run, then unset it).
    Prices reach the site on the refresh that follows.
 
+### SSL certificates — migrations 38–39 (PRD E15)
+
+Strictly in this order — **migrations, then the gateway, then the web**:
+
+1. **Push migrations 38 and 39** (`supabase db push`). 38 only adds the
+   refund reason `ssl_failed`; Postgres cannot use a new enum value in the
+   transaction that adds it, so it must be committed before 39. Then check
+   them: `supabase db query --linked -f supabase/tests/ssl_certificates.sql`
+   (rolled back; 18 checks). Until 39 is applied the web sells no
+   certificates and still builds: a missing SSL table reads as "nothing yet".
+2. **Deploy the gateway** (`fly deploy --ha=false -a mydomainshub-gateway`).
+   It must know the three new job kinds (`ssl_initialize`, `ssl_configure`,
+   `ssl_reissue`) and serve `/v1/ssl/*` (approvers, CSR check, CSR
+   generation) before any web change can queue one or call them — an older
+   gateway answers 404 to the routes, and never sees the `ssl_jobs` queue at
+   all. Its first start syncs the SSL product list at once (no earlier
+   `ssl_catalogue:production` run is recorded), prices the three products
+   migration 39 marks `is_sellable` (351, 352, 371), and refreshes the
+   site's prices. New, optional: `SSL_CHECK_MINUTES` (default 5), how often
+   the poller reads certificates waiting on the CA.
+3. **Deploy the web** (`git push`). The `/ssl` page, the cart lines and the
+   panel's Certificates page go live with it.
+4. To see the sync's report before the gateway applies it:
+   `pnpm --filter @dr/gateway sync:ssl` (report only; `-- --apply` writes).
+   Which products are sold is `ssl_products.is_sellable` — the owner's, never
+   written by the sync.
+
+Certificates follow the queue's sides: with `DNA_WRITE_ENV=ote`, test
+payments buy in the supplier's sandbox (which issues at once and returns
+empty certificate text); with `production`, live payments buy from the float.
+The float check at checkout counts certificates at their USD cost.
+
 ## 5c. Email (L1)
 
 Supabase Auth sends every email through our route `/api/auth/send-email`,
