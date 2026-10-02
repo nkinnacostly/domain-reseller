@@ -147,6 +147,33 @@ describe('server client', () => {
     expect(store.set).toHaveBeenNthCalledWith(2, 'sb-refresh-token', 'r', { path: '/' })
   })
 
+  it('writes session cookies httpOnly, so no script can lift the refresh token (ADMIN-SPEC §5.1)', async () => {
+    await build({ getAll: () => [], set: vi.fn() })
+    const [, , options] = lib.createServerClient.mock.calls[0] as unknown as [
+      string,
+      string,
+      { cookieOptions: { httpOnly: boolean } },
+    ]
+    expect(options.cookieOptions).toEqual({ httpOnly: true })
+  })
+
+  it('passes a request id on as x-request-id, and nothing that is not a uuid', async () => {
+    lib.cookies.mockResolvedValue({ getAll: () => [], set: vi.fn() })
+    const { createClient } = await import('../supabase/server')
+    await createClient({ requestId: '8dbd7ea2-c535-4a4a-a091-e202d9185a20' })
+    await createClient({ requestId: 'not-a-uuid\r\nx-evil: 1' })
+    const headersOf = (call: number) =>
+      (
+        lib.createServerClient.mock.calls[call] as unknown as [
+          string,
+          string,
+          { global: { headers: Record<string, string> } },
+        ]
+      )[2].global.headers
+    expect(headersOf(0)['x-request-id']).toBe('8dbd7ea2-c535-4a4a-a091-e202d9185a20')
+    expect(headersOf(1)['x-request-id']).toBeUndefined()
+  })
+
   it('ignores a refresh from a Server Component, where cookies cannot be written', async () => {
     const store = {
       getAll: () => [],

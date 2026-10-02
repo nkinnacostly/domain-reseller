@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import nextConfig from '../../../next.config'
+import nextConfig, { NOT_ADMIN } from '../../../next.config'
 
 async function policy(): Promise<Map<string, string>> {
   const rules = (await nextConfig.headers?.()) ?? []
@@ -27,5 +27,35 @@ describe('Content Security Policy (SEC-15) and Turnstile (SEC-9)', () => {
     expect(csp.get('default-src')).toBe("'self'")
     expect(csp.get('frame-ancestors')).toBe("'none'")
     expect(csp.get('object-src')).toBe("'none'")
+  })
+})
+
+describe('the admin area keeps its own policy (ADMIN-SPEC §2.3)', () => {
+  const notAdmin = new RegExp(`^/${NOT_ADMIN}$`)
+
+  it('leaves /admin out of the site-wide policy, and nothing else', async () => {
+    const rules = (await nextConfig.headers?.()) ?? []
+    const withCsp = rules.filter((rule) =>
+      rule.headers.some((header) => header.key === 'Content-Security-Policy'),
+    )
+    expect(withCsp.map((rule) => rule.source)).toEqual([`/:path(${NOT_ADMIN})`])
+    for (const path of ['/', '/pricing', '/app/domains', '/administrator', '/legal/admin']) {
+      expect(notAdmin.test(path), path).toBe(true)
+    }
+    for (const path of ['/admin', '/admin/', '/admin/refunds/1']) {
+      expect(notAdmin.test(path), path).toBe(false)
+    }
+  })
+
+  it('still sends the other security headers everywhere', async () => {
+    const rules = (await nextConfig.headers?.()) ?? []
+    const everywhere = rules.find((rule) => rule.source === '/:path*')
+    expect(everywhere?.headers.map((header) => header.key)).toEqual(
+      expect.arrayContaining([
+        'X-Content-Type-Options',
+        'X-Frame-Options',
+        'Strict-Transport-Security',
+      ]),
+    )
   })
 })

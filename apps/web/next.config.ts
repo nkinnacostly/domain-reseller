@@ -43,6 +43,9 @@ const supabase = (() => {
 
 const TURNSTILE = 'https://challenges.cloudflare.com'
 
+/** Every path except `/admin` and below (path-to-regexp group for `source`). */
+export const NOT_ADMIN = '(?!admin(?:/|$)).*'
+
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' ${TURNSTILE}${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
@@ -88,9 +91,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Everywhere but /admin, which the proxy gives its own nonce policy
+        // (ADMIN-SPEC §2.3): no 'unsafe-inline' for scripts there.
+        source: `/:path(${NOT_ADMIN})`,
+        headers: [{ key: 'Content-Security-Policy', value: csp }],
+      },
+      {
         source: '/:path*',
         headers: [
-          { key: 'Content-Security-Policy', value: csp },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
