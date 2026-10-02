@@ -99,6 +99,23 @@ export const requireAdmin = cache(async (): Promise<AdminPrincipal> => {
   }
 })
 
+/**
+ * The admin, or null — for the sidebar, which renders beside AdminGate's
+ * explanation of a weak sign-in and so must not turn the page into a 404.
+ */
+export const findAdmin = cache(async (): Promise<AdminPrincipal | null> => {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+  try {
+    return await adminWhoami(supabase, null)
+  } catch {
+    return null
+  }
+})
+
 export type AdminSessionStatus =
   | 'ok'
   | 'needs_code'

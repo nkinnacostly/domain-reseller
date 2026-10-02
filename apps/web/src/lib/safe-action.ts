@@ -13,7 +13,7 @@ import {
   type AdminActionId,
   rank,
 } from '@/features/admin/lib/actions'
-import { AdminRefusal } from '@/features/admin/lib/errors'
+import { AdminRefusal, SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
 import { type AdminPrincipal, adminWhoami } from '@/features/admin/queries/session'
 import {
   describeHold,
@@ -39,7 +39,7 @@ import { createClient } from '@/lib/supabase/server'
 function handleServerError(error: Error) {
   if (error instanceof AppError) return error.message
   logger.error({ err: error }, 'unhandled server action error')
-  return 'Something went wrong on our end. Please try again.'
+  return SERVER_CRASH_WORDS
 }
 
 export const actionClient = createSafeActionClient({ handleServerError }).use(async ({ next }) => {

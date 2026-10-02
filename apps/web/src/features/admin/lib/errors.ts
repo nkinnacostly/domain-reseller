@@ -161,6 +161,18 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
 
 export const FALLBACK_WORDS = "That didn't go through, and nothing changed. Try again."
 
+/** What any server action says about an error nobody wrote words for (safe-action.ts). */
+export const SERVER_CRASH_WORDS = 'Something went wrong on our end. Please try again.'
+
+/**
+ * The answer was lost or the server failed part-way: it may have gone
+ * through. A retry with the same request key replays it rather than acting
+ * twice, so the dialog keeps its key for this one.
+ */
+export const UNKNOWN_OUTCOME = 'UNKNOWN_OUTCOME'
+export const LOST_ANSWER_WORDS =
+  "We couldn't tell whether that went through. Try again: if it did, trying again shows it and does nothing twice."
+
 /** The bare code: `admin:needs_code` → `needs_code`. */
 export function bareAdminCode(code: string): string {
   return code.startsWith('admin:') ? code.slice('admin:'.length) : code
@@ -241,6 +253,45 @@ export function refusedResult(code: string, auditId?: number): AdminResult<never
     message: adminErrorWords(code),
     ...(auditId !== undefined ? { auditId } : {}),
   }
+}
+
+type SafeActionAnswer<T> = {
+  data?: AdminResult<T> | undefined
+  serverError?: string | undefined
+  validationErrors?: unknown
+}
+
+function firstMessage(errors: unknown): string | null {
+  if (!isRecord(errors)) return null
+  for (const value of Object.values(errors)) {
+    if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
+    const nested = firstMessage(value)
+    if (nested) return nested
+  }
+  return null
+}
+
+/**
+ * A server action's whole answer as an AdminResult, for ConfirmAction. A
+ * refusal in words is `REFUSED` (the dialog takes a new request key); an
+ * error nobody wrote words for may have happened after the change committed,
+ * so it is `UNKNOWN_OUTCOME` and the key is kept.
+ */
+export function adminOutcome<T>(answer: SafeActionAnswer<T> | undefined): AdminResult<T> {
+  if (answer?.data) return answer.data
+  if (answer?.serverError) {
+    return answer.serverError === SERVER_CRASH_WORDS
+      ? { ok: false, code: UNKNOWN_OUTCOME, message: LOST_ANSWER_WORDS }
+      : { ok: false, code: 'REFUSED', message: answer.serverError }
+  }
+  if (answer?.validationErrors) {
+    return {
+      ok: false,
+      code: 'VALIDATION_FAILED',
+      message: firstMessage(answer.validationErrors) ?? 'Check what you entered and try again.',
+    }
+  }
+  return { ok: false, code: UNKNOWN_OUTCOME, message: LOST_ANSWER_WORDS }
 }
 
 const RAISED = /^admin:[a-z_]+$/
