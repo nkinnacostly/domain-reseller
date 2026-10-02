@@ -653,7 +653,7 @@ begin
   values (
     v_parent.admin_id, v_parent.admin_label, v_parent.admin_role, v_parent.test_actor,
     v_parent.session_hash, v_parent.action, v_parent.side, v_parent.target_type,
-    v_parent.target_id, v_parent.target_test_mode, p_outcome, left(p_code, 60), v_detail, p_audit_id)
+    v_parent.target_id, v_parent.target_test_mode, p_outcome, left(nullif(p_code, ''), 60), v_detail, p_audit_id)
   returning id into v_id;
   return v_id;
 end;
@@ -807,8 +807,9 @@ begin
   end if;
   insert into public.flw_refund_checks (test_mode, target_type, target_id, flw_refund_id, tx_id,
                                         amount_kobo, currency, status, disburse_status, state, audit_id)
-  values (p_test_mode, p_target_type, p_target_id, p_flw_refund_id, left(p_tx_id, 64), p_amount_kobo,
-          left(p_currency, 8), left(p_status, 60), left(p_disburse_status, 60), p_state, p_audit_id)
+  values (p_test_mode, p_target_type, p_target_id, p_flw_refund_id, nullif(left(p_tx_id, 64), ''), p_amount_kobo,
+          nullif(left(p_currency, 8), ''), left(p_status, 60), nullif(left(p_disburse_status, 60), ''), p_state,
+          p_audit_id)
   returning id into v_id;
   return v_id;
 end;

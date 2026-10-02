@@ -11,7 +11,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 begin;
 
-create function pg_temp.act(p_uid uuid, p_sid uuid, p_totp_age interval default interval '1 minute')
+create function pg_temp.act_data(p_uid uuid, p_sid uuid, p_totp_age interval default interval '1 minute')
 returns void language plpgsql as $f$
 begin
   perform set_config('request.jwt.claims', jsonb_build_object(
@@ -306,7 +306,7 @@ begin
   -- ── 7. Top-up costs: credits only, once, then corrected once.
   perform public.record_supplier_ledger(false, jsonb_build_array(
     pg_temp.lrow(pg_temp.trace('topup' || v_tag), now() - interval '2 days', 5, 1, 0, 3, 'Ziraat Payment (Order: m41-t)', 897738, 901338)));
-  perform pg_temp.act(u_owner, s_owner);
+  perform pg_temp.act_data(u_owner, s_owner);
   if public.admin_record_float_topup(pg_temp.trace('ghost' || v_tag)::uuid, 5000000, 'GTB-1', 'paid from GTBank today', gen_random_uuid()) ->> 'code' <> 'NOT_TOPUP' then
     raise exception 'FAILED 7: a debit recorded as a top-up';
   end if;
@@ -376,7 +376,7 @@ begin
     end;
   end loop;
   execute 'reset role';
-  perform pg_temp.act(u_test, s_test);
+  perform pg_temp.act_data(u_test, s_test);
   foreach v_sql in array array[
     'select public.admin_attention_counts(false)', 'select public.admin_overview(false)',
     'select public.admin_float(false)', 'select public.admin_customer_stats()',
@@ -407,7 +407,7 @@ begin
     raise exception 'FAILED 9: a test admin read a real customer';
   exception when insufficient_privilege then null;
   end;
-  perform pg_temp.act(u_owner, s_owner);
+  perform pg_temp.act_data(u_owner, s_owner);
   if (public.admin_overview(false) #> '{health,cron}') is null
      or jsonb_typeof(public.admin_attention_counts(false)) <> 'object'
      or (select count(*) from public.admin_list_admins()) < 2 then
