@@ -180,6 +180,61 @@ export type Database = {
           },
         ]
       }
+      cart_ssl_items: {
+        Row: {
+          cart_id: string
+          common_name: string
+          created_at: string
+          id: string
+          product_code: string
+          quoted_at: string
+          quoted_fx_rate_id: string
+          quoted_total_kobo: number
+        }
+        Insert: {
+          cart_id: string
+          common_name: string
+          created_at?: string
+          id?: string
+          product_code: string
+          quoted_at?: string
+          quoted_fx_rate_id: string
+          quoted_total_kobo: number
+        }
+        Update: {
+          cart_id?: string
+          common_name?: string
+          created_at?: string
+          id?: string
+          product_code?: string
+          quoted_at?: string
+          quoted_fx_rate_id?: string
+          quoted_total_kobo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cart_ssl_items_cart_id_fkey"
+            columns: ["cart_id"]
+            isOneToOne: false
+            referencedRelation: "carts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cart_ssl_items_product_code_fkey"
+            columns: ["product_code"]
+            isOneToOne: false
+            referencedRelation: "ssl_products"
+            referencedColumns: ["product_code"]
+          },
+          {
+            foreignKeyName: "cart_ssl_items_quoted_fx_rate_id_fkey"
+            columns: ["quoted_fx_rate_id"]
+            isOneToOne: false
+            referencedRelation: "fx_rates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       carts: {
         Row: {
           anon_token_hash: string | null
@@ -1102,6 +1157,7 @@ export type Database = {
           privacy: boolean
           renewal_kobo: number
           renewal_years: number
+          ssl_product_code: string | null
           status: Database["public"]["Enums"]["order_item_status"]
           tld: string
           updated_at: string
@@ -1122,6 +1178,7 @@ export type Database = {
           privacy: boolean
           renewal_kobo: number
           renewal_years?: number
+          ssl_product_code?: string | null
           status?: Database["public"]["Enums"]["order_item_status"]
           tld: string
           updated_at?: string
@@ -1142,6 +1199,7 @@ export type Database = {
           privacy?: boolean
           renewal_kobo?: number
           renewal_years?: number
+          ssl_product_code?: string | null
           status?: Database["public"]["Enums"]["order_item_status"]
           tld?: string
           updated_at?: string
@@ -1160,6 +1218,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_ssl_product_code_fkey"
+            columns: ["ssl_product_code"]
+            isOneToOne: false
+            referencedRelation: "ssl_products"
+            referencedColumns: ["product_code"]
           },
         ]
       }
@@ -1723,6 +1788,253 @@ export type Database = {
         }
         Relationships: []
       }
+      ssl_certificates: {
+        Row: {
+          approver_email: string | null
+          ca_bundle_pem: string | null
+          certificate_pem: string | null
+          common_name: string
+          configured_at: string | null
+          contact: Json | null
+          created_at: string
+          csr: string | null
+          expires_at: string | null
+          id: string
+          included_names: number
+          is_wildcard: boolean
+          issued_at: string | null
+          last_checked_at: string | null
+          last_error_code: string | null
+          next_check_at: string | null
+          order_item_id: string
+          product_code: string
+          product_name: string
+          purchased_at: string | null
+          reissue_count: number
+          san_names: string[]
+          status: string
+          status_unrecognised_since: string | null
+          subscription_ends_at: string | null
+          supplier_certificate_id: string | null
+          supplier_status: string | null
+          test_mode: boolean
+          updated_at: string
+          user_id: string
+          validation_method: string | null
+          web_server: string | null
+        }
+        Insert: {
+          approver_email?: string | null
+          ca_bundle_pem?: string | null
+          certificate_pem?: string | null
+          common_name: string
+          configured_at?: string | null
+          contact?: Json | null
+          created_at?: string
+          csr?: string | null
+          expires_at?: string | null
+          id?: string
+          included_names?: number
+          is_wildcard?: boolean
+          issued_at?: string | null
+          last_checked_at?: string | null
+          last_error_code?: string | null
+          next_check_at?: string | null
+          order_item_id: string
+          product_code: string
+          product_name: string
+          purchased_at?: string | null
+          reissue_count?: number
+          san_names?: string[]
+          status?: string
+          status_unrecognised_since?: string | null
+          subscription_ends_at?: string | null
+          supplier_certificate_id?: string | null
+          supplier_status?: string | null
+          test_mode: boolean
+          updated_at?: string
+          user_id: string
+          validation_method?: string | null
+          web_server?: string | null
+        }
+        Update: {
+          approver_email?: string | null
+          ca_bundle_pem?: string | null
+          certificate_pem?: string | null
+          common_name?: string
+          configured_at?: string | null
+          contact?: Json | null
+          created_at?: string
+          csr?: string | null
+          expires_at?: string | null
+          id?: string
+          included_names?: number
+          is_wildcard?: boolean
+          issued_at?: string | null
+          last_checked_at?: string | null
+          last_error_code?: string | null
+          next_check_at?: string | null
+          order_item_id?: string
+          product_code?: string
+          product_name?: string
+          purchased_at?: string | null
+          reissue_count?: number
+          san_names?: string[]
+          status?: string
+          status_unrecognised_since?: string | null
+          subscription_ends_at?: string | null
+          supplier_certificate_id?: string | null
+          supplier_status?: string | null
+          test_mode?: boolean
+          updated_at?: string
+          user_id?: string
+          validation_method?: string | null
+          web_server?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssl_certificates_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssl_certificates_product_code_fkey"
+            columns: ["product_code"]
+            isOneToOne: false
+            referencedRelation: "ssl_products"
+            referencedColumns: ["product_code"]
+          },
+          {
+            foreignKeyName: "ssl_certificates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssl_jobs: {
+        Row: {
+          attempts: number
+          certificate_id: string
+          created_at: string
+          finished_at: string | null
+          id: string
+          idempotency_key: string
+          kind: string
+          last_error: string | null
+          last_error_code: string | null
+          locked_at: string | null
+          locked_by: string | null
+          run_after: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          test_mode: boolean
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          certificate_id: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          idempotency_key: string
+          kind: string
+          last_error?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          run_after?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          test_mode: boolean
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          certificate_id?: string
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string
+          kind?: string
+          last_error?: string | null
+          last_error_code?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          run_after?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          test_mode?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssl_jobs_certificate_id_fkey"
+            columns: ["certificate_id"]
+            isOneToOne: false
+            referencedRelation: "ssl_certificates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ssl_products: {
+        Row: {
+          create_usd: number | null
+          created_at: string
+          included_names: number | null
+          is_multi_domain: boolean | null
+          is_reissue_free: boolean | null
+          is_sellable: boolean
+          is_wildcard: boolean | null
+          max_names: number | null
+          name: string | null
+          product_code: string
+          requires_csr: boolean | null
+          synced_at: string | null
+          updated_at: string
+          validation_type: string | null
+          vendor: string | null
+        }
+        Insert: {
+          create_usd?: number | null
+          created_at?: string
+          included_names?: number | null
+          is_multi_domain?: boolean | null
+          is_reissue_free?: boolean | null
+          is_sellable?: boolean
+          is_wildcard?: boolean | null
+          max_names?: number | null
+          name?: string | null
+          product_code: string
+          requires_csr?: boolean | null
+          synced_at?: string | null
+          updated_at?: string
+          validation_type?: string | null
+          vendor?: string | null
+        }
+        Update: {
+          create_usd?: number | null
+          created_at?: string
+          included_names?: number | null
+          is_multi_domain?: boolean | null
+          is_reissue_free?: boolean | null
+          is_sellable?: boolean
+          is_wildcard?: boolean | null
+          max_names?: number | null
+          name?: string | null
+          product_code?: string
+          requires_csr?: boolean | null
+          synced_at?: string | null
+          updated_at?: string
+          validation_type?: string | null
+          vendor?: string | null
+        }
+        Relationships: [
+        ]
+      }
       supplier_balance_snapshots: {
         Row: {
           balance_usd: number
@@ -1757,6 +2069,7 @@ export type Database = {
           message: string | null
           operation: string
           outcome: string
+          ssl_job_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1770,6 +2083,7 @@ export type Database = {
           message?: string | null
           operation: string
           outcome: string
+          ssl_job_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1783,6 +2097,7 @@ export type Database = {
           message?: string | null
           operation?: string
           outcome?: string
+          ssl_job_id?: string | null
         }
         Relationships: [
           {
@@ -1790,6 +2105,13 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_calls_ssl_job_id_fkey"
+            columns: ["ssl_job_id"]
+            isOneToOne: false
+            referencedRelation: "ssl_jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -1975,6 +2297,15 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_ssl_job: {
+        Args: {
+          p_job_id?: string
+          p_lease_seconds?: number
+          p_test_mode: boolean
+          p_worker: string
+        }
+        Returns: Json
+      }
       claimed_refund: {
         Args: { p_refund_id: string; p_worker: string }
         Returns: {
@@ -2036,6 +2367,17 @@ export type Database = {
       }
       complete_renewal: {
         Args: { p_expires_at: string; p_job_id: string; p_recovered: boolean }
+        Returns: undefined
+      }
+      complete_ssl_initialize: {
+        Args: {
+          p_job_id: string
+          p_purchased_at: string
+          p_recovered: boolean
+          p_subscription_ends_at: string
+          p_supplier_id: string
+          p_supplier_status: string
+        }
         Returns: undefined
       }
       complete_transfer: {
@@ -2120,6 +2462,15 @@ export type Database = {
       enqueue_undelegated_nudges: { Args: never; Returns: number }
       expire_unpaid_orders: { Args: { p_older_than?: string }; Returns: number }
       fail_job: {
+        Args: {
+          p_code: string
+          p_job_id: string
+          p_message: string
+          p_needs_attention?: boolean
+        }
+        Returns: undefined
+      }
+      fail_ssl_job: {
         Args: {
           p_code: string
           p_job_id: string
@@ -2230,6 +2581,7 @@ export type Database = {
         Args: { p_expires_at: string; p_job_id: string }
         Returns: string
       }
+      note_ssl_job_sent: { Args: { p_job_id: string }; Returns: string }
       note_sign_in: {
         Args: { p_device: string; p_user_id: string }
         Returns: boolean
@@ -2372,6 +2724,36 @@ export type Database = {
         }
         Returns: undefined
       }
+      record_ssl_configured: {
+        Args: {
+          p_job_id: string
+          p_recovered: boolean
+          p_supplier_status: string
+        }
+        Returns: undefined
+      }
+      record_ssl_reissue: {
+        Args: {
+          p_job_id: string
+          p_recovered: boolean
+          p_state: string
+          p_supplier_status: string
+        }
+        Returns: undefined
+      }
+      record_ssl_status: {
+        Args: {
+          p_ca_bundle: string
+          p_certificate: string
+          p_certificate_id: string
+          p_expires_at: string
+          p_issued_at: string
+          p_next_check_seconds: number
+          p_state: string
+          p_supplier_status: string
+        }
+        Returns: string
+      }
       record_supplier_balance: {
         Args: { p_balance_usd: number; p_test_mode: boolean }
         Returns: undefined
@@ -2387,6 +2769,10 @@ export type Database = {
         }
         Returns: string
       }
+      refuse_ssl_setup: {
+        Args: { p_code: string; p_job_id: string; p_message: string }
+        Returns: undefined
+      }
       refund_hold_reason: {
         Args: {
           p_amount_kobo: number
@@ -2396,6 +2782,15 @@ export type Database = {
         Returns: string
       }
       reschedule_job: {
+        Args: {
+          p_code: string
+          p_delay_seconds: number
+          p_job_id: string
+          p_message: string
+        }
+        Returns: undefined
+      }
+      reschedule_ssl_job: {
         Args: {
           p_code: string
           p_delay_seconds: number
@@ -2419,7 +2814,24 @@ export type Database = {
         Args: { p_by: string; p_incident_id: number }
         Returns: undefined
       }
+      request_ssl_reissue: {
+        Args: { p_certificate_id: string; p_user_id: string }
+        Returns: string
+      }
+      request_ssl_setup: {
+        Args: {
+          p_approver_email: string
+          p_certificate_id: string
+          p_contact: Json
+          p_csr: string
+          p_san_names: string[]
+          p_user_id: string
+          p_web_server: string
+        }
+        Returns: string
+      }
       retry_job: { Args: { p_job_id: string }; Returns: undefined }
+      retry_ssl_job: { Args: { p_job_id: string }; Returns: undefined }
       retry_refund: {
         Args: { p_by: string; p_refund_id: string }
         Returns: undefined
@@ -2430,6 +2842,21 @@ export type Database = {
         Returns: boolean
       }
       settle_order: { Args: { p_order_id: string }; Returns: undefined }
+      ssl_certificates_to_check: {
+        Args: { p_limit?: number; p_test_mode: boolean }
+        Returns: {
+          common_name: string
+          configured_at: string
+          has_certificate: boolean
+          id: string
+          is_wildcard: boolean
+          status: string
+        }[]
+      }
+      ssl_name_in_use: {
+        Args: { p_common_name: string; p_test_mode: boolean }
+        Returns: boolean
+      }
       start_bulk_change: {
         Args: {
           p_domain_ids: string[]
@@ -2502,6 +2929,7 @@ export type Database = {
         | "empty_order"
         | "renewal_failed"
         | "transfer_failed"
+        | "ssl_failed"
       refund_status:
         | "queued"
         | "held"
@@ -2707,6 +3135,7 @@ export const Constants = {
         "empty_order",
         "renewal_failed",
         "transfer_failed",
+        "ssl_failed",
       ],
       refund_status: [
         "queued",
