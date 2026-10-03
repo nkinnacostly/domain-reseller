@@ -1171,8 +1171,9 @@ begin
   update public.admins set revoked_at = null where user_id = u_test;
   v_passed := v_passed + 1;
 
-  -- ── 34. Extension flags: a null pause keeps the pause; rank and tagline are
-  -- set as sent, so a pause sent without them un-features (§3.1.2).
+  -- ── 34. Extension flags: null keeps what is stored, for every flag. A pause
+  -- sent alone keeps the feature; a feature sent alone keeps the pause and its
+  -- reason; rank 0 and an empty tagline are how they are cleared (§3.1.2).
   select min(r) into v_rank from generate_series(1, 50) r
    where not exists (select 1 from public.tlds t where t.featured_rank = r);
   select t.name into v_text from public.tlds t where not t.is_paused and t.featured_rank is null order by t.name limit 1;
@@ -1187,9 +1188,45 @@ begin
   perform pg_temp.expect_ok(public.admin_set_tld_flags(v_text, true, 'registry maintenance', null, null,
                                                        'pause it for the night', gen_random_uuid()),
                             'FAILED 34: pause an extension');
+  if (select row(t.is_paused, t.paused_reason, t.featured_rank::integer, t.featured_tagline)::text
+        from public.tlds t where t.name = v_text)
+     is distinct from row(true, 'registry maintenance', v_rank, 'Fast and local')::text then
+    raise exception 'FAILED 34: a pause sent without rank and tagline cleared them';
+  end if;
+  perform pg_temp.expect_ok(public.admin_set_tld_flags(v_text, null, null, null, 'Quick and local',
+                                                       'reword the home page card', gen_random_uuid()),
+                            'FAILED 34: a new tagline on a paused extension');
+  if (select row(t.is_paused, t.paused_reason, t.featured_rank::integer, t.featured_tagline)::text
+        from public.tlds t where t.name = v_text)
+     is distinct from row(true, 'registry maintenance', v_rank, 'Quick and local')::text then
+    raise exception 'FAILED 34: a tagline sent alone moved the pause, its reason or the rank';
+  end if;
+  perform pg_temp.expect_ok(public.admin_set_tld_flags(v_text, null, null, 0, '',
+                                                       'take it off the home page', gen_random_uuid()),
+                            'FAILED 34: un-feature an extension');
+  if (select row(t.is_paused, t.paused_reason, t.featured_rank, t.featured_tagline)::text from public.tlds t where t.name = v_text)
+     is distinct from row(true, 'registry maintenance', null::integer, null::text)::text then
+    raise exception 'FAILED 34: rank 0 and an empty tagline did not clear them, or moved the pause';
+  end if;
+  perform pg_temp.expect_ok(public.admin_set_tld_flags(v_text, false, null, null, null,
+                                                       'the registry is back up', gen_random_uuid()),
+                            'FAILED 34: resume an extension');
+  if (select row(t.is_paused, t.paused_reason)::text from public.tlds t where t.name = v_text)
+     is distinct from row(false, null::text)::text then
+    raise exception 'FAILED 34: a resume kept the pause reason';
+  end if;
+  perform pg_temp.expect_code(public.admin_set_tld_flags(v_text, true, null, null, null,
+                                                         'pause it with no reason', gen_random_uuid()),
+                              'PAUSE_REASON', 'FAILED 34: a new pause without a reason');
+  perform pg_temp.expect_code(public.admin_set_tld_flags(v_text, null, null, 51, null,
+                                                         'feature it past the end', gen_random_uuid()),
+                              'OUT_OF_RANGE', 'FAILED 34: rank 51');
+  perform pg_temp.expect_code(public.admin_set_tld_flags(v_text, null, null, -1, null,
+                                                         'feature it before the start', gen_random_uuid()),
+                              'OUT_OF_RANGE', 'FAILED 34: rank -1');
   if (select row(t.is_paused, t.featured_rank, t.featured_tagline)::text from public.tlds t where t.name = v_text)
-     is distinct from row(true, null::integer, null::text)::text then
-    raise exception 'FAILED 34: a pause without rank and tagline left them set';
+     is distinct from row(false, null::integer, null::text)::text then
+    raise exception 'FAILED 34: a refused change moved the flags';
   end if;
   v_passed := v_passed + 1;
 

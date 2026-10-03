@@ -1846,10 +1846,11 @@ begin
     p_reason, p_request_key, 'ok', null, null, jsonb_build_object('before', v_before, 'after', v_after));
 end $$;
 
--- A null p_is_paused keeps the pause as stored. Rank and tagline are set as
--- sent, null clearing them — that is how an extension is un-featured — so a
--- caller sends all four flags, the current rank and tagline with a pause
--- (§3.1.2; admin.sql check 34 pins it).
+-- Null keeps what is stored, for every flag: a pause sent alone leaves the
+-- extension featured, and a feature sent alone leaves it paused with its
+-- reason. Clearing is said out loud — rank 0 un-features, an empty tagline
+-- removes it — so a missing value can never wipe one (§3.1.2; admin.sql
+-- check 34 pins it).
 create function public.admin_set_tld_flags(p_name text, p_is_paused boolean, p_paused_reason text,
                                            p_featured_rank integer, p_featured_tagline text, p_reason text,
                                            p_request_key uuid)
@@ -1861,6 +1862,10 @@ declare
   v_name   text := lower(trim(coalesce(p_name, '')));
   v_tld    public.tlds;
   v_paused boolean;
+  v_sent   text := nullif(trim(coalesce(p_paused_reason, '')), '');
+  v_why    text;
+  v_rank   integer;
+  v_tag    text;
   v_code   text;
   v_detail jsonb;
 begin
@@ -1872,6 +1877,15 @@ begin
                                p_request_key, 'refused', 'NOT_FOUND', null, '{}');
   end if;
   v_paused := coalesce(p_is_paused, v_tld.is_paused);
+  -- A new pause needs its reason; one already paused keeps it unless a new one is sent.
+  v_why := case when not v_paused then null
+                when v_sent is not null then v_sent
+                when v_tld.is_paused then v_tld.paused_reason end;
+  v_rank := case when p_featured_rank is null then v_tld.featured_rank
+                 when p_featured_rank = 0 then null
+                 else p_featured_rank end;
+  v_tag := case when p_featured_tagline is null then v_tld.featured_tagline
+                else nullif(trim(p_featured_tagline), '') end;
   v_detail := jsonb_build_object(
     'before', jsonb_build_object('is_paused', v_tld.is_paused, 'paused_reason', v_tld.paused_reason,
                                  'featured_rank', v_tld.featured_rank, 'featured_tagline', v_tld.featured_tagline),
@@ -1879,22 +1893,24 @@ begin
                       where d.tld = v_tld.name and d.source <> 'demo'
                         and d.local_status in ('active', 'expired_grace', 'redemption', 'pending_delete', 'pending_verification')));
   v_code := coalesce(public.admin_gate(v_admin, c_action, false), public.admin_reason_problem(p_reason));
-  if v_code is null and v_paused and char_length(trim(coalesce(p_paused_reason, ''))) not between 3 and 120 then
+  -- Only a reason sent now is judged: a stored one stands as it was written.
+  if v_code is null and v_paused and (v_sent is not null or v_why is null)
+     and char_length(coalesce(v_why, '')) not between 3 and 120 then
     v_code := 'PAUSE_REASON';
   end if;
-  if v_code is null and p_featured_rank is not null and p_featured_rank not between 1 and 50 then
+  if v_code is null and p_featured_rank is not null and p_featured_rank not between 0 and 50 then
     v_code := 'OUT_OF_RANGE';
   end if;
-  if v_code is null and char_length(coalesce(p_featured_tagline, '')) > 60 then v_code := 'OUT_OF_RANGE'; end if;
+  if v_code is null and char_length(coalesce(trim(p_featured_tagline), '')) > 60 then v_code := 'OUT_OF_RANGE'; end if;
   if v_code is not null then
     return public.admin_record(v_admin, c_action, 'global', 'tld', v_tld.name, null,
                                p_reason, p_request_key, 'refused', v_code, null, v_detail);
   end if;
   update public.tlds
      set is_paused = v_paused,
-         paused_reason = case when v_paused then trim(p_paused_reason) else null end,
-         featured_rank = p_featured_rank,
-         featured_tagline = nullif(trim(coalesce(p_featured_tagline, '')), '')
+         paused_reason = v_why,
+         featured_rank = v_rank,
+         featured_tagline = v_tag
    where name = v_tld.name;
   return public.admin_record(v_admin, c_action, 'global', 'tld', v_tld.name, null,
     p_reason, p_request_key, 'ok', null, null,
