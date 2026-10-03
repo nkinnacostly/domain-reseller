@@ -429,6 +429,27 @@ describe('the registry', () => {
     expect(calls).toHaveLength(2)
   })
 
+  it('takes the handle only from the listing item that is this domain, never a near match', async () => {
+    const { request, calls } = setup(
+      {},
+      {
+        '/domains': {
+          status: 200,
+          body: {
+            totalCount: 1,
+            items: [
+              { domainName: 'notmydomainshubtest1.com', contacts: { Registrant: 'D-OTHER' } },
+            ],
+          },
+        },
+      },
+    )
+    expect(
+      await read(await request('/supplier/domains/mydomainshubtest1.com/verification?side=test')),
+    ).toEqual({ ok: true, data: null })
+    expect(calls.map((call: SupplierCall) => call.path)).toEqual(['/domains'])
+  })
+
   it('has no verification for a name not in our account', async () => {
     const { request } = setup(
       {},

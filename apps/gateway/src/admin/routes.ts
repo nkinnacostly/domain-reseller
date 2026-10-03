@@ -606,10 +606,17 @@ export function createAdminRouter(deps: AdminRouterDeps) {
       if (!ok(listing)) return supplierFailure(listing)
       const items = ((listing.body ?? {}) as { items?: unknown }).items
       const first = Array.isArray(items)
-        ? (items[0] as { contacts?: unknown } | undefined)
+        ? (items[0] as { domainName?: unknown; contacts?: unknown } | undefined)
         : undefined
+      // DomainName may match by containing the name, so the first item is ours
+      // only when it is this domain; otherwise another domain's verification
+      // would be shown, and cached for an hour.
+      const same =
+        typeof first?.domainName === 'string' && first.domainName.trim().toLowerCase() === name
       // The registrant's handle is used for the next call and nothing else (N13).
-      const handle = (first?.contacts as Record<string, unknown> | undefined)?.Registrant
+      const handle = same
+        ? (first?.contacts as Record<string, unknown> | undefined)?.Registrant
+        : undefined
       if (typeof handle !== 'string' || handle === '') {
         caches.verification.set(key, null)
         return { status: 'ok', data: null, detail: { found: false } }
