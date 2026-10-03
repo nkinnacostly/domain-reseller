@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
@@ -11,7 +10,7 @@ import {
   hasAdminSchema,
 } from './support/accounts.mjs'
 import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from './support/admin'
-import { seedTestFailedEmail } from './support/admin-seed.mjs'
+import { bounceTestEmail, seedTestFailedEmail } from './support/admin-seed.mjs'
 
 /**
  * The emails page (docs/ADMIN-SPEC.md §5.2, §9 B11), as a test-only operator
@@ -28,7 +27,7 @@ const MASKED = 'e•••@example.com'
 
 type TestUser = { id: string; email: string; password: string }
 
-/** The secret-key client: what was recorded, and the gateway's own steps for the bounce. */
+/** The secret-key client, to read back what was recorded. */
 function service(): SupabaseClient {
   const path = fileURLToPath(new URL('../../../../.env', import.meta.url))
   for (const line of readFileSync(path, 'utf8').split('\n')) {
@@ -62,53 +61,6 @@ async function auditRows(adminId: string, action: string) {
     .eq('action', action)
   if (error) throw error
   return data ?? []
-}
-
-/**
- * Sends one waiting test email and records its bounce, as the gateway and
- * the provider would (`claim_emails`, `mark_email_sent`,
- * `record_email_delivery`). The claim takes the oldest due test email, so
- * it waits until that is this one — never taking another run's email.
- */
-async function sendAndBounce(emailId: string) {
-  const db = service()
-  const worker = `e2e-b11-${randomUUID()}`
-  for (let attempt = 0; attempt < 60; attempt++) {
-    const { data: due, error } = await db
-      .from('email_outbox')
-      .select('id')
-      .eq('test_mode', true)
-      .eq('status', 'pending')
-      .lte('next_attempt_at', new Date().toISOString())
-      .order('next_attempt_at')
-      .order('created_at')
-      .limit(1)
-    if (error) throw error
-    if (due?.[0]?.id === emailId) {
-      const claimed = await db.rpc('claim_emails', {
-        p_worker: worker,
-        p_test_mode: true,
-        p_limit: 1,
-      })
-      if (claimed.error) throw claimed.error
-      const ids = (claimed.data as { id: string }[]).map((row) => row.id)
-      expect(ids, 'the claim took this email and no other').toEqual([emailId])
-      const sent = await db.rpc('mark_email_sent', {
-        p_id: emailId,
-        p_worker: worker,
-        p_message_id: `e2e-b11-${randomUUID()}`,
-        p_template_version: 'e2e',
-      })
-      expect(sent.error).toBeNull()
-      expect(sent.data).toBe(true)
-      const bounced = await db.rpc('record_email_delivery', { p_id: emailId, p_status: 'bounced' })
-      expect(bounced.error).toBeNull()
-      expect(bounced.data).toBe(true)
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-  throw new Error('another test email stayed ahead of this one in the queue')
 }
 
 const shortId = (id: string) => id.replace(/-/g, '').slice(0, 8)
@@ -248,7 +200,7 @@ test.describe('the emails page, as a test administrator', () => {
   })
 
   test('once the email has bounced, "Send again" is not offered', async () => {
-    await sendAndBounce(emailId)
+    await bounceTestEmail(emailId)
     expect(await emailState(emailId)).toMatchObject({ status: 'sent', delivery_status: 'bounced' })
 
     await page.goto('/admin/emails?status=bounced')
