@@ -74,11 +74,13 @@ export type Health = z.infer<typeof healthSchema>
 export type Heartbeat = z.infer<typeof heartbeat>
 export type CronJob = z.infer<typeof cronJob>
 
+/** Paid lines by kind over one window (`admin_overview.lines`, migration 42). */
+const linesWindow = z.object({ register: count, renew: count, transfer: count, ssl: count })
+
 export const overviewSchema = z.object({
   sales: z.object({ d1: salesWindow, d7: salesWindow, d30: salesWindow, d90: salesWindow }),
-  lines: z.object({
-    d30: z.object({ register: count, renew: count, transfer: count, ssl: count }),
-  }),
+  /** Over the same windows as `sales`: paid more than N days ago is out. */
+  lines: z.object({ d7: linesWindow, d30: linesWindow, d90: linesWindow }),
   float: floatSchema,
   health: healthSchema,
   signups7d: count,
@@ -91,6 +93,7 @@ export const overviewSchema = z.object({
 
 export type Overview = z.infer<typeof overviewSchema>
 export type SalesWindow = z.infer<typeof salesWindow>
+export type LinesWindow = z.infer<typeof linesWindow>
 
 /** The answer as the page reads it, or null when it is not what SQL promised. */
 export function parseOverview(data: unknown): { overview: Overview } | { issues: number } {

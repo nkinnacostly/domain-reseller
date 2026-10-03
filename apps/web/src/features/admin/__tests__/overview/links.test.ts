@@ -87,18 +87,30 @@ describe('the KPI row', () => {
     expect(byKey.orders).toBe(`/admin/orders?${week}`)
   })
 
-  it('says the line counts are 30 days whatever the period, and links them that way (N9b)', () => {
-    const row = kpis(overview(), 90, NOW)
-    const register = row.find((kpi) => kpi.key === 'register')
-    expect(register).toMatchObject({
-      value: '4',
-      hint: 'Last 30 days',
-      href: '/admin/orders?kind=register&from=2026-09-03&to=2026-10-03',
+  it('counts what was sold over the period chosen, and links it over the same days', () => {
+    const quarter = kpis(overview(), 90, NOW)
+    expect(quarter.find((kpi) => kpi.key === 'register')).toMatchObject({
+      value: '11',
+      hint: 'Last 90 days',
+      href: '/admin/orders?kind=register&from=2026-07-05&to=2026-10-03',
     })
-    expect(row.find((kpi) => kpi.key === 'ssl')?.href).toBe(
-      '/admin/orders?kind=ssl&from=2026-09-03&to=2026-10-03',
-    )
-    expect(row.find((kpi) => kpi.key === 'cash')?.hint).toBe('Last 90 days')
+    expect(quarter.find((kpi) => kpi.key === 'ssl')).toMatchObject({
+      value: '1',
+      href: '/admin/orders?kind=ssl&from=2026-07-05&to=2026-10-03',
+    })
+    const week = kpis(overview(), 7, NOW)
+    expect(week.find((kpi) => kpi.key === 'register')).toMatchObject({
+      value: '1',
+      hint: 'Last 7 days',
+      href: '/admin/orders?kind=register&from=2026-09-26&to=2026-10-03',
+    })
+    expect(week.find((kpi) => kpi.key === 'renew')?.value).toBe('0')
+    const month = kpis(overview(), 30, NOW)
+    expect(month.find((kpi) => kpi.key === 'transfer')).toMatchObject({
+      value: '1',
+      hint: 'Last 30 days',
+      href: '/admin/orders?kind=transfer&from=2026-09-03&to=2026-10-03',
+    })
   })
 
   it('never puts a name or an email in a link (N13)', () => {

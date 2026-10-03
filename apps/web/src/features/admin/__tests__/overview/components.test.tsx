@@ -105,8 +105,8 @@ describe('KpiRow', () => {
       within(sales).getByRole('link', { name: /^Cash in\s+₦10,750\s+Last 7 days$/ }),
     ).toHaveAttribute('href', '/admin/money?from=2026-09-26&to=2026-10-03')
     expect(
-      within(sales).getByRole('link', { name: /^Registrations\s+4\s+Last 30 days$/ }),
-    ).toBeInTheDocument()
+      within(sales).getByRole('link', { name: /^Registrations\s+1\s+Last 7 days$/ }),
+    ).toHaveAttribute('href', '/admin/orders?kind=register&from=2026-09-26&to=2026-10-03')
     expect(within(sales).getByText('New accounts in the last 7 days:')).toBeInTheDocument()
   })
 })
