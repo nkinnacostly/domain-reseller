@@ -36,6 +36,15 @@ beforeEach(() => {
 })
 
 describe('listOutbox', () => {
+  it('narrows to one account by its id when asked (?user=)', async () => {
+    const reads = fakeService(() => ({ data: [], count: 0 }))
+    const admin = await principal({ role: 'operator' })
+    await listOutbox(admin, 'test', outbox({ user: ids.user }), NOW)
+    const [read] = byTable(reads, 'admin_email_outbox_v')
+    expect(filterOf(read, 'eq', 'user_id')).toBe(ids.user)
+    expect(filterOf(read, 'eq', 'test_mode')).toBe(true)
+  })
+
   it('reads one page of the masked outbox on the side asked, newest first', async () => {
     const reads = fakeService((read) =>
       read.table === 'admin_email_outbox_v'

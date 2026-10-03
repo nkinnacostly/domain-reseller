@@ -8,9 +8,11 @@ import { parseListParams, type SortDir, validDate } from '@/features/admin/lib/l
  * are rebuilt from the parsed values, never by appending to the raw query.
  *
  * Other pages link here with `?status=failed` (the overview, §9),
- * `?status=unconfirmed`, `?status=complained`, `?status=pending` and
- * `?tab=compliance` (`adminHrefForAlertKey`, §4.5). Nothing here takes an
- * address: recipients are only ever shown masked, and never searched (N13).
+ * `?status=unconfirmed`, `?status=complained`, `?status=pending`,
+ * `?tab=compliance` (`adminHrefForAlertKey`, §4.5) and `?user=<uuid>` (a
+ * customer's Emails tab). An account is named by its id only: nothing here
+ * takes an address, recipients are only ever shown masked, and never
+ * searched (N13).
  */
 
 export const EMAILS_PATH = '/admin/emails'
@@ -58,6 +60,9 @@ const DEFAULT_PER = 25
 /** An email kind as the outbox stores it (`^[a-z_]+$`). */
 const KIND = /^[a-z_]{1,40}$/
 
+/** An account's id; anything else (an address included) is ignored. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 type Paging<S extends string> = {
   sort: S
   dir: SortDir
@@ -72,6 +77,8 @@ export type OutboxParams = Paging<OutboxSort> & {
   status: OutboxStatus | null
   category: EmailCategory | null
   kind: string | null
+  /** One account's emails, by its id (`?user=`). */
+  user: string | null
 }
 
 export type NoticeParams = Paging<NoticeSort> & {
@@ -131,11 +138,13 @@ export function parseEmailsParams(search: Search): EmailsParams {
     defaultPer: DEFAULT_PER,
   })
   const kind = (first(search, 'kind') ?? '').trim()
+  const user = (first(search, 'user') ?? '').trim()
   return {
     tab,
     status: oneOf(first(search, 'status'), OUTBOX_STATUSES),
     category: oneOf(first(search, 'category'), EMAIL_CATEGORIES),
     kind: KIND.test(kind) ? kind : null,
+    user: UUID.test(user) ? user.toLowerCase() : null,
     sort: list.sort,
     dir: list.dir,
     page: list.page,
@@ -167,6 +176,7 @@ export function emailsHref<P extends EmailsParams>(params: P, changes: Changes<P
   if (next.tab === 'outbox') {
     if (next.category) query.set('category', next.category)
     if (next.kind) query.set('kind', next.kind)
+    if (next.user) query.set('user', next.user)
   } else if (next.type) {
     query.set('type', next.type)
   }
@@ -195,7 +205,9 @@ export function chosen<T extends string>(current: T | null, value: T): T | null 
 /** True when the list is narrowed by anything but its sort and page. */
 export function isEmailsFiltered(params: EmailsParams): boolean {
   if (params.status || params.from || params.to) return true
-  return params.tab === 'outbox' ? Boolean(params.category || params.kind) : Boolean(params.type)
+  return params.tab === 'outbox'
+    ? Boolean(params.category || params.kind || params.user)
+    : Boolean(params.type)
 }
 
 /** The start of a Lagos day (WAT, UTC+1, no daylight saving), for `created_at >=`. */
