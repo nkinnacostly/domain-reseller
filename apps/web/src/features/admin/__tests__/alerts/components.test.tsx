@@ -232,6 +232,23 @@ describe('open alerts', () => {
     )
   })
 
+  it('narrow to one severity from the overview’s ?severity=critical, with a way back', async () => {
+    queries.listOpenAlerts.mockResolvedValue({ ok: true, data: { rows: [], total: 0 } })
+    const narrowed = params('severity=critical') as Parameters<typeof OpenAlerts>[0]['params']
+    render(await resolve(<OpenAlerts admin={owner} side="live" params={narrowed} now={now} />))
+    expect(queries.listOpenAlerts).toHaveBeenCalledWith(owner, 'live', narrowed.list, 'critical')
+    const chips = screen.getByRole('navigation', { name: 'Severity' })
+    expect(within(chips).getByRole('link', { name: 'Critical' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    )
+    expect(screen.getByText('No open critical alerts')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Show every open alert' })).toHaveAttribute(
+      'href',
+      '/admin/alerts',
+    )
+  })
+
   it('offer to try again when they cannot be read', async () => {
     queries.listOpenAlerts.mockResolvedValue({ ok: false })
     render(await resolve(<OpenAlerts admin={owner} side="live" params={params('')} now={now} />))

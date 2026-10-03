@@ -8,8 +8,9 @@ import {
 
 /**
  * The alerts page's URL (docs/ADMIN-SPEC.md §5.2, B5): `?tab=open|history|
- * drift|health`, then each list's own `sort`, `dir`, `page`, `per`, and on
- * History the state chips, a `kind` and a date range. Parsing is strict — an
+ * drift|health`, then each list's own `sort`, `dir`, `page`, `per`; on Open a
+ * `severity` (the overview's "critical alerts" tile links `?severity=critical`),
+ * and on History the state chips, a `kind` and a date range. Parsing is strict — an
  * unknown tab is Open, an unknown kind is dropped — and links are rebuilt
  * from the parsed values. The tab names are the ones `adminHrefForAlertKey`
  * links to (`?tab=drift`, `?tab=health`).
@@ -24,6 +25,9 @@ export type OpenSort = 'severity' | 'first_seen' | 'last_seen'
 export type HistorySort = 'last_seen' | 'first_seen' | 'notified'
 export type HistoryState = 'open' | 'resolved'
 export type DriftSort = 'last_seen' | 'first_seen'
+
+export const ALERT_SEVERITIES = ['critical', 'warning'] as const
+export type AlertSeverity = (typeof ALERT_SEVERITIES)[number]
 
 /** Critical first (`severity` ascending), then the most recently seen. */
 export const OPEN_SPEC: ListSpec<OpenSort> = {
@@ -49,7 +53,7 @@ export const DRIFT_SPEC: ListSpec<DriftSort> = {
 }
 
 export type AlertsParams =
-  | { tab: 'open'; list: ListParams<OpenSort> }
+  | { tab: 'open'; list: ListParams<OpenSort>; severity: AlertSeverity | null }
   | { tab: 'history'; list: ListParams<HistorySort, HistoryState>; kind: string | null }
   | { tab: 'drift'; list: ListParams<DriftSort> }
   | { tab: 'health' }
@@ -69,6 +73,13 @@ export function parseAlertTab(value: string | undefined): AlertTab {
   return (ALERT_TABS as readonly string[]).includes(value ?? '') ? (value as AlertTab) : 'open'
 }
 
+/** One severity to filter Open by, or null (both) for anything else. */
+export function parseAlertSeverity(value: string | undefined): AlertSeverity | null {
+  return (ALERT_SEVERITIES as readonly string[]).includes(value ?? '')
+    ? (value as AlertSeverity)
+    : null
+}
+
 /** A kind to filter History by, or null for anything that is not one. */
 export function parseAlertKind(value: string | undefined): string | null {
   return value && KIND.test(value) ? value : null
@@ -78,7 +89,11 @@ export function parseAlertsParams(search: Search): AlertsParams {
   const tab = parseAlertTab(first(search, 'tab'))
   switch (tab) {
     case 'open':
-      return { tab, list: parseListParams(search, OPEN_SPEC) }
+      return {
+        tab,
+        list: parseListParams(search, OPEN_SPEC),
+        severity: parseAlertSeverity(first(search, 'severity')),
+      }
     case 'history':
       return {
         tab,
@@ -99,6 +114,7 @@ export function alertsTabHref(tab: AlertTab): string {
 
 type ListChanges<S extends string, T extends string> = Partial<ListParams<S, T>> & {
   kind?: string | null
+  severity?: AlertSeverity | null
 }
 
 /**
@@ -109,14 +125,19 @@ export function alertsListHref(
   params: Exclude<AlertsParams, { tab: 'health' }>,
   changes: ListChanges<string, string> = {},
 ): string {
-  const { kind: kindChange, ...rest } = changes
+  const { kind: kindChange, severity: severityChange, ...rest } = changes
   const tab = params.tab === 'open' ? null : params.tab
   switch (params.tab) {
-    case 'open':
+    case 'open': {
+      const severity = severityChange === undefined ? params.severity : severityChange
+      // A severity that changes is a filter that changes: back to page 1.
+      const page = severityChange !== undefined && rest.page === undefined ? { page: 1 } : {}
       return listHref(ALERTS_PATH, params.list, OPEN_SPEC, {
         ...(rest as Partial<ListParams<OpenSort>>),
-        extra: { tab },
+        ...page,
+        extra: { severity, tab },
       })
+    }
     case 'history': {
       const kind = kindChange === undefined ? params.kind : kindChange
       const extra = { kind, tab }
@@ -143,6 +164,14 @@ export function alertsSortHref(
 ): string {
   const { sort, dir } = nextSort(params.list as { sort: string; dir: 'asc' | 'desc' }, column)
   return alertsListHref(params, { sort, dir })
+}
+
+/** A severity chip: choosing the chosen one shows both. */
+export function openSeverityHref(
+  params: Extract<AlertsParams, { tab: 'open' }>,
+  severity: AlertSeverity,
+): string {
+  return alertsListHref(params, { severity: params.severity === severity ? null : severity })
 }
 
 /** The state chips toggle one at a time: choosing the chosen one clears it. */

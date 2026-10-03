@@ -8,6 +8,7 @@ import {
   historyKindHref,
   historyStateHref,
   historyWindow,
+  openSeverityHref,
   parseAlertKind,
   parseAlertsParams,
   parseAlertTab,
@@ -64,6 +65,28 @@ describe('the open list', () => {
     if (params.tab !== 'open') throw new Error('not open')
     expect(alertsSortHref(params, 'severity')).toBe('/admin/alerts?dir=desc')
     expect(alertsSortHref(params, 'last_seen')).toBe('/admin/alerts?sort=last_seen&dir=desc')
+  })
+})
+
+describe('the open list by severity (§9: the overview links ?severity=critical)', () => {
+  it('opens on the critical alerts for ?severity=critical, and keeps it in every link', () => {
+    const params = parseAlertsParams({ severity: 'critical', page: '2' })
+    if (params.tab !== 'open') throw new Error('not open')
+    expect(params.severity).toBe('critical')
+    expect(alertsListHref(params, { page: 3 })).toBe('/admin/alerts?page=3&severity=critical')
+    expect(alertsSortHref(params, 'last_seen')).toBe(
+      '/admin/alerts?sort=last_seen&dir=desc&severity=critical',
+    )
+  })
+
+  it('toggles one severity chip, back on page 1, and drops a severity it does not know', () => {
+    const params = parseAlertsParams({ severity: 'critical', page: '2' })
+    if (params.tab !== 'open') throw new Error('not open')
+    expect(openSeverityHref(params, 'critical')).toBe('/admin/alerts')
+    expect(openSeverityHref(params, 'warning')).toBe('/admin/alerts?severity=warning')
+    const unknown = parseAlertsParams({ severity: 'all' })
+    if (unknown.tab !== 'open') throw new Error('not open')
+    expect(unknown.severity).toBeNull()
   })
 })
 

@@ -15,7 +15,9 @@ import {
   OPEN_NOTE,
 } from '@/features/admin/lib/alerts-copy'
 import {
+  ALERT_SEVERITIES,
   ALERTS_PATH,
+  type AlertSeverity,
   type AlertsParams,
   alertsListHref,
   alertsSortHref,
@@ -23,8 +25,10 @@ import {
   historyKindHref,
   historyStateHref,
   type OpenSort,
+  openSeverityHref,
 } from '@/features/admin/lib/alerts-params'
 import { formatCount } from '@/features/admin/lib/format'
+import { labelFor, SEVERITY_LABEL } from '@/features/admin/lib/labels'
 import { pageCount } from '@/features/admin/lib/list-params'
 import {
   type AlertRow,
@@ -112,7 +116,7 @@ export async function OpenAlerts({
   params: OpenParams
   now: Date
 }) {
-  const result = await listOpenAlerts(admin, side, params.list)
+  const result = await listOpenAlerts(admin, side, params.list, params.severity)
   return (
     <AlertsSection
       id="open-alerts-heading"
@@ -124,10 +128,21 @@ export async function OpenAlerts({
       }
     >
       <AlertsNote testId="alerts-no-dismiss">{OPEN_NOTE}</AlertsNote>
+      <FilterChips
+        label="Severity"
+        chips={ALERT_SEVERITIES.map((value) => ({ value, label: labelFor(SEVERITY_LABEL, value) }))}
+        selected={params.severity ? [params.severity] : []}
+        href={(value) => openSeverityHref(params, value as AlertSeverity)}
+        allHref={alertsListHref(params, { severity: null })}
+      />
       {result.ok ? (
         <>
           <DataTable
-            caption="Open alerts, critical first"
+            caption={
+              params.severity
+                ? `Open alerts, ${labelFor(SEVERITY_LABEL, params.severity).toLowerCase()} only`
+                : 'Open alerts, critical first'
+            }
             rows={result.data.rows}
             rowKey={(row) => String(row.id)}
             columns={openColumns(now)}
@@ -139,6 +154,19 @@ export async function OpenAlerts({
             empty={
               result.data.total > 0 ? (
                 <PastTheLastPage firstPage={alertsListHref(params, { page: 1 })} />
+              ) : params.severity ? (
+                <EmptyState
+                  title={`No open ${labelFor(SEVERITY_LABEL, params.severity).toLowerCase()} alerts`}
+                  body="Nothing of this severity is open on this side right now."
+                  action={
+                    <Link
+                      href={alertsListHref(params, { severity: null })}
+                      className={QUIET_BUTTON}
+                    >
+                      Show every open alert
+                    </Link>
+                  }
+                />
               ) : (
                 <EmptyState
                   title="No open alerts"

@@ -3,6 +3,7 @@ import 'server-only'
 import { z } from 'zod'
 import { driftComparison, runOutcome } from '@/features/admin/lib/alerts-copy'
 import {
+  type AlertSeverity,
   type DriftSort,
   type HistorySort,
   type HistoryState,
@@ -82,21 +83,27 @@ const OPEN_ORDER: Record<OpenSort, string> = {
   last_seen: 'last_seen_at',
 }
 
-/** Open alerts on the side: critical first, then the most recently seen. */
+/**
+ * Open alerts on the side: critical first, then the most recently seen —
+ * one severity only when asked (`?severity=critical`, the overview's tile).
+ */
 export async function listOpenAlerts(
   admin: AdminPrincipal,
   side: AdminSide,
   list: ListParams<OpenSort>,
+  severity: AlertSeverity | null = null,
 ): Promise<Read<Page<AlertRow>>> {
   const { from, to } = pageRange(list)
   try {
-    const { data, error, count } = await adminDb(admin, side)
+    let query = adminDb(admin, side)
       .from('ops_alerts')
       .select(
         'id, key, severity, kind, summary, first_seen_at, last_seen_at, notify_count, resolved_at',
         { count: 'exact' },
       )
       .is('resolved_at', null)
+    if (severity) query = query.eq('severity', severity)
+    const { data, error, count } = await query
       .order(OPEN_ORDER[list.sort], { ascending: list.dir === 'asc' })
       .order('last_seen_at', { ascending: false })
       .order('id', { ascending: false })
