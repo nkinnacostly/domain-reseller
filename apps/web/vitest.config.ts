@@ -14,7 +14,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
-      include: ['src/features/**/*.{ts,tsx}', 'src/lib/**/*.ts', 'src/components/common/**/*.tsx'],
+      include: [
+        'src/features/**/*.{ts,tsx}',
+        'src/lib/**/*.ts',
+        'src/components/common/**/*.tsx',
+        // The admin gate's wiring (ADMIN-SPEC §2.3): proxy.test.ts.
+        'src/proxy.ts',
+      ],
       exclude: [
         '**/*.test.{ts,tsx}',
         '**/__tests__/**',
