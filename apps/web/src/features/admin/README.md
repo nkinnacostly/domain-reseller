@@ -16,9 +16,30 @@ no RLS bypass. Everything for this feature lives here — `app/(admin)/admin/**`
 | `schemas/` | Zod inputs. `common.ts` has the reason, request key, code and id schemas. |
 | `__tests__/` | `foundation/` is Package A's, including `boundaries.test.ts`, which every B package must pass. |
 
-The rules `boundaries.test.ts` holds: queries and actions are server-only; no `select('*')`;
-no select names a column of personal data, secrets or raw provider answers; `.from()` only
-names `ADMIN_TABLES` keys; writes are only `rpc('admin_*')`; the service client is imported
-only by `queries/session.ts`.
+The rules `boundaries.test.ts` holds: queries and actions are server-only; every `.select(`
+takes a string literal (no variable, no `${…}`), so the scan can read it; no `select('*')`;
+no select names a column in `PRIVATE_COLUMNS` (personal data, secrets, raw provider answers);
+no embed but the table's own side parent, by plain names; `.from()` only names `ADMIN_TABLES`
+keys; writes are only `rpc('admin_*')`; the service client is imported only by
+`queries/session.ts`; and each sensitive projection (`admin_reveal_*`, `admin_find_customers`,
+`admin_float`, the `admin_*_v` views, `order_item_costs`, `supplier_ledger_*`, `float_topups`,
+…) appears only in the package ADMIN-SPEC §9 gives it to (`PERMITTED` in the test).
+
+## Rules for B packages
+
+- **`adminDb(...).from(name).select(columns)`** takes plain column names, plus one embed of the
+  table's side parent by plain names (`orders(order_number)` on `order_items`). Anything else —
+  another embed (the service key would follow `user_id` to `profiles`), an alias, a cast, a JSON
+  path, `*`, a name in `PRIVATE_COLUMNS` — throws. Select once: the builder refuses a second
+  `select()`. Orders are read through `admin_orders_v`, which has no registrant or contacts.
+- **Wrapper errors.** Call `adminAccessError(error.message)` on an RPC error and throw what it
+  returns. A recognised admin code (`admin:role`, `NOT_HELD`, …) becomes an `AdminRefusal`: the
+  call was refused, nothing changed, and `ConfirmAction` takes a new request key. Anything else
+  (`fetch failed`, a statement timeout) is a plain `Error`: the action answers
+  `SERVER_CRASH_WORDS`, `adminOutcome` reads it as `UNKNOWN_OUTCOME`, and the dialog keeps its
+  key — the wrapper may have committed, and trying again with the same key replays it.
+- **Reveals.** `admin_reveal_customer` / `admin_reveal_registrant` show details only on a fresh
+  request key. A replayed key answers `{ ok, auditId, replayed: true }` with no details: take a
+  new key and ask again (gated, rate-limited and audited again).
 
 `app/` routes import from here. Nothing here imports from `app/`.

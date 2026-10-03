@@ -1521,7 +1521,7 @@ Purposeful only: state transitions, list reordering, skeleton→content. Spring 
 
 ## 17. Admin back-office
 
-A real internal tool, not a Supabase Studio session. Separate route group, admins checked in SQL (ADR-006), full audit logging. Built to `docs/ADMIN-SPEC.md`: Package A (the foundation) and packages B1–B15 (the pages). Deferred, and done in the SQL editor meanwhile (ADMIN-SPEC D20): impersonation, force-refund, status override, manual supplier operations, abuse, risk scores, the DSAR queue and SSL revoke.
+A real internal tool, not a Supabase Studio session. Separate route group, admins checked in SQL (ADR-006), full audit logging. Built to `docs/ADMIN-SPEC.md`: Package A (the foundation) and packages B1–B15 (the pages). Deferred, and done in the SQL editor meanwhile (ADMIN-SPEC D20): impersonation, force-refund, status override, manual supplier operations, abuse, risk scores, the DSAR queue, SSL revoke and CSV export of personal data.
 
 | Module | Capability | Status |
 |---|---|---|

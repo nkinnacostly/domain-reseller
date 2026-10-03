@@ -245,10 +245,13 @@ end $$;
 
 **`admin_gate(p_admin admins, p_action text, p_target_ok_for_test boolean) returns text`** returns the first refusal code, or null:
 1. `UNKNOWN_ACTION`.
-2. `ROLE`.
-3. `NEEDS_CODE`: a money action whose `amr` totp is older than 5 min.
-4. `HELD`.
-5. `TEST_ADMIN`.
+2. `TEST_ADMIN` for an action whose test rule is `never`, whatever the role.
+3. `ROLE`.
+4. `NEEDS_CODE`: a money action whose `amr` totp is older than 5 min.
+5. `HELD`.
+6. `TEST_ADMIN` for a target the test rule refuses (`test_target`, `reserved_target`).
+
+*Amended in the Package A review (3 Oct 2026; owner to acknowledge):* the build checks a test admin's `never` actions before the role, so a test operator asking for an owner action (settings, prices) is told `TEST_ADMIN` — the true reason — rather than `ROLE`. §3.3 check 11 relies on this order.
 
 Wrappers call `admin_session('viewer')` for identity, which raises without an audit row. They then call `admin_gate`, whose refusals **are** recorded.
 
@@ -272,6 +275,8 @@ Wrappers call `admin_session('viewer')` for identity, which raises without an au
   - `Cache-Control: private, no-store`
   - **A nonce CSP:** `script-src 'self' 'nonce-<n>' 'strict-dynamic'` (no `'unsafe-inline'`), `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`. The nonce is also set on the request header so Next stamps its scripts. `next.config.ts`'s global CSP `source` pattern excludes `/admin`.
 - Server-action POSTs to `/admin/*` pass through the same branch. Actions check again.
+- **Matchers.** The proxy's general matcher skips paths ending in an image extension (`.png`, `.svg`, …), which would also skip `/admin/orders/x.png`. `config.matcher` therefore lists `'/admin'` and `'/admin/:path*'` on their own (matchers are OR'd), so every `/admin` path gets the gate and the headers.
+- **The layout as a second layer.** `app/(admin)/admin/layout.tsx` awaits `assertAdminArea()` (`adminSessionStatus()`, once per request) and calls `notFound()` for `not_admin` before it renders the sidebar or anything with admin words, and its `generateMetadata` gives a stranger no admin title. Should the proxy ever not run for a path, a stranger still sees the plain not-found page; only the proxy can make the status 404, because the page's static shell has gone out first (CLAUDE.md §15, "A streamed page cannot change its status code").
 
 **`features/admin/queries/session.ts`** (`import 'server-only'`):
 ```ts
@@ -288,6 +293,7 @@ export async function adminSessionStatus(): Promise<'ok' | 'needs_code' | 'facto
 
 **`adminDb(admin, side)`** throws unless `admin` is in the module WeakSet of issued principals. It returns an `AdminDb` whose only method is `from(name).select(columns, opts)`:
 - **Allowed names.** `name` must be a key of `ADMIN_TABLES`, a fixed map in `session.ts`. Insert, update, delete, upsert and rpc do not exist on the type.
+- **Named columns only.** `columns` is plain column names, plus at most one embed of the table's own side parent by plain names (`orders(order_number)` on `order_items`). Any other embed — the service key would follow `orders.user_id` or `refunds.user_id` to `profiles`, or `orders.contact_profile_id` to `contact_profiles` — and any alias, cast, spread, JSON path or `*` throws, as does a name in `PRIVATE_COLUMNS` (the §8.1 list plus `email`, `phone`, `full_name`, `business_name`, `tax_id`, `contact_profile_id`; `key` on `ops_alerts` only). The builder refuses a second `select()`, which would replace the checked columns.
 - **Side filter.** Each entry names how the side is applied, and `select` applies it before returning the builder:
   - `test_mode` → `.eq('test_mode', side === 'test')`
   - `environment` (`supplier_calls`) → `'ote' | 'production'`
@@ -296,10 +302,13 @@ export async function adminSessionStatus(): Promise<'ok' | 'needs_code' | 'facto
     - `domain_events`, `domain_nameserver_history` → `domains`
     - `order_item_costs` → `order_items` → `orders`
   - `test_actor` (`admin_audit_log`) → `.eq('test_actor', true)` for a test admin; no filter otherwise.
+  - `live_only` (`float_topups`, which records live top-ups only) → no filter on the live side; nothing on the test side.
   - `global` → no filter.
 - **`global` entries:** `tlds`, `ssl_products`, `nameserver_presets`, `nameserver_preset_drafts`, `fx_rates`, `pricing_settings`, `ops_settings`, `service_heartbeats`, `reconcile_runs`, `registry_drift`, `ops_alerts`. The last three carry `test_mode` and use it.
+- **`test_mode` entries:** `admin_orders_v`, `refunds`, `payment_incidents`, `jobs`, `ssl_jobs`, `registry_drift`, `reconcile_runs`, `ops_alerts`, `supplier_ledger_entries`, `supplier_ledger_revisions`, `supplier_balance_snapshots`, `metrics_daily`, `funnel_daily`, and the masked views `admin_payments_v`, `admin_domains_v`, `admin_ssl_certificates_v`, `admin_email_outbox_v`, `admin_compliance_notices_v`.
+- *Amended in the Package A review (3 Oct 2026; owner to acknowledge):* the map holds the tables the B packages read beyond the v2 list — `payment_incidents`, `supplier_balance_snapshots`, `metrics_daily`, `funnel_daily`, `supplier_ledger_entries`, `supplier_ledger_revisions`, `float_topups` (with the `live_only` rule) — and reads orders through `admin_orders_v`, never `orders`. `boundaries.test.ts` pins this list.
 - **Test admins.** For a `test_only` principal, `side` is forced to `'test'`. Every entry must have a side filter or be marked `publicSafe`; others throw `TEST_ADMIN`. Only `tlds`, `ssl_products`, `nameserver_presets`, `fx_rates` and `pricing_settings` are `publicSafe`, because the storefront already shows them.
-- **Never in the map:** `profiles`, `payments`, `email_outbox`, `compliance_notices`, `ssl_certificates`, `domains`, `transfer_secrets`, `admins`, `admin_changes`. Rows from these come through the masked views (§3.2i) or `admin_*` functions.
+- **Never in the map:** `orders`, `profiles`, `contact_profiles`, `payments`, `email_outbox`, `compliance_notices`, `ssl_certificates`, `domains`, `transfer_secrets`, `admins`, `admin_changes`. Rows from these come through the masked views (§3.2i) or `admin_*` functions.
 
 **`requireAdmin()`:**
 1. Calls `createClient()` and `getUser()`. Without a user it calls `notFound()`.
@@ -437,7 +446,7 @@ There are **no role or freshness parameters**.
 - `created_at > now() - interval '60 seconds'`.
 - Not `test_actor` when `p_side` is `live` or `global`.
 
-It inserts into `admin_note_claims`; a conflict returns `USED`. It returns `{ok}` or `{ok:false, code}` with one of: `NOT_FOUND`, `NOT_INTENT`, `ACTION_MISMATCH`, `LABEL_MISMATCH`, `TARGET_MISMATCH`, `SIDE_MISMATCH`, `EXPIRED`, `USED`, `TEST_ADMIN`.
+It inserts into `admin_note_claims`; a conflict returns `USED`. It returns `{ok, auditId, testActor, detail}` — the note's own `detail`, so a route acts on what the admin noted, never on its query string — or `{ok:false, code}` with one of: `NOT_FOUND`, `NOT_INTENT`, `ACTION_MISMATCH`, `LABEL_MISMATCH`, `TARGET_MISMATCH`, `SIDE_MISMATCH`, `EXPIRED`, `USED`, `TEST_ADMIN`, `REVOKED` (the admin was revoked after writing the note).
 
 **`admin_note_result(p_audit_id bigint, p_outcome text, p_code text, p_detail jsonb) returns bigint`**, `service_role`:
 - It requires a claim for `p_audit_id`.
@@ -505,7 +514,7 @@ Two migrations, both owned by Package A. After each one, the builder:
 |---|---|
 | **none** (definer-internal, triggers, or `pg_cron` as `postgres`) | `admin_session`, `admin_tier`, `admin_gate`, `admin_replay`, `admin_record`, `admin_reason_problem`, `purge_test_admin_audit`, `match_supplier_ledger`, `ledger_alert_conditions`, `admin_alert_conditions`, `cron_alert_conditions`, `record_metrics_daily`, the trigger functions `admins_factor_is_theirs`, `admins_log_change`, `admin_changes_final`, `admin_audit_is_final`, `supplier_ledger_is_final`, `append_only_final`, `order_item_costs_final` |
 | **`authenticated`** | `admin_status`, `admin_whoami`, `admin_note`, `admin_redact_reason`, every write wrapper in §3.1.2, `admin_record_float_topup`, `admin_correct_float_topup`, `admin_find_customers`, `admin_reveal_customer`, `admin_reveal_registrant`, every read function in §3.2h |
-| **`service_role`** | `admin_claim_note`, `admin_note_result`, `grant_test_admin`, `record_flw_refund_check`, `preset_drafts_for_check`, `record_preset_draft_check`, `record_supplier_ledger`, `bump_funnel`, `admin_mask_email`, `seed_test_failed_email`, `hold_test_refund`, `purge_test_ledger_entries`; **select only** on the views `admin_payments_v`, `admin_email_outbox_v`, `admin_compliance_notices_v`, `admin_ssl_certificates_v`, `admin_domains_v` |
+| **`service_role`** | `admin_claim_note`, `admin_note_result`, `grant_test_admin`, `record_flw_refund_check`, `preset_drafts_for_check`, `record_preset_draft_check`, `record_supplier_ledger`, `bump_funnel`, `admin_mask_email`, `seed_test_failed_email`, `hold_test_refund`, `purge_test_ledger_entries`; **select only** on the views `admin_payments_v`, `admin_email_outbox_v`, `admin_compliance_notices_v`, `admin_ssl_certificates_v`, `admin_domains_v`, `admin_orders_v` |
 | unchanged (`postgres`, `service_role`) | `current_alert_conditions`, re-created in 41; `create or replace` keeps its ACL, and the check asserts it |
 
 **Table privileges** (migration 40, item 8). Today RLS is the only thing preventing these writes. The admin wrappers now own these tables, so one permissive policy added later would open live pricing to the anon key.
@@ -553,7 +562,7 @@ Contents, in order:
 5. `grant_test_admin` (§2.7).
 6. Supporting tables:
    - `flw_refund_checks`: id, created_at, test_mode, target_type (`refund` or `incident`), target_id, flw_refund_id, tx_id, amount_kobo, currency, status, disburse_status, state (`done`, `failed` or `pending`), audit_id. Append-only.
-   - `record_flw_refund_check(…)`.
+   - `record_flw_refund_check(…)`. It writes a row only for a `refund.flw_check` note claimed under 2 minutes ago on the same side, when `p_flw_refund_id` is the note's `target_id`, the refund or incident is the one the note's `detail` names (`refund_id` or `incident_id`, exactly one), and no check exists for that note yet (also a unique index on `audit_id`). Otherwise it raises `admin:not_claimed`, `admin:target_mismatch` or `admin:check_recorded`.
    - `nameserver_preset_sources(provider, host)`, seeded with `vercel.com`, `www.hostinger.com`, `truehost.com.ng`, `developers.cloudflare.com` and `docs.netlify.com`.
    - `nameserver_preset_drafts`: id, preset_id (null for new), provider, nameservers, source_url, notes, assigns_per_zone, saved_by, saved_at, check_ok, checked_at, check_detail, published_at, discarded_at.
    - `preset_drafts_for_check()` and `record_preset_draft_check(p_draft_id, p_ok, p_detail)`.
@@ -649,8 +658,8 @@ The tier comes from `admin_tier` (§2.2). A `test_only` admin is refused `TEST_A
 | `admin_requeue_email(p_email_id, p_reason, …)` | Status `failed`. `complained_at` null. `coalesce(delivery_status,'') <> 'bounced'`. | `update email_outbox set status='pending', attempts=0, next_attempt_at=now(), last_error=null, claimed_by=null, claimed_at=null` | kind, category |
 | `admin_queue_deep_sync(p_domain_id, p_reason, …)` | The domain exists, `source <> 'demo'`, and `local_status in ('active','expired_grace','redemption')` (`NOT_SYNCABLE`). The side's `gateway:<production\|ote>` heartbeat is under 15 min old (`NO_GATEWAY`). | `update domains set deep_checked_at = null` | domain id |
 | `admin_find_customers(p_query text)` | `customer.search`. A test admin sees reserved-email profiles only. 30 searches and reveals per admin per hour (`RATE_LIMITED`). | Exact match on a lower-cased email, order number, or domain. Returns at most 20 masked rows: `{userId, maskedEmail, joinedAt, domainsHeld, ordersPaid}`. | `{kind, matched: [user ids]}`; the query text is never stored |
-| `admin_reveal_customer(p_user_id, p_reason, …)` | `customer.reveal`. A reserved-email target for a test admin. Same rate limit. Reason optional. | Returns `{email, fullName, phone, businessName}`. | target id only |
-| `admin_reveal_registrant(p_domain_id, p_reason, …)` | `domain.reveal_contacts`. A `test_mode` domain for a test admin. Same rate limit. | Returns the registrant and `contacts`. | target id only |
+| `admin_reveal_customer(p_user_id, p_reason, …)` | `customer.reveal`. A reserved-email target for a test admin. Same rate limit. Reason optional. | Returns `{email, fullName, phone, businessName}`. **A replayed key returns `{ok, auditId, replayed}` with no details**: they are read only after the gate, the limit and a new audit row, so a key kept from before a demotion shows nothing. | target id only |
+| `admin_reveal_registrant(p_domain_id, p_reason, …)` | `domain.reveal_contacts`. A `test_mode` domain for a test admin. Same rate limit. | Returns the registrant and `contacts`. A replay carries no details, as above. | target id only |
 
 `admin_record_float_topup` and `admin_correct_float_topup` are in migration 41 (§3.2b).
 
@@ -794,7 +803,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 
 **(g) Alert conditions.** Each returns `table(key text, severity text, kind text, summary text)`, is STABLE and SECURITY DEFINER, and has no grant.
 
-- **`ledger_alert_conditions(p_test_mode)`** returns nothing unless a `service_heartbeats` row `supplier_ledger:%` exists for the side. Rows with `description like 'e2e-%'` are ignored.
+- **`ledger_alert_conditions(p_test_mode)`** returns nothing unless a `service_heartbeats` row `supplier_ledger:%` exists for the side. Rows with `description like 'e2e-%'` are ignored **on the test side only** (e2e seeds them there; `float_runway` does the same). Anyone can register an `e2e-*` name, so on the live side such a debit is a real one: it is unexplained, double, refunded-line or price drift like any other, and counted in `ledgerUnexplained`.
 
 | Key | Severity | Kind | Fires when |
 |---|---|---|---|
@@ -846,8 +855,8 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 | `admin_float(p_test_mode)` | jsonb `{side, balanceCents, takenAt, alertCents, committedCents, uncostedLines, burn7dCents, burn30dCents, burnState:'known'\|'stale'\|'short_history', runwayDays:number\|null, lastKnownRunway:{days,at}\|null, shortByCents\|null, target21dCents, topUpToTargetCents, topups:[{id,traceId,occurredAt,usdCents,ngnPaidKobo,rateKoboPerCent,reference,supersedesId}], ledgerSyncedAt, ledgerReadAt}` | test side | B1, B6 |
 | `admin_ledger_daily(p_test_mode, p_from, p_to)` | table `(day, debit_cents, credit_cents, close_cents)` from the mirror | test side | B6 |
 | `admin_customer_stats()` | jsonb `{profiles, confirmed, liveBuyers, mfaUsers, holders, active30d, signupsByDay (30), over10NoMfa}` | **raises** | B8 |
-| `admin_customers(p_test_mode, p_sort, p_dir, p_offset, p_limit, p_filter jsonb)` | table `(user_id, account_type, masked_email, joined_at, domains_held, orders_paid, total_paid_kobo, has_totp, email_confirmed, last_sign_in_at, is_admin, total_count)`. Sorts are allowlisted: joined, domains, orders, paid, last_sign_in. `p_limit` ≤ 100. | reserved-email profiles only | B8 |
-| `admin_customer(p_user_id, p_test_mode)` | jsonb `{maskedEmail, accountType, joinedAt, emailConfirmed, hasTotp, lastSignInAt, isAdmin, counts:{domains,orders,spentKobo,refunds}, allowance}` (allowance via `account_domain_allowance`) | reserved only | B8 |
+| `admin_customers(p_test_mode, p_sort, p_dir, p_offset, p_limit, p_filter jsonb)` | table `(user_id, account_type, masked_email, joined_at, domains_held, orders_paid, total_paid_kobo, has_totp, email_confirmed, last_sign_in_at, is_admin, total_count)`. Sorts are allowlisted: joined, domains, orders, paid, last_sign_in. `p_limit` ≤ 100. | test side, reserved-email profiles only | B8 |
+| `admin_customer(p_user_id, p_test_mode)` | jsonb `{maskedEmail, accountType, joinedAt, emailConfirmed, hasTotp, lastSignInAt, isAdmin, counts:{domains,orders,spentKobo,refunds}, allowance}` (allowance via `account_domain_allowance`) | test side, reserved only | B8 |
 | `admin_domain_stats(p_test_mode)` | jsonb `{byTldStatus, expiries:{expired,d30,d60,d90,autoOn90,autoOff90,next}, delegation, registryAutoRenewLabel}` | test side | B9 |
 | `admin_tld_held_counts(p_test_mode)` | table `(tld, held)` | test side | B13 |
 | `admin_preset_usage(p_test_mode)` | table `(preset_id, domains, orders, lines)` | test side | B13 |
@@ -866,6 +875,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 | `admin_compliance_notices_v` | `id, test_mode, domain_id, domain_name, notice_type, window, expires_at, channel, masked_recipient, template_version, sent_at, delivery_status, checked_at` | B11 |
 | `admin_ssl_certificates_v` | every column except `csr`, `contact`, `approver_email`; plus `approver_masked` | B10 |
 | `admin_domains_v` | every column except `registrant`, `contacts`, `pending_registrant`, `pending_contacts`; plus `registrant_country`, `registrant_type` | B9, B2, B4 |
+| `admin_orders_v` | every column of `orders` except `registrant`, `contacts`, `contact_profile_id` (added in the Package A review: the map read `orders` whole) | B2 and any page showing an order |
 
 **(j) Test-only helpers** (`service_role`; each refuses a non-`e2e-*@example.com` user or a live row):
 - **`seed_test_failed_email(p_user_id) returns uuid`** inserts one `test_mode` `email_outbox` row with status `failed`.
@@ -1049,7 +1059,7 @@ All routes return `{ ok: true, data }`. Types live in `packages/shared/src/admin
 | `POST /v1/admin/supplier/catalogue/apply` (`supplier.catalogue_apply`) | `syncCatalogue({apply:true})`, then `catalogue/refresh.ts`, then the `catalogue:production` heartbeat | low | invalidates the preview; 1 per 10 min (`TOO_SOON`) | `AdminCatalogueApply {outcome, reason, changes, readAt}` |
 | `POST /v1/admin/supplier/ssl-catalogue/apply` (`supplier.ssl_catalogue_apply`) | `syncSslProducts({apply:true})` (never `is_sellable`) | low | same | same |
 | `GET /v1/admin/supplier/ssl/:name?side=` (`supplier.ssl_lookup`) | `SslClient.status` (+ `details` unless `*.`) | normal / 12 s | none; 30 s per name | `AdminSslStatus {…, readAt}` |
-| `GET /v1/admin/flutterwave/refunds/:flwRefundId?side=&refund=\|incident=` (`refund.flw_check`) | Flutterwave `getRefund` with the side's key, then `record_flw_refund_check` | own bucket (not the supplier lane) | none | `AdminFlwRefundCheck {checkId, flwRefundId, transactionId, amountKobo, status, state:'done'\|'failed'\|'pending' (refundState), readAt}` |
+| `GET /v1/admin/flutterwave/refunds/:flwRefundId?side=&refund=\|incident=` (`refund.flw_check`) | The refund or incident comes from the claimed note's `detail`; a query string naming another gives `403 TARGET_MISMATCH` before Flutterwave is called. Then Flutterwave `getRefund` with the side's key, and `record_flw_refund_check` with the note's target | own bucket (not the supplier lane) | none | `AdminFlwRefundCheck {checkId, flwRefundId, transactionId, amountKobo, status, state:'done'\|'failed'\|'pending' (refundState), readAt}` |
 | `POST /v1/admin/presets/drafts/:id/check` (`preset.draft_check`) | DoH A/AAAA on Cloudflare and Google for each host (the `presets/` module), then `record_preset_draft_check` | not supplier | 1 per 60 s per draft | `AdminPresetDraftCheck {ok, hosts:[{host, ok}], checkedAt}` |
 
 **`LedgerKind`** (`packages/shared/src/admin/ledger.ts`):
@@ -1632,7 +1642,9 @@ All metrics are filtered by side (live by default), exclude `source = 'demo'`, u
   - **no select string names one of these whole column names** (word-boundary match, so `idempotency_key` passes): `auth_code`, `raw`, `csr`, `contact`, `contacts`, `registrant`, `pending_registrant`, `pending_contacts`, `to_email`, `recipient`, `approver_email`, `delivery_detail`, `data`, `private_key`, `secret`, `key`. `key` is allowed only in `queries/alerts.ts` (`ops_alerts.key`);
   - `.from()` names appear only as keys of `ADMIN_TABLES`, and `ADMIN_TABLES` equals the list in §2.3;
   - writes are only `.rpc('admin_*')`;
-  - no service-client import outside `session.ts`.
+  - no service-client import outside `session.ts`;
+  - every `.select(` takes a string or template literal with nothing interpolated (`session.ts`'s own `select(list, …)` excepted), names no `PRIVATE_COLUMNS` entry (the list above plus `email`, `phone`, `full_name`, `business_name`, `tax_id`, `contact_profile_id`), and embeds nothing but the table's side parent by plain names;
+  - each sensitive projection in the §9 table (and `admin_reveal_*`, `admin_find_customers`) appears only in the area paths of the package it is given to; Package A's shared files may use `admin_attention_counts` and define `checkFlutterwaveRefund`.
 - **SQL:** `supabase/tests/admin.sql` and `admin_data.sql` (§3.3).
 - **Gateway:** §4.6, plus MSW handlers for every `/v1/admin/*` route in `apps/web/tests/mocks/handlers.ts`.
 - **E2E (Playwright):**
@@ -1758,11 +1770,11 @@ Each B package's area paths:
 - **Database:** both migrations and both SQL check files; `packages/db/src/database.types.ts`.
 - **Shared:** `packages/shared/src/admin/{supplier.ts, ledger.ts, alert-href.ts, money.ts (usdToCents), index.ts}` and tests; `packages/shared/package.json` (`./admin`); `packages/shared/src/email/notices.ts`, adding `NOT_AT_REGISTRY` ("The registry did not register it, so nothing was bought."), `TRANSFER_REFUSED` ("The registry refused the transfer, so the domain did not move to us."; added if missing), `STOPPED_BY_ADMIN` ("We stopped this change. Your domain keeps the settings the registry shows.") and `FAILED_BY_ADMIN` ("The certificate was not ordered, so nothing was bought."). No existing wording changes.
 - **Gateway:** `apps/gateway/src/admin/**`, `ledger/**`, `presets/**` (drafts), `{app.ts, server.ts, env.ts}`, `alerts/{format.ts, store.ts}`, and tests.
-- **Web infrastructure:** `apps/web/src/proxy.ts`, **`apps/web/next.config.ts`** (the CSP source excludes `/admin`), `lib/{safe-action.ts, env.ts, gateway.ts}`, `lib/supabase/server.ts`, `features/auth/lib/use-signed-in.ts`.
+- **Web infrastructure:** `apps/web/src/proxy.ts`, **`apps/web/next.config.ts`** (the CSP source excludes `/admin`), `lib/{safe-action.ts, env.ts, gateway.ts}`, `lib/supabase/{server.ts, cookies.ts}`, `features/auth/lib/{use-signed-in.ts, signed-in-hint.ts}`; the root **`turbo.json`** (`GATEWAY_ADMIN_SECRET` passed through like the shared secret).
 - **Components:** `components/layout/{app-sidebar.tsx, app-sidebar-client.tsx}`, `components/common/{refresh-while.tsx, action-parts.tsx}`, import updates, `components/ui/textarea.tsx`.
 - **Admin routes:** `app/(admin)/admin/{layout.tsx, error.tsx}` and every placeholder; `features/admin/README.md`.
 - **Admin shared code:**
-  - `features/admin/lib/{actions,list-params,format,labels,tone,playbook,errors,side,href}.ts`, `schemas/common.ts`;
+  - `features/admin/lib/{actions,list-params,format,labels,tone,playbook,errors,side,href,gate}.ts`, `schemas/common.ts`;
   - `queries/{session,attention,gateway}.ts`, `actions/{side,supplier-live}.ts`;
   - the shared components; `__tests__/foundation/**`.
 - **Tests and CI:** `apps/web/tests/mocks/handlers.ts`, `tests/e2e/support/{accounts.mjs, admin.ts, admin-seed.mjs, mock-gateway.mjs, global-teardown.mjs}`, `tests/e2e/admin.spec.ts`, `playwright.config.ts`, `.github/workflows/ci.yml`.
@@ -1796,7 +1808,7 @@ Each B package's area paths:
 | **B10 SSL** | `ssl/**`, `queries/ssl.ts`, `__tests__/ssl/**`, `tests/e2e/admin-ssl.spec.ts` | **E2E:** list and detail (skipped when `hasSslSchema()` is false); "Check status now"; the approver masked; no "valid for a year". |
 | **B11 Emails** | `emails/**`, `queries/emails.ts`, `actions/emails.ts`, `__tests__/emails/**`, `tests/e2e/admin-emails.spec.ts` | **E2E:** recipients masked; **a failed email seeded with `seed_test_failed_email`** → "Send again" → `pending`; not offered for a bounced row; the compliance tab is read-only. |
 | **B12 Pricing & FX** | `pricing/**`, `queries/pricing.ts`, `actions/pricing.ts`, `lib/pricing-copy.ts`, `__tests__/pricing/**`, `tests/e2e/admin-pricing.spec.ts` | **Unit:** the impact line uses the shared pricing functions; a rate older than 48 h, or older than the active one, offers Reject only (fixtures). **E2E (test admin; no FX row is seeded):** the page renders whatever FX state exists; VAT is read-only; Save and Activate are refused with the role words; nothing changes. |
-| **B13 Settings** | `settings/**`, `queries/settings.ts`, `actions/{settings,extensions,ssl-products,presets}.ts`, `lib/settings-copy.ts`, `schemas/settings.ts`, `__tests__/settings/**`, `tests/e2e/admin-settings.spec.ts` | **Unit:** pause copy; the 11-field limits form with bounds; the preset draft form; `revalidateTag('nameserver-presets', { expire: 0 })` after publish, hide and show. **E2E:** extensions filter, with held counts; the pause dialog needs type-to-confirm; a test admin is refused; the preset list shows blast radius and drafts; the admins page shows only the test admin's own row with its pinned-device state. |
+| **B13 Settings** *(open question for the owner before B13 starts: `nameserver_preset_drafts`, `ops_settings` and `service_heartbeats` are refused to a test admin by §2.3, but this e2e runs as one and expects drafts. Either make drafts `publicSafe`, or run that step as a non-test admin.)* | `settings/**`, `queries/settings.ts`, `actions/{settings,extensions,ssl-products,presets}.ts`, `lib/settings-copy.ts`, `schemas/settings.ts`, `__tests__/settings/**`, `tests/e2e/admin-settings.spec.ts` | **Unit:** pause copy; the 11-field limits form with bounds; the preset draft form; `revalidateTag('nameserver-presets', { expire: 0 })` after publish, hide and show. **E2E:** extensions filter, with held counts; the pause dialog needs type-to-confirm; a test admin is refused; the preset list shows blast radius and drafts; the admins page shows only the test admin's own row with its pinned-device state. |
 | **B14 Audit** | `audit/**`, `queries/audit.ts`, `__tests__/audit/**`, `tests/e2e/admin-audit.spec.ts` | **E2E:** rows from earlier steps appear (a side switch does not audit; a lookup writes an intent row); filters by prefix and outcome; `detail` expands; no edit controls for an operator. |
 | **B15 Instrumentation** | `features/checkout/actions/place-order.ts`, `features/renewals/actions/{place-renewal,place-renewals}.ts`, `features/transfers/actions/place-transfer.ts`, `features/cart/actions/{cart,ssl}.ts`, `features/checkout/lib/cost.ts` (`lineCostUsd()` → `{supplierCents, icannCents}`), **`features/renewals/lib/renewal.ts`** (`renewalCostUsd`), **`features/transfers/lib/start.ts`** (`transferCostUsd`), and their existing tests | **Unit:** per-line cents equal the pre-flight total summed, cent-exact, for register (including .ai 2-year), renew, transfer and SSL; the ICANN share is split out; a failed cost insert never fails the order; `bump_funnel` is called once per add and a failure never fails the add. **Integration:** inserted lines get `order_item_costs` rows; `order_items` gains no cost column. The existing checkout, renewals, transfers and cart e2e suites stay green. |
 
