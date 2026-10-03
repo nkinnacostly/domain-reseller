@@ -84,9 +84,6 @@ export const REVEAL_NOTE =
 export const REVEAL_SHOWN_NOTE =
   'Shown for this view only: cleared when you leave this page. Don’t copy it anywhere it would be kept.'
 export const REVEAL_ROLE = 'Your admin role can’t see contact details. Ask the owner.'
-/** A replayed request key answers without details (D4): the page asks again with a new key. */
-export const REVEAL_REPLAYED =
-  'That view was recorded, but its details are shown only once. Ask again: it is a new view, and it is recorded too.'
 export const REVEAL_UNREADABLE =
   'The view was recorded, but its details couldn’t be read. Ask again: it is a new view, and it is recorded too.'
 

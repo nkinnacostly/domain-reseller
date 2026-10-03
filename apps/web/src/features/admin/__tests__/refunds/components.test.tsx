@@ -209,7 +209,10 @@ describe('RefundActions', () => {
 
 describe('RecordRefund: the record step stays shut without a matching check', () => {
   const recordButton = () => screen.getByRole('button', { name: 'Record ₦19,672.50 as refunded' })
-  const withCharge = { ...refund, providerReference: '456' }
+  const withCharge: typeof refund & { providerReference: string | null } = {
+    ...refund,
+    providerReference: '456',
+  }
 
   /** Opens the dialog, where the check and the record both sit. */
   async function open(props: typeof withCharge = withCharge) {

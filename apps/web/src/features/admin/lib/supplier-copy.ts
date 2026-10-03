@@ -57,12 +57,6 @@ export const TOPUP_FIELDS = {
   referenceInvalid: 'Give the payment reference in 1 to 80 characters.',
 } as const
 
-/** A wrapper's codes, worded for a top-up rather than the refund words they share. */
-export const TOPUP_CODE_WORDS: Readonly<Record<string, string>> = {
-  BAD_REFERENCE: TOPUP_FIELDS.referenceInvalid,
-  OUT_OF_RANGE: TOPUP_FIELDS.paidInvalid,
-}
-
 export const TOPUPS_LIVE_ONLY =
   "Top-up costs are recorded on the live side only: the test side's credits are the sandbox's, not money we paid."
 

@@ -1,8 +1,12 @@
 'use server'
 
 import { z } from 'zod'
-import { REVEAL } from '@/features/admin/lib/domains-copy'
-import { type AdminResult, adminAccessError, toAdminResult } from '@/features/admin/lib/errors'
+import {
+  type AdminResult,
+  adminAccessError,
+  refusedResult,
+  toAdminResult,
+} from '@/features/admin/lib/errors'
 import { optionalReasonSchema, requestKeySchema, uuidSchema } from '@/features/admin/schemas/common'
 import { adminAction } from '@/lib/safe-action'
 
@@ -124,7 +128,7 @@ export const revealRegistrant = adminAction('domain.reveal_contacts', domainInpu
     if (!result.ok) return result
     // A replayed key carries no details (§3.1.2): a new key asks again, through the gate and the limit.
     if (result.replayed) {
-      return { ok: false, code: 'REPLAYED', message: REVEAL.replayed, auditId: result.auditId }
+      return refusedResult('REPLAYED', result.auditId)
     }
     return { ok: true, auditId: result.auditId, data: revealed(data) }
   },

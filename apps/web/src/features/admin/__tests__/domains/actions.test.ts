@@ -1,7 +1,6 @@
 import { headers } from 'next/headers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queueDeepSync, revealRegistrant } from '@/features/admin/actions/domains'
-import { REVEAL } from '@/features/admin/lib/domains-copy'
 import { ADMIN_ERROR_WORDS, SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
@@ -204,7 +203,7 @@ describe('revealRegistrant (§5.2 B9): audited, rate-limited, details to the bro
     expect((await revealRegistrant(input)).data).toEqual({
       ok: false,
       code: 'REPLAYED',
-      message: REVEAL.replayed,
+      message: ADMIN_ERROR_WORDS.REPLAYED,
       auditId: 12,
     })
   })

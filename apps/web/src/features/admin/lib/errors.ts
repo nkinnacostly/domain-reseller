@@ -69,7 +69,9 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   NOT_CANCELLABLE: "This refund can't be cancelled from where it is now.",
   HAS_PROVIDER_REFUND:
     'Flutterwave has a refund for this. If the money went back, record the Flutterwave refund instead.',
-  BAD_REFERENCE: "That isn't a Flutterwave refund id.",
+  // Shared by a Flutterwave refund id and a top-up's payment reference.
+  BAD_REFERENCE:
+    "That reference isn't one the database accepts. Copy it again, exactly as Flutterwave or the bank shows it.",
   NOT_RECORDABLE: "This refund can't be recorded as paid from where it is now.",
   FLW_NOT_VERIFIED:
     'Check the refund with Flutterwave first. It must be this charge, this amount, completed, and checked in the last 15 minutes.',
@@ -106,9 +108,12 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   RATE_TOO_OLD: 'Too old to activate — the daily job will fetch a fresh one.',
   NEWER_RATE_ACTIVE: 'A newer rate is already active. Reject this one.',
   UNKNOWN_KEY: "That setting can't be changed here.",
-  OUT_OF_RANGE: 'A value is outside what this setting allows.',
+  // Shared by settings, prices, extension ranks and a top-up's naira.
+  OUT_OF_RANGE: "A value is outside what's allowed here. Check the figures and try again.",
   NO_CHANGES: 'Nothing was changed.',
   PAUSE_REASON: 'Say why the extension is paused, in 3 to 120 characters.',
+  RANK_TAKEN:
+    'That featured rank belongs to another extension. Choose another rank, or move that extension first.',
   NO_PRICE: 'DomainNameAPI lists no price for this product yet.',
   INCOMPLETE_PRODUCT: "This product's details are incomplete, so it can't be sold yet.",
 
@@ -134,6 +139,9 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   NOT_SYNCABLE: 'Only a live domain — active, expired or in redemption — can be read again.',
   NO_GATEWAY: 'No gateway is reading this side right now, so nothing would read it.',
   BAD_QUERY: 'Search by an exact email address, order number or domain.',
+  // A reveal's details come only with a new request key (D4).
+  REPLAYED:
+    'That view was recorded, but its details are shown only once. Ask again: it is a new view, and it is recorded too.',
   NOT_TOPUP: 'That ledger entry is not a top-up.',
   ALREADY_RECORDED: "This top-up's cost is already recorded. Correct it instead.",
   NOT_CURRENT: 'That record was already corrected. Correct the newest one.',

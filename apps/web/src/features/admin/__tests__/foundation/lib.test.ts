@@ -178,6 +178,20 @@ describe('errors: every code has words (§2.4)', () => {
     expect(adminErrorWords(null)).toBe(FALLBACK_WORDS)
   })
 
+  it('words the codes several pages share once, for all of them', () => {
+    // A refund id and a top-up's reference; a setting, a price and a top-up's naira.
+    expect(adminErrorWords('BAD_REFERENCE')).not.toMatch(/refund/i)
+    expect(adminErrorWords('OUT_OF_RANGE')).not.toMatch(/setting/i)
+    // A reveal answered on a replayed key carries no details: customers and domains alike.
+    expect(adminErrorWords('REPLAYED')).toBe(
+      'That view was recorded, but its details are shown only once. Ask again: it is a new view, and it is recorded too.',
+    )
+    // Migration 42 records a taken featured rank as a refusal; the extensions page also checks first.
+    expect(adminErrorWords('RANK_TAKEN')).toMatch(
+      /^That featured rank belongs to another extension/,
+    )
+  })
+
   it('never passes a database message through, and calls an unknown error an unknown outcome', () => {
     // A timeout or a lost answer may come after the wrapper committed: not a
     // refusal, so the words never say "nothing changed" and the key is kept.

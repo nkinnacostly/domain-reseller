@@ -101,6 +101,7 @@ const DETAIL: RefundDetail = {
   providerStatus: null,
   failedProviderRefundIds: [],
   paymentId: '3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f',
+  providerReference: '456',
   testMode: true,
   order: {
     id: ORDER,

@@ -105,8 +105,6 @@ export const REVEAL = {
     'The full registrant and contacts are hidden. Showing them is recorded in the audit log and counts toward your hourly limit of look-ups.',
   none: 'No registrant is recorded for this domain.',
   roleOnly: 'Your admin role can see the summary, not the full registrant.',
-  replayed:
-    'That request was already answered, so the details were not sent again. Ask again to see them.',
 } as const
 
 export const CONTACT_ROLE_LABEL: Readonly<Record<string, string>> = {
