@@ -1,0 +1,23 @@
+{
+  "readAt": "2026-10-03T01:53:33.758Z",
+  "environment": "ote",
+  "domain": "mydomainshubtest1.com",
+  "period": 1,
+  "before": {
+    "balanceCents": 61621,
+    "expiresAt": "2027-09-23T13:44:14.8005439",
+    "ledgerEntries": 17
+  },
+  "check": {
+    "status": 200,
+    "renewable": true,
+    "renewalLock": false,
+    "errorMessageKey": null
+  },
+  "after": {
+    "balanceCents": 61621,
+    "expiresAt": "2027-09-23T13:44:14.8005439",
+    "ledgerEntries": 17
+  },
+  "unchanged": true
+}

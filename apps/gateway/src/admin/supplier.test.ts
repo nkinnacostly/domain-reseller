@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { RENEW_CHECK_ENABLED } from '@dr/shared/admin'
 import { describe, expect, it, vi } from 'vitest'
 import {
   ALLOWED_GET,
@@ -166,5 +167,21 @@ describe('the admin module’s source', () => {
     const writes =
       /\.(register|renew|transfer|modifyNameServer|ModifyNameServer|RegisterWithContactInfo|Renew|Transfer|SaveContacts|initialize|configure|reissue|createRefund|setLock|setPrivacy|updateContacts|cancelTransfer)\(/
     for (const source of sources) expect(source).not.toMatch(writes)
+  })
+})
+
+describe('the renew check', () => {
+  // v2 review point 8, §9 A acceptance: on only while the recorded OTE proof
+  // (scripts/prove-renew-check.ts) shows it changed nothing.
+  it('is on only with a recorded sandbox run that changed nothing', () => {
+    const fixture = fileURLToPath(
+      new URL('../../scripts/fixtures/renew-check-ote.json', import.meta.url),
+    )
+    const proof = JSON.parse(readFileSync(fixture, 'utf8'))
+    expect(proof.environment).toBe('ote')
+    expect(proof.check.status).toBe(200)
+    expect(proof.after).toEqual(proof.before)
+    expect(proof.unchanged).toBe(true)
+    expect(RENEW_CHECK_ENABLED).toBe(proof.unchanged)
   })
 })

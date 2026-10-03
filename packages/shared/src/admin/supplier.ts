@@ -273,9 +273,13 @@ export type AdminGatewayRouteName = keyof typeof ADMIN_GATEWAY_ROUTES
 
 /**
  * `domains/renew/check` changes nothing at the supplier: proven in the OTE
- * sandbox on 2 Oct 2026 — balance $616.21, expiry 2027-09-23 and 17 ledger
- * entries before and after (§9 A acceptance). Flip to false to take the
- * route off; NOT_RENEWABLE then shows only the playbook text.
+ * sandbox on 2 and 3 Oct 2026 — balance $616.21, expiry 2027-09-23 and 17
+ * ledger entries before and after (§9 A acceptance). The proof is
+ * `apps/gateway/scripts/prove-renew-check.ts` (`pnpm --filter @dr/gateway
+ * prove:renew-check`), its last run recorded in
+ * `apps/gateway/scripts/fixtures/renew-check-ote.json`, which
+ * `apps/gateway/src/admin/supplier.test.ts` holds this flag to. Flip to false
+ * to take the route off; NOT_RENEWABLE then shows only the playbook text.
  */
 export const RENEW_CHECK_ENABLED = true
 
