@@ -18,16 +18,16 @@ export { expect }
 /** Sign-ins are rate-limited per address: these two projects only. */
 export const SIGN_IN_PROJECTS = ['chromium-desktop', 'mobile-ios']
 
+/** What createAdminTestUser returns (ADMIN-SPEC §2.7). */
 export type AdminUser = {
-  id: string
-  email: string
-  password: string
-  secret: string
-  adminLabel: string
+  user: { id: string; email: string; password: string }
+  totpSecret: string
+  label: string
 }
 
 /** Signs in with the password at /sign-in?next=…, then the code on /verify. */
-export async function signInAsAdmin(page: Page, user: AdminUser, next = '/admin') {
+export async function signInAsAdmin(page: Page, admin: AdminUser, next = '/admin') {
+  const { user } = admin
   await page.goto(`/sign-in?next=${encodeURIComponent(next)}`)
   const form = page.getByRole('form', { name: 'Sign in', exact: true })
   await form.getByLabel('Email').fill(user.email)
@@ -35,7 +35,7 @@ export async function signInAsAdmin(page: Page, user: AdminUser, next = '/admin'
   await form.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page).toHaveURL(/\/verify/)
   const verify = page.getByRole('form', { name: 'Two-factor code' })
-  await verify.getByLabel('6-digit code').fill(await freshTotpCode(user.secret))
+  await verify.getByLabel('6-digit code').fill(await freshTotpCode(admin.totpSecret))
   await verify.getByRole('button', { name: 'Continue' }).click()
   await expect(page).toHaveURL(new RegExp(`${next.replaceAll('/', '\\/')}$`))
 }

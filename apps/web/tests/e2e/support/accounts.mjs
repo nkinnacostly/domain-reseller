@@ -745,15 +745,16 @@ export async function hasAdminSchema() {
 }
 
 /**
- * A test user with TOTP on, made a test administrator. Returns the user, the
- * authenticator's secret and the admin label SQL gave it.
+ * A test user with TOTP on, made a test administrator (ADMIN-SPEC §2.7).
+ * Returns `{ user, totpSecret, label }`: the user, the authenticator's secret
+ * and the admin label SQL gave it.
  */
 export async function createAdminTestUser(label = 'admin') {
   const user = await createTestUser(label, { fullName: 'Test Admin' })
-  const secret = await enableTotp(user)
+  const totpSecret = await enableTotp(user)
   const { data, error } = await admin().rpc('grant_test_admin', { p_user_id: user.id })
   if (error) throw error
-  return { ...user, secret, adminLabel: data }
+  return { user, totpSecret, label: data }
 }
 
 /** Removes the test supplier-ledger rows e2e seeded (`e2e-` descriptions, test side only). */

@@ -156,23 +156,23 @@ test.describe('the admin area to anyone who is not an admin', () => {
 })
 
 test.describe('an enrolled admin', () => {
-  let user: AdminUser | undefined
+  let admin: AdminUser | undefined
 
   test.beforeEach(async () => {
     test.skip(!SIGN_IN_PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
     test.skip(!(await hasAdminSchema()), 'migration 40 is not applied to this database')
-    user = (await createAdminTestUser('admin')) as AdminUser
+    admin = (await createAdminTestUser('admin')) as AdminUser
   })
   test.afterEach(async () => {
-    if (user) await deleteTestUser(user.id)
-    user = undefined
+    if (admin) await deleteTestUser(admin.user.id)
+    admin = undefined
   })
 
   test('reaches the dashboard after the code, on the test side, with the page marked', async ({
     page,
   }) => {
-    if (!user) throw new Error('no user')
-    await signInAsAdmin(page, user, '/admin')
+    if (!admin) throw new Error('no admin')
+    await signInAsAdmin(page, admin, '/admin')
 
     await expect(page.getByRole('heading', { level: 1, name: 'Operations' })).toBeVisible()
     await expect(page.getByRole('note').filter({ hasText: TEST_ADMIN_BANNER })).toBeVisible()
@@ -205,19 +205,19 @@ test.describe('an enrolled admin', () => {
   })
 
   test('signed in, /sign-in?next=/admin lands on /admin', async ({ page }) => {
-    if (!user) throw new Error('no user')
-    await signInAsAdmin(page, user, '/admin')
+    if (!admin) throw new Error('no admin')
+    await signInAsAdmin(page, admin, '/admin')
     await page.goto('/sign-in?next=/admin')
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByRole('heading', { level: 1, name: 'Operations' })).toBeVisible()
   })
 
   test('a session without the code is sent to enter it', async ({ page }) => {
-    if (!user) throw new Error('no user')
+    if (!admin) throw new Error('no admin')
     await page.goto('/sign-in')
     const form = page.getByRole('form', { name: 'Sign in', exact: true })
-    await form.getByLabel('Email').fill(user.email)
-    await form.getByLabel('Password', { exact: true }).fill(user.password)
+    await form.getByLabel('Email').fill(admin.user.email)
+    await form.getByLabel('Password', { exact: true }).fill(admin.user.password)
     await form.getByRole('button', { name: 'Sign in', exact: true }).click()
     await expect(page).toHaveURL(/\/verify/)
 
