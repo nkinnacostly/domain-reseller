@@ -1,18 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { PricingPageSkeleton } from '@/features/admin/components/pricing/pricing-header'
+import { PricingView } from '@/features/admin/components/pricing/pricing-view'
 
 export const metadata: Metadata = { title: 'Pricing' }
 
-/** Package B12 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
+/** How a price is built, and the settings it is built from (docs/ADMIN-SPEC.md §5.2 B12). Routing only. */
 export default function AdminPricingPage() {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Pricing"
-        description="Margin, buffer, ICANN fee and the rules every price is built from."
-      />
+    <Suspense fallback={<PricingPageSkeleton cards={3} />}>
+      <PricingView />
     </Suspense>
   )
 }
