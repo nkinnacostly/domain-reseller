@@ -1,6 +1,7 @@
 'use server'
 
 import type { TldPricing } from '@dr/shared'
+import { after as afterResponse } from 'next/server'
 import { z } from 'zod'
 import { periodsText } from '@/features/pricing/lib/terms'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
@@ -11,9 +12,11 @@ import { parseSearchQuery } from '@/features/search/lib/query'
 import { checkAvailability } from '@/features/search/queries/availability'
 import { getLengthRules } from '@/features/search/queries/length-rules'
 import { getSslCatalogue } from '@/features/ssl/queries/catalogue'
+import { requirePaymentEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
+import { createServiceClient } from '@/lib/supabase/service'
 import { MAX_CART_ITEMS, nearestSoldPeriod, quoteFor, sellsPeriod } from '../lib/lines'
 import { existingCartId, ownerForWrite, setCountCookie } from '../queries/owner'
 import {
@@ -76,6 +79,8 @@ export const addToCart = actionClient
         quotedRenewalKobo: quote.renewalKobo,
         quotedFxRateId: priced.rateId,
       })
+
+      countCartAdd()
 
       const after = await countLines(cartId)
       await setCountCookie(after)
@@ -163,6 +168,7 @@ export const addDomainsToCart = actionClient
           ),
         )
         const added: string[] = []
+        let putInCart = false
 
         for (const entry of wanted) {
           const shown = toUnicodeHost(entry.domain)
@@ -196,7 +202,10 @@ export const addDomainsToCart = actionClient
           })
           count += 1
           added.push(shown)
+          putInCart = true
         }
+        // One add, however many names it put in the cart.
+        if (putInCart) countCartAdd()
 
         const after = await countLines(cartId)
         await setCountCookie(after)
@@ -326,3 +335,28 @@ export const acceptCurrentPrices = actionClient.action(
     }
   },
 )
+
+/**
+ * ADMIN-SPEC §6: one `cart_add` in the funnel, on the side checkout would be
+ * paid on. Searches are never counted (FR-S7). Counted once the response has
+ * gone (`after`), and a count that fails never fails the add.
+ */
+function countCartAdd() {
+  const failed = (code?: string) => logger.warn({ code }, 'cart add not counted')
+  try {
+    afterResponse(async () => {
+      try {
+        const { testMode } = requirePaymentEnv()
+        const { error } = await createServiceClient().rpc('bump_funnel', {
+          p_event: 'cart_add',
+          p_test_mode: testMode,
+        })
+        if (error) failed(error.code)
+      } catch {
+        failed()
+      }
+    })
+  } catch {
+    failed()
+  }
+}

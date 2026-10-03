@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { accountBalanceSchema, userMessageFor } from '@dr/shared'
+import { after } from 'next/server'
 import { z } from 'zod'
 import { purchaseNeedsTwoFactor } from '@/features/auth/lib/security'
 import { mustTurnOnTwoFactor } from '@/features/auth/queries/two-factor'
@@ -22,7 +23,15 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { checkoutOpenTo } from '../lib/access'
 import { allowanceRefusal, exceedsAllowance } from '../lib/allowance'
 import { registrantFormSchema, toContact } from '../lib/contact'
-import { type SupplierCost, sslCostUsd, wholesaleCostUsd } from '../lib/cost'
+import {
+  costRows,
+  type LineCost,
+  type OrderItemCostRow,
+  type SupplierCost,
+  sslCostUsd,
+  totalCents,
+  wholesaleCostUsd,
+} from '../lib/cost'
 import { lineHostsSchema } from '../lib/line-hosts'
 import { renewalTermColumn, unsoldPeriods } from '../lib/periods'
 import { readAllowance } from '../queries/allowance'
@@ -226,18 +235,19 @@ export const placeOrder = authAction
     }
 
     // ── Float pre-flight (FR-C8) ─────────────────────────────────────────
+    // Prices are read as decimal text and costed in integer cents (N5, D24).
     const [{ data: tldRows }, { data: settings }, { data: sslRows }] = await Promise.all([
       service
         .from('tlds')
-        .select('name, register_usd, renew_usd, is_country_code')
+        .select('name, register_usd::text, renew_usd::text, is_country_code')
         .in('name', [...byTld.keys()]),
-      service.from('pricing_settings').select('icann_fee_usd').single(),
+      service.from('pricing_settings').select('icann_fee_usd::text').single(),
       certificates.length > 0
         ? service
             .from('ssl_products')
-            .select('product_code, create_usd')
+            .select('product_code, create_usd::text')
             .in('product_code', [...new Set(certificates.map((line) => line.productCode))])
-        : Promise.resolve({ data: [] as { product_code: string; create_usd: number | null }[] }),
+        : Promise.resolve({ data: [] as { product_code: string; create_usd: string | null }[] }),
     ])
     // The first term comes from the catalogue the cart was priced with.
     const firstTerms = new Map(lines.map((line) => [line.tld, line.minPeriod]))
@@ -245,22 +255,26 @@ export const placeOrder = authAction
       (tldRows ?? []).map((row) => [
         row.name,
         {
-          registerUsd: Number(row.register_usd),
-          renewUsd: Number(row.renew_usd),
+          registerUsd: row.register_usd,
+          renewUsd: row.renew_usd,
           isCountryCode: Boolean(row.is_country_code),
           firstTermYears: firstTerms.get(row.name) ?? 1,
         },
       ]),
     )
+    // Each line's cost, in the order the lines are written; the float is
+    // checked against their sum, and each is recorded as it was summed.
+    let domainCosts: LineCost[]
+    let certificateCosts: LineCost[]
     let costUsd: number
     let balanceUsd: number
     try {
-      costUsd =
-        wholesaleCostUsd(lines, costs, Number(settings?.icann_fee_usd ?? 0)) +
-        sslCostUsd(
-          certificates,
-          new Map((sslRows ?? []).map((row) => [row.product_code, row.create_usd])),
-        )
+      domainCosts = wholesaleCostUsd(lines, costs, settings?.icann_fee_usd ?? 0)
+      certificateCosts = sslCostUsd(
+        certificates,
+        new Map((sslRows ?? []).map((row) => [row.product_code, row.create_usd])),
+      )
+      costUsd = totalCents([...domainCosts, ...certificateCosts]) / 100
       const balance = accountBalanceSchema.parse(
         await callGateway<unknown>({
           path: 'account/balance',
@@ -326,41 +340,56 @@ export const placeOrder = authAction
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }
 
-    const { error: itemsError } = await service.from('order_items').insert([
-      ...lines.map((line) => ({
-        order_id: order.id,
-        domain: line.domain,
-        tld: line.tld,
-        period_years: line.periodYears,
-        privacy: line.privacyOffered ? line.privacy : false,
-        auto_renew: line.autoRenew,
-        price_kobo: line.payableKobo,
-        renewal_kobo: line.renewalKobo,
-        ...renewalTermColumn(line.renewYears),
-        // FR-C10 — a domain's own host wins over the order's (migration 29).
-        ...hosts.columnsFor(line.domain),
-      })),
-      // FR-SSL-6 (migration 39): one subscription term; its "renewal" is what a
-      // new certificate cost today (N8). Paid, it becomes a certificate and an
-      // order job in the payment's transaction.
-      ...certificates.map((line) => ({
-        order_id: order.id,
-        item_type: 'ssl',
-        ssl_product_code: line.productCode,
-        domain: line.commonName,
-        tld: line.commonName.split('.').at(-1) ?? 'ssl',
-        period_years: 1,
-        privacy: false,
-        auto_renew: false,
-        price_kobo: line.payableKobo,
-        renewal_kobo: line.renewalKobo,
-      })),
-    ])
+    // Ids are chosen here so each line's cost row can name it (ADMIN-SPEC §6).
+    const domainIds = lines.map(() => randomUUID())
+    const certificateIds = certificates.map(() => randomUUID())
+    const { error: itemsError } = await service.from('order_items').insert(
+      [
+        ...lines.map((line, index) => ({
+          id: domainIds[index],
+          order_id: order.id,
+          domain: line.domain,
+          tld: line.tld,
+          period_years: line.periodYears,
+          privacy: line.privacyOffered ? line.privacy : false,
+          auto_renew: line.autoRenew,
+          price_kobo: line.payableKobo,
+          renewal_kobo: line.renewalKobo,
+          ...renewalTermColumn(line.renewYears),
+          // FR-C10 — a domain's own host wins over the order's (migration 29).
+          ...hosts.columnsFor(line.domain),
+        })),
+        // FR-SSL-6 (migration 39): one subscription term; its "renewal" is what a
+        // new certificate cost today (N8). Paid, it becomes a certificate and an
+        // order job in the payment's transaction.
+        ...certificates.map((line, index) => ({
+          id: certificateIds[index],
+          order_id: order.id,
+          item_type: 'ssl',
+          ssl_product_code: line.productCode,
+          domain: line.commonName,
+          tld: line.commonName.split('.').at(-1) ?? 'ssl',
+          period_years: 1,
+          privacy: false,
+          auto_renew: false,
+          price_kobo: line.payableKobo,
+          renewal_kobo: line.renewalKobo,
+        })),
+        // Rows differ in their keys (a certificate sets item_type, a block-sold
+        // extension sets renewal_years); a key one row leaves out must take the
+        // column's default, not NULL — both columns are NOT NULL.
+      ],
+      { defaultToNull: false },
+    )
     if (itemsError) {
       logger.error({ ...dbError(itemsError), orderId: order.id }, 'order items insert failed')
       await service.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }
+    recordLineCosts(service, order.id, [
+      ...costRows(domainIds, domainCosts),
+      ...costRows(certificateIds, certificateCosts),
+    ])
 
     // ── Hand over to Flutterwave (step 5) ────────────────────────────────
     try {
@@ -392,4 +421,31 @@ async function activeRateId(
 ): Promise<string | null> {
   const { data } = await service.from('fx_rates').select('id').eq('status', 'active').maybeSingle()
   return data?.id ?? null
+}
+
+/**
+ * ADMIN-SPEC §6, D13: what each line costs us, in the service-only
+ * `order_item_costs` — customers can read `order_items`, so cost never goes
+ * there. Written once the response has gone (`after`): a cost that cannot be
+ * recorded leaves the line uncosted, and never fails, delays or changes the
+ * order. Only the order's id is logged (N13).
+ */
+function recordLineCosts(
+  service: ReturnType<typeof createServiceClient>,
+  orderId: string,
+  rows: OrderItemCostRow[],
+) {
+  const failed = (code?: string) => logger.error({ orderId, code }, 'line costs not recorded')
+  try {
+    after(async () => {
+      try {
+        const { error } = await service.from('order_item_costs').insert(rows)
+        if (error) failed(error.code)
+      } catch {
+        failed()
+      }
+    })
+  } catch {
+    failed()
+  }
 }

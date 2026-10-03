@@ -88,9 +88,16 @@ describe('takesTransfers (N5b)', () => {
 })
 
 describe('transferCostUsd (FR-C8)', () => {
-  it('adds the ICANN fee on generic extensions only', () => {
-    expect(transferCostUsd({ transferUsd: 10.61, isCountryCode: false }, 0.2)).toBe(10.81)
-    expect(transferCostUsd({ transferUsd: 38.99, isCountryCode: true }, 0.2)).toBe(38.99)
+  it('adds the ICANN fee once, on generic extensions only, split out', () => {
+    // $10.61 and $0.20 for ICANN: $10.81.
+    expect(transferCostUsd({ transferUsd: 10.61, isCountryCode: false }, 0.2)).toEqual({
+      supplierCents: 1061,
+      icannCents: 20,
+    })
+    expect(transferCostUsd({ transferUsd: '38.9900', isCountryCode: true }, '0.2000')).toEqual({
+      supplierCents: 3899,
+      icannCents: 0,
+    })
   })
 })
 

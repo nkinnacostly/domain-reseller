@@ -55,46 +55,43 @@ export const ORDER_ID_CAP = IDS_PER_READ
 const LINE_SCAN = 1000
 /** How many settling orders the stuck filter looks at, oldest payment first. */
 const STUCK_SCAN = 500
-/** How many pages of customers are read to mask a page's buyers. */
-const CUSTOMER_PAGES = 5
-const CUSTOMERS_PER_PAGE = 100
+/** `admin_customers` answers at most this many rows a call (`p_limit` ≤ 100). */
+const CUSTOMERS_PER_CALL = 100
 
 // ── The masked customer ────────────────────────────────────────────────────
 
 /**
  * Each buyer's masked email (`a•••@gmail.com`) from `admin_customers`, the
- * one read that may name a customer here (§9). It has no filter by id, so
- * it is paged until every buyer is found. A buyer not found — a real
- * customer's test order seen by a test admin, or past the pages read — is
- * left out, and the page shows the account's short id instead.
+ * one read that may name a customer here (§9), asked for by id
+ * (`p_filter.userIds`, migration 42). A buyer not answered — a real
+ * customer's test order seen by a test admin — is left out, and the page
+ * shows the account's short id instead.
  */
 export async function maskedCustomers(
   side: AdminSide,
   userIds: readonly (string | null)[],
 ): Promise<Map<string, string | null>> {
-  const wanted = new Set(userIds.filter((id): id is string => id !== null))
+  const wanted = unique(userIds.filter((id): id is string => id !== null))
   const found = new Map<string, string | null>()
-  if (wanted.size === 0) return found
+  if (wanted.length === 0) return found
   const supabase = await createClient()
-  for (let page = 0; page < CUSTOMER_PAGES && found.size < wanted.size; page += 1) {
+  for (const run of chunk(wanted, CUSTOMERS_PER_CALL)) {
     const { data, error } = await supabase.rpc('admin_customers', {
       p_test_mode: side === 'test',
       p_sort: 'joined',
       p_dir: 'desc',
-      p_offset: page * CUSTOMERS_PER_PAGE,
-      p_limit: CUSTOMERS_PER_PAGE,
-      p_filter: {},
+      p_offset: 0,
+      p_limit: CUSTOMERS_PER_CALL,
+      p_filter: { userIds: run },
     })
     if (error) {
       // The buyer is a courtesy here: the orders still show without it.
       logger.warn({ code: error.code }, 'admin orders: customers unavailable')
       break
     }
-    const rows = data ?? []
-    for (const row of rows) {
-      if (wanted.has(row.user_id)) found.set(row.user_id, row.masked_email ?? null)
+    for (const row of data ?? []) {
+      if (run.includes(row.user_id)) found.set(row.user_id, row.masked_email ?? null)
     }
-    if (rows.length < CUSTOMERS_PER_PAGE) break
   }
   return found
 }
@@ -117,8 +114,8 @@ export type OrderListRow = {
   lines: { item_type: string }[]
 }
 
-/** Why the stuck filter listed every settling order: its threshold is a setting a test admin cannot read. */
-export type StuckNote = 'test_admin' | 'no_threshold' | null
+/** Why the stuck filter listed every settling order: its threshold could not be read. */
+export type StuckNote = 'no_threshold' | null
 
 export type OrderList = {
   rows: OrderListRow[]
@@ -169,25 +166,29 @@ async function orderIdsByLine(db: AdminDb, line: string): Promise<IdSet> {
 }
 
 /**
- * Stuck, as SQL counts it for the sidebar and the `order_stuck` alert: paid
- * or provisioning, paid longer ago than `ops_settings.stuck_order_minutes`,
- * with a line still pending or provisioning — a transfer the other registrar
- * is still releasing is not late (migration 26). A test admin cannot read
- * the settings (§2.3), so for one every settling order is listed, and said so.
+ * The stuck-order threshold in minutes, from `admin_stuck_order_minutes`
+ * (migration 42): the number alone, which a test admin may read too —
+ * `ops_settings` itself stays refused to them (§2.3). Null when unreadable.
  */
-async function stuckOrderIds(
-  admin: AdminPrincipal,
-  db: AdminDb,
-  now: Date,
-): Promise<IdSet & { note: StuckNote }> {
-  let minutes: number | null = null
-  if (!admin.testOnly) {
-    const settings = read(
-      'the stuck-order threshold',
-      await db.from('ops_settings').select('stuck_order_minutes').limit(1),
-    )
-    minutes = settings[0]?.stuck_order_minutes ?? null
+async function stuckMinutes(): Promise<number | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('admin_stuck_order_minutes')
+  if (error) {
+    logger.warn({ code: error.code }, 'admin orders: stuck-order threshold unavailable')
+    return null
   }
+  return typeof data === 'number' && Number.isSafeInteger(data) && data > 0 ? data : null
+}
+
+/**
+ * Stuck, as SQL counts it for the sidebar and the `order_stuck` alert: paid
+ * or provisioning, paid longer ago than the stuck-order threshold, with a
+ * line still pending or provisioning — a transfer the other registrar is
+ * still releasing is not late (migration 26). Without the threshold every
+ * settling order is listed, and said so.
+ */
+async function stuckOrderIds(db: AdminDb, now: Date): Promise<IdSet & { note: StuckNote }> {
+  const minutes = await stuckMinutes()
   let query = db
     .from('admin_orders_v')
     .select('id, paid_at')
@@ -234,7 +235,7 @@ async function stuckOrderIds(
   return {
     ids: ids.filter((id) => late.has(id)),
     capped: candidates.length >= STUCK_SCAN,
-    note: admin.testOnly ? 'test_admin' : minutes === null ? 'no_threshold' : null,
+    note: minutes === null ? 'no_threshold' : null,
   }
 }
 
@@ -295,7 +296,7 @@ export async function listOrders(
   if (params.search.kind === 'domain') sets.push(await orderIdsByDomain(db, params.search.value))
   if (params.kind) sets.push(await orderIdsByKind(db, params))
   if (params.stuck) {
-    const stuck = await stuckOrderIds(admin, db, now)
+    const stuck = await stuckOrderIds(db, now)
     stuckNote = stuck.note
     sets.push(stuck)
   }

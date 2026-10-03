@@ -3,16 +3,14 @@ import {
   getCurrentRates,
   getPricingStatus,
   getRecentRates,
-  getSampleTld,
   getSettingsChangedAt,
   RECENT_RATES,
-  SAMPLE_TLD,
 } from '@/features/admin/queries/pricing'
 import { adminWhoami } from '@/features/admin/queries/session'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import { sessionClient, whoami } from '../foundation/fixtures'
-import { fakeService, rateRow, rawRate, staleRow, status } from './fixtures'
+import { fakeService, rateRow, rawRate, staleRow, status, statusJson } from './fixtures'
 
 /**
  * The Pricing & FX reads (docs/ADMIN-SPEC.md §3.2h, §5.2 B12): one SQL
@@ -39,28 +37,14 @@ async function principal(overrides: Record<string, unknown> = {}) {
   return adminWhoami(client.client as never, null)
 }
 
-const SAMPLE_ROW = {
-  name: 'com',
-  register_usd: 11.31,
-  renew_usd: 11.51,
-  is_country_code: false,
-  min_period: 1,
-  max_period: 10,
-  register_periods: [1, 2],
-  renew_periods: [1],
-  is_sellable: true,
-  is_paused: false,
-}
-
 beforeEach(() => vi.clearAllMocks())
 
 describe('getPricingStatus', () => {
   it('asks admin_pricing_status as the admin, and parses its answer', async () => {
-    const client = session({
-      admin_pricing_status: { data: JSON.parse(JSON.stringify(status())) },
-    })
+    const client = session({ admin_pricing_status: { data: statusJson() } })
     expect(await getPricingStatus()).toEqual(status())
     expect(client.rpc).toHaveBeenCalledWith('admin_pricing_status')
+    // The example's costs come in cents from SQL: no catalogue row is read (D24).
     expect(createServiceClient).not.toHaveBeenCalled()
   })
 
@@ -108,30 +92,6 @@ describe('the rate reads', () => {
     // adminDb refuses anything but a principal it issued.
     expect(await getCurrentRates({ role: 'owner' } as never)).toBeNull()
     expect(await getRecentRates({ role: 'owner' } as never)).toBeNull()
-  })
-})
-
-describe('getSampleTld', () => {
-  it('reads .com’s row through adminDb and turns its dollars into cents', async () => {
-    const calls = fakeService({ tlds: { data: [SAMPLE_ROW] } })
-    expect(SAMPLE_TLD).toBe('com')
-    expect(await getSampleTld(await principal())).toMatchObject({
-      name: 'com',
-      registerCents: 1131,
-      renewCents: 1151,
-      onSale: true,
-    })
-    expect(calls).toContainEqual(['eq', 'name', 'com'])
-    expect(calls).toContainEqual(['limit', 1])
-  })
-
-  it('is null without the row, on an error or a refusal', async () => {
-    const admin = await principal()
-    fakeService({ tlds: { data: [] } })
-    expect(await getSampleTld(admin)).toBeNull()
-    fakeService({ tlds: { data: null, error: { code: 'PGRST301', message: 'no' } } })
-    expect(await getSampleTld(admin)).toBeNull()
-    expect(await getSampleTld({} as never)).toBeNull()
   })
 })
 

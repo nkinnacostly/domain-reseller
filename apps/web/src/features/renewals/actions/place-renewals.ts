@@ -3,8 +3,10 @@
 import { randomUUID } from 'node:crypto'
 import type { Json } from '@dr/db/types'
 import { type TldPricing, userMessageFor } from '@dr/shared'
+import { after } from 'next/server'
 import { z } from 'zod'
 import { checkoutOpenTo } from '@/features/checkout/lib/access'
+import { costRows, type OrderItemCostRow, totalCents } from '@/features/checkout/lib/cost'
 import { renewalTermColumn } from '@/features/checkout/lib/periods'
 import { defaultRegistrant } from '@/features/checkout/queries/registrant'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
@@ -151,11 +153,12 @@ export const placeRenewals = authAction
     }
 
     // ── Float pre-flight (FR-C8, I3) ─────────────────────────────────────
+    // Prices are read as decimal text and costed in integer cents (N5, D24).
     const service = createServiceClient()
     const tlds = [...new Set(ordered.map((domain) => domain.tld))]
     const [{ data: costs }, { data: settings }, { data: rate }] = await Promise.all([
-      service.from('tlds').select('name, renew_usd, is_country_code').in('name', tlds),
-      service.from('pricing_settings').select('icann_fee_usd').maybeSingle(),
+      service.from('tlds').select('name, renew_usd::text, is_country_code').in('name', tlds),
+      service.from('pricing_settings').select('icann_fee_usd::text').maybeSingle(),
       service.from('fx_rates').select('id').eq('status', 'active').maybeSingle(),
     ])
     const costOf = new Map((costs ?? []).map((cost) => [cost.name, cost]))
@@ -165,19 +168,17 @@ export const placeRenewals = authAction
         error: `Renewal prices are unavailable right now. ${NOT_CHARGED} Try again shortly.`,
       }
     }
-    const icannFeeUsd = Number(settings?.icann_fee_usd ?? 0)
-    const costUsd = ordered.reduce((sum, domain) => {
-      const cost = costOf.get(domain.tld)
-      return (
-        sum +
-        renewalCostUsd(
-          { renewUsd: Number(cost?.renew_usd), isCountryCode: Boolean(cost?.is_country_code) },
-          parsedInput.years,
-          icannFeeUsd,
-        )
+    // Each line's cost, in line order; the float is checked against their
+    // sum, and each line records exactly what was summed.
+    const lineCosts = ordered.map((domain) => {
+      const cost = costOf.get(domain.tld) // there for every extension: checked above
+      return renewalCostUsd(
+        { renewUsd: cost?.renew_usd ?? '', isCountryCode: Boolean(cost?.is_country_code) },
+        parsedInput.years,
+        settings?.icann_fee_usd ?? 0,
       )
-    }, 0)
-    const float = await checkFloat(Math.round(costUsd * 100) / 100, payment.testMode)
+    })
+    const float = await checkFloat(totalCents(lineCosts) / 100, payment.testMode)
     if (!float.ok) {
       return float.reason === 'insufficient'
         ? { error: userMessageFor('SUPPLIER_INSUFFICIENT_FUNDS') }
@@ -215,8 +216,11 @@ export const placeRenewals = authAction
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }
 
+    // Ids are chosen here so each line's cost row can name it (ADMIN-SPEC §6).
+    const lineIds = ordered.map(() => randomUUID())
     const { error: lineError } = await service.from('order_items').insert(
       ordered.map((domain, index) => ({
+        id: lineIds[index],
         order_id: order.id,
         item_type: 'renew' as const,
         domain_id: domain.id,
@@ -229,12 +233,16 @@ export const placeRenewals = authAction
         renewal_kobo: pricings[index]?.renewal.priceKobo ?? 0,
         ...renewalTermColumn(pricings[index]?.renewalTerm.years ?? 1),
       })),
+      // Only some lines set renewal_years (NOT NULL, default 1); a line that
+      // leaves it out must take the default, not NULL.
+      { defaultToNull: false },
     )
     if (lineError) {
       logger.error({ ...dbError(lineError), orderId: order.id }, 'bulk renewal lines insert failed')
       await service.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }
+    recordLineCosts(service, order.id, costRows(lineIds, lineCosts))
 
     // ── Hand over to Flutterwave ─────────────────────────────────────────
     return startRenewalPayment(service, order, {
@@ -243,3 +251,30 @@ export const placeRenewals = authAction
       customer: paymentCustomer(registrant as Record<string, string | undefined>, ctx.user.email),
     })
   })
+
+/**
+ * ADMIN-SPEC §6, D13: what each line costs us, in the service-only
+ * `order_item_costs` (customers can read `order_items`). Written once the
+ * response has gone (`after`): a cost that cannot be recorded leaves the line
+ * uncosted, and never fails, delays or changes the order. Only the order's id
+ * is logged (N13).
+ */
+function recordLineCosts(
+  service: ReturnType<typeof createServiceClient>,
+  orderId: string,
+  rows: OrderItemCostRow[],
+) {
+  const failed = (code?: string) => logger.error({ orderId, code }, 'line costs not recorded')
+  try {
+    after(async () => {
+      try {
+        const { error } = await service.from('order_item_costs').insert(rows)
+        if (error) failed(error.code)
+      } catch {
+        failed()
+      }
+    })
+  } catch {
+    failed()
+  }
+}

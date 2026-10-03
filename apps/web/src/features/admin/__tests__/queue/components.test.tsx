@@ -150,6 +150,13 @@ function detail(
     registryRead: null,
     transferRead: null,
     lastAttemptAt: '2026-10-03T09:59:00Z',
+    ledger: {
+      since: '2026-10-03T09:00:00Z',
+      readAt: '2026-10-03T11:15:00Z',
+      syncedAt: '2026-10-03T11:15:05Z',
+      outcome: 'ok',
+      charges: 0,
+    },
     events: [
       {
         id: 9,
@@ -487,13 +494,58 @@ describe('JobDetailBody', () => {
       'Last registry read: 3 Oct 2026, 12:58 WAT (not in our account).',
     )
     expect(before).toHaveTextContent('The last registry read is recent and allows Fail.')
-    expect(before).toHaveTextContent(/ledger shows a charge for example\.com/)
+    // The ledger's word, as admin_job_ledger counts it (migration 42).
+    expect(before).toHaveTextContent(
+      'Ledger last read 3 Oct 2026, 12:15 WAT; no charge for example.com since this job started.',
+    )
     // The read sits in the precondition panel, once.
     expect(screen.getAllByRole('button', { name: 'Read the registry now' })).toHaveLength(1)
     expect(screen.getByText(/The supplier did not answer in time/)).toBeInTheDocument()
     expect(
       within(before).getByRole('button', { name: 'Read the registry now' }),
     ).toBeInTheDocument()
+  })
+
+  it('says when the ledger shows a charge, or could not be read', () => {
+    const waiting = {
+      status: 'needs_attention',
+      lastErrorCode: 'SUPPLIER_TIMEOUT',
+      finishedAt: null,
+    }
+    const charged = render(
+      <JobDetailBody
+        detail={detail(waiting, {
+          refunds: [],
+          ledger: {
+            since: '2026-10-03T09:00:00Z',
+            readAt: '2026-10-03T11:15:00Z',
+            syncedAt: '2026-10-03T11:15:05Z',
+            outcome: 'ok',
+            charges: 1,
+          },
+        })}
+        side="test"
+        viewer={operator}
+        now={NOW}
+      />,
+    )
+    const before = screen.getByRole('region', { name: 'Before failing' })
+    expect(before).toHaveTextContent(
+      "Ledger last read 3 Oct 2026, 12:15 WAT; it shows a charge for example.com since this job started, so Fail is refused. Don't fail it: retry, or ask.",
+    )
+    expect(before.querySelector('[data-ledger="charge"]')).not.toBeNull()
+    charged.unmount()
+    render(
+      <JobDetailBody
+        detail={detail(waiting, { refunds: [], ledger: 'unreadable' })}
+        side="test"
+        viewer={operator}
+        now={NOW}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'Before failing' })).toHaveTextContent(
+      "The supplier ledger couldn't be read just now. The database still checks it when you fail this job.",
+    )
   })
 
   it('keeps only Retry for a renewal, and offers its renewability check', () => {
@@ -626,20 +678,105 @@ describe('SslJobDetailBody', () => {
       name: 'example.com',
       calls: [],
       siblings: [],
+      line: {
+        id: LINE,
+        orderId: ORDER,
+        orderNumber: 'MDH-1002',
+        itemType: 'ssl',
+        domain: 'example.com',
+        periodYears: 1,
+        renewalYears: 1,
+        priceKobo: 2_500_000,
+        renewalKobo: 2_600_000,
+        status: 'provisioning',
+        failureCode: null,
+      },
+      orderLines: [{ id: LINE, priceKobo: 2_500_000, createdAt: '2026-10-03T08:00:00Z' }],
+      order: { subtotalKobo: 2_500_000, vatKobo: 187_500 },
+      refunds: [],
       ...rest,
     } satisfies SslJobDetail
   }
 
-  it('offers Fail for an order never sent, and links the certificate by id', () => {
+  it('offers Fail for an order never sent, naming the certificate, its line and its refund', async () => {
+    const user = userEvent.setup()
     render(<SslJobDetailBody detail={ssl()} side="test" viewer={operator} />)
-    expect(screen.getByRole('button', { name: 'Fail' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Certificate 7a1b2c3d' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'example.com' })).toHaveAttribute(
       'href',
       `/admin/ssl/${DOMAIN}`,
     )
+    const line = screen.getByRole('region', { name: 'Order line and refund' })
+    expect(within(line).getByRole('link', { name: 'MDH-1002' })).toHaveAttribute(
+      'href',
+      `/admin/orders/${ORDER}`,
+    )
+    expect(line).toHaveTextContent('Certificate')
+    expect(line).toHaveTextContent(
+      "₦25,000 for a 1-year subscription; a new one is ₦26,000 at today's price",
+    )
+    expect(line).toHaveTextContent('No refund for this line.')
     expect(screen.getByText('None.')).toBeInTheDocument()
     expect(screen.getByText('No supplier calls recorded for this job.')).toBeInTheDocument()
+    // The refund an order's Fail queues: its price and its share of the VAT.
+    await user.click(screen.getByRole('button', { name: 'Fail' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Fail the certificate order for example.com?')
+    expect(dialog).toHaveTextContent(
+      'a refund of ₦26,875 is queued to the card or account that paid',
+    )
+  })
+
+  it('names the refund a retried order cancels, and refuses one that reached Flutterwave', () => {
+    const refund = {
+      id: ORDER,
+      status: 'queued',
+      amountKobo: 2_687_500,
+      providerRefundId: null,
+      reason: 'ssl_failed',
+      lastErrorCode: null,
+      createdAt: '2026-10-03T10:00:00Z',
+      updatedAt: '2026-10-03T10:00:00Z',
+    }
+    const queued = render(
+      <SslJobDetailBody
+        detail={ssl({ status: 'failed' }, { refunds: [refund] })}
+        side="test"
+        viewer={operator}
+      />,
+    )
+    expect(
+      within(screen.getByRole('region', { name: 'Order line and refund' })).getByRole('link', {
+        name: 'Refund of ₦26,875',
+      }),
+    ).toHaveAttribute('href', `/admin/refunds/${ORDER}`)
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    queued.unmount()
+    render(
+      <SslJobDetailBody
+        detail={ssl({ status: 'failed' }, { refunds: [{ ...refund, status: 'submitted' }] })}
+        side="test"
+        viewer={operator}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    expect(screen.getByText(ADMIN_ERROR_WORDS.REFUND_AT_PROVIDER as string)).toBeInTheDocument()
+  })
+
+  it('says when the order line could not be read, and names the certificate by id', () => {
+    render(
+      <SslJobDetailBody
+        detail={ssl({}, { name: null, line: null, orderLines: [], order: null })}
+        side="test"
+        viewer={operator}
+      />,
+    )
+    expect(screen.getByRole('link', { name: 'Certificate 7a1b2c3d' })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "The certificate's order line couldn't be read. Its certificate page shows the order.",
+      ),
+    ).toBeInTheDocument()
   })
 
   it('never fails an order that may have reached the supplier (N3)', () => {

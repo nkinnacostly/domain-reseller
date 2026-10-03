@@ -169,6 +169,16 @@ test.describe('the orders pages, as a test administrator', () => {
     await expect(page.getByText(/in all$/)).toBeVisible()
   })
 
+  test('"Stuck only" judges by the stuck-order threshold, for a test admin too', async () => {
+    await page.goto('/admin/orders?stuck=1')
+    await expect(page.getByRole('checkbox', { name: 'Stuck only' })).toBeChecked()
+    // admin_stuck_order_minutes (migration 42): the threshold is read, so
+    // the list is exact and carries no "every settling order" notice.
+    await expect(page.getByText(/in all$|No orders/).first()).toBeVisible()
+    await expect(page.getByText(/stuck-order threshold couldn’t be read/)).toHaveCount(0)
+    await expect(page.getByText(/Test administrators can’t read/)).toHaveCount(0)
+  })
+
   test('?q= never takes an email', async () => {
     if (!customer) throw new Error('no customer')
     await page.goto('/admin/orders')

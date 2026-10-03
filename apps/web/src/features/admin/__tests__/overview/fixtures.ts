@@ -74,7 +74,11 @@ export function overviewAnswer(overrides: Record<string, unknown> = {}) {
         chargeRefundedKobo: 120_000,
       }),
     },
-    lines: { d30: { register: 4, renew: 1, transfer: 1, ssl: 0 } },
+    lines: {
+      d7: { register: 1, renew: 0, transfer: 0, ssl: 0 },
+      d30: { register: 4, renew: 1, transfer: 1, ssl: 0 },
+      d90: { register: 11, renew: 3, transfer: 2, ssl: 1 },
+    },
     float: floatState(),
     health: {
       heartbeats: [

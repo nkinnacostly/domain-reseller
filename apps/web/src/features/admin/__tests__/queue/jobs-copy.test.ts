@@ -9,6 +9,8 @@ import {
   isSslKind,
   type JobFacts,
   lastReadWords,
+  ledgerWords,
+  linePriceWords,
   ONLY_RETRY_WORDS,
   RETRY_DONE,
   readVerdictWords,
@@ -116,6 +118,12 @@ describe('Retry, by kind (ADMIN-SPEC §5.2 B4)', () => {
     expect(retryBody(job({ kind: 'ssl_initialize' }))).toBe(words)
     expect(retryBody(job({ kind: 'ssl_initialize', status: 'failed' }))).toBe(
       `${words} A refund still pending for it is cancelled first; this is refused if that refund has reached Flutterwave.`,
+    )
+    // With the line read (migration 42), the refund it cancels is named.
+    expect(
+      retryBody(job({ kind: 'ssl_initialize', status: 'failed', pendingRefundKobo: 2_687_500 })),
+    ).toBe(
+      `${words} Its pending refund of ₦26,875 is cancelled first; this is refused if that refund has reached Flutterwave.`,
     )
     expect(retryBody(job({ kind: 'mystery' }))).toBe(
       'The worker picks the job up again on its next run.',
@@ -254,9 +262,13 @@ describe('Fail, and when it is offered', () => {
   it('fails an unsent certificate order, and stops a set-up or reissue', () => {
     expect(failCopy(job({ kind: 'ssl_initialize' }))).toMatchObject({
       title: 'Fail the certificate order for example.com?',
+      body: 'It was never sent to the supplier, so nothing was bought. The line fails, the customer is told, and a refund of ₦10,750 is queued to the card or account that paid.',
       confirmLabel: 'Fail the order',
       needsRead: null,
     })
+    expect(failCopy(job({ kind: 'ssl_initialize', failRefundKobo: null }))?.body).toBe(
+      'It was never sent to the supplier, so nothing was bought. The line fails, the customer is told, and its refund is queued to the card or account that paid.',
+    )
     expect(failCopy(job({ kind: 'ssl_configure' }))).toMatchObject({
       title: 'Stop this certificate set-up?',
       body: 'The request is dropped; the certificate keeps what the supplier shows. The customer can ask again.',
@@ -408,5 +420,73 @@ describe('what a live read found', () => {
     expect(renewCheckWords({ ...base, renewable: false })).toBe(
       'Read at 14:05 WAT: the registry would not renew it',
     )
+  })
+})
+
+describe('the supplier ledger before failing (admin_job_ledger, migration 42)', () => {
+  const ledger = {
+    since: '2026-10-03T09:00:00Z',
+    readAt: '2026-10-03T13:15:00Z',
+    syncedAt: '2026-10-03T13:15:05Z',
+    outcome: 'ok',
+    charges: 0,
+  }
+
+  it('says no charge only for a read made after the job started', () => {
+    expect(ledgerWords(ledger, 'example.com')).toBe(
+      'Ledger last read 3 Oct 2026, 14:15 WAT; no charge for example.com since this job started.',
+    )
+    expect(ledgerWords({ ...ledger, readAt: '2026-10-03T08:00:00Z' }, 'example.com')).toBe(
+      "Ledger last read 3 Oct 2026, 09:00 WAT, before this job started: it can't show a charge for example.com yet.",
+    )
+    expect(ledgerWords({ ...ledger, readAt: null }, 'example.com')).toBe(
+      "The supplier ledger hasn't been read on this side yet, so it can't show whether example.com was charged.",
+    )
+  })
+
+  it('says a charge refuses Fail, in the singular and the plural', () => {
+    expect(ledgerWords({ ...ledger, charges: 1 }, 'example.com')).toBe(
+      "Ledger last read 3 Oct 2026, 14:15 WAT; it shows a charge for example.com since this job started, so Fail is refused. Don't fail it: retry, or ask.",
+    )
+    expect(ledgerWords({ ...ledger, charges: 2, readAt: null }, 'example.com')).toBe(
+      "The supplier ledger shows 2 charges for example.com since this job started, so Fail is refused. Don't fail it: retry, or ask.",
+    )
+  })
+
+  it('says when the last sync failed, or the check could not be read', () => {
+    expect(ledgerWords({ ...ledger, outcome: 'failed' }, 'example.com')).toBe(
+      'Ledger last read 3 Oct 2026, 14:15 WAT; no charge for example.com since this job started. The latest ledger sync failed: this is the last good read.',
+    )
+    expect(ledgerWords('unreadable', 'example.com')).toBe(
+      "The supplier ledger couldn't be read just now. The database still checks it when you fail this job.",
+    )
+  })
+})
+
+describe('the order line', () => {
+  it('prices a domain line with its renewal (N8)', () => {
+    const line = {
+      itemType: 'register',
+      periodYears: 1,
+      renewalYears: 1,
+      priceKobo: 100_000,
+      renewalKobo: 110_000,
+    }
+    expect(linePriceWords(line)).toBe('₦1,000 for 1 year, then ₦1,100 every year')
+    expect(linePriceWords({ ...line, periodYears: 2, renewalYears: 2 })).toBe(
+      '₦1,000 for 2 years, then ₦1,100 every 2 years',
+    )
+  })
+
+  it('prices a certificate as a subscription, renewed by buying a new one', () => {
+    expect(
+      linePriceWords({
+        itemType: 'ssl',
+        periodYears: 1,
+        renewalYears: 1,
+        priceKobo: 2_500_000,
+        renewalKobo: 2_600_000,
+      }),
+    ).toBe("₦25,000 for a 1-year subscription; a new one is ₦26,000 at today's price")
   })
 })

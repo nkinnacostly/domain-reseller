@@ -1,13 +1,20 @@
 import { userMessageFor } from '@dr/shared'
+import { after } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { env, requirePaymentEnv } from '@/lib/env'
 import { createPaymentLink } from '@/lib/flutterwave'
 import { callGateway } from '@/lib/gateway'
+import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 
 vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
+// The line's cost (ADMIN-SPEC §6) is written after the response: queued here.
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: vi.fn(),
+}))
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
 vi.mock('@/lib/flutterwave', () => ({ createPaymentLink: vi.fn() }))
 vi.mock('@/lib/gateway', () => ({ callGateway: vi.fn() }))
@@ -66,13 +73,21 @@ let answers: {
   order: { data: unknown; error: unknown }
   lineError: unknown
 }
-let inserted: { orders: unknown[]; items: unknown[] }
+let inserted: { orders: unknown[]; items: unknown[]; costs: unknown[] }
 let orderUpdates: unknown[]
 let rateLimited: { data: unknown; error: unknown }
+let costsAnswer: () => Promise<{ error: unknown }>
+
+/** What `after` was handed, run as Next would once the response has gone. */
+async function afterResponse() {
+  for (const [task] of vi.mocked(after).mock.calls) await (task as () => Promise<void>)()
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
-  inserted = { orders: [], items: [] }
+  inserted = { orders: [], items: [], costs: [] }
+  costsAnswer = async () => ({ error: null })
+  vi.mocked(after).mockImplementation(() => undefined)
   orderUpdates = []
   rateLimited = { data: true, error: null }
   answers = {
@@ -145,6 +160,14 @@ beforeEach(() => {
           insert: async (row: unknown) => {
             inserted.items.push(row)
             return { error: answers.lineError }
+          },
+        }
+      }
+      if (table === 'order_item_costs') {
+        return {
+          insert: async (rows: unknown) => {
+            inserted.costs.push(rows)
+            return costsAnswer()
           },
         }
       }
@@ -313,6 +336,7 @@ describe('placeRenewal — the order and the payment', () => {
     ])
     expect(inserted.items).toEqual([
       {
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
         order_id: 'order-1',
         item_type: 'renew',
         domain_id: DOMAIN_ID,
@@ -443,5 +467,79 @@ describe('placeRenewal — an extension renewed only in blocks (.ai)', () => {
       expect.objectContaining({ float_check: 'covered' }),
       expect.objectContaining({ float_check: 'shortfall_test_mode' }),
     ])
+  })
+
+  it('records the two years’ cost in cents, exactly what the float was checked against', async () => {
+    answers.cost = { renew_usd: '99.9000', is_country_code: true }
+    answers.settings = { icann_fee_usd: '0.2000' }
+    await placeRenewal({ domainId: DOMAIN_ID, years: 2, expectedTotalKobo: total })
+    await afterResponse()
+    expect(inserted.costs).toEqual([
+      [
+        {
+          order_item_id: (inserted.items[0] as { id: string }).id,
+          supplier_cost_cents: 19_980,
+          icann_fee_cents: 0,
+        },
+      ],
+    ])
+  })
+})
+
+describe('placeRenewal — what the line cost us (ADMIN-SPEC §6, D13)', () => {
+  beforeEach(() => {
+    // As PostgREST answers `::text`: the database's own decimal digits.
+    answers.cost = { renew_usd: '11.5100', is_country_code: false }
+    answers.settings = { icann_fee_usd: '0.2000' }
+  })
+
+  it('records the line’s cost, ICANN apart, adding up to the float check to the cent', async () => {
+    // Two years at $11.51, and $0.20 a year for ICANN: $23.42.
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 23.42 })
+    await placeRenewal(INPUT)
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 23.41 })
+    await placeRenewal(INPUT)
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({ float_check: 'covered' }),
+      expect.objectContaining({ float_check: 'shortfall_test_mode' }),
+    ])
+    // Written once the response has gone.
+    expect(inserted.costs).toEqual([])
+    await afterResponse()
+    expect(inserted.costs[0]).toEqual([
+      {
+        order_item_id: (inserted.items[0] as { id: string }).id,
+        supplier_cost_cents: 2302,
+        icann_fee_cents: 40,
+      },
+    ])
+  })
+
+  it('keeps the order as it was when the cost cannot be recorded, logging the order id only', async () => {
+    const error = vi.spyOn(logger, 'error')
+    costsAnswer = async () => ({ error: { code: '23503', message: 'violates foreign key' } })
+    expect((await placeRenewal(INPUT))?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    await afterResponse()
+    expect(error).toHaveBeenCalledWith(
+      { orderId: 'order-1', code: '23503' },
+      'line costs not recorded',
+    )
+
+    vi.mocked(after).mockImplementation(() => {
+      throw new Error('`after` was called outside a request scope')
+    })
+    expect((await placeRenewal(INPUT))?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(error).toHaveBeenLastCalledWith(
+      { orderId: 'order-1', code: undefined },
+      'line costs not recorded',
+    )
+    expect(orderUpdates).toEqual([])
+    error.mockRestore()
+  })
+
+  it('records nothing when the line was never written', async () => {
+    answers.lineError = { message: 'insert failed' }
+    await placeRenewal(INPUT)
+    expect(after).not.toHaveBeenCalled()
   })
 })

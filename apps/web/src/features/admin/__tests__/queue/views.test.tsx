@@ -173,6 +173,7 @@ describe('JobView and SslJobView', () => {
       registryRead: null,
       transferRead: null,
       lastAttemptAt: null,
+      ledger: null,
       events: [],
     })
     render(await JobView({ params: Promise.resolve({ id: JOB }) }))
@@ -198,6 +199,10 @@ describe('JobView and SslJobView', () => {
       name: 'example.com',
       calls: [],
       siblings: [],
+      line: null,
+      orderLines: [],
+      order: null,
+      refunds: [],
     })
     render(await SslJobView({ params: Promise.resolve({ id: JOB }) }))
     expect(screen.getByRole('heading', { level: 1, name: 'example.com' })).toBeInTheDocument()

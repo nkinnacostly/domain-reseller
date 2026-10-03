@@ -87,7 +87,30 @@ const jobRow = {
   order_item_id: LINE,
 }
 
-beforeEach(() => vi.clearAllMocks())
+/** The session client's rpc, answering by function name; anything else is an error. */
+function session(answers: Record<string, { data?: unknown; error?: unknown }> = {}) {
+  const rpc = vi.fn(async (name: string, _args?: unknown) => {
+    const answer = answers[name]
+    if (!answer) return { data: null, error: { code: 'TEST', message: `no answer for ${name}` } }
+    return { data: answer.data ?? null, error: answer.error ?? null }
+  })
+  vi.mocked(createClient).mockResolvedValue({ rpc } as never)
+  return rpc
+}
+
+const LEDGER = {
+  jobId: JOB,
+  since: '2026-10-03T09:00:00.123+00:00',
+  syncedAt: '2026-10-03T11:15:05+00:00',
+  outcome: 'ok',
+  readAt: '2026-10-03T11:15:00+00:00',
+  charges: 0,
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  session()
+})
 
 describe('listJobs', () => {
   it('applies every filter, sorts with a stable tie-break, and names domains from the masked view', async () => {
@@ -319,6 +342,7 @@ describe('listPendingWithoutJob', () => {
 
 describe('getJob', () => {
   it('reads the job, its domain, line, refunds, calls, reads and events', async () => {
+    const rpc = session({ admin_job_ledger: { data: LEDGER } })
     const calls = fakeDb({
       jobs: [{ data: jobRow }],
       admin_domains_v: [
@@ -422,8 +446,17 @@ describe('getJob', () => {
       registryRead: { createdAt: '2026-10-03T09:58:00Z', outcome: 'not_found' },
       transferRead: null,
       lastAttemptAt: '2026-10-03T09:59:00Z',
+      ledger: {
+        since: LEDGER.since,
+        readAt: LEDGER.readAt,
+        syncedAt: LEDGER.syncedAt,
+        outcome: 'ok',
+        charges: 0,
+      },
       events: [{ id: 9, eventType: 'registration_failed' }],
     })
+    // The ledger check is SQL's count, on the job's own side (migration 42).
+    expect(rpc).toHaveBeenCalledWith('admin_job_ledger', { p_test_mode: true, p_job_id: JOB })
     expect(detail?.calls.map((call) => call.operation)).toEqual([
       'RegisterWithContactInfo',
       'GetDetails',
@@ -455,7 +488,10 @@ describe('getJob', () => {
       ],
       domain_events: [{ data: [] }],
     })
+    const rpc = session()
     const detail = await getJob(admin, 'test', JOB)
+    expect(detail?.ledger).toBeNull()
+    expect(rpc).not.toHaveBeenCalled()
     expect(detail?.line).toBeNull()
     expect(detail?.order).toBeNull()
     expect(detail?.registryRead).toBeNull()
@@ -479,6 +515,24 @@ describe('getJob', () => {
       domain_events: [{ data: [] }],
     })
     expect((await getJob(admin, 'test', JOB))?.transferRead?.state).toBeNull()
+  })
+
+  it('says the ledger is unreadable when SQL refuses or answers another shape', async () => {
+    const answers = [
+      { error: { code: '42501', message: 'admin:needs_code' } },
+      { data: { ...LEDGER, charges: -1 } },
+      { data: null },
+    ]
+    for (const answer of answers) {
+      session({ admin_job_ledger: answer })
+      fakeDb({
+        jobs: [{ data: { ...jobRow, order_item_id: null, status: 'needs_attention' } }],
+        admin_domains_v: [{ data: { id: DOMAIN, domain_name: 'example.com' } }],
+        supplier_calls: [{ data: [] }, { data: null }],
+        domain_events: [{ data: [] }],
+      })
+      expect((await getJob(admin, 'test', JOB))?.ledger).toBe('unreadable')
+    }
   })
 
   it('answers null for a job this side does not have, and fails on a read error', async () => {
@@ -559,8 +613,144 @@ describe('getSslJob', () => {
     })
   })
 
+  it('names an order by its certificate, with its line, order and refunds', async () => {
+    const rpc = session({
+      admin_ssl_job_certificate: { data: { commonName: '*.example.com', orderItemId: LINE } },
+    })
+    const calls = fakeDb({
+      ssl_jobs: [
+        {
+          data: {
+            id: JOB,
+            kind: 'ssl_initialize',
+            status: 'failed',
+            attempts: 1,
+            last_error_code: 'SSL_REFUSED',
+            run_after: '2026-10-03T10:00:00Z',
+            sent_at: null,
+            created_at: '2026-10-03T09:00:00Z',
+            updated_at: '2026-10-03T10:00:00Z',
+            finished_at: '2026-10-03T10:00:00Z',
+            locked_at: null,
+            locked_by: null,
+            test_mode: true,
+            certificate_id: DOMAIN,
+          },
+        },
+        { data: [] },
+      ],
+      supplier_calls: [{ data: [] }],
+      order_items: [
+        {
+          data: {
+            id: LINE,
+            order_id: ORDER,
+            item_type: 'ssl',
+            domain: '*.example.com',
+            period_years: 1,
+            renewal_years: 1,
+            price_kobo: 2_500_000,
+            renewal_kobo: 2_600_000,
+            status: 'failed',
+            failure_code: 'SSL_REFUSED',
+          },
+        },
+        { data: [{ id: LINE, price_kobo: 2_500_000, created_at: '2026-10-03T08:00:00Z' }] },
+      ],
+      refunds: [
+        {
+          data: [
+            {
+              id: ORDER,
+              status: 'queued',
+              amount_kobo: 2_687_500,
+              reason: 'ssl_failed',
+              provider_refund_id: null,
+              last_error_code: null,
+              created_at: '2026-10-03T10:00:00Z',
+              updated_at: '2026-10-03T10:00:00Z',
+            },
+          ],
+        },
+      ],
+      admin_orders_v: [
+        { data: { order_number: 'MDH-1002', subtotal_kobo: 2_500_000, vat_kobo: 187_500 } },
+      ],
+    })
+    const detail = await getSslJob(admin, 'test', JOB)
+    expect(rpc).toHaveBeenCalledWith('admin_ssl_job_certificate', {
+      p_test_mode: true,
+      p_job_id: JOB,
+    })
+    expect(detail).toMatchObject({
+      name: '*.example.com',
+      line: { id: LINE, itemType: 'ssl', orderNumber: 'MDH-1002', priceKobo: 2_500_000 },
+      order: { subtotalKobo: 2_500_000, vatKobo: 187_500 },
+      orderLines: [{ id: LINE, priceKobo: 2_500_000 }],
+      refunds: [{ id: ORDER, amountKobo: 2_687_500, status: 'queued' }],
+    })
+    // The certificate itself is never read here: its view is B10's (§9).
+    expect(calls.some((call) => call.table === 'admin_ssl_certificates_v')).toBe(false)
+    const [line] = calls.filter((call) => call.table === 'order_items')
+    expect(line?.steps).toContainEqual(['eq', ['id', LINE]])
+  })
+
+  it('names a job from its calls, with no line, when SQL cannot say', async () => {
+    for (const answer of [
+      { error: { code: '42501', message: 'admin:test_admin' } },
+      { data: null },
+      { data: { commonName: 'example.com', orderItemId: 'not-a-line' } },
+    ]) {
+      session({ admin_ssl_job_certificate: answer })
+      const calls = fakeDb({
+        ssl_jobs: [
+          {
+            data: {
+              id: JOB,
+              kind: 'ssl_configure',
+              status: 'needs_attention',
+              attempts: 1,
+              last_error_code: null,
+              run_after: '2026-10-03T10:00:00Z',
+              sent_at: null,
+              created_at: '2026-10-03T09:00:00Z',
+              updated_at: '2026-10-03T10:00:00Z',
+              finished_at: null,
+              locked_at: null,
+              locked_by: null,
+              test_mode: false,
+              certificate_id: DOMAIN,
+            },
+          },
+          { data: [] },
+        ],
+        supplier_calls: [
+          {
+            data: [
+              {
+                id: 5,
+                created_at: '2026-10-03T09:30:00Z',
+                operation: 'SslConfigure',
+                outcome: 'ok',
+                error_code: null,
+                http_status: 200,
+                duration_ms: 900,
+                domain_name: 'from-calls.com',
+              },
+            ],
+          },
+        ],
+      })
+      const detail = await getSslJob(admin, 'live', JOB)
+      expect(detail).toMatchObject({ name: 'from-calls.com', line: null, refunds: [], order: null })
+      expect(calls.some((call) => call.table === 'order_items')).toBe(false)
+    }
+  })
+
   it('answers null when this side has no such job', async () => {
+    const rpc = session()
     fakeDb({ ssl_jobs: [{ data: null }] })
     expect(await getSslJob(admin, 'test', JOB)).toBeNull()
+    expect(rpc).not.toHaveBeenCalled()
   })
 })

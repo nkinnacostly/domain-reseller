@@ -83,7 +83,7 @@ const PERMITTED: Readonly<Record<string, readonly string[]>> = {
   overview: ['admin_overview', 'admin_attention_counts', 'admin_float', 'admin_audit_log'],
   orders: ['admin_payments_v', 'order_item_costs', 'admin_customers', 'admin_domains_v'],
   refunds: ['admin_refund_stats', 'checkFlutterwaveRefund', 'admin_payments_v'],
-  queue: ['admin_domains_v'],
+  queue: ['admin_domains_v', 'admin_job_ledger', 'admin_ssl_job_certificate'],
   alerts: ['admin_overview'],
   supplier: [
     'admin_float',
@@ -246,11 +246,8 @@ describe('admin boundaries', () => {
   })
 
   it('reads no dollar figure under features/admin: money is kobo or integer cents (N5, D24)', () => {
-    // Integration pass B's migration 42 gives the pricing page cents; drop this entry with it.
-    const PENDING_MIGRATION_42 = new Set(['features/admin/queries/pricing.ts'])
     const usd = /(^|[^a-z0-9_])[a-z0-9_]+_usd([^a-z0-9_]|$)/
     for (const file of ALL.filter((f) => f.rel.startsWith('features/admin/'))) {
-      if (PENDING_MIGRATION_42.has(file.rel)) continue
       for (const { columns } of selects(file.text)) {
         if (columns === null) continue
         expect(usd.test(columns), `${file.rel} selects a dollar column: ${columns}`).toBe(false)

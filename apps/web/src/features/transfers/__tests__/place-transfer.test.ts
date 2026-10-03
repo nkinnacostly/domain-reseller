@@ -1,4 +1,5 @@
 import { GatewayError, userMessageFor } from '@dr/shared'
+import { after } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { env, requirePaymentEnv } from '@/lib/env'
@@ -11,6 +12,11 @@ import type { RdapLookup } from '../lib/rdap'
 import { lookupDomain } from '../queries/rdap-lookup'
 
 vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
+// The line's cost (ADMIN-SPEC §6) is written after the response: queued here.
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: vi.fn(),
+}))
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
 vi.mock('@/lib/flutterwave', () => ({ createPaymentLink: vi.fn() }))
 vi.mock('@/lib/gateway', () => ({ callGateway: vi.fn() }))
@@ -85,8 +91,14 @@ let answers: {
   check: unknown
   balance: unknown
 }
-let inserted: { orders: unknown[]; items: unknown[]; secrets: unknown[] }
+let inserted: { orders: unknown[]; items: unknown[]; secrets: unknown[]; costs: unknown[] }
 let orderUpdates: unknown[]
+let costsAnswer: () => Promise<{ error: unknown }>
+
+/** What `after` was handed, run as Next would once the response has gone. */
+async function afterResponse() {
+  for (const [task] of vi.mocked(after).mock.calls) await (task as () => Promise<void>)()
+}
 let secretDeletes: unknown[]
 let limits: Record<string, { data: unknown; error: unknown }>
 let limitKeys: string[]
@@ -112,7 +124,9 @@ const established = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
-  inserted = { orders: [], items: [], secrets: [] }
+  inserted = { orders: [], items: [], secrets: [], costs: [] }
+  costsAnswer = async () => ({ error: null })
+  vi.mocked(after).mockImplementation(() => undefined)
   orderUpdates = []
   secretDeletes = []
   limits = {}
@@ -224,6 +238,14 @@ beforeEach(() => {
               return { error: null }
             },
           }),
+        }
+      }
+      if (table === 'order_item_costs') {
+        return {
+          insert: async (rows: unknown) => {
+            inserted.costs.push(rows)
+            return costsAnswer()
+          },
         }
       }
       throw new Error(`unexpected table ${table}`)
@@ -628,5 +650,53 @@ describe('placeTransfer — the order, the code and the payment', () => {
     const logged = JSON.stringify(spies.map((spy) => spy.mock.calls))
     expect(logged).not.toContain(CODE)
     for (const spy of spies) spy.mockRestore()
+  })
+})
+
+describe('placeTransfer — what the line cost us (ADMIN-SPEC §6, D13)', () => {
+  beforeEach(() => {
+    // As PostgREST answers `::text`: the database's own decimal digits.
+    answers.tld = { transfer_usd: '10.6100', is_country_code: false, is_transferable: true }
+    answers.settings = { icann_fee_usd: '0.2000' }
+  })
+
+  it('records the line’s cost, ICANN apart, adding up to the float check to the cent', async () => {
+    // $10.61 and the ICANN fee once, $0.20: $10.81.
+    answers.balance = { balanceUsd: 10.81 }
+    await placeTransfer(INPUT)
+    answers.balance = { balanceUsd: 10.8 }
+    await placeTransfer(INPUT)
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({ float_check: 'covered' }),
+      expect.objectContaining({ float_check: 'shortfall_test_mode' }),
+    ])
+    // Written once the response has gone, for the line the code was stored against.
+    expect(inserted.costs).toEqual([])
+    await afterResponse()
+    expect(inserted.costs[0]).toEqual([
+      { order_item_id: 'line-1', supplier_cost_cents: 1061, icann_fee_cents: 20 },
+    ])
+  })
+
+  it('keeps the order and its code as they were when the cost cannot be recorded', async () => {
+    const error = vi.spyOn(logger, 'error')
+    costsAnswer = async () => ({ error: { code: '42501', message: 'permission denied' } })
+    expect((await placeTransfer(INPUT))?.data).toEqual({
+      redirectTo: 'https://checkout.test/pay/1',
+    })
+    await afterResponse()
+    expect(error).toHaveBeenCalledWith(
+      { orderId: 'order-1', code: '42501' },
+      'line costs not recorded',
+    )
+    expect(orderUpdates).toEqual([])
+    expect(secretDeletes).toEqual([])
+    error.mockRestore()
+  })
+
+  it('records nothing for an order it abandoned', async () => {
+    answers.secretError = { code: '23514', message: 'transfer_secrets_auth_code_check' }
+    await placeTransfer(INPUT)
+    expect(after).not.toHaveBeenCalled()
   })
 })
