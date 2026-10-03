@@ -1,10 +1,19 @@
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
 import type { Locator, Page } from '@playwright/test'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createAdminTestUser, deleteTestUser, hasAdminSchema } from './support/accounts.mjs'
-import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from './support/admin'
+import {
+  type AdminUser,
+  codeAfter,
+  expect,
+  SIGN_IN_PROJECTS,
+  signInAsAdmin,
+  test,
+} from './support/admin'
+import { adminSqlSession } from './support/admin-seed.mjs'
 
 /**
  * /admin/audit (docs/ADMIN-SPEC.md §5.2, §9 B14), as a test-only operator on
@@ -15,7 +24,8 @@ import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from '.
  * writes one `customer.search` row naming the account matched — never the
  * address. Then the log shows both, filters them by action family and by
  * outcome, expands an entry's `detail` without a word of personal data, and
- * offers nothing that edits or deletes. No axe violations and no sideways
+ * offers nothing that edits or deletes; "Redact reason", the owner's, is
+ * refused by SQL when this admin asks for it directly, and never offered. No axe violations and no sideways
  * scroll. One sign-in per project: sign-ins are rate-limited per address.
  */
 
@@ -123,8 +133,9 @@ test.describe('the audit log', () => {
   test('shows what this admin did, filters it, expands it, and edits nothing', async ({ page }) => {
     test.setTimeout(240_000)
     if (!admin) throw new Error('no admin')
-    const { user, label } = admin
+    const { user, label, totpSecret } = admin
     await signInAsAdmin(page, admin, '/admin/supplier')
+    const signedInAt = Date.now()
     const main = page.getByRole('main')
 
     await test.step('a side switch records nothing', async () => {
@@ -289,6 +300,31 @@ test.describe('the audit log', () => {
         .evaluateAll((forms) => forms.map((form) => (form as HTMLFormElement).method))
       expect(methods).toEqual(['get'])
       expect(await auditRows(user.id)).toHaveLength(2)
+    })
+
+    await test.step('"Redact reason" is the owner’s: SQL refuses a test administrator, and the page offers none', async () => {
+      // Asked directly, as this admin at aal2: refused, recorded, and nothing removed.
+      const db = await adminSqlSession({ user }, await codeAfter(totpSecret, signedInAt))
+      const why = 'e2e: a test administrator may not redact'
+      const { data, error } = await db.rpc('admin_redact_reason', {
+        p_audit_id: searchId,
+        p_why: why,
+        p_request_key: randomUUID(),
+      })
+      await db.auth.signOut({ scope: 'local' })
+      expect(error).toBeNull()
+      expect(data).toMatchObject({ ok: false, code: 'TEST_ADMIN' })
+      const rows = await auditRows(user.id)
+      expect(rows).toHaveLength(3)
+      const refusal = rows[2]
+      expect(refusal).toMatchObject({ action: 'audit.redact', outcome: 'refused', detail: {} })
+
+      // The refusal carries a typed reason — an owner would be offered "Redact reason" on it.
+      await page.goto(`/admin/audit?admin=${label}`)
+      const entry = entryOf(main, refusal?.id ?? 0)
+      await expect(entry).toContainText(why)
+      await expect(entry).toContainText('Refused')
+      await expect(main.getByRole('button', { name: /^Redact reason/ })).toHaveCount(0)
     })
   })
 })

@@ -54,7 +54,7 @@ describe('auditTargetHref', () => {
   it('links a record by its id, to the page that shows it', () => {
     const cases: [string, string, string][] = [
       ['refund', UUID, `/admin/refunds/${UUID}`],
-      ['incident', '12', '/admin/refunds/incidents#incident-12'],
+      ['incident', '12', '/admin/refunds/incidents?id=12#incident-12'],
       ['job', UUID, `/admin/queue/jobs/${UUID}`],
       ['ssl_job', UUID, `/admin/queue/ssl-jobs/${UUID}`],
       ['domain', UUID, `/admin/domains/${UUID}`],

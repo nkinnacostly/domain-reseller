@@ -1,6 +1,7 @@
-import { Check, Info } from 'lucide-react'
+import { Info } from 'lucide-react'
 import Link from 'next/link'
 import { FOCUS } from '@/components/layout/panel'
+import { RouteTabs } from '@/features/admin/components/route-tabs'
 import { TAB_LABEL } from '@/features/admin/lib/emails-copy'
 import { EMAIL_TABS, type EmailTab, emailsTabHref } from '@/features/admin/lib/emails-params'
 import { formatWatDate, formatWatTime, shortId } from '@/features/admin/lib/format'
@@ -22,36 +23,20 @@ export const QUIET_LINK = cn(
 )
 
 /**
- * The two views as links: the URL says which is open (`?tab=`). The open one
- * carries `aria-current="page"`, a tick and heavier words — never colour
- * alone (S13). NavLink judges by path only, and both share one path.
+ * The two views as links: the URL says which is open (`?tab=`). Both share
+ * one path, so the page says which is current; RouteTabs marks it with
+ * `aria-current="page"`, a tick and heavier words (S13).
  */
 export function EmailTabs({ current }: { current: EmailTab }) {
   return (
-    <nav aria-label="Email views" className="relative -mx-1 overflow-x-auto px-1 py-1">
-      <ul className="flex min-w-max gap-2">
-        {EMAIL_TABS.map((tab) => {
-          const isCurrent = tab === current
-          return (
-            <li key={tab}>
-              <Link
-                href={emailsTabHref(tab)}
-                aria-current={isCurrent ? 'page' : undefined}
-                data-current={isCurrent ? 'true' : undefined}
-                className={cn(
-                  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-muted-foreground transition hover:bg-brand-subtle hover:text-foreground active:scale-[0.98]',
-                  'data-[current=true]:border-brand data-[current=true]:bg-brand data-[current=true]:font-medium data-[current=true]:text-brand-foreground',
-                  FOCUS,
-                )}
-              >
-                {isCurrent ? <Check className="size-3.5" aria-hidden="true" /> : null}
-                {TAB_LABEL[tab]}
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
-    </nav>
+    <RouteTabs
+      label="Email views"
+      tabs={EMAIL_TABS.map((tab) => ({
+        href: emailsTabHref(tab),
+        label: TAB_LABEL[tab],
+        current: tab === current,
+      }))}
+    />
   )
 }
 

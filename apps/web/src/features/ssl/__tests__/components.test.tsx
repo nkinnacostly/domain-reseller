@@ -48,6 +48,9 @@ const CONTACT = {
   country: 'NG',
 }
 
+// Every user here types with no pause between keys (`delay: null`), and long
+// text — a CSR, a list of names — is pasted, as people do: key-by-key typing
+// with a timer per key ran past Vitest's 5 s under a loaded machine.
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(loadApprovers).mockResolvedValue({
@@ -71,7 +74,7 @@ function setupForm(over: Partial<Parameters<typeof CertificateSetupForm>[0]> = {
 
 describe('setting a certificate up (FR-SSL-4)', () => {
   it('loads who can approve it, checks a pasted CSR, and sends the set-up', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(checkCertificateRequest).mockResolvedValue({
       data: {
         summary: {
@@ -110,10 +113,10 @@ describe('setting a certificate up (FR-SSL-4)', () => {
         contact: expect.objectContaining({ firstName: 'Ada', city: 'Lagos' }),
       }),
     )
-  }, 15_000)
+  })
 
   it('shows a generated key once, and sends nothing until it is saved', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(generateCertificateRequest).mockResolvedValue({
       data: { csr: CSR, privateKey: KEY },
     } as never)
@@ -142,16 +145,15 @@ describe('setting a certificate up (FR-SSL-4)', () => {
   })
 
   it('asks for the other names on a multi-domain certificate', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(requestCertificateSetup).mockResolvedValue({
       data: { error: 'notexample.com is not under example.com', field: 'extraNames' },
     } as never)
     setupForm({ includedNames: 4 })
-    await user.type(
-      screen.getByLabelText('Up to 3 more names, one per line'),
-      'www.example.com\nnotexample.com',
-    )
-    await user.type(screen.getByLabelText('Paste the CSR'), CSR)
+    await user.click(screen.getByLabelText('Up to 3 more names, one per line'))
+    await user.paste('www.example.com\nnotexample.com')
+    await user.click(screen.getByLabelText('Paste the CSR'))
+    await user.paste(CSR)
     await user.click(await screen.findByRole('radio', { name: 'admin@example.com' }))
     await user.click(screen.getByRole('button', { name: 'Send to the certificate authority' }))
     expect(requestCertificateSetup).toHaveBeenCalledWith(
@@ -161,7 +163,7 @@ describe('setting a certificate up (FR-SSL-4)', () => {
   })
 
   it('shows a refused earlier set-up, and an approver list it could not load, with a retry', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(loadApprovers).mockResolvedValueOnce({
       data: { error: 'We could not reach the certificate supplier just now.' },
     } as never)
@@ -175,12 +177,13 @@ describe('setting a certificate up (FR-SSL-4)', () => {
   })
 
   it('shows a contact field the supplier would refuse beside the field', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(requestCertificateSetup).mockResolvedValue({
       data: { error: 'Use 20 characters or fewer', field: 'contact.city' },
     } as never)
     setupForm()
-    await user.type(screen.getByLabelText('Paste the CSR'), CSR)
+    await user.click(screen.getByLabelText('Paste the CSR'))
+    await user.paste(CSR)
     await user.click(await screen.findByRole('radio', { name: 'admin@example.com' }))
     await user.click(screen.getByRole('button', { name: 'Send to the certificate authority' }))
     expect(await screen.findByText('Use 20 characters or fewer')).toBeInTheDocument()
@@ -191,7 +194,7 @@ describe('an issued certificate (FR-SSL-7, FR-SSL-8)', () => {
   const FILES = [{ name: 'example.com.crt', label: 'Certificate', content: 'PEM-TEXT' }]
 
   it('offers each file to copy or download, and asks before reissuing', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(requestCertificateReissue).mockResolvedValue({ data: { ok: true } } as never)
     render(<IssuedCertificate certificateId={ID} files={FILES} canReissue />)
     expect(screen.getByLabelText('Certificate')).toHaveValue('PEM-TEXT')
@@ -207,7 +210,7 @@ describe('an issued certificate (FR-SSL-7, FR-SSL-8)', () => {
   })
 
   it('says so while the CA has issued it but the supplier has no text yet, and shows a refused reissue', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(requestCertificateReissue).mockResolvedValue({
       data: { error: 'This certificate has moved on.' },
     } as never)
@@ -221,7 +224,7 @@ describe('an issued certificate (FR-SSL-7, FR-SSL-8)', () => {
 
 describe('a text file to copy or download', () => {
   it('copies to the clipboard, downloads a file, and says when the browser will not copy', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     const writeText = vi
       .fn()
       .mockResolvedValueOnce(undefined)
@@ -466,7 +469,7 @@ describe('the storefront offers', () => {
   })
 
   it('adds a certificate for a name, and says what went wrong', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.mocked(addSslToCart)
       .mockResolvedValueOnce({ data: { error: 'Leave out the "*."' } } as never)
       .mockResolvedValueOnce({ data: { count: 1, name: 'shop.example.com' } } as never)

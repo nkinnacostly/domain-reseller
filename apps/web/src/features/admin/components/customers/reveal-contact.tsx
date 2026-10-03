@@ -15,7 +15,6 @@ import {
   REVEAL_HEADING,
   REVEAL_HIDE,
   REVEAL_NOTE,
-  REVEAL_REPLAYED,
   REVEAL_ROLE,
   REVEAL_SHOWN_NOTE,
   REVEAL_TITLE,
@@ -23,7 +22,7 @@ import {
   REVEAL_UNREADABLE,
 } from '@/features/admin/lib/customers-copy'
 import type { CustomerContact } from '@/features/admin/lib/customers-data'
-import { type AdminResult, adminOutcome } from '@/features/admin/lib/errors'
+import { type AdminResult, adminErrorWords, adminOutcome } from '@/features/admin/lib/errors'
 import { adminHref } from '@/features/admin/lib/href'
 
 /**
@@ -83,7 +82,7 @@ function Reveal({ userId }: { userId: string }) {
       return {
         ok: false,
         code: outcome.replayed ? 'REPLAYED' : 'UNREADABLE',
-        message: outcome.replayed ? REVEAL_REPLAYED : REVEAL_UNREADABLE,
+        message: outcome.replayed ? adminErrorWords('REPLAYED') : REVEAL_UNREADABLE,
       }
     }
     setContact(outcome.data)

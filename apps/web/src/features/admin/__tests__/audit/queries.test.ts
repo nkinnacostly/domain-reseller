@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HIDDEN_VALUE } from '@/features/admin/lib/audit-copy'
 import { parseAuditParams } from '@/features/admin/lib/audit-params'
-import { AuditReadError, listAuditEntries } from '@/features/admin/queries/audit'
+import {
+  AuditReadError,
+  LATEST_AUDIT_COUNT,
+  latestAuditEntries,
+  listAuditEntries,
+} from '@/features/admin/queries/audit'
 import { auditRow, fakeService, filterOf, ids, principal, type Read } from './fake-db'
 
 vi.mock('next/headers', () => ({ headers: vi.fn(), cookies: vi.fn() }))
@@ -189,6 +194,54 @@ describe('listAuditEntries', () => {
     const admin = await principal()
     await expect(listAuditEntries(admin, 'live', parseAuditParams({}))).rejects.toThrow(
       'audit read failed: gateway results',
+    )
+  })
+})
+
+describe('latestAuditEntries (the overview, §5.2 B1)', () => {
+  it('reads the newest ten, made safe as the log makes them, with each note’s result', async () => {
+    const reads = fakeService((read) =>
+      isResults(read)
+        ? {
+            data: [
+              {
+                id: 103,
+                parent_id: 102,
+                outcome: 'ok',
+                error_code: null,
+                created_at: '2026-10-03T11:06:00Z',
+              },
+            ],
+          }
+        : {
+            data: [
+              auditRow({ id: 102, outcome: 'intent', action: 'supplier.balance' }),
+              auditRow(),
+            ],
+          },
+    )
+    const admin = await principal({ role: 'owner' })
+    const entries = await latestAuditEntries(admin, 'live')
+    const [read] = reads
+    expect(read?.table).toBe('admin_audit_log')
+    expect(read?.select).not.toMatch(NEVER)
+    expect(read?.filters).toContainEqual(['order', 'created_at', { ascending: false }])
+    expect(read?.filters).toContainEqual(['limit', LATEST_AUDIT_COUNT])
+    expect(LATEST_AUDIT_COUNT).toBe(10)
+    expect(entries.map((entry) => entry.id)).toEqual([102, 101])
+    expect(entries[0]?.result).toMatchObject({ id: 103, outcome: 'ok' })
+  })
+
+  it('keeps a test administrator to test administrators’ rows (D15)', async () => {
+    const reads = fakeService(() => ({ data: [] }))
+    await latestAuditEntries(await principal({ role: 'operator', testOnly: true }), 'test')
+    expect(filterOf(reads[0], 'eq', 'test_actor')).toBe(true)
+  })
+
+  it('throws a read error the overview shows in words', async () => {
+    fakeService(() => ({ error: { message: 'boom', code: '57014' } }))
+    await expect(latestAuditEntries(await principal(), 'live')).rejects.toBeInstanceOf(
+      AuditReadError,
     )
   })
 })

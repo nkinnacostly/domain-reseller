@@ -95,7 +95,6 @@ Package A built 3 Oct 2026 (ADR-006, `docs/ADMIN-SPEC.md`): admins checked in SQ
 - **Contact profiles** (FR-A4) — the registrant/admin/tech/billing contacts; built with checkout, where registration needs them.
 
 ### Refunds and alerts (after L15, L16)
-- **An admin screen for refunds and alerts** (PRD §16 "Order queue") — approving, retrying, cancelling and recording manual refunds is SQL today (`docs/DEPLOY.md` §6). Who is an admin and how they sign in is decided (ADR-006) and its foundation is built (§1e); the refund screens land with package B3, which removes this line.
 - ~~**Refund policy wording**~~ — done 25 Sept 2026 (the owner: follow Flutterwave): the policy and help centre say we send a refund within 5 business days, usually within minutes, and that a card refund can take up to 15 business days to show — as the order page and refund emails already did.
 - **Refund emails** (FR-R3) — built 24 Sept 2026: a failed line is explained by email, and each refund is announced when it is sent.
 

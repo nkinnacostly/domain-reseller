@@ -4,11 +4,13 @@ import {
   CustomersReadError,
   getCustomer,
   getCustomerStats,
-  LINE_ORDERS_CAP,
-  listCustomerLines,
+  listCustomerCertificates,
+  listCustomerDomains,
+  listCustomerEmails,
   listCustomerOrders,
   listCustomers,
-  sslProductNames,
+  TAB_EMAILS_SHOWN,
+  TAB_ROWS_CAP,
 } from '@/features/admin/queries/customers'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
@@ -264,104 +266,113 @@ describe('listCustomerOrders', () => {
   })
 })
 
-describe('listCustomerLines', () => {
-  it('reads the lines of the newest orders, with each order’s number', async () => {
+describe('a customer’s domains, certificates and emails, from the masked views', () => {
+  it('reads the domains by user id on the side, newest first, without demo rows', async () => {
     const admin = await principal()
-    const reads = fakeService((read) => {
-      if (read.table === 'admin_orders_v') {
-        return {
-          data: [
-            { id: ids.order, order_number: 'ND-001035' },
-            { id: ids.order2, order_number: 'ND-001036' },
-          ],
-          count: 2,
-        }
-      }
-      if (read.table === 'order_items') {
-        return {
-          data: [
-            {
-              id: ids.line,
-              order_id: ids.order2,
-              domain: 'getpaid.com',
-              domain_id: ids.domain,
-              item_type: 'register',
-              status: 'completed',
-              ssl_product_code: null,
-              created_at: '2026-10-02T09:00:00Z',
-            },
-          ],
-        }
-      }
-      return undefined
-    })
-    const lines = await listCustomerLines(admin, 'live', { userId: ids.user })
-    const [orders] = byTable(reads, 'admin_orders_v')
-    expect(orders?.select).toBe('id, order_number')
-    expect(filterOf(orders, 'eq', 'user_id')).toBe(ids.user)
-    expect(filterOf(orders, 'eq', 'test_mode')).toBe(false)
-    expect(orders?.filters).toContainEqual(['limit', LINE_ORDERS_CAP])
-    const [items] = byTable(reads, 'order_items')
-    expect(items?.select).toBe(
-      'id, order_id, domain, domain_id, item_type, status, ssl_product_code, created_at, admin_side:orders!inner(test_mode)',
-    )
-    expect(filterOf(items, 'in', 'order_id')).toEqual([ids.order, ids.order2])
-    expect(lines).toEqual({
-      capped: false,
-      lines: [
+    const reads = fakeService(() => ({
+      data: [
         {
-          id: ids.line,
-          orderId: ids.order2,
-          orderNumber: 'ND-001036',
-          domain: 'getpaid.com',
-          domainId: ids.domain,
-          itemType: 'register',
-          status: 'completed',
-          sslProductCode: null,
-          createdAt: '2026-10-02T09:00:00Z',
+          id: ids.domain,
+          domain_name: 'getpaid.com',
+          local_status: 'active',
+          expires_at: '2027-10-02T09:00:00Z',
+          auto_renew: true,
+          registered_at: '2026-10-02T09:00:00Z',
+          created_at: '2026-10-02T08:00:00Z',
+          test_mode: false,
+        },
+      ],
+      count: 1,
+    }))
+    const domains = await listCustomerDomains(admin, 'live', { userId: ids.user })
+    const [read] = reads
+    expect(read?.table).toBe('admin_domains_v')
+    expect(read?.select).toBe(
+      'id, domain_name, local_status, expires_at, auto_renew, registered_at, created_at, test_mode',
+    )
+    expect(read?.select).not.toMatch(/registrant/)
+    expect(filterOf(read, 'eq', 'user_id')).toBe(ids.user)
+    expect(filterOf(read, 'eq', 'test_mode')).toBe(false)
+    expect(filterOf(read, 'neq', 'source')).toBe('demo')
+    expect(read?.filters).toContainEqual(['limit', TAB_ROWS_CAP])
+    expect(domains).toEqual({
+      total: 1,
+      rows: [
+        {
+          id: ids.domain,
+          domainName: 'getpaid.com',
+          status: 'active',
+          expiresAt: '2027-10-02T09:00:00Z',
+          autoRenew: true,
+          registeredAt: '2026-10-02T09:00:00Z',
+          createdAt: '2026-10-02T08:00:00Z',
+          testMode: false,
         },
       ],
     })
   })
 
-  it('says when there are more orders than one read takes', async () => {
-    const admin = await principal()
-    fakeService((read) =>
-      read.table === 'admin_orders_v'
-        ? { data: [{ id: ids.order, order_number: 'ND-1' }], count: LINE_ORDERS_CAP + 1 }
-        : { data: [] },
-    )
-    expect((await listCustomerLines(admin, 'live', { userId: ids.user })).capped).toBe(true)
+  it('reads the certificates by user id, names and dates only — never the approver or the certificate', async () => {
+    const admin = await principal({ testOnly: true, role: 'operator' })
+    const reads = fakeService(() => ({
+      data: [
+        {
+          id: ids.line,
+          common_name: 'shop.ng',
+          product_name: 'PositiveSSL',
+          status: 'issued',
+          issued_at: '2026-10-02T09:00:00Z',
+          expires_at: '2027-04-20T09:00:00Z',
+          created_at: '2026-10-01T09:00:00Z',
+          test_mode: true,
+        },
+      ],
+      count: 140,
+    }))
+    const certificates = await listCustomerCertificates(admin, 'live', { userId: ids.user })
+    const [read] = reads
+    expect(read?.table).toBe('admin_ssl_certificates_v')
+    expect(read?.select).not.toMatch(/approver|_pem/)
+    // A test admin is held to the Test side whatever is asked.
+    expect(filterOf(read, 'eq', 'test_mode')).toBe(true)
+    expect(filterOf(read, 'eq', 'user_id')).toBe(ids.user)
+    expect(certificates.total).toBe(140)
+    expect(certificates.rows[0]).toMatchObject({ name: 'shop.ng', product: 'PositiveSSL' })
   })
 
-  it('reads no lines for a customer with no orders', async () => {
-    const admin = await principal()
-    const reads = fakeService(() => ({ data: [], count: 0 }))
-    expect(await listCustomerLines(admin, 'live', { userId: ids.user })).toEqual({
-      lines: [],
-      capped: false,
-    })
-    expect(byTable(reads, 'order_items')).toEqual([])
-  })
-})
-
-describe('sslProductNames', () => {
-  it('names each product once, from the storefront’s list', async () => {
+  it('reads the newest emails by user id: what and when, never the recipient or the error', async () => {
     const admin = await principal()
     const reads = fakeService(() => ({
       data: [
-        { product_code: '351', name: 'PositiveSSL' },
-        { product_code: '352', name: null },
+        {
+          id: ids.key,
+          kind: 'order_receipt',
+          category: 'transactional',
+          status: 'sent',
+          delivery_status: 'delivered',
+          created_at: '2026-10-02T09:00:00Z',
+          sent_at: '2026-10-02T09:01:00Z',
+          test_mode: false,
+        },
       ],
+      count: 31,
     }))
-    const names = await sslProductNames(admin, 'live', ['351', '352', '351'])
-    expect(filterOf(reads[0], 'in', 'product_code')).toEqual(['351', '352'])
-    expect([...names]).toEqual([['351', 'PositiveSSL']])
+    const emails = await listCustomerEmails(admin, 'live', { userId: ids.user })
+    const [read] = reads
+    expect(read?.table).toBe('admin_email_outbox_v')
+    expect(read?.select).not.toMatch(/masked_to|last_error/)
+    expect(read?.filters).toContainEqual(['limit', TAB_EMAILS_SHOWN])
+    expect(emails).toMatchObject({ total: 31, rows: [{ kind: 'order_receipt', status: 'sent' }] })
   })
 
-  it('reads nothing for no codes', async () => {
+  it('throws a read error the tab shows in words', async () => {
     const admin = await principal()
-    expect((await sslProductNames(admin, 'live', [])).size).toBe(0)
-    expect(createServiceClient).not.toHaveBeenCalled()
+    fakeService(() => ({ error: { message: 'boom', code: '57014' } }))
+    for (const list of [listCustomerDomains, listCustomerCertificates, listCustomerEmails]) {
+      await expect(list(admin, 'live', { userId: ids.user })).rejects.toBeInstanceOf(
+        CustomersReadError,
+      )
+    }
+    expect(createServiceClient).toHaveBeenCalled()
   })
 })

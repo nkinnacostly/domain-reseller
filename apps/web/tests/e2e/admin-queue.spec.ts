@@ -6,11 +6,18 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import {
   createAdminTestUser,
   deleteTestUser,
-  freshTotpCode,
   hasAdminSchema,
   hasSslSchema,
 } from './support/accounts.mjs'
-import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from './support/admin'
+import {
+  type AdminUser,
+  codeAfter,
+  expect,
+  SIGN_IN_PROJECTS,
+  signInAsAdmin,
+  test,
+} from './support/admin'
+import { seedPaidTestOrder, settleTestJob, settleTestSslJob } from './support/admin-seed.mjs'
 
 /**
  * The queue (docs/ADMIN-SPEC.md §5.2 B4, §9): a failed test registration is
@@ -23,8 +30,9 @@ import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from '.
  *
  * Seeds are test-mode rows of the admin's own e2e account, written as the
  * payment and the worker write them — record_order_payment, claim_job,
- * fail_job — with the secret key, as accounts.mjs's settle helpers do. The
- * account's deletion removes them (purge_test_orders).
+ * fail_job — by support/admin-seed.mjs (`seedPaidTestOrder`,
+ * `settleTestJob`, `settleTestSslJob`). The account's deletion removes them
+ * (purge_test_orders).
  */
 
 function service(): SupabaseClient {
@@ -44,94 +52,18 @@ function service(): SupabaseClient {
 type Seeded = { orderId: string; jobId: string; domain: string }
 
 /**
- * A paid test order of one ₦1,000 line (₦1,075 with VAT) for the admin's own
- * e2e account, paid through record_order_payment, which queues its job.
- */
-async function paidOrder(
-  db: SupabaseClient,
-  userId: string,
-  kind: 'register' | 'transfer' | 'ssl',
-  productCode: string | null = null,
-): Promise<{ orderId: string; domain: string }> {
-  const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-  const domain = `e2equeue${stamp}.com`
-  const { data: rate, error: rateError } = await db.from('fx_rates').select('id').limit(1).single()
-  if (rateError) throw rateError
-  const { data: order, error } = await db
-    .from('orders')
-    .insert({
-      user_id: userId,
-      subtotal_kobo: 100_000,
-      vat_pct: 7.5,
-      vat_kobo: 7_500,
-      total_kobo: 107_500,
-      fx_rate_id: rate.id,
-      tx_ref: `MDH-e2e-queue-${stamp}`,
-      registrant: {},
-      float_check: 'covered',
-      test_mode: true,
-    })
-    .select('id')
-    .single()
-  if (error) throw error
-  const line = await db.from('order_items').insert({
-    order_id: order.id,
-    domain,
-    tld: 'com',
-    item_type: kind,
-    period_years: 1,
-    privacy: false,
-    auto_renew: false,
-    price_kobo: 100_000,
-    renewal_kobo: 100_000,
-    ...(productCode ? { ssl_product_code: productCode } : {}),
-  })
-  if (line.error) throw line.error
-  const paid = await db.rpc('record_order_payment', {
-    p_order_id: order.id,
-    p_provider_reference: `queue-${stamp}`,
-    p_amount_kobo: 107_500,
-    p_currency: 'NGN',
-    p_method: 'card',
-    p_raw: { id: `queue-${stamp}`, status: 'successful' },
-  })
-  if (paid.error) throw paid.error
-  return { orderId: order.id, domain }
-}
-
-/**
  * A paid test registration or transfer, its job claimed and failed the way
- * the worker fails it: `failed` queues the line's refund; `needs_attention`
- * waits for a person.
+ * the worker fails it (`seedPaidTestOrder`, `settleTestJob`): `failed`
+ * queues the line's refund; `needs_attention` waits for a person.
  */
 async function seedJob(
   userId: string,
   kind: 'register' | 'transfer',
   outcome: { code: string; needsAttention: boolean },
 ): Promise<Seeded> {
-  const db = service()
-  const { orderId, domain } = await paidOrder(db, userId, kind)
-  const { data: jobs, error: jobsError } = await db
-    .from('jobs')
-    .select('id, order_items!inner(order_id)')
-    .eq('order_items.order_id', orderId)
-  if (jobsError) throw jobsError
-  const job = jobs?.[0]
-  if (!job) throw new Error(`no job for order ${orderId}`)
-  const claim = await db.rpc('claim_job', {
-    p_worker: 'e2e',
-    p_test_mode: true,
-    p_job_id: job.id,
-  })
-  if (claim.error) throw claim.error
-  const failed = await db.rpc('fail_job', {
-    p_job_id: job.id,
-    p_code: outcome.code,
-    p_message: 'e2e',
-    p_needs_attention: outcome.needsAttention,
-  })
-  if (failed.error) throw failed.error
-  return { orderId, jobId: job.id, domain }
+  const order = await seedPaidTestOrder(userId, { kind, tag: 'queue' })
+  const jobId = await settleTestJob(order.orderId, outcome)
+  return { orderId: order.orderId, jobId, domain: order.domain }
 }
 
 /**
@@ -139,8 +71,7 @@ async function seedJob(
  * before it was sent: it waits for a person, and Fail is offered.
  */
 async function seedSslJob(userId: string): Promise<Seeded> {
-  const db = service()
-  const { data: product, error: productError } = await db
+  const { data: product, error: productError } = await service()
     .from('ssl_products')
     .select('product_code')
     .eq('is_sellable', true)
@@ -148,27 +79,16 @@ async function seedSslJob(userId: string): Promise<Seeded> {
     .limit(1)
     .single()
   if (productError) throw productError
-  const { orderId, domain } = await paidOrder(db, userId, 'ssl', product.product_code)
-  const { data: job, error } = await db
-    .from('ssl_jobs')
-    .select('id, ssl_certificates!inner(order_items!inner(order_id))')
-    .eq('ssl_certificates.order_items.order_id', orderId)
-    .single()
-  if (error) throw error
-  const claim = await db.rpc('claim_ssl_job', {
-    p_worker: 'e2e',
-    p_test_mode: true,
-    p_job_id: job.id,
+  const order = await seedPaidTestOrder(userId, {
+    kind: 'ssl',
+    tag: 'queue',
+    productCode: product.product_code,
   })
-  if (claim.error) throw claim.error
-  const failed = await db.rpc('fail_ssl_job', {
-    p_job_id: job.id,
-    p_code: 'SUPPLIER_TIMEOUT',
-    p_message: 'e2e',
-    p_needs_attention: true,
+  const jobId = await settleTestSslJob(order.orderId, {
+    code: 'SUPPLIER_TIMEOUT',
+    needsAttention: true,
   })
-  if (failed.error) throw failed.error
-  return { orderId, jobId: job.id, domain }
+  return { orderId: order.orderId, jobId, domain: order.domain }
 }
 
 async function jobStatus(jobId: string): Promise<string | null> {
@@ -189,19 +109,6 @@ async function auditRows(jobId: string, action: string) {
     .eq('action', action)
   return data ?? []
 }
-
-/**
- * A code from a later window than the one signing in used: a money dialog
- * verifies its own code, and the authenticator's last one may not count twice.
- */
-async function nextCode(secret: string, after: number): Promise<string> {
-  while (Math.floor(Date.now() / 30_000) <= after) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-  return freshTotpCode(secret)
-}
-
-const window30 = () => Math.floor(Date.now() / 30_000)
 
 const axe = (page: Page) =>
   new AxeBuilder({ page })
@@ -262,7 +169,7 @@ test.describe('the queue to a test administrator', () => {
     expect(queued?.status).toBe('queued')
 
     await signInAsAdmin(page, admin, '/admin/queue')
-    const signedInWindow = window30()
+    const signedInAt = Date.now()
     await expect(page.getByRole('heading', { level: 1, name: 'Queue' })).toBeVisible()
     await expect(
       page
@@ -298,7 +205,7 @@ test.describe('the queue to a test administrator', () => {
     await dialog.getByLabel('Reason').fill('e2e: the registry read shows it free again')
     await dialog
       .getByLabel('Code from your authenticator app')
-      .fill(await nextCode(admin.totpSecret, signedInWindow))
+      .fill(await codeAfter(admin.totpSecret, signedInAt))
     await dialog.getByRole('button', { name: 'Retry', exact: true }).click()
     await expect(
       dialog.getByText('Back in the queue: the worker takes it on its next run.'),
@@ -331,7 +238,7 @@ test.describe('the queue to a test administrator', () => {
     })
 
     await signInAsAdmin(page, admin, `/admin/queue/jobs/${seeded.jobId}`)
-    const signedInWindow = window30()
+    const signedInAt = Date.now()
     await expect(page.getByRole('heading', { level: 1, name: seeded.domain })).toBeVisible()
     const before = page.getByRole('region', { name: 'Before failing' })
     await expect(before).toContainText('No registry read is recorded for this domain on this side.')
@@ -359,7 +266,7 @@ test.describe('the queue to a test administrator', () => {
     await dialog.getByLabel(`Type ${seeded.domain} to confirm`).fill(seeded.domain)
     await dialog
       .getByLabel('Code from your authenticator app')
-      .fill(await nextCode(admin.totpSecret, signedInWindow))
+      .fill(await codeAfter(admin.totpSecret, signedInAt))
     await dialog.getByRole('button', { name: 'Fail and refund ₦1,075' }).click()
     await expect(
       dialog.getByText(

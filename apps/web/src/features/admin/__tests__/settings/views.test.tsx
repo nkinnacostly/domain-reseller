@@ -95,7 +95,7 @@ beforeEach(() => vi.clearAllMocks())
 describe('the limits page', () => {
   it('gives the owner the form, grouped, with each limit and its bounds', async () => {
     fakeService(() => ({ data: opsRow() }))
-    signedIn()
+    signedIn({ admin_float: { data: { alertCents: 4_321 } } })
     await serverRender(LimitsView())
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Settings pages' })
@@ -120,7 +120,7 @@ describe('the limits page', () => {
 
   it('shows an operator the limits read-only, and says who changes them', async () => {
     fakeService(() => ({ data: opsRow() }))
-    signedIn({}, { role: 'operator', label: 'ops' })
+    signedIn({ admin_float: { data: { alertCents: 4_321 } } }, { role: 'operator', label: 'ops' })
     await serverRender(LimitsView())
     const region = screen.getByRole('region', { name: 'Limits' })
     expect(region).toHaveTextContent('Only the owner changes limits.')

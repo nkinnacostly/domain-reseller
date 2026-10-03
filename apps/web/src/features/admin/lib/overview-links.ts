@@ -61,7 +61,8 @@ export const ATTENTION_SPECS: readonly Spec[] = [
   {
     key: 'incidents',
     label: 'Payment incidents',
-    href: '/admin/refunds/incidents?status=unresolved',
+    // The incidents list opens on the unresolved ones (`?state=open` is its default).
+    href: '/admin/refunds/incidents',
     tone: 'warning',
   },
   {
@@ -73,7 +74,7 @@ export const ATTENTION_SPECS: readonly Spec[] = [
   {
     key: 'pendingWithoutJob',
     label: 'Paid lines with no job',
-    href: '/admin/queue?tab=pending-without-job',
+    href: '/admin/queue/pending',
     tone: 'danger',
   },
   {

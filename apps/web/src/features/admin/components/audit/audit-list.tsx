@@ -27,12 +27,14 @@ import { AUDIT_OUTCOME_LABEL, labelFor, ROLE_LABEL } from '@/features/admin/lib/
 import { pageCount } from '@/features/admin/lib/list-params'
 import type { AuditEntry } from '@/features/admin/queries/audit'
 import { cn } from '@/lib/utils'
+import { RedactReason } from './redact-reason'
 
 /**
  * The entries (docs/ADMIN-SPEC.md §5.2 B14): When · Admin · Action · Target
  * · Side · Reason · Result · Request id, and a `<details>` per entry with what
- * was recorded. An intent note shows the gateway's result beside it. Nothing
- * here acts: there is no edit, delete or redact control, for anyone.
+ * was recorded. An intent note shows the gateway's result beside it. The one
+ * control is the owner's "Redact reason", which removes a typed reason and
+ * records that it did; nothing edits or deletes an entry.
  */
 
 const LINK = cn(
@@ -94,13 +96,19 @@ function Target({ row }: { row: AuditEntry }) {
   )
 }
 
-function Reason({ row }: { row: AuditEntry }) {
+function Reason({ row, canRedact }: { row: AuditEntry; canRedact: boolean }) {
   if (row.redactedAt) {
     return (
       <span className="text-muted-foreground">Redacted on {formatWatDate(row.redactedAt)}</span>
     )
   }
-  return row.reason ? <span className="break-words">{row.reason}</span> : <>—</>
+  if (!row.reason) return <>—</>
+  return (
+    <span className="flex flex-col items-end gap-1 sm:items-start">
+      <span className="break-words">{row.reason}</span>
+      {canRedact ? <RedactReason auditId={row.id} /> : null}
+    </span>
+  )
 }
 
 function Result({ row }: { row: AuditEntry }) {
@@ -226,7 +234,7 @@ function Details({ row }: { row: AuditEntry }) {
   )
 }
 
-function columns(params: AuditParams): Column<AuditEntry, AuditSort>[] {
+function columns(params: AuditParams, canRedact: boolean): Column<AuditEntry, AuditSort>[] {
   return [
     {
       key: 'when',
@@ -244,7 +252,11 @@ function columns(params: AuditParams): Column<AuditEntry, AuditSort>[] {
       header: 'Side',
       cell: (row) => (row.side ? labelFor(SIDE_LABEL, row.side) : '—'),
     },
-    { key: 'reason', header: 'Reason', cell: (row) => <Reason row={row} /> },
+    {
+      key: 'reason',
+      header: 'Reason',
+      cell: (row) => <Reason row={row} canRedact={canRedact} />,
+    },
     { key: 'result', header: 'Result', cell: (row) => <Result row={row} /> },
     {
       key: 'request',
@@ -299,11 +311,14 @@ export function AuditList({
   total,
   params,
   testOnly,
+  canRedact = false,
 }: {
   rows: AuditEntry[]
   total: number
   params: AuditParams
   testOnly: boolean
+  /** The owner: each typed reason offers "Redact reason" (§5.2 B14). */
+  canRedact?: boolean
 }) {
   const dir = params.list.dir
   return (
@@ -311,7 +326,7 @@ export function AuditList({
       <DataTable
         caption={`Audit entries, ${dir === 'asc' ? 'oldest' : 'newest'} first`}
         rows={rows}
-        columns={columns(params)}
+        columns={columns(params, canRedact)}
         rowKey={(row) => String(row.id)}
         sorting={{
           sort: 'when',

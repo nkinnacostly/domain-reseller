@@ -493,7 +493,15 @@ describe('one order', () => {
       `/admin/queue/jobs/${ids.job}`,
     )
     expect(within(table).getByText('A new one is ₦25,000 at today’s price')).toBeInTheDocument()
-    expect(within(table).getByText('On the certificate’s page')).toBeInTheDocument()
+    // A certificate's line opens its certificate by the line (§9: /admin/ssl?line=).
+    expect(within(table).getByRole('link', { name: 'On the certificate’s page' })).toHaveAttribute(
+      'href',
+      `/admin/ssl?line=${ids.sslLine}`,
+    )
+    expect(within(table).getByRole('link', { name: sslLine.domain })).toHaveAttribute(
+      'href',
+      `/admin/ssl?line=${ids.sslLine}`,
+    )
     expect(within(table).getByText('1-year subscription')).toBeInTheDocument()
   })
 
@@ -527,7 +535,7 @@ describe('one order', () => {
     ).getByRole('table')
     expect(within(incidents).getByRole('link', { name: 'Incident 42' })).toHaveAttribute(
       'href',
-      '/admin/refunds/incidents#incident-42',
+      '/admin/refunds/incidents?id=42#incident-42',
     )
     expect(within(incidents).getByText('Resolved')).toBeInTheDocument()
     expect(within(incidents).getByText(/by owner$/)).toBeInTheDocument()

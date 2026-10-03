@@ -101,6 +101,7 @@ const DETAIL: RefundDetail = {
   providerStatus: null,
   failedProviderRefundIds: [],
   paymentId: '3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f',
+  providerReference: '456',
   testMode: true,
   order: {
     id: ORDER,
@@ -359,8 +360,9 @@ describe('/admin/refunds/incidents', () => {
     expect(within(card).getByRole('heading', { name: 'Payment not recorded' })).toBeInTheDocument()
     expect(within(card).getByText('Money owed')).toBeInTheDocument()
     expect(within(card).getByText('₦1,075')).toBeInTheDocument()
-    expect(within(card).getByRole('group', { name: 'What happened?' })).toBeInTheDocument()
-    expect(within(card).queryByRole('radio', { name: /Handled outside/ })).not.toBeInTheDocument()
+    // What happened is asked inside the dialog, so the card offers only the button.
+    expect(within(card).getByRole('button', { name: 'Mark resolved' })).toBeEnabled()
+    expect(within(card).queryByRole('radio')).not.toBeInTheDocument()
   })
 
   it('tells a viewer the role only reads, and shows resolved ones without a button', async () => {

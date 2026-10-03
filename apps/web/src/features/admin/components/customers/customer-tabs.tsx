@@ -1,6 +1,7 @@
 import { formatNaira } from '@dr/shared'
 import Link from 'next/link'
 import { QUIET_BUTTON } from '@/components/common/action-parts'
+import { STATUS_LABEL as DOMAIN_STATUS_LABEL } from '@/components/common/domain-status-pill'
 import { PANEL_HEADING, Panel } from '@/components/layout/panel'
 import { AdminStatusPill, TestBadge } from '@/features/admin/components/admin-status-pill'
 import { CopyValue } from '@/features/admin/components/copy-value'
@@ -12,6 +13,7 @@ import { type Column, DataTable } from '@/features/admin/components/table/data-t
 import { Pager } from '@/features/admin/components/table/pager'
 import { canAct } from '@/features/admin/lib/actions'
 import {
+  ALL_EMAILS,
   ALLOWANCE_HEADING,
   ALLOWANCE_UNREAD,
   allowanceRule,
@@ -21,53 +23,54 @@ import {
   DOMAINS_HEADING,
   DOMAINS_NOTE,
   EMAILS_HEADING,
-  EMAILS_UNAVAILABLE,
-  EMAILS_UNAVAILABLE_BODY,
+  EMAILS_NOTE,
   kindsText,
-  LINE_KIND_LABEL,
-  LINES_CAPPED,
   NO_CERTIFICATES,
   NO_DOMAINS,
+  NO_EMAILS,
   NO_ORDERS,
   ORDERS_HEADING,
   OTHER_SIDE,
   OVERVIEW_ACCOUNT_HEADING,
   OVERVIEW_SIDE_HEADING,
+  ROWS_CAPPED,
   SECTION_ERROR,
   sideWord,
   tierLabel,
 } from '@/features/admin/lib/customers-copy'
-import {
-  type CustomerDetail,
-  type CustomerDomain,
-  type CustomerLine,
-  certificatesFromLines,
-  domainsFromLines,
-} from '@/features/admin/lib/customers-data'
+import type { CustomerDetail } from '@/features/admin/lib/customers-data'
 import { ACCOUNT_TYPE_LABEL, customerTabHref } from '@/features/admin/lib/customers-params'
+import { kindLabel } from '@/features/admin/lib/emails-copy'
 import { formatCount, formatWat } from '@/features/admin/lib/format'
 import { adminHref } from '@/features/admin/lib/href'
-import { LINE_STATUS_LABEL, labelFor, ORDER_STATUS_LABEL } from '@/features/admin/lib/labels'
+import { EMAIL_STATUS_LABEL, labelFor, ORDER_STATUS_LABEL } from '@/features/admin/lib/labels'
 import { pageCount } from '@/features/admin/lib/list-params'
 import type { AdminSide } from '@/features/admin/lib/side'
+import { CERTIFICATE_STATUS_LABEL } from '@/features/admin/lib/ssl-copy'
 import {
+  type Capped,
+  type CustomerCertificateRow,
+  type CustomerDomainRow,
+  type CustomerEmailRow,
   type CustomerOrder,
   type CustomerOrders,
-  LINE_ORDERS_CAP,
-  listCustomerLines,
+  listCustomerCertificates,
+  listCustomerDomains,
+  listCustomerEmails,
   listCustomerOrders,
   ORDERS_PER_PAGE,
-  sslProductNames,
+  TAB_EMAILS_SHOWN,
 } from '@/features/admin/queries/customers'
 import type { AdminPrincipal } from '@/features/admin/queries/session'
 import { cn } from '@/lib/utils'
-import { LINK, MaskedEmail, TwoFactorPill, When } from './parts'
+import { Day, LINK, MaskedEmail, TwoFactorPill, When } from './parts'
 import { RevealContact } from './reveal-contact'
 
 /**
  * One customer's tabs (§5.2 B8). Each is read only after `admin_customer`
- * allowed this admin the account; orders and their lines come through
- * `adminDb`, by user id, on the side shown.
+ * allowed this admin the account; orders, domains, certificates and emails
+ * come through `adminDb` — orders and the masked views — by user id, on
+ * the side shown.
  */
 
 type TabProps = { admin: AdminPrincipal; side: AdminSide; customer: CustomerDetail }
@@ -258,154 +261,203 @@ export async function CustomerOrdersTab({
 
 // ── Domains ────────────────────────────────────────────────────────────────
 
-const DOMAIN_COLUMNS: Column<CustomerDomain>[] = [
+const DOMAIN_COLUMNS: Column<CustomerDomainRow>[] = [
   {
     key: 'domain',
     header: 'Domain',
-    cell: (row) =>
-      row.domainId ? (
-        <Link href={adminHref.domain(row.domainId)} className={cn(LINK, 'break-all')}>
-          {row.domain}
+    cell: (row) => (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <Link href={adminHref.domain(row.id)} className={cn(LINK, 'break-all')}>
+          {row.domainName}
         </Link>
-      ) : (
-        <span className="break-all">{row.domain}</span>
-      ),
-  },
-  {
-    key: 'kind',
-    header: 'Latest line',
-    cell: (row) => labelFor(LINE_KIND_LABEL, row.latest.itemType),
+        {row.testMode ? <TestBadge /> : null}
+      </span>
+    ),
   },
   {
     key: 'status',
-    header: 'Line status',
-    cell: (row) => <AdminStatusPill value={row.latest.status} labels={LINE_STATUS_LABEL} />,
+    header: 'Status',
+    cell: (row) => <AdminStatusPill value={row.status} labels={DOMAIN_STATUS_LABEL} />,
   },
-  { key: 'when', header: 'Ordered', cell: (row) => <When at={row.latest.createdAt} /> },
-  {
-    key: 'order',
-    header: 'Order',
-    className: 'whitespace-nowrap',
-    cell: (row) => (
-      <Link href={adminHref.order(row.latest.orderId)} className={LINK}>
-        {row.latest.orderNumber ?? 'Open the order'}
-      </Link>
-    ),
-  },
-  { key: 'lines', header: 'Lines', numeric: true, cell: (row) => formatCount(row.lines) },
+  { key: 'expires', header: 'Expires', cell: (row) => <Day at={row.expiresAt} /> },
+  { key: 'renew', header: 'Auto-renew', cell: (row) => (row.autoRenew ? 'On' : 'Off') },
+  { key: 'registered', header: 'Registered', cell: (row) => <When at={row.registeredAt} /> },
 ]
 
+/** A tab's heading, what it lists, and — past the cap — how many there are. */
+function TabSection({
+  id,
+  heading,
+  total,
+  note,
+  shown,
+  children,
+  aside,
+}: {
+  id: string
+  heading: string
+  total: number
+  note: string
+  shown: number
+  children: React.ReactNode
+  aside?: React.ReactNode
+}) {
+  return (
+    <section aria-labelledby={id} className="space-y-3">
+      <h2 id={id} className="px-1 font-medium text-foreground">
+        {heading} · {formatCount(total)}
+      </h2>
+      <p className="px-1 text-sm text-muted-foreground">{note}</p>
+      {total > shown ? (
+        <p className="px-1 text-sm text-muted-foreground">{ROWS_CAPPED(shown, total)}</p>
+      ) : null}
+      {children}
+      {aside}
+    </section>
+  )
+}
+
 export async function CustomerDomainsTab({ admin, side, customer }: TabProps) {
-  let lines: { lines: CustomerLine[]; capped: boolean }
+  let domains: Capped<CustomerDomainRow>
   try {
-    lines = await listCustomerLines(admin, side, customer)
+    domains = await listCustomerDomains(admin, side, customer)
   } catch {
     return <ErrorState title={SECTION_ERROR} />
   }
-  const domains = domainsFromLines(lines.lines)
   return (
-    <section aria-labelledby="customer-domains-heading" className="space-y-3">
-      <h2 id="customer-domains-heading" className="px-1 font-medium text-foreground">
-        {DOMAINS_HEADING} · {formatCount(domains.length)}
-      </h2>
-      <p className="px-1 text-sm text-muted-foreground">{DOMAINS_NOTE(side)}</p>
-      {lines.capped ? (
-        <p className="px-1 text-sm text-muted-foreground">{LINES_CAPPED(LINE_ORDERS_CAP)}</p>
-      ) : null}
-      <DataTable<CustomerDomain>
-        caption={`Domains on this customer’s orders, ${sideWord(side)} side`}
-        rows={domains}
+    <TabSection
+      id="customer-domains-heading"
+      heading={DOMAINS_HEADING}
+      total={domains.total}
+      note={DOMAINS_NOTE(side)}
+      shown={domains.rows.length}
+    >
+      <DataTable<CustomerDomainRow>
+        caption={`This customer’s domains, ${sideWord(side)} side`}
+        rows={domains.rows}
         columns={DOMAIN_COLUMNS}
-        rowKey={(row) => row.domain}
+        rowKey={(row) => row.id}
         empty={<EmptyState title={NO_DOMAINS(side)} body={OTHER_SIDE(side)} />}
       />
-    </section>
+    </TabSection>
   )
 }
 
 // ── Certificates ───────────────────────────────────────────────────────────
 
-type CertificateRow = CustomerLine & { product: string }
-
-const CERTIFICATE_COLUMNS: Column<CertificateRow>[] = [
-  { key: 'name', header: 'Name', cell: (row) => <span className="break-all">{row.domain}</span> },
-  { key: 'product', header: 'Product', cell: (row) => row.product },
+const CERTIFICATE_COLUMNS: Column<CustomerCertificateRow>[] = [
   {
-    key: 'status',
-    header: 'Line status',
-    cell: (row) => <AdminStatusPill value={row.status} labels={LINE_STATUS_LABEL} />,
-  },
-  { key: 'when', header: 'Ordered', cell: (row) => <When at={row.createdAt} /> },
-  {
-    key: 'order',
-    header: 'Order',
-    className: 'whitespace-nowrap',
+    key: 'name',
+    header: 'Name',
     cell: (row) => (
-      <Link href={adminHref.order(row.orderId)} className={LINK}>
-        {row.orderNumber ?? 'Open the order'}
-      </Link>
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <Link href={adminHref.certificate(row.id)} className={cn(LINK, 'break-all')}>
+          {row.name}
+        </Link>
+        {row.testMode ? <TestBadge /> : null}
+      </span>
     ),
   },
+  { key: 'product', header: 'Product', cell: (row) => row.product ?? '—' },
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (row) => <AdminStatusPill value={row.status} labels={CERTIFICATE_STATUS_LABEL} />,
+  },
+  { key: 'issued', header: 'Issued', cell: (row) => <Day at={row.issuedAt} never="Not yet" /> },
+  { key: 'expires', header: 'Expires', cell: (row) => <Day at={row.expiresAt} /> },
+  { key: 'ordered', header: 'Ordered', cell: (row) => <When at={row.createdAt} /> },
 ]
 
 export async function CustomerCertificatesTab({ admin, side, customer }: TabProps) {
-  let rows: CertificateRow[]
-  let capped: boolean
+  let certificates: Capped<CustomerCertificateRow>
   try {
-    const lines = await listCustomerLines(admin, side, customer)
-    const certificates = certificatesFromLines(lines.lines)
-    const names = await sslProductNames(
-      admin,
-      side,
-      certificates.flatMap((line) => (line.sslProductCode ? [line.sslProductCode] : [])),
-    )
-    rows = certificates.map((line) => ({
-      ...line,
-      product: line.sslProductCode
-        ? (names.get(line.sslProductCode) ?? `Product ${line.sslProductCode}`)
-        : '—',
-    }))
-    capped = lines.capped
+    certificates = await listCustomerCertificates(admin, side, customer)
   } catch {
     return <ErrorState title={SECTION_ERROR} />
   }
   return (
-    <section aria-labelledby="customer-certificates-heading" className="space-y-3">
-      <h2 id="customer-certificates-heading" className="px-1 font-medium text-foreground">
-        {CERTIFICATES_HEADING} · {formatCount(rows.length)}
-      </h2>
-      <p className="px-1 text-sm text-muted-foreground">{CERTIFICATES_NOTE(side)}</p>
-      {capped ? (
-        <p className="px-1 text-sm text-muted-foreground">{LINES_CAPPED(LINE_ORDERS_CAP)}</p>
-      ) : null}
-      <DataTable<CertificateRow>
-        caption={`Certificates on this customer’s orders, ${sideWord(side)} side`}
-        rows={rows}
+    <TabSection
+      id="customer-certificates-heading"
+      heading={CERTIFICATES_HEADING}
+      total={certificates.total}
+      note={CERTIFICATES_NOTE(side)}
+      shown={certificates.rows.length}
+    >
+      <DataTable<CustomerCertificateRow>
+        caption={`This customer’s certificates, ${sideWord(side)} side`}
+        rows={certificates.rows}
         columns={CERTIFICATE_COLUMNS}
         rowKey={(row) => row.id}
         empty={<EmptyState title={NO_CERTIFICATES(side)} body={OTHER_SIDE(side)} />}
       />
-    </section>
+    </TabSection>
   )
 }
 
 // ── Emails ─────────────────────────────────────────────────────────────────
 
-export function CustomerEmailsTab() {
+const EMAIL_COLUMNS: Column<CustomerEmailRow>[] = [
+  {
+    key: 'kind',
+    header: 'Email',
+    cell: (row) => (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <span>{kindLabel(row.kind)}</span>
+        {row.testMode ? <TestBadge /> : null}
+      </span>
+    ),
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (row) => (
+      <span className="inline-flex flex-wrap gap-1.5">
+        <AdminStatusPill value={row.status} labels={EMAIL_STATUS_LABEL} />
+        {row.deliveryStatus ? (
+          <AdminStatusPill value={row.deliveryStatus} labels={EMAIL_STATUS_LABEL} />
+        ) : null}
+      </span>
+    ),
+  },
+  { key: 'queued', header: 'Queued', cell: (row) => <When at={row.createdAt} /> },
+  { key: 'sent', header: 'Sent', cell: (row) => <When at={row.sentAt} never="Not sent" /> },
+]
+
+/**
+ * The newest emails queued for this account, and the way to all of them:
+ * the Emails page narrowed to the account by its id (`?user=`), never by
+ * its address (N13).
+ */
+export async function CustomerEmailsTab({ admin, side, customer }: TabProps) {
+  let emails: Capped<CustomerEmailRow>
+  try {
+    emails = await listCustomerEmails(admin, side, customer)
+  } catch {
+    return <ErrorState title={SECTION_ERROR} />
+  }
   return (
-    <section aria-labelledby="customer-emails-heading" className="space-y-3">
-      <h2 id="customer-emails-heading" className="px-1 font-medium text-foreground">
-        {EMAILS_HEADING}
-      </h2>
-      <EmptyState
-        title={EMAILS_UNAVAILABLE}
-        body={EMAILS_UNAVAILABLE_BODY}
-        action={
-          <Link href="/admin/emails" className={QUIET_BUTTON}>
-            Go to Emails
+    <TabSection
+      id="customer-emails-heading"
+      heading={EMAILS_HEADING}
+      total={emails.total}
+      note={EMAILS_NOTE(side, TAB_EMAILS_SHOWN)}
+      shown={emails.rows.length}
+      aside={
+        emails.total > 0 ? (
+          <Link href={adminHref.customerEmails(customer.userId)} className={QUIET_BUTTON}>
+            {ALL_EMAILS}
           </Link>
-        }
+        ) : null
+      }
+    >
+      <DataTable<CustomerEmailRow>
+        caption={`This customer’s newest emails, ${sideWord(side)} side`}
+        rows={emails.rows}
+        columns={EMAIL_COLUMNS}
+        rowKey={(row) => row.id}
+        empty={<EmptyState title={NO_EMAILS(side)} body={OTHER_SIDE(side)} />}
       />
-    </section>
+    </TabSection>
   )
 }

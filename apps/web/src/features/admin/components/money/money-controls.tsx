@@ -7,7 +7,7 @@ import { GRAIN_LABEL, GRAINS, grainHref, type MoneyParams } from '@/features/adm
 import { cn } from '@/lib/utils'
 
 const CHIP =
-  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.98]'
+  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition-transform hover:bg-brand-subtle active:scale-[0.98]'
 
 const FIELD = 'h-11 rounded-full bg-background px-4 text-foreground dark:bg-background'
 

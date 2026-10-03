@@ -1117,7 +1117,7 @@ The periodic preset checker also checks open drafts (`preset_drafts_for_check()`
 | `ssl_status:` | `/admin/ssl/<id>` |
 | `order_stuck:` | `/admin/orders/<id>` |
 | `refund:`, `refund_overdue:`, `refund_slow:` | `/admin/refunds/<id>` |
-| `incident:` | `/admin/refunds/incidents#incident-<id>` |
+| `incident:` | `/admin/refunds/incidents?id=<id>#incident-<id>` (that incident, resolved or not) |
 | `drift:` | `/admin/alerts?tab=drift` |
 | `reconcile_stale:`, `cron_stale:`, `cron_failed:` | `/admin/alerts?tab=health` |
 | `float_low:`, `float_cover:` | `/admin/supplier` |
@@ -1129,7 +1129,8 @@ The periodic preset checker also checks open drafts (`preset_drafts_for_check()`
 | `ledger_missing:` | `/admin/orders?line=<id>` |
 | `ledger_*:` (others) | `/admin/supplier/ledger?trace=<id>` |
 | `admin_changed:`, `admin_factor_missing:`, `admin_test_not_e2e:` | `/admin/settings/admins` |
-| `admin_burst:`, `admin_limit_raised:`, `admin_preset_changed:` | `/admin/audit?id=<id>` |
+| `admin_burst:` | `/admin/audit?admin=<label>` (the key holds the admin's label, not an entry) |
+| `admin_limit_raised:`, `admin_preset_changed:` | `/admin/audit?id=<id>` |
 | anything else | `/admin/alerts` |
 
 - **Alert keys.** `sync_alerts()` is unchanged and returns no `key`. **`alerts/store.ts` then selects `id, key` from `ops_alerts` for the returned ids** (`service_role` has SELECT) and adds `key` to `DueAlert`.
@@ -1189,16 +1190,16 @@ The periodic preset checker also checks open drafts (`preset_drafts_for_check()`
 
 | File | Contract |
 |---|---|
-| `table/data-table.tsx` (server) | As v1: a card list below `xl`, a `<table>` at `xl` in `div.relative.overflow-x-auto`, an sr-only caption, `scope`, sort `Link`s with `aria-sort` on the `th`, tabular-nums. |
-| `table/table-toolbar.tsx`, `table/filter-chips.tsx`, `table/pager.tsx`, `table/table-skeleton.tsx` | As v1. The toolbar is never used for PII search. |
-| `admin-status-pill.tsx`, `stat-tile.tsx`, `charts/bar-chart.tsx`, `charts/line-chart.tsx` | As v1 (server SVG, sr-only data, `status-*` / brand tokens only). |
-| `confirm-action.tsx` (client) | `ConfirmAction({trigger, title, rows, body, confirmLabel, cancelLabel, reason, reasonLabel?, typeToConfirm?, checks?, destructive?, needsCode?, run:(extra:{reason?, requestKey, checks, code?})=>Promise<AdminResult>, returnTo})`.<br>• **`needsCode` (every money action) adds a six-digit field** ("Code from your authenticator app", `inputMode="numeric"`, `autoComplete="one-time-code"`). The action verifies it before anything else.<br>• `requestKey = crypto.randomUUID()` is made per opening and **replaced after every refused answer**. It is kept after a network error or timeout, so a retry replays a committed `ok`.<br>• Destructive dialogs focus Cancel first. Pressed, pending and disabled states (S12). Errors show through `ActionError`. Success gives a toast, `FormMessage role=status` and `router.refresh()`. |
-| `dl-grid.tsx`, `timeline.tsx`, `copy-value.tsx`, `empty-state.tsx`, `error-state.tsx`, `route-tabs.tsx`, `diff-table.tsx` | As v1. |
-| `shell/*` | As v1. |
+| `table/data-table.tsx` (server) | `DataTable({caption, rows, columns, rowKey, sorting?, empty})`: a card list below `xl`, a `<table>` at `xl` in its own scroll box — a `relative overflow-x-auto` `section` that takes focus (`tabIndex=0`) and is named by the caption (axe scrollable-region-focusable) — an sr-only caption, `scope`, sort `Link`s with `aria-sort` on the `th`, tabular-nums. |
+| `table/table-toolbar.tsx`, `table/filter-chips.tsx`, `table/pager.tsx`, `table/table-skeleton.tsx` | The toolbar is a GET search form that keeps the other filters as hidden fields, never used for PII search. `FilterChips({label, chips, selected, href, allHref})` are links with an "All" chip; the chosen one carries a tick and `aria-current`, counts sit inside each name, and only the press animates (a colour never fades in, so axe never reads it half-way). The pager is Previous/Next links and "Page X of Y · N in all"; the skeleton is pulsing rows. |
+| `admin-status-pill.tsx`, `stat-tile.tsx`, `charts/bar-chart.tsx`, `charts/line-chart.tsx` | A state in words with a tinted dot (`TestBadge` says "Test"); a figure with a label, hint, tone and, when linked, the whole tile as the link with the figure in its name; server SVG bars and lines with `role="img"` and an sr-only table of the figures. `status-*` / brand tokens only. |
+| `confirm-action.tsx` (client) | `ConfirmAction({trigger, title, rows, body, confirmLabel, cancelLabel, reason, reasonLabel?, typeToConfirm?, checks?, destructive?, needsCode?, children?, canConfirm?, notReadyHint?, run:(extra:{reason?, requestKey, checks, code?})=>Promise<AdminResult>, returnTo})`.<br>• **`children`** holds a choice the action needs — an incident's outcome, a Flutterwave check — inside the dialog, after its rows and body and outside its form (so a child may be a form); `canConfirm` keeps the confirm button disabled until it is made, and `notReadyHint` says why.<br>• **`needsCode` (every money action) adds a six-digit field** ("Code from your authenticator app", `inputMode="numeric"`, `autoComplete="one-time-code"`). The action verifies it before anything else.<br>• `requestKey = crypto.randomUUID()` is made per opening and **replaced after every refused answer**. It is kept after a network error or timeout, so a retry replays a committed `ok`.<br>• Destructive dialogs focus Cancel first. Pressed, pending and disabled states (S12). Errors show through `ActionError`. Success gives a toast, `FormMessage role=status` and `router.refresh()`. |
+| `dl-grid.tsx`, `timeline.tsx`, `copy-value.tsx`, `empty-state.tsx`, `error-state.tsx`, `route-tabs.tsx`, `diff-table.tsx` | A record's facts as a description list; events newest first in WAT; an id with a copy button (never personal data or a secret); the empty state; the error state with "Try again"; tabs that are pages (`RouteTabs`; the current one has `aria-current="page"`, a tick and heavier words, and `current` names it for tabs that differ only by `?tab=`); ours beside the registry, field by field, saying "Differs" in words. |
+| `shell/*` | `AdminGate` (asks SQL on every page; explains a factor mismatch or a weak sign-in, a 404 otherwise), the grouped sidebar with badges from `admin_attention_counts` inside each link's name (a drawer below `lg`), `SideSwitch`, `SideBanner`, the page skeleton and the sign-out button. |
 
 **Shared lib** (`features/admin/lib/`, pure and unit-tested):
 - `actions.ts`: `ADMIN_ACTIONS`, a mirror of `admin_tier` (`minRole`, `money`, `testRule`). It is used to hide buttons a role cannot use and to refuse early. SQL remains the authority.
-- `list-params.ts` (as v1).
+- `list-params.ts`: `?status=&from=&to=&sort=&dir=&page=&per=` parsed strictly against a `ListSpec` (unknown values fall back, dates must be real and are put in order), and `listHref` rebuilds a link from the parsed values, defaults left out, back to page 1 when a filter changes.
 - `format.ts`: `formatWat`, `ago`, `formatUsd(cents)`, `maskEmail` (the same `a•••@gmail.com` format as `admin_mask_email`), `maskPhone`, `shortId`.
 - `labels.ts`, `tone.ts`.
 - `playbook.ts`: DEPLOY §6 as `code → {meaning, next, offers}`.
@@ -1280,7 +1281,7 @@ Every list is URL-driven (`?status=&from=&to=&sort=&page=&per=`) unless noted. E
 **Actions:** none.
 
 #### `/admin/refunds`, `/admin/refunds/[id]`, `/admin/refunds/incidents` (B3)
-**List and stats:** as v1. Stats come from `admin_refund_stats`, including `limits`.
+**List and stats:** five tiles from `admin_refund_stats` — need a person, oldest open, typical time to refund (90 days), sent in the last 24 hours against the daily limit, and the per-refund limit with the delay. The list is Refund · Created · Reason · Amount · Status · Code · Last change, filtered by status and reason chips (with counts), created dates and `?q=` (an order number only), sorted by created, updated, amount or status. A "Payment incidents" tab sits beside it.
 
 **Detail:**
 - Summary, the **Playbook card**, limits (both from `limits`), payment, provider, and the timeline.
@@ -1316,7 +1317,7 @@ Every list is URL-driven (`?status=&from=&to=&sort=&page=&per=`) unless noted. E
 - **Buttons:** **[Cancel refund — nothing sent]** / **[Keep refund]**
 
 **4. Record a Flutterwave refund** (money, `refund.record_manual`). Two steps:
-1. "Flutterwave refund id" plus **[Check with Flutterwave]** (`checkFlutterwaveRefund`, standard tier). It shows: "Flutterwave refund 123: ₦19,672.50 on charge 456, completed — matches this refund", or each mismatch in words.
+1. Inside the dialog (**[Check and record a Flutterwave refund]** opens it): "Flutterwave refund id" plus **[Check with Flutterwave]** (`checkFlutterwaveRefund`, standard tier). It shows: "Flutterwave refund 123: ₦19,672.50 on charge 456, completed — matches this refund", or each mismatch in words.
 2. The record button is enabled only for a matching `done` check under 15 minutes old.
 
 - **Body:** "Nothing is sent. The customer's order page will show ₦X as refunded."
@@ -1326,7 +1327,7 @@ Every list is URL-driven (`?status=&from=&to=&sort=&page=&per=`) unless noted. E
 
 **5. Resolve incident** (`incident.resolve` or `incident.resolve_money`)
 - **Title:** "Mark this incident resolved?"
-- **For owed kinds,** choose one outcome:
+- **For owed kinds,** choose one outcome, inside the dialog (the dialog's own rows don't repeat it):
   - "The payment is now recorded" (unrecorded payment only).
   - "A refund for this order completed" (pick it).
   - "A Flutterwave refund I checked just now" (the step-1 check).
@@ -1339,7 +1340,7 @@ Every list is URL-driven (`?status=&from=&to=&sort=&page=&per=`) unless noted. E
 After success, re-read the refund and show its new status and timeline event.
 
 #### `/admin/queue`, `/admin/queue/jobs/[id]`, `/admin/queue/ssl-jobs/[id]` (B4)
-- **Tabs, columns, filters, stats:** as v1. The pending-without-a-job note is kept.
+- **Pages, columns, filters, stats:** three pages as tabs — Jobs (`/admin/queue`), Certificate jobs (`/admin/queue/ssl-jobs`) and Paid, no job (`/admin/queue/pending`, with the pending-without-a-job note, oldest payment first). Jobs opens with four tiles (each kind's jobs needing a person and with the worker) and a 30-day kind × status table. Lists filter by status (comma list), one kind, dates and, for jobs, `?domain=`; they sort by created, updated, attempts or next try.
 - **`RefreshWhile`** (10 s) runs while a listed job is `queued` or `running`.
 
 **Job detail:**
@@ -1379,10 +1380,10 @@ After success, re-read the refund and show its new status and timeline event.
   - **Button:** **[Stop the change]**
 - **Reason, type-to-confirm (the domain) and code:** required.
 
-**Fail certificate order** (money, `ssl_job.fail`; only when not yet sent, and never for `PAYMENT_NOT_VERIFIED`): as v1.
+**Fail certificate order** (money, `ssl_job.fail`; only when not yet sent, and never for `PAYMENT_NOT_VERIFIED`): "Fail the certificate order for example.com?" — "It was never sent to the supplier, so nothing was bought. The line fails, the customer is told, and its refund is queued to the card or account that paid." A reason, the name typed back and the code; **[Fail the order]**. Once sent, the page says it is only read from now on (`ALREADY_SENT`); set-up and reissue jobs offer "Stop the change" instead.
 
 #### `/admin/alerts` (B5)
-Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: each cron job's schedule, last run, last status and last success, from `admin_overview.health.cron`. A test admin sees no cron panel.
+Four tabs by `?tab=`, read only (no dismiss, resolve or retry; each row links to where its cause is worked): **Open** (critical first; `?severity=critical|warning` chips), **History** (open and closed, kind chips, dates, Telegram counts), **Drift** (ours beside the registry, last check), and **Health** — background services' heartbeats, registry check runs, host preset health, and the scheduled jobs: each cron job's schedule, last run, last status and last success, from `admin_overview.health.cron`. A test admin sees no cron or service panel.
 
 #### `/admin/supplier` + `/ledger`, `/calls`, `/lookup`, `/catalogue` (B6)
 
@@ -1405,7 +1406,7 @@ Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: 
 - Filters and a chain strip.
 - **"Search the live ledger"** (a POST).
 
-**Calls, Lookup:** as v1. Lookup adds "Read the transfer state" and "Check renewability". For a test admin, the price check shows the `TEST_ADMIN` words.
+**Calls, Lookup:** Calls is a 7-day by-operation summary (calls, median, 95th percentile) above the calls themselves (when, operation, domain, outcome, code, time taken, job), filtered by outcome, operation, dates and `?job=`; searches are never recorded. Lookup reads on a button press only, audited: a domain ("Read the registry now", "Read the transfer state", "Registrant verification", "Check renewability"), a certificate, a price against our cost basis, and our listing at the registry 25 at a time. For a test admin, the price check shows the `TEST_ADMIN` words.
 
 **Catalogue:** preview and apply are owner-only.
 
@@ -1443,7 +1444,7 @@ Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: 
 
 - **Search:** the POST action `findCustomers` (operator) → `admin_find_customers`. It returns masked rows and never uses `?q=`.
 - **Detail** from `admin_customer`:
-  - Route tabs (Overview · Domains · Orders · Certificates · Emails) read through `adminDb` by `user_id`, side-filtered.
+  - Route tabs (Overview · Domains · Orders · Certificates · Emails) read through `adminDb` by `user_id`, side-filtered: orders from `admin_orders_v`, domains from `admin_domains_v`, certificates from `admin_ssl_certificates_v` (newest 100 each), and the newest 10 emails from `admin_email_outbox_v`, with "All of this customer's emails" linking to `/admin/emails?user=<id>` — never the recipient or an error, which stay on the Emails page.
   - **"Show contact details"** (operator, `revealCustomer` → `admin_reveal_customer`, optional reason). Title "Show this customer's contact details?"; body "Your view is recorded in the audit log."
   - The details live in client state and are cleared when the page is left.
 
@@ -1460,12 +1461,12 @@ Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: 
   - On test domains, the page shows "No sandbox gateway is reading test domains right now, so nothing would read it" whenever the `gateway:ote` heartbeat is stale.
 
 #### `/admin/ssl`, `/admin/ssl/[id]` (B10)
-- As v1, reading `admin_ssl_certificates_v`.
+- Reads `admin_ssl_certificates_v`: tiles by status (each a filter), then Certificate · Product · Status · DomainNameAPI says · Ordered · Expires · Last checked · Customer, filtered by `?q=` (a name or `*.name`), status chips, dates, `?unrecognised=1` and `?line=`, with a "Paid, no certificate" panel below. The detail shows where it stands, the supplier's last word, summary, term, set-up, the certificate text, jobs, refunds and supplier calls; its one action is "Check status now" (an audited live read).
 - The approver is `approver_masked`. `csr`, `contact` and `approver_email` are never selected.
 - Term wording comes from `SSL_TERM`.
 
 #### `/admin/emails` (B11)
-- As v1.
+- Two tabs: **Outbox** (tiles for 30 days; status, category, kind and `?user=` filters; a by-kind table) and **Compliance notices** (read only; delivery and notice chips).
 - **Outbox** reads `admin_email_outbox_v` (`masked_to`, `last_error_safe`).
 - **Compliance** reads `admin_compliance_notices_v`.
 - **"Send again"** (operator, standard): not offered for bounced or complained rows.
@@ -1486,7 +1487,7 @@ Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: 
 - **Body:** "Every price on the site changes on the next refresh, within minutes. Orders already placed keep their rate."
 - Code required. Then `revalidateTag('pricing')`.
 
-**Reject:** as v1, with the code.
+**Reject** (money, owner): "Reject the ₦X rate?" — prices stay on the active rate (or none, if there is none); the rejected rate stays in the history and can't be activated from the dashboard. A reason and the code; **[Reject rate]** / **[Keep it held]**.
 
 #### `/admin/settings` + `/extensions`, `/ssl-products`, `/presets`, `/presets/[id]`, `/admins` (B13)
 
@@ -1498,11 +1499,11 @@ Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: 
 - **Buttons:** **[Save limits]** / **[Cancel]**
 
 **Extensions:**
-- As v1. **"Held domains" comes from `admin_tld_held_counts`.**
-- Pause, Resume and Feature dialogs as v1, with the code. Each is followed by `revalidateTag('pricing')`.
+- Extension · State · Featured · Held (live/test) · Synced · Change, filtered by a name prefix and state chips (paused, featured, not sold, country codes). **"Held domains" comes from `admin_tld_held_counts`.**
+- **Pause** (the reason up to 120 characters, the extension typed back), **Resume**, **Feature** (rank 1–50, unique, and an optional tagline) and **Stop featuring**, each owner-only with the code. Each is followed by `revalidateTag('pricing')`.
 
 **SSL products:**
-- As v1. Sellable-on is refused for a product with no price: "DomainNameAPI lists no price for this product yet."
+- Product · Kind · On sale · Price listed · Synced · Change, with **Put on sale** / **Take off sale** (owner, money). Sellable-on is refused for a product with no price: "DomainNameAPI lists no price for this product yet."
 
 **Presets:**
 - **List:** Provider · Nameservers · Per-zone · Source · Verified · Health · Hidden (by a person / by the checker) · **blast radius from `admin_preset_usage`** · Open draft.
@@ -1519,7 +1520,7 @@ Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: 
 - **Hide** (operator):
   - **Title:** "Hide <provider>?"
   - **Body:** "N domains use it now; they keep their nameservers. Customers stop seeing it as a choice within a minute."
-- **Show again** (money, owner): as v1.
+- **Show again** (money, owner): "Show <provider> again?" — customers can choose it again from the next refresh, and a Telegram notice is sent. Offered only for a preset a person hid; one the health check hid shows again by itself once its nameservers resolve.
 - Publish, Hide and Show are each followed by **`revalidateTag('nameserver-presets', { expire: 0 })`**.
 - Registrar-default rows are read-only.
 
@@ -1533,13 +1534,13 @@ Tabs and contents as v1, with one addition. **Health** adds the scheduled jobs: 
 - **An `intent` row shows its gateway result inline** ("Read: ok", "Refused: TOO_SOON", or "No result recorded").
 - **Filters:** action prefix chips, outcome, label, dates, `?id=`.
 - `<details>` per row shows `detail`.
-- **Owner only:** **"Redact reason"** (money).
+- **Owner only:** **"Redact reason"** (money; `actions/audit.ts` → `admin_redact_reason`), on an entry with a typed reason. A reason ("Why remove it") and the code; Cancel is focused first; **[Remove the reason]** / **[Keep it]**. Nobody else is offered it, and SQL refuses anyone else (a test administrator as `TEST_ADMIN`), recording the refusal.
   - **Title:** "Remove the reason text from this entry?"
   - **Body:** "Only the typed reason is removed; who did what, when, and the amounts stay. The removal is recorded."
 - A test admin sees only test rows.
 
 ### 5.3 Mobile, dark mode, accessibility and indexing
-As v1:
+Every admin page:
 - Cards below `xl`; every control `h-11`; no overflow from 320 to 1920 px.
 - Existing tokens only.
 - Words on every pill; charts as `role=img` with data tables; captions, `scope` and `aria-sort`; counts inside accessible names.
@@ -1646,12 +1647,12 @@ All metrics are filtered by side (live by default), exclude `source = 'demo'`, u
     - role pre-check.
   - `callAdminGateway`: logs `logPath` (the template) and never the filled path.
 - **Component tests:**
-  - `DataTable` and `FilterChips` as v1.
+  - `DataTable` (cards and table, caption, `scope`, `aria-sort`, a named, focusable scroll box) and `FilterChips` (links, `aria-current`, a tick, counts in the name).
   - `ConfirmAction`:
     - reason required; type-to-confirm; the code field for money actions;
     - **a new `requestKey` after a refused answer and the same key after a network error**;
     - Cancel focused first; the step-up link.
-  - Charts as v1.
+  - Charts: `role="img"` with an sr-only table of the figures.
 - **Static test** (`features/admin/__tests__/foundation/boundaries.test.ts`):
   - every file in `queries/**` and `actions/**` starts with `import 'server-only'` or `'use server'`;
   - no `.select('*')`;
@@ -1726,7 +1727,7 @@ All metrics are filtered by side (live by default), exclude `source = 'demo'`, u
 - **§5b:** the deploy order.
 
 **docs/BACKLOG.md:**
-- Remove line 83 when B3 lands.
+- The "admin screen for refunds and alerts" line is removed now that B3 has landed (integration pass A, 3 Oct 2026).
 - **Owner tasks:**
   1. Sign off ADR-006. Then enrol yourself (DEPLOY §6b), pinning every device, and set `GATEWAY_ADMIN_SECRET`.
   2. In Supabase → JWT Keys, confirm the legacy JWT secret is revoked (the JWKS shows an ES256 key; check nothing still uses the legacy anon or service keys first). Keep `SUPABASE_ACCESS_TOKEN` out of CI and Vercel. L9 (rotate the database password) still applies.
@@ -1766,19 +1767,19 @@ Each B package's area paths:
 
 | Package | Permitted sensitive reads |
 |---|---|
-| B1 | `admin_overview`, `admin_attention_counts`, `admin_float` |
-| B2 | `admin_payments_v` (fee, charged, absorbed), `order_item_costs` (embedded), `admin_customers` (masked email) |
-| B3 | `admin_refund_stats.limits`, `checkFlutterwaveRefund` results (ids and amounts) |
+| B1 | `admin_overview`, `admin_attention_counts`, `admin_float`, `admin_audit_log` (the latest 10 entries, through B14's read, `test_actor`-filtered by `adminDb`) |
+| B2 | `admin_payments_v` (fee, charged, absorbed), `order_item_costs` (embedded), `admin_customers` (masked email), `admin_domains_v` |
+| B3 | `admin_refund_stats.limits`, `checkFlutterwaveRefund` results (ids and amounts), `admin_payments_v` (`provider_reference` only: the charge a Flutterwave check must be on) |
 | B4 | `admin_domains_v`, `AdminTransferState`, `AdminRenewCheck` |
-| B5 | `ops_alerts.key` (in `queries/alerts.ts`), `admin_overview.health.cron` |
+| B5 | `ops_alerts.key` (in `queries/alerts.ts`), `admin_overview` (`health.cron`) |
 | B6 | `admin_float`, `admin_ledger_daily`, `supplier_ledger_entries`, `supplier_ledger_revisions`, `float_topups` |
 | B7 | `admin_revenue`, `admin_margin` |
-| B8 | `admin_customers`, `admin_customer`, `admin_find_customers`, `admin_reveal_customer` |
+| B8 | `admin_customers`, `admin_customer`, `admin_customer_stats`, `admin_find_customers`, `admin_reveal_customer`; by `user_id`, `admin_domains_v`, `admin_ssl_certificates_v` and `admin_email_outbox_v` — never their sensitive columns (`registrant_*`, `certificate_pem`, `ca_bundle_pem`, `approver_masked`, `masked_to`, `last_error_safe`) |
 | B9 | `admin_domains_v` (`registrant_country`, `registrant_type`), `admin_reveal_registrant` |
 | B10 | `admin_ssl_certificates_v` (`approver_masked`, `certificate_pem`, `ca_bundle_pem`) |
 | B11 | `admin_email_outbox_v` (`masked_to`, `last_error_safe`), `admin_compliance_notices_v` (`masked_recipient`) |
 | B12 | `admin_pricing_status` |
-| B13 | `admin_tld_held_counts`, `admin_preset_usage`, `admin_list_admins`, `nameserver_preset_drafts` |
+| B13 | `admin_tld_held_counts`, `admin_preset_usage`, `admin_list_admins`, `nameserver_preset_drafts`, `admin_float` (`alertCents` only: no `*_usd` column is read under `features/admin`, D24) |
 | B14 | `admin_audit_log` (side-filtered by `adminDb`) |
 
 ### Package A: Foundation (must land first, after the ADR-006 sign-off)
@@ -1829,19 +1830,28 @@ Each B package's area paths:
 | **B14 Audit** | `audit/**`, `queries/audit.ts`, `__tests__/audit/**`, `tests/e2e/admin-audit.spec.ts` | **E2E:** rows from earlier steps appear (a side switch does not audit; a lookup writes an intent row); filters by prefix and outcome; `detail` expands; no edit controls for an operator. |
 | **B15 Instrumentation** | `features/checkout/actions/place-order.ts`, `features/renewals/actions/{place-renewal,place-renewals}.ts`, `features/transfers/actions/place-transfer.ts`, `features/cart/actions/{cart,ssl}.ts`, `features/checkout/lib/cost.ts` (`lineCostUsd()` → `{supplierCents, icannCents}`), **`features/renewals/lib/renewal.ts`** (`renewalCostUsd`), **`features/transfers/lib/start.ts`** (`transferCostUsd`), and their existing tests | **Unit:** per-line cents equal the pre-flight total summed, cent-exact, for register (including .ai 2-year), renew, transfer and SSL; the ICANN share is split out; a failed cost insert never fails the order; `bump_funnel` is called once per add and a failure never fails the add. **Integration:** inserted lines get `order_item_costs` rows; `order_items` gains no cost column. The existing checkout, renewals, transfers and cart e2e suites stay green. |
 
-**Cross-page link contract (added 3 Oct 2026, from B1).** The overview links into other pages with these query parameters; each page must accept them and open with that filter applied (unknown values fall back to the unfiltered list):
+**Cross-page link contract (added 3 Oct 2026, from B1; rewritten from the built pages in integration pass A).** Pages link into each other — overview tiles, alert keys (§4.5, `adminHrefForAlertKey`), `adminHref` in `lib/href.ts`, and the order, customer and audit pages — with these query parameters. Each page accepts them and opens with that filter applied; an unknown value falls back to the unfiltered list. Ids only: never an email or a name in a URL (N13).
 
 | Page | Accepts |
 |---|---|
-| Refunds | `?status=held,failed,needs_attention` (comma list) |
-| Incidents | `?status=unresolved` |
-| Queue | `?status=needs_attention`, `?tab=pending-without-job` |
-| Alerts | `?severity=critical`, `?tab=drift`, `?tab=health` |
-| Orders | `?stuck=1`, `?kind=register\|renew\|transfer\|ssl`, `?from=YYYY-MM-DD&to=YYYY-MM-DD` |
-| Money | `?from=YYYY-MM-DD&to=YYYY-MM-DD` |
-| Emails | `?status=failed` |
-| Supplier ledger | `?status=unexplained` |
-| Presets | `?status=draft` |
+| Overview | `?period=7\|30\|90` (30 by default) |
+| Refunds | `?status=` comma list (`held,failed,needs_attention` for the overview), `?reason=` comma list, `?q=` an order number only, `?from&to`, `?sort`, `?dir`, `?page`, `?per` |
+| Incidents | `?state=open\|resolved\|all` (open, the unresolved ones, by default), `?kind=` comma list, `?id=<n>` one incident resolved or not (with `#incident-<n>`), `?dir`, `?page`, `?per` |
+| Queue | `/admin/queue?status=needs_attention` (comma list: `needs_attention`, `failed`, `queued`, `running`, `succeeded`), `?kind=`, `?domain=<uuid>`, `?from&to`, `?sort`; `/admin/queue/pending` (paid lines with no job); `/admin/queue/ssl-jobs` with the same `?status`, `?kind`, `?from&to`. An old `?tab=pending` redirects to `/admin/queue/pending`, `?tab=ssl` or `?tab=ssl-jobs` to `/admin/queue/ssl-jobs` |
+| Alerts | `?severity=critical\|warning` (Open), `?tab=history\|drift\|health`; History adds `?status=open\|resolved`, `?kind=`, `?from&to` |
+| Orders | `?stuck=1`, `?kind=register\|renew\|transfer\|ssl`, `?status=`, `?line=<order_item_id>`, `?q=` (order number, `MDH-` reference, invoice or domain; never an email), `?from&to` |
+| Money | `?from&to`, `?grain=day\|week\|month` |
+| Emails | `?status=failed\|pending\|unconfirmed\|complained` (and the other outbox statuses), `?tab=compliance`, `?user=<uuid>` (one account's emails, by its id), `?category=`, `?kind=`, `?from&to` |
+| Supplier ledger | `?status=unexplained` (comma list), `?trace=<guid>`, `?from&to` |
+| Supplier calls | `?status=` comma list, `?op=`, `?job=<uuid>`, `?from&to` |
+| Presets | `?status=draft\|hidden\|failing` (one value) |
+| Extensions | `?status=` comma list, `?q=` a name prefix, `?edit=<name>#change-extension` |
+| Customers | `?holders`, `?twofa`, `?type`, `?sort`, `?dir`, `?page`, `?per`; a customer's tabs at `/admin/customers/<uuid>/{orders,domains,certificates,emails}` (orders take `?page`) |
+| Domains | status chips `?status=` (comma list), `?tld=`, `?expires=expired\|30\|60\|90`, `?delegation=` (the DNS chips), `?renew=on\|off` (auto-renew), `?source=registration\|transfer\|demo`, `?from&to`, `?q=`; detail `/admin/domains/<uuid>` |
+| Certificates | `?status=<comma list>`, `?unrecognised=1`, `?line=<order_item_id>`, `?q=`, `?from&to`, `?sort=ordered\|expires\|checked`; detail `/admin/ssl/<uuid>` |
+| Audit | `?id=`, `?action=<prefix>`, `?outcome=` comma list, `?side=`, `?who=`, `?admin=<label>`, `?target=`, `?from&to`, `?dir`, `?page`, `?per` |
+
+`apps/web/src/features/admin/__tests__/overview/links.test.ts` parses the overview's tiles with each page's own parser; the alert keys' links are pinned in `packages/shared/src/admin/admin.test.ts`.
 
 Shared charts (`components/charts/*`) clip their screen-reader table (`relative overflow-hidden` on the figure), so pages need no wrapper of their own.
 

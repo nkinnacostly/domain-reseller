@@ -419,6 +419,21 @@ describe('filters', () => {
     expect(screen.getByLabelText('Queued from')).toHaveAttribute('type', 'date')
   })
 
+  it('shows one account’s emails by its short id, with a way back, and keeps it in the dates form', () => {
+    render(<OutboxFilters params={outbox({ user: ids.user })} />)
+    const note = screen.getByTestId('emails-user-filter')
+    expect(within(note).getByRole('link', { name: 'account 2a2b2c2d' })).toHaveAttribute(
+      'href',
+      `/admin/customers/${ids.user}`,
+    )
+    expect(within(note).getByRole('link', { name: 'Show every account' })).toHaveAttribute(
+      'href',
+      '/admin/emails',
+    )
+    const form = screen.getByRole('form', { name: 'Queued between dates' })
+    expect(form.querySelector('input[name="user"]')).toHaveAttribute('value', ids.user)
+  })
+
   it('offers clearing dates only when there are some', () => {
     const { unmount } = render(<OutboxFilters params={outbox()} />)
     expect(screen.queryByRole('link', { name: 'Clear dates' })).toBeNull()

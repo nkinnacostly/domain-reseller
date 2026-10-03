@@ -202,8 +202,11 @@ test.describe('the certificate pages, as a test administrator', () => {
     await expect(page.getByRole('link', { name: seeded.name, exact: true }).first()).toBeVisible()
 
     // The sidebar marks the page (S13); on a phone it is a drawer.
-    const nav = page.getByRole('navigation', { name: 'Admin' }).first()
-    if (!(await nav.isVisible())) await page.getByRole('button', { name: 'Open menu' }).click()
+    // The sidebar streams in on its own: wait for it, or for the phone's menu button.
+    const nav = page.getByRole('navigation', { name: 'Admin' }).filter({ visible: true })
+    const menu = page.getByRole('button', { name: 'Open menu' }).filter({ visible: true })
+    await expect(nav.or(menu).first()).toBeVisible()
+    if ((await nav.count()) === 0) await menu.click()
     await expect(
       page
         .getByRole('navigation', { name: 'Admin' })

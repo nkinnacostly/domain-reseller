@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 /**
  * Every admin list (ADMIN-SPEC §5.1): cards below `xl`, a table from `xl` in
  * its own scroll box (S5 — `relative`, so the sr-only caption cannot widen
- * the page). Headers carry `scope`, a sorted one `aria-sort`, and sorting is
+ * the page; focusable and named, so a keyboard can scroll it). Headers carry `scope`, a sorted one `aria-sort`, and sorting is
  * a link: the URL says how the list is ordered. Figures are tabular.
  */
 
@@ -77,7 +77,15 @@ export function DataTable<Row, S extends string = string>({
         ))}
       </ul>
 
-      <div className={cn(PANEL, 'relative hidden overflow-x-auto xl:block')}>
+      {/* A scroll box a keyboard can reach and a screen reader can name (axe
+          scrollable-region-focusable); `relative` keeps the sr-only caption
+          inside its clip (CLAUDE.md §15). */}
+      <section
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll box takes focus so a keyboard can scroll it (WCAG 2.1.1)
+        tabIndex={0}
+        aria-label={caption}
+        className={cn(PANEL, 'relative hidden overflow-x-auto xl:block', FOCUS)}
+      >
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">{caption}</caption>
           <thead>
@@ -141,7 +149,7 @@ export function DataTable<Row, S extends string = string>({
             ))}
           </tbody>
         </table>
-      </div>
+      </section>
     </div>
   )
 }

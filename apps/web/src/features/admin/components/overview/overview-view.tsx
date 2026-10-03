@@ -7,6 +7,7 @@ import { healthItems } from '@/features/admin/lib/overview-health'
 import { kpis, type Period, parsePeriod } from '@/features/admin/lib/overview-kpis'
 import type { AdminSide } from '@/features/admin/lib/side'
 import { getAttentionCounts } from '@/features/admin/queries/attention'
+import { latestAuditEntries } from '@/features/admin/queries/audit'
 import { getOverview, getRecentPaidOrders } from '@/features/admin/queries/overview'
 import { type AdminPrincipal, getAdminSide, requireAdmin } from '@/features/admin/queries/session'
 import { todayLine } from '@/features/domains/lib/dashboard'
@@ -16,13 +17,14 @@ import { HealthStrip } from './health-strip'
 import { KpiRow } from './kpi-row'
 import { OverviewCharts } from './overview-charts'
 import { BusinessSkeleton, TilesSkeleton } from './overview-skeleton'
-import { AuditPointer, RecentOrders } from './recent-orders'
+import { LatestAudit, RecentOrders } from './recent-orders'
 
 export type OverviewSearch = Record<string, string | string[] | undefined>
 
 /**
  * `/admin` — Operations (docs/ADMIN-SPEC.md §5.2 B1): health, what needs a
- * person, sales, the float, trends and the latest paid orders, on the side
+ * person, sales, the float, trends, the latest paid orders and the latest
+ * audit entries, on the side
  * the admin is looking at. Read only: the page offers no actions. Each
  * section streams in on its own, with its own loading and error states (S11).
  */
@@ -118,11 +120,15 @@ export async function BusinessSection({
 }
 
 export async function ListsSection({ admin, side }: { admin: AdminPrincipal; side: AdminSide }) {
-  const orders = await getRecentPaidOrders(admin, side)
+  const [orders, audit] = await Promise.all([
+    getRecentPaidOrders(admin, side),
+    // A failed read shows its error state; the orders beside it still show.
+    latestAuditEntries(admin, side).catch(() => null),
+  ])
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start">
       <RecentOrders orders={orders} />
-      <AuditPointer />
+      <LatestAudit entries={audit} />
     </div>
   )
 }

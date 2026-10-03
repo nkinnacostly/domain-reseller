@@ -225,6 +225,11 @@ export type IncidentState = (typeof INCIDENT_STATES)[number]
 
 export type IncidentListParams = {
   state: IncidentState
+  /**
+   * One incident by its number (`?id=`), resolved or not: what a link to one
+   * incident opens, so its card is on the page whichever list it is in.
+   */
+  id: number | null
   kinds: string[]
   dir: 'asc' | 'desc'
   page: number
@@ -233,7 +238,7 @@ export type IncidentListParams = {
 
 const PER_OPTIONS = [25, 50, 100]
 
-/** `?state=&kind=&dir=&page=&per=`, strictly: unresolved, newest first, by default. */
+/** `?state=&kind=&id=&dir=&page=&per=`, strictly: unresolved, newest first, by default. */
 export function parseIncidentParams(search: Search): IncidentListParams {
   const stateText = firstOf(search, 'state')
   const state = (INCIDENT_STATES as readonly string[]).includes(stateText ?? '')
@@ -245,8 +250,10 @@ export function parseIncidentParams(search: Search): IncidentListParams {
   const pageText = firstOf(search, 'page') ?? '1'
   const page = /^\d{1,5}$/.test(pageText) ? Math.max(Number(pageText), 1) : 1
   const perText = Number(firstOf(search, 'per'))
+  const idText = firstOf(search, 'id') ?? ''
   return {
     state,
+    id: /^[1-9]\d{0,14}$/.test(idText) ? Number(idText) : null,
     kinds,
     dir: firstOf(search, 'dir') === 'asc' ? 'asc' : 'desc',
     page,
@@ -261,8 +268,11 @@ export function incidentsHref(
 ): string {
   const next = { ...params, ...changes }
   if (!('page' in changes)) next.page = 1
+  // A state or kind chip lists incidents again, not the one asked for by number.
+  if (!('id' in changes) && ('state' in changes || 'kinds' in changes)) next.id = null
   const query = new URLSearchParams()
   if (next.state !== 'open') query.set('state', next.state)
+  if (next.id !== null) query.set('id', String(next.id))
   if (next.kinds.length > 0) query.set('kind', next.kinds.join(','))
   if (next.dir !== 'desc') query.set('dir', next.dir)
   if (next.per !== 25) query.set('per', String(next.per))

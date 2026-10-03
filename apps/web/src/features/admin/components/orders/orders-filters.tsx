@@ -221,7 +221,7 @@ export function OrderSortLinks({ params }: { params: OrderListParams }) {
                 aria-current={current ? 'true' : undefined}
                 data-current={current ? 'true' : undefined}
                 className={cn(
-                  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.98]',
+                  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition-transform hover:bg-brand-subtle active:scale-[0.98]',
                   'data-[current=true]:border-brand data-[current=true]:bg-brand data-[current=true]:text-brand-foreground',
                   FOCUS,
                 )}

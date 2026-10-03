@@ -1,6 +1,5 @@
 import 'server-only'
 
-import { usdToCents } from '@dr/shared/admin'
 import { cache } from 'react'
 import { pageRange } from '@/features/admin/lib/list-params'
 import type { Limits } from '@/features/admin/lib/settings-limits'
@@ -41,47 +40,54 @@ const list = (value: unknown): string[] =>
 // ── Limits ──────────────────────────────────────────────────────────────────
 
 /**
- * The 11 limits, each in the unit the wrapper takes. The float alert is
- * stored in dollars (`float_alert_usd`, numeric(10,2)); it becomes integer
- * cents here, read as decimal text by `usdToCents` — the one edge where USD
- * becomes cents (D24) — so nothing past this line sees a dollar float.
+ * The 11 limits, each in the unit the wrapper takes. Ten are read from
+ * `ops_settings`; the float alert, stored there in dollars, comes from
+ * `admin_float` already in integer cents (`alertCents`), so no dollar
+ * figure is read under features/admin (D24).
  */
 export async function getLimits(
   admin: AdminPrincipal,
   side: AdminSide,
 ): Promise<Limits | 'hidden' | null> {
   if (admin.testOnly) return 'hidden'
-  const { data, error } = await adminDb(admin, side)
-    .from('ops_settings')
-    .select(
-      'auto_refund_max_kobo, auto_refund_daily_max_kobo, refund_delay_minutes, stuck_order_minutes, max_domains_per_account_day, velocity_new_max, velocity_trusted_max, velocity_standard_after_days, velocity_trusted_after_days, velocity_trusted_after_paid_orders, float_alert_usd',
-    )
-    .limit(1)
-    .maybeSingle()
+  const supabase = await createClient()
+  const [{ data, error }, float] = await Promise.all([
+    adminDb(admin, side)
+      .from('ops_settings')
+      .select(
+        'auto_refund_max_kobo, auto_refund_daily_max_kobo, refund_delay_minutes, stuck_order_minutes, max_domains_per_account_day, velocity_new_max, velocity_trusted_max, velocity_standard_after_days, velocity_trusted_after_days, velocity_trusted_after_paid_orders',
+      )
+      .limit(1)
+      .maybeSingle(),
+    supabase.rpc('admin_float', { p_test_mode: side === 'test' }),
+  ])
   if (error || !data) {
     warn(error, 'admin settings: limits unavailable')
     return null
   }
-  try {
-    const limits: Limits = {
-      auto_refund_max_kobo: num(data.auto_refund_max_kobo),
-      auto_refund_daily_max_kobo: num(data.auto_refund_daily_max_kobo),
-      refund_delay_minutes: num(data.refund_delay_minutes),
-      stuck_order_minutes: num(data.stuck_order_minutes),
-      max_domains_per_account_day: num(data.max_domains_per_account_day),
-      velocity_new_max: num(data.velocity_new_max),
-      velocity_trusted_max: num(data.velocity_trusted_max),
-      velocity_standard_after_days: num(data.velocity_standard_after_days),
-      velocity_trusted_after_days: num(data.velocity_trusted_after_days),
-      velocity_trusted_after_paid_orders: num(data.velocity_trusted_after_paid_orders),
-      float_alert_cents: usdToCents(data.float_alert_usd as number | string),
-    }
-    if (!Object.values(limits).every((value) => Number.isSafeInteger(value))) throw new Error()
-    return limits
-  } catch {
-    logger.error('admin settings: ops_settings answered an unexpected shape')
+  if (float.error) {
+    warn(float.error, 'admin settings: the float alert is unavailable')
     return null
   }
+  const alert = (float.data as { alertCents?: unknown } | null)?.alertCents
+  const limits: Limits = {
+    auto_refund_max_kobo: num(data.auto_refund_max_kobo),
+    auto_refund_daily_max_kobo: num(data.auto_refund_daily_max_kobo),
+    refund_delay_minutes: num(data.refund_delay_minutes),
+    stuck_order_minutes: num(data.stuck_order_minutes),
+    max_domains_per_account_day: num(data.max_domains_per_account_day),
+    velocity_new_max: num(data.velocity_new_max),
+    velocity_trusted_max: num(data.velocity_trusted_max),
+    velocity_standard_after_days: num(data.velocity_standard_after_days),
+    velocity_trusted_after_days: num(data.velocity_trusted_after_days),
+    velocity_trusted_after_paid_orders: num(data.velocity_trusted_after_paid_orders),
+    float_alert_cents: typeof alert === 'number' ? alert : Number.NaN,
+  }
+  if (!Object.values(limits).every((value) => Number.isSafeInteger(value))) {
+    logger.error('admin settings: the limits answered an unexpected shape')
+    return null
+  }
+  return limits
 }
 
 // ── Extensions ──────────────────────────────────────────────────────────────

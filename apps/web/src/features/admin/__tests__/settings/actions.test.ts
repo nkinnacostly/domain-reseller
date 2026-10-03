@@ -170,7 +170,7 @@ describe('saving limits (settings.update, money, owner)', () => {
     expect((await updateLimits(input)).data).toEqual({
       ok: false,
       code: 'OUT_OF_RANGE',
-      message: 'A value is outside what this setting allows.',
+      message: "A value is outside what's allowed here. Check the figures and try again.",
       auditId: 71,
     })
     expect((await updateLimits(input)).serverError).toBe(SERVER_CRASH_WORDS)

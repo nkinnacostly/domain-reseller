@@ -8,11 +8,18 @@ import {
   createTestUser,
   deleteTestUser,
   hasAdminSchema,
-  settleRegistration,
-  totpCode,
 } from './support/accounts.mjs'
-import { type AdminUser, expect, signInAsAdmin, test } from './support/admin'
-import { holdTestRefund } from './support/admin-seed.mjs'
+import {
+  type AdminUser,
+  animationsDone,
+  codeAfter,
+  expect,
+  SIGN_IN_PROJECTS,
+  signInAsAdmin,
+  test,
+  wrongCode,
+} from './support/admin'
+import { holdTestRefund, seedPaidTestOrder, settleTestJob } from './support/admin-seed.mjs'
 
 /**
  * Refunds and incidents in the admin area (ADMIN-SPEC §5.2 B3, §9). A test
@@ -23,9 +30,6 @@ import { holdTestRefund } from './support/admin-seed.mjs'
  * never shown. Every refund here belongs to an e2e-*@example.com user, in
  * test mode: no real money and no live row is touched (N12).
  */
-
-/** One desktop and one phone: sign-ins are rate-limited per address. */
-const PROJECTS = ['chromium-desktop', 'mobile-android']
 
 const WRONG_CODE_WORDS = "That code didn't work. Check your authenticator app and try again."
 const REASON = 'e2e: checked the order, the domain was taken'
@@ -50,65 +54,23 @@ function service(): SupabaseClient {
 
 /**
  * A paid test order for an e2e user whose one line failed, so its refund is
- * queued, then held as if over the limit (§8.1's seed: a paid test order,
- * `settleRegistration(…, failed)`, `hold_test_refund`). The payment goes
- * through `record_order_payment`, as the webhook records one.
+ * queued, then held as if over the limit (§8.1's seed: `seedPaidTestOrder`,
+ * the job failed as the worker fails it, `hold_test_refund`).
  */
 async function seedHeldRefund(userId: string): Promise<Seeded> {
-  const db = service()
-  const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-  const { data: rate, error: rateError } = await db.from('fx_rates').select('id').limit(1).single()
-  if (rateError) throw rateError
-  const { data: order, error } = await db
-    .from('orders')
-    .insert({
-      user_id: userId,
-      subtotal_kobo: 100_000,
-      vat_pct: 7.5,
-      vat_kobo: 7_500,
-      total_kobo: 107_500,
-      fx_rate_id: rate.id,
-      tx_ref: `MDH-e2e-refunds-${stamp}`,
-      registrant: {},
-      float_check: 'covered',
-      test_mode: true,
-    })
-    .select('id, order_number')
-    .single()
-  if (error) throw error
-  const line = await db.from('order_items').insert({
-    order_id: order.id,
-    domain: `e2erefund${stamp}.com`,
-    tld: 'com',
-    period_years: 1,
-    privacy: false,
-    auto_renew: false,
-    price_kobo: 100_000,
-    renewal_kobo: 100_000,
-  })
-  if (line.error) throw line.error
-  const paid = await db.rpc('record_order_payment', {
-    p_order_id: order.id,
-    p_provider_reference: `e2e-refunds-${stamp}`,
-    p_amount_kobo: 107_500,
-    p_currency: 'NGN',
-    p_method: 'card',
-    p_raw: { id: `e2e-refunds-${stamp}`, status: 'successful' },
-  })
-  if (paid.error) throw paid.error
-  await settleRegistration(order.id, 'DOMAIN_TAKEN')
-
-  const { data: refund, error: refundError } = await db
+  const order = await seedPaidTestOrder(userId, { tag: 'refunds' })
+  await settleTestJob(order.orderId, { code: 'DOMAIN_TAKEN', needsAttention: false })
+  const { data: refund, error: refundError } = await service()
     .from('refunds')
     .select('id, status, amount_kobo')
-    .eq('order_id', order.id)
+    .eq('order_id', order.orderId)
     .single()
   if (refundError) throw refundError
   // Over the daily limit already, it is held as it is.
   if (refund.status === 'queued') await holdTestRefund(refund.id)
   return {
-    orderId: order.id,
-    orderNumber: order.order_number,
+    orderId: order.orderId,
+    orderNumber: order.orderNumber,
     refundId: refund.id,
     amountKobo: Number(refund.amount_kobo),
   }
@@ -133,23 +95,6 @@ async function approvals(refundId: string) {
     .eq('target_id', refundId)
   if (error) throw error
   return data ?? []
-}
-
-/**
- * The next window's code: Supabase takes a code once, and the sign-in on
- * /verify spent this window's. Waits for a window with time left in it.
- */
-async function nextWindowCode(secret: string, after: number): Promise<string> {
-  const windowOf = (ms: number) => Math.floor(ms / 30_000)
-  while (windowOf(Date.now()) <= windowOf(after) || 30 - ((Date.now() / 1000) % 30) < 5) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-  return totpCode(secret)
-}
-
-/** Six digits that are not the code now. */
-function wrongCode(secret: string): string {
-  return String((Number(totpCode(secret)) + 500_000) % 1_000_000).padStart(6, '0')
 }
 
 const axe = (page: Page) =>
@@ -178,7 +123,7 @@ test.describe('refunds, as a test administrator', () => {
   let seeded: Seeded | undefined
 
   test.beforeEach(async () => {
-    test.skip(!PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
+    test.skip(!SIGN_IN_PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
     test.skip(!(await hasAdminSchema()), 'migrations 40–41 are not applied to this database')
     test.setTimeout(180_000)
     customer = (await createTestUser('refundee')) as TestUser
@@ -215,6 +160,8 @@ test.describe('refunds, as a test administrator', () => {
     await expect(dialog).toBeVisible()
     await expect(dialog.getByText(seeded.orderNumber, { exact: true })).toBeVisible()
     await expect(dialog.getByText('Over the', { exact: false })).toBeVisible()
+    // Read once the dialog has finished opening: half-way through its fade, colours are not yet its own.
+    await animationsDone(page)
     expect((await axe(page)).violations).toEqual([])
 
     // Refused first: a wrong code reaches no wrapper — nothing changes, nothing is written.
@@ -229,7 +176,7 @@ test.describe('refunds, as a test administrator', () => {
     // Then the right code, pressed twice: one approval, one audit row.
     await dialog
       .getByLabel('Code from your authenticator app')
-      .fill(await nextWindowCode(admin.totpSecret, signedInAt))
+      .fill(await codeAfter(admin.totpSecret, signedInAt))
     await confirm.dblclick()
     await expect(dialog.getByRole('status')).toContainText('Approved', { timeout: 20_000 })
 
@@ -241,8 +188,13 @@ test.describe('refunds, as a test administrator', () => {
     ])
     expect(rows).toHaveLength(1)
 
-    // The page is read again: the new status and its event are shown.
-    await dialog.getByRole('button', { name: 'Close' }).click()
+    // The page is read again: the new status and its event are shown. An approved refund
+    // offers no Approve, so the re-read may have closed the dialog before Close is pressed.
+    await dialog
+      .getByRole('button', { name: 'Close' })
+      .click({ timeout: 5_000 })
+      .catch(() => undefined)
+    await expect(dialog).toBeHidden()
     await expect(page.getByText('Queued', { exact: true }).first()).toBeVisible()
     await expect(page.getByText(`Approved · ${admin.label}`)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Approve refund' })).toHaveCount(0)

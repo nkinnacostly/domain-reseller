@@ -7,8 +7,6 @@ import {
   notOfferedWords,
   OWNER_ONLY,
   RECORD_TOPUP,
-  TOPUP_CODE_WORDS,
-  TOPUP_FIELDS,
 } from '@/features/admin/lib/supplier-copy'
 
 describe('the owner’s dialogs, word for word (§5.2 B6)', () => {
@@ -43,10 +41,10 @@ describe('the owner’s dialogs, word for word (§5.2 B6)', () => {
     expect(CORRECT_TOPUP.trigger).toBe('Correct')
   })
 
-  it('words the wrapper’s shared codes for a top-up, not a refund', () => {
-    expect(TOPUP_CODE_WORDS.BAD_REFERENCE).toBe(TOPUP_FIELDS.referenceInvalid)
-    expect(TOPUP_CODE_WORDS.BAD_REFERENCE).not.toBe(ADMIN_ERROR_WORDS.BAD_REFERENCE)
-    expect(TOPUP_CODE_WORDS.OUT_OF_RANGE).toBe(TOPUP_FIELDS.paidInvalid)
+  it('the wrapper’s shared codes read for a top-up as well as a refund', () => {
+    // One wording each, in lib/errors.ts: nothing about a refund in a top-up's refusal.
+    expect(ADMIN_ERROR_WORDS.BAD_REFERENCE).not.toMatch(/refund/i)
+    expect(ADMIN_ERROR_WORDS.OUT_OF_RANGE).not.toMatch(/setting/i)
   })
 })
 

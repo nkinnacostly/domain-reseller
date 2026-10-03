@@ -11,7 +11,8 @@ import {
   TilesSkeleton,
 } from '@/features/admin/components/overview/overview-skeleton'
 import {
-  AuditPointer,
+  LatestAudit,
+  NO_AUDIT_ENTRIES,
   NO_PAID_ORDERS,
   RecentOrders,
 } from '@/features/admin/components/overview/recent-orders'
@@ -231,11 +232,58 @@ describe('RecentOrders', () => {
     expect(within(alert).getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
-  it('points to the audit log', () => {
-    render(<AuditPointer />)
+  it('lists the latest audit entries, each linked to the log by number', () => {
+    const entry = {
+      id: 412,
+      createdAt: '2026-10-03T09:00:00Z',
+      adminLabel: 'e2e-ops',
+      adminRole: 'operator',
+      testActor: true,
+      session: null,
+      action: 'supplier.balance',
+      side: 'test',
+      targetType: 'supplier',
+      targetId: 'test',
+      targetTestMode: true,
+      reason: null,
+      redactedAt: null,
+      outcome: 'intent',
+      errorCode: null,
+      detail: [],
+      parentId: null,
+      requestId: null,
+      result: null,
+    }
+    render(
+      <LatestAudit
+        entries={[
+          entry,
+          { ...entry, id: 413, outcome: 'refused', errorCode: 'ROLE', action: 'refund.approve' },
+        ]}
+      />,
+    )
     expect(screen.getByRole('link', { name: 'Open the audit log' })).toHaveAttribute(
       'href',
       '/admin/audit',
+    )
+    const list = screen.getByRole('list', { name: 'Latest audit entries' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(list).getByRole('link', { name: 'Entry #412' })).toHaveAttribute(
+      'href',
+      '/admin/audit?id=412',
+    )
+    expect(within(list).getByText('No result recorded')).toBeInTheDocument()
+    expect(within(list).getByText('ROLE')).toBeInTheDocument()
+    expect(within(list).getByText('Refused')).toBeInTheDocument()
+  })
+
+  it('says when nothing is recorded, or the log could not be read', () => {
+    const { unmount } = render(<LatestAudit entries={[]} />)
+    expect(screen.getByText(NO_AUDIT_ENTRIES)).toBeInTheDocument()
+    unmount()
+    render(<LatestAudit entries={null} />)
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "The latest audit entries couldn't be loaded.",
     )
   })
 })

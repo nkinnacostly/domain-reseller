@@ -1,4 +1,4 @@
-import { csvCell } from '@/features/domains/lib/csv'
+import { csvCell } from '@/lib/csv'
 import { itemLabel, LOST_LABEL, SOURCE_LABEL, sideWord, TOTAL_LABEL } from './money-copy'
 import type { MarginLine, MarginSummary, RevenueBucket } from './money-data'
 import { bucketSpan, type Grain, type MoneyParams } from './money-params'
@@ -9,7 +9,7 @@ import type { AdminSide } from './side'
  * no customer, order or domain is in them (D20 keeps personal data out of
  * CSV) — built in the browser from what the page already shows.
  *
- * The formula guard is the portfolio's (`csvCell`, CLAUDE.md §15 "CSV export
+ * The formula guard is the portfolio's (`csvCell` in `@/lib/csv`, CLAUDE.md §15 "CSV export
  * guards against formulas"): a text cell starting with = + - @, a tab or a
  * carriage return gets a leading apostrophe, so a spreadsheet shows it as
  * text and never runs it. A figure is not text: it is written from integer

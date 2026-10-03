@@ -36,6 +36,11 @@ type NavLinkProps = {
   onClick?: () => void
   /** Current only on this exact path, not its children — for an index tab. */
   exact?: boolean
+  /**
+   * Whether this link is the current page, when the path cannot say: tabs
+   * that share one path and differ by `?tab=`. Unset, the path decides.
+   */
+  current?: boolean
 }
 
 export function NavLink({
@@ -45,9 +50,10 @@ export function NavLink({
   activeClassName,
   onClick,
   exact,
+  current,
 }: NavLinkProps) {
   const pathname = usePathname()
-  const isCurrent = isCurrentPath(href, pathname, exact)
+  const isCurrent = current ?? isCurrentPath(href, pathname, exact)
 
   return (
     <Link

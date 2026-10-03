@@ -80,9 +80,9 @@ function parentOf(table: string | null): string | null {
  */
 const PERMITTED: Readonly<Record<string, readonly string[]>> = {
   foundation: ['admin_attention_counts', 'checkFlutterwaveRefund'],
-  overview: ['admin_overview', 'admin_attention_counts', 'admin_float'],
+  overview: ['admin_overview', 'admin_attention_counts', 'admin_float', 'admin_audit_log'],
   orders: ['admin_payments_v', 'order_item_costs', 'admin_customers', 'admin_domains_v'],
-  refunds: ['admin_refund_stats', 'checkFlutterwaveRefund'],
+  refunds: ['admin_refund_stats', 'checkFlutterwaveRefund', 'admin_payments_v'],
   queue: ['admin_domains_v', 'admin_job_ledger', 'admin_ssl_job_certificate'],
   alerts: ['admin_overview'],
   supplier: [
@@ -93,12 +93,16 @@ const PERMITTED: Readonly<Record<string, readonly string[]>> = {
     'float_topups',
   ],
   money: ['admin_revenue', 'admin_margin'],
+  // The masked views by user id; their sensitive columns stay banned here.
   customers: [
     'admin_customers',
     'admin_customer',
     'admin_customer_stats',
     'admin_find_customers',
     'admin_reveal_customer',
+    'admin_domains_v',
+    'admin_ssl_certificates_v',
+    'admin_email_outbox_v',
   ],
   domains: ['admin_domains_v', 'registrant_country', 'registrant_type', 'admin_reveal_registrant'],
   ssl: ['admin_ssl_certificates_v', 'approver_masked', 'certificate_pem', 'ca_bundle_pem'],
@@ -111,6 +115,7 @@ const PERMITTED: Readonly<Record<string, readonly string[]>> = {
   ],
   pricing: ['admin_pricing_status'],
   settings: [
+    'admin_float',
     'admin_tld_held_counts',
     'admin_preset_usage',
     'admin_list_admins',
@@ -222,6 +227,53 @@ describe('admin boundaries', () => {
     }
   })
 
+  it("reads only a charge's reference from admin_payments_v on the refunds pages", () => {
+    // B2 shows fees; a refund needs only the charge a Flutterwave check must be on (§9).
+    const allowed = new Set(['id', 'order_id', 'provider_reference', 'test_mode'])
+    let seen = 0
+    for (const file of ALL.filter((f) => areaOf(f.rel) === 'refunds')) {
+      for (const { columns, table } of selects(file.text)) {
+        if (table !== 'admin_payments_v' || columns === null) continue
+        seen += 1
+        for (const column of columns.split(',').map((name) => name.trim())) {
+          expect(allowed.has(column), `${file.rel} selects ${column} from admin_payments_v`).toBe(
+            true,
+          )
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('reads no dollar figure under features/admin: money is kobo or integer cents (N5, D24)', () => {
+    const usd = /(^|[^a-z0-9_])[a-z0-9_]+_usd([^a-z0-9_]|$)/
+    for (const file of ALL.filter((f) => f.rel.startsWith('features/admin/'))) {
+      for (const { columns } of selects(file.text)) {
+        if (columns === null) continue
+        expect(usd.test(columns), `${file.rel} selects a dollar column: ${columns}`).toBe(false)
+      }
+    }
+    expect(usd.test('id, float_alert_usd')).toBe(true)
+    expect(usd.test('id, usd_cents, alert_cents')).toBe(false)
+  })
+
+  it("keeps the customers pages' masked views to their plain columns", () => {
+    // The views are theirs by user id; what each masks or holds stays the owning page's.
+    const banned = [
+      'registrant_country',
+      'registrant_type',
+      'certificate_pem',
+      'ca_bundle_pem',
+      'approver_masked',
+      'masked_to',
+      'last_error_safe',
+    ]
+    for (const file of ALL.filter((f) => areaOf(f.rel) === 'customers')) {
+      for (const name of banned)
+        expect(mentions(file.text, name), `${file.rel} uses ${name}`).toBe(false)
+    }
+  })
+
   it('places every B package path in its area, and the rest in Package A', () => {
     expect(areaOf('app/(admin)/admin/page.tsx')).toBe('overview')
     expect(areaOf('app/(admin)/admin/customers/[id]/page.tsx')).toBe('customers')
@@ -308,6 +360,18 @@ describe('admin boundaries', () => {
     }
   })
 
+  it('names every admin page in its title (the layout adds " · Admin")', () => {
+    // Axe once found an admin page with no <title>: each page says what it is.
+    const pages = ALL.filter((file) => /^app\/\(admin\)\/admin\/(.+\/)?page\.tsx$/.test(file.rel))
+    expect(pages.length).toBeGreaterThan(30)
+    for (const page of pages) {
+      const named =
+        /export const metadata: Metadata = \{[^}]*\btitle: '[^']+'/.test(page.text) ||
+        /export async function generateMetadata\b[\s\S]*\btitle:/.test(page.text)
+      expect(named, `${page.rel} sets no title`).toBe(true)
+    }
+  })
+
   it('runs every admin e2e spec without screenshots, video or traces', () => {
     const e2e = join(SRC, '../tests/e2e')
     const specs = readdirSync(e2e).filter((name) => /^admin.*\.spec\.ts$/.test(name))
@@ -317,5 +381,8 @@ describe('admin boundaries', () => {
       expect(text, spec).toMatch(/import \{[^}]*\btest\b[^}]*\} from '\.\/support\/admin'/)
       expect(text, spec).not.toMatch(/import \{[^}]*\btest\b[^}]*\} from '@playwright\/test'/)
     }
+    // Nor the error-context.md a failure writes, which holds the page's text.
+    const support = readFileSync(join(e2e, 'support/admin.ts'), 'utf8')
+    expect(support).toMatch(/'error-context\.md'[\s\S]*devNull/)
   })
 })

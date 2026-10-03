@@ -133,6 +133,12 @@ describe('open alerts', () => {
     expect(callsOf(calls, 'select')[0]?.[1]).toEqual({ count: 'exact' })
   })
 
+  it('reads one severity when asked, for the overview’s critical tile', async () => {
+    const calls = fakeService({ ops_alerts: [{ data: [alertRow()], count: 1 }] })
+    await listOpenAlerts(await principal(), 'live', parseListParams({}, OPEN_SPEC), 'critical')
+    expect(callsOf(calls, 'eq')).toContainEqual(['severity', 'critical'])
+  })
+
   it('keeps a test administrator on the test side, whatever side the page asked for (D15)', async () => {
     const calls = fakeService({ ops_alerts: [{ data: [], count: 0 }] })
     await listOpenAlerts(

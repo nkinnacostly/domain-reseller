@@ -57,6 +57,7 @@ describe('parseEmailsParams: the link contract', () => {
       status: null,
       category: null,
       kind: null,
+      user: null,
       sort: 'created',
       dir: 'desc',
       page: 1,
@@ -65,6 +66,24 @@ describe('parseEmailsParams: the link contract', () => {
       to: null,
     })
     expect(emailsHref(outbox({ status: 'nope' }))).toBe('/admin/emails')
+  })
+
+  it('narrows to one account by its id for ?user= (a customer’s Emails tab), never an address', () => {
+    const id = '2A2B2C2D-3E3F-4A4B-8C5D-6E6F7A7B8C8D'
+    const params = outbox({ user: id, status: 'failed' })
+    expect(params.user).toBe(id.toLowerCase())
+    expect(emailsHref(params)).toBe(`/admin/emails?status=failed&user=${id.toLowerCase()}`)
+    // Another filter keeps the account; clearing it shows every account.
+    expect(emailsHref(params, { status: null })).toBe(`/admin/emails?user=${id.toLowerCase()}`)
+    expect(emailsHref(params, { user: null })).toBe('/admin/emails?status=failed')
+    for (const bad of ['e2e-x@example.com', 'getpaid.com', '1234']) {
+      expect(outbox({ user: bad }).user, bad).toBeNull()
+    }
+    expect(isEmailsFiltered(outbox({ user: id }))).toBe(true)
+    // The compliance tab has no account filter.
+    expect(emailsHref(parseEmailsParams({ tab: 'compliance', user: id }))).toBe(
+      '/admin/emails?tab=compliance',
+    )
   })
 
   it('takes one status: the first known one in a comma list', () => {

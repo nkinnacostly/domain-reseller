@@ -671,14 +671,16 @@ describe('the registrant', () => {
 
   it('says a replayed request in words, with nothing shown', async () => {
     vi.mocked(revealRegistrant).mockResolvedValue({
-      data: { ok: false, code: 'REPLAYED', message: REVEAL.replayed, auditId: 22 },
+      data: { ok: false, code: 'REPLAYED', message: ADMIN_ERROR_WORDS.REPLAYED, auditId: 22 },
     } as never)
     const user = userEvent.setup()
     render(<RegistrantPanel {...props} />)
     await user.click(screen.getByRole('button', { name: 'Show registrant' }))
     const dialog = screen.getByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: 'Show registrant' }))
-    expect(await within(dialog).findByText(REVEAL.replayed)).toBeInTheDocument()
+    expect(
+      await within(dialog).findByText(ADMIN_ERROR_WORDS.REPLAYED as string),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/Registrant$/, { selector: 'h3' })).toBeNull()
   })
 

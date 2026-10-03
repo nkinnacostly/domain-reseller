@@ -144,7 +144,7 @@ describe('updatePricingSettings', () => {
     expect(answer.data).toEqual({
       ok: false,
       code: 'OUT_OF_RANGE',
-      message: 'A value is outside what this setting allows.',
+      message: "A value is outside what's allowed here. Check the figures and try again.",
       auditId: 7,
     })
     expect(revalidateTag).not.toHaveBeenCalled()

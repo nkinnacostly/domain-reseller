@@ -7,7 +7,9 @@ import { resolveIncident, resolveMoneyIncident } from '@/features/admin/actions/
 import { ConfirmAction, type ConfirmRow } from '@/features/admin/components/confirm-action'
 import { adminOutcome } from '@/features/admin/lib/errors'
 import { formatWat } from '@/features/admin/lib/format'
+import { adminHref } from '@/features/admin/lib/href'
 import {
+  CHECK_STEP,
   HANDLED_OUTSIDE_CHECK,
   INCIDENT_KIND_LABEL,
   naira,
@@ -21,10 +23,11 @@ import { FlwCheck, useNow } from './flw-check'
 /**
  * "Mark resolved" for one payment incident (ADMIN-SPEC §5.2 B3). Where
  * nothing is owed it records that someone looked. Where money is owed it is
- * a money action: the person first says what settled it — a payment now
- * recorded, a refund that completed, a Flutterwave refund checked from here,
- * or (the owner) handled outside — and the wrapper checks that evidence
- * against the records before it marks anything resolved.
+ * a money action: inside the dialog the person says what settled it — a
+ * payment now recorded, a refund that completed, a Flutterwave refund
+ * checked from there, or (the owner) handled outside — and the wrapper
+ * checks that evidence against the records before it marks anything
+ * resolved.
  */
 
 export type ResolvableIncident = {
@@ -52,7 +55,7 @@ export function ResolveIncident({
   const [refundId, setRefundId] = useState<string | null>(incident.completedRefunds[0]?.id ?? null)
   const [check, setCheck] = useState<AdminFlwRefundCheck | null>(null)
   const now = useNow(check !== null)
-  const returnTo = `/admin/refunds/incidents#incident-${incident.id}`
+  const returnTo = adminHref.incident(incident.id)
   const kind = INCIDENT_KIND_LABEL[incident.kind] ?? incident.kind.replace(/_/g, ' ')
   const rows: ConfirmRow[] = [
     { label: 'Incident', value: kind },
@@ -83,40 +86,62 @@ export function ResolveIncident({
   const problems = check
     ? checkProblems(check, { transactionId: incident.providerReference }, now)
     : []
-  const evidence: { ready: boolean; words: string } = (() => {
+  const ready = (() => {
     switch (outcome) {
       case 'payment_recorded':
-        return { ready: true, words: `Charge ${incident.providerReference ?? '—'}` }
-      case 'refund_completed': {
-        const picked = incident.completedRefunds.find((refund) => refund.id === refundId)
-        return picked
-          ? {
-              ready: true,
-              words: `${naira(picked.amountKobo)} refunded ${formatWat(picked.completedAt)}`,
-            }
-          : { ready: false, words: RESOLVE_COPY.noCompletedRefund }
-      }
-      case 'flw_refund_verified':
-        return check && problems.length === 0
-          ? {
-              ready: true,
-              words: `Flutterwave refund ${check.flwRefundId}, ${naira(check.amountKobo)}`,
-            }
-          : { ready: false, words: '—' }
       case 'handled_outside':
-        return { ready: true, words: 'Confirmed by the owner' }
+        return true
+      case 'refund_completed':
+        return incident.completedRefunds.some((refund) => refund.id === refundId)
+      case 'flw_refund_verified':
+        return check !== null && problems.length === 0
       default:
-        return { ready: false, words: '—' }
+        return false
     }
   })()
+  const notReady =
+    outcome === null
+      ? RESOLVE_COPY.chooseFirst
+      : outcome === 'refund_completed'
+        ? RESOLVE_COPY.noCompletedRefund
+        : CHECK_STEP.needsCheck
 
   return (
-    <div className="space-y-4">
+    <ConfirmAction
+      trigger={RESOLVE_COPY.confirmLabel}
+      title={RESOLVE_COPY.title}
+      rows={rows}
+      body={RESOLVE_COPY.owed}
+      checks={outcome === 'handled_outside' ? [HANDLED_OUTSIDE_CHECK] : []}
+      confirmLabel={RESOLVE_COPY.confirmLabel}
+      cancelLabel={RESOLVE_COPY.cancelLabel}
+      reason="required"
+      needsCode
+      canConfirm={ready}
+      notReadyHint={notReady}
+      returnTo={returnTo}
+      successMessage={RESOLVE_COPY.success}
+      run={async ({ reason, requestKey, code, checks }) => {
+        if (!outcome)
+          return { ok: false, code: 'OUTCOME_REQUIRED', message: RESOLVE_COPY.chooseFirst }
+        return adminOutcome(
+          await resolveMoneyIncident({
+            incidentId: incident.id,
+            outcome,
+            ...(outcome === 'refund_completed' && refundId ? { refundId } : {}),
+            ...(outcome === 'flw_refund_verified' && check ? { checkId: check.checkId } : {}),
+            confirmed: Boolean(checks[HANDLED_OUTSIDE_CHECK.id]),
+            reason: reason ?? '',
+            requestKey,
+            code: code ?? '',
+          }),
+        )
+      }}
+    >
       <fieldset className="space-y-2">
         <legend className="mb-2 text-sm font-medium text-foreground">
           {RESOLVE_COPY.outcomeLegend}
         </legend>
-        <p className="text-sm text-muted-foreground">{RESOLVE_COPY.owed}</p>
         {outcomes.map((value) => {
           const none = value === 'refund_completed' && incident.completedRefunds.length === 0
           return (
@@ -176,46 +201,6 @@ export function ResolveIncident({
           returnTo={returnTo}
         />
       ) : null}
-
-      <div className="space-y-2">
-        <ConfirmAction
-          trigger={RESOLVE_COPY.confirmLabel}
-          disabled={!evidence.ready}
-          title={RESOLVE_COPY.title}
-          rows={[
-            ...rows,
-            { label: 'What happened', value: outcome ? OUTCOME_LABEL[outcome] : '—' },
-            { label: 'Evidence', value: evidence.words },
-          ]}
-          body={RESOLVE_COPY.owed}
-          checks={outcome === 'handled_outside' ? [HANDLED_OUTSIDE_CHECK] : []}
-          confirmLabel={RESOLVE_COPY.confirmLabel}
-          cancelLabel={RESOLVE_COPY.cancelLabel}
-          reason="required"
-          needsCode
-          returnTo={returnTo}
-          successMessage={RESOLVE_COPY.success}
-          run={async ({ reason, requestKey, code, checks }) => {
-            if (!outcome)
-              return { ok: false, code: 'OUTCOME_REQUIRED', message: RESOLVE_COPY.chooseFirst }
-            return adminOutcome(
-              await resolveMoneyIncident({
-                incidentId: incident.id,
-                outcome,
-                ...(outcome === 'refund_completed' && refundId ? { refundId } : {}),
-                ...(outcome === 'flw_refund_verified' && check ? { checkId: check.checkId } : {}),
-                confirmed: Boolean(checks[HANDLED_OUTSIDE_CHECK.id]),
-                reason: reason ?? '',
-                requestKey,
-                code: code ?? '',
-              }),
-            )
-          }}
-        />
-        {outcome ? null : (
-          <p className="text-xs text-muted-foreground">{RESOLVE_COPY.chooseFirst}</p>
-        )}
-      </div>
-    </div>
+    </ConfirmAction>
   )
 }

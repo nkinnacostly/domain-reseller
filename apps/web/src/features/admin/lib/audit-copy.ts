@@ -161,3 +161,14 @@ export function gatewayResult(
 
 export const NO_DETAIL = 'Nothing else was recorded.'
 export const HIDDEN_VALUE = 'Not shown: personal data'
+
+/** "Redact reason" (§5.2 B14): the owner's only change to the log, money tier. */
+export const REDACT = {
+  trigger: 'Redact reason',
+  title: 'Remove the reason text from this entry?',
+  body: 'Only the typed reason is removed; who did what, when, and the amounts stay. The removal is recorded.',
+  reasonLabel: 'Why remove it',
+  confirm: 'Remove the reason',
+  cancel: 'Keep it',
+  done: 'Reason removed. The removal is recorded as its own entry.',
+} as const

@@ -2,6 +2,7 @@ import { Info } from 'lucide-react'
 import { Panel, PanelHeader, PanelPage, PanelPageSkeleton } from '@/components/layout/panel'
 import { ErrorState } from '@/features/admin/components/error-state'
 import { TableSkeleton } from '@/features/admin/components/table/table-skeleton'
+import { canAct } from '@/features/admin/lib/actions'
 import {
   AUDIT_DESCRIPTION,
   AUDIT_READ_FAILED,
@@ -17,9 +18,9 @@ import { AuditList } from './audit-list'
 
 /**
  * /admin/audit (docs/ADMIN-SPEC.md §5.2, B14): every admin action, refusal,
- * lookup and live read, newest first, filtered by the URL. Read-only for
- * everyone: the log is append-only, so the page has no edit, delete or
- * redact control. Each step is awaited inside the route's Suspense — the
+ * lookup and live read, newest first, filtered by the URL. The log is
+ * append-only: the one control is the owner's "Redact reason" (money
+ * tier), which removes a typed reason and is itself recorded. Each step is awaited inside the route's Suspense — the
  * admin asked of SQL first, then the side, then the URL, then the read.
  */
 
@@ -60,6 +61,7 @@ export async function AuditView({ searchParams }: { searchParams: Promise<Search
             total={page.value.total}
             params={params}
             testOnly={admin.testOnly}
+            canRedact={canAct(admin, 'audit.redact')}
           />
         </Panel>
       ) : (

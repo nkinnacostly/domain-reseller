@@ -1,23 +1,13 @@
 'use server'
 
-import {
-  ADMIN_GATEWAY_ROUTES,
-  type AdminCatalogueApply,
-  type AdminCataloguePreview,
-  type AdminGatewayRouteName,
-  adminNoteTarget,
-  adminRouteSide,
+import type {
+  AdminCatalogueApply,
+  AdminCataloguePreview,
+  AdminGatewayRouteName,
 } from '@dr/shared/admin'
-import { GatewayError } from '@dr/shared/errors'
 import { revalidateTag } from 'next/cache'
-import {
-  type AdminResult,
-  adminAccessError,
-  refusedResult,
-  toAdminResult,
-} from '@/features/admin/lib/errors'
-import { TOPUP_CODE_WORDS } from '@/features/admin/lib/supplier-copy'
-import { adminGatewayConfigured, callAdminGateway } from '@/features/admin/queries/gateway'
+import { liveRead } from '@/features/admin/actions/live-read'
+import { type AdminResult, adminAccessError, toAdminResult } from '@/features/admin/lib/errors'
 import {
   applyCatalogueSchema,
   correctTopupSchema,
@@ -48,47 +38,21 @@ const APPLY_ROUTE: Record<Catalogue, AdminGatewayRouteName> = {
 }
 
 /**
- * Note, then gateway. Catalogue reads are about the storefront, not a side:
- * their notes are `global` (§4.3). A refusal from SQL or the gateway comes
- * back in words; anything else is thrown, so the dialog keeps its request key.
+ * Note, then gateway (`liveRead`). Price lists are about the storefront, not
+ * a side: their notes are `global`, and the gateway is not told a side (§4.3).
  */
-async function catalogueCall<T>(
+function catalogueCall<T>(
   ctx: AdminContext,
   route: AdminGatewayRouteName,
   extra: { reason?: string | undefined; requestKey?: string } = {},
 ): Promise<AdminResult<T>> {
-  if (!adminGatewayConfigured()) return refusedResult('ADMIN_DISABLED')
-  const side = adminRouteSide(route, 'live')
-  const note = await ctx.db.rpc('admin_note', {
-    p_action: ADMIN_GATEWAY_ROUTES[route].action,
-    p_side: side,
-    p_target_type: 'catalogue',
-    p_target_id: adminNoteTarget(route, { side }),
-    p_detail: {},
-    ...(extra.reason ? { p_reason: extra.reason } : {}),
-    ...(extra.requestKey ? { p_request_key: extra.requestKey } : {}),
+  return liveRead<T>(ctx, {
+    route,
+    targetType: 'catalogue',
+    sideless: true,
+    reason: extra.reason,
+    ...(extra.requestKey ? { requestKey: extra.requestKey } : {}),
   })
-  if (note.error) throw adminAccessError(note.error.message)
-  const noted = toAdminResult(note.data)
-  if (!noted.ok) return noted
-
-  try {
-    const data = await callAdminGateway<T>({
-      admin: ctx.admin,
-      auditId: noted.auditId,
-      route: ADMIN_GATEWAY_ROUTES[route].template,
-    })
-    return { ok: true, auditId: noted.auditId, data }
-  } catch (error) {
-    if (error instanceof GatewayError) {
-      const reason = (error as GatewayError & { reason?: string }).reason
-      return refusedResult(
-        error.code === 'ADMIN_NOTE_REFUSED' && reason ? reason : error.code,
-        noted.auditId,
-      )
-    }
-    throw error
-  }
 }
 
 /** What the weekly extension sync would change, without writing anything. */
@@ -156,14 +120,6 @@ export const applySslList = adminMoneyAction(
   ),
 )
 
-/** A wrapper's answer, with the top-up's own words for codes it shares with refunds. */
-function topupResult(json: unknown): AdminResult {
-  const result = toAdminResult(json)
-  if (result.ok) return result
-  const words = TOPUP_CODE_WORDS[result.code]
-  return words ? { ...result, message: words } : result
-}
-
 /** Record top-up cost (money, owner, `topup.record`): the naira paid for a live ledger credit. */
 export const recordTopup = adminMoneyAction('topup.record', recordTopupSchema).action(
   async ({ parsedInput, ctx }): Promise<AdminResult> => {
@@ -175,7 +131,7 @@ export const recordTopup = adminMoneyAction('topup.record', recordTopupSchema).a
       p_request_key: parsedInput.requestKey,
     })
     if (error) throw adminAccessError(error.message)
-    return topupResult(data)
+    return toAdminResult(data)
   },
 )
 
@@ -190,6 +146,6 @@ export const correctTopup = adminMoneyAction('topup.correct', correctTopupSchema
       p_request_key: parsedInput.requestKey,
     })
     if (error) throw adminAccessError(error.message)
-    return topupResult(data)
+    return toAdminResult(data)
   },
 )

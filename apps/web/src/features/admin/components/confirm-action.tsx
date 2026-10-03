@@ -62,6 +62,9 @@ export function ConfirmAction({
   destructive = false,
   needsCode = false,
   disabled = false,
+  canConfirm = true,
+  notReadyHint,
+  children,
   run,
   returnTo,
   successMessage = 'Done.',
@@ -82,7 +85,20 @@ export function ConfirmAction({
   destructive?: boolean
   /** A money action: asks for the code from the authenticator app. */
   needsCode?: boolean
+  /** The trigger itself: nothing to open. */
   disabled?: boolean
+  /**
+   * Whatever the dialog's own `children` collect is ready: until it is, the
+   * confirm button stays disabled and `notReadyHint` says why.
+   */
+  canConfirm?: boolean
+  notReadyHint?: React.ReactNode
+  /**
+   * Choices the action needs before it can run — an outcome, a check made
+   * from inside the dialog — shown in the dialog's body, after its rows and
+   * text. They sit outside the dialog's own form, so they may hold a form.
+   */
+  children?: React.ReactNode
   run: (extra: ConfirmExtra) => Promise<AdminResult<unknown>>
   /** Where the "Enter a code" link comes back to. */
   returnTo: string
@@ -123,7 +139,7 @@ export function ConfirmAction({
   const typedOk = typeToConfirm === undefined || typed.trim() === typeToConfirm
   const checksOk = checks.every((check) => ticked[check.id])
   const codeOk = !needsCode || CODE.test(code)
-  const ready = reasonOk && typedOk && checksOk && codeOk && !pending && !done
+  const ready = canConfirm && reasonOk && typedOk && checksOk && codeOk && !pending && !done
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -183,7 +199,7 @@ export function ConfirmAction({
           cancelRef.current?.focus()
         }}
       >
-        <form onSubmit={submit} className="grid gap-4" aria-describedby={`${id}-body`}>
+        <div className="grid gap-4">
           <DialogTitle className="pr-8 text-lg font-medium">{title}</DialogTitle>
           <DialogDescription asChild>
             <div id={`${id}-body`} className="space-y-3 text-sm text-muted-foreground">
@@ -203,118 +219,125 @@ export function ConfirmAction({
             </div>
           </DialogDescription>
 
-          {checks.map((check) => (
-            <label
-              key={check.id}
-              className="flex min-h-11 items-start gap-3 text-sm text-foreground"
-            >
-              <input
-                type="checkbox"
-                checked={Boolean(ticked[check.id])}
-                onChange={(event) =>
-                  setTicked((current) => ({ ...current, [check.id]: event.target.checked }))
-                }
-                disabled={pending || Boolean(done)}
-                className="mt-0.5 size-5 shrink-0 accent-brand"
-              />
-              <span>{check.label}</span>
-            </label>
-          ))}
+          {children && !done ? <div className="space-y-4">{children}</div> : null}
 
-          {reason !== 'none' ? (
-            <div>
-              <label htmlFor={`${id}-reason`} className="text-sm font-medium text-foreground">
-                {reasonLabel}
-                {reason === 'optional' ? ' (optional)' : ''}
-              </label>
-              <Textarea
-                id={`${id}-reason`}
-                value={reasonText}
-                onChange={(event) => setReasonText(event.target.value)}
-                maxLength={reasonMax}
-                rows={3}
-                required={reason === 'required'}
-                disabled={pending || Boolean(done)}
-                aria-describedby={`${id}-reason-hint`}
-                className="mt-1.5"
-              />
-              <p id={`${id}-reason-hint`} className="mt-1.5 text-xs text-muted-foreground">
-                Don't include personal details.
-                {reason === 'required' ? ` At least ${REASON_MIN} characters.` : ''} It is kept in
-                the audit log.
-              </p>
-            </div>
-          ) : null}
-
-          {typeToConfirm !== undefined ? (
-            <div>
-              <label htmlFor={`${id}-typed`} className="text-sm font-medium text-foreground">
-                Type <span className="font-mono break-all">{typeToConfirm}</span> to confirm
-              </label>
-              <input
-                id={`${id}-typed`}
-                value={typed}
-                onChange={(event) => setTyped(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                disabled={pending || Boolean(done)}
-                className={cn(inputClass, 'mt-1.5 font-mono')}
-              />
-            </div>
-          ) : null}
-
-          {needsCode ? (
-            <div>
-              <label htmlFor={`${id}-code`} className="text-sm font-medium text-foreground">
-                Code from your authenticator app
-              </label>
-              <input
-                id={`${id}-code`}
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="\d{6}"
-                maxLength={6}
-                required
-                disabled={pending || Boolean(done)}
-                className={cn(inputClass, 'mt-1.5 w-40 font-mono tracking-widest tabular-nums')}
-              />
-            </div>
-          ) : null}
-
-          <ActionError message={error} returnTo={returnTo} />
-          {done ? <FormMessage tone="success">{done}</FormMessage> : null}
-
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
-              ref={cancelRef}
-              type="button"
-              onClick={() => onOpenChange(false)}
-              disabled={pending}
-              className={QUIET_BUTTON}
-            >
-              {done ? 'Close' : cancelLabel}
-            </button>
-            {done ? null : (
-              <button
-                type="submit"
-                disabled={!ready}
-                aria-busy={pending || undefined}
-                className={cn(
-                  BUTTON,
-                  destructive
-                    ? 'border border-destructive/50 bg-destructive/10 text-foreground hover:bg-destructive/20'
-                    : 'bg-brand text-brand-foreground hover:bg-brand/90',
-                  FOCUS,
-                )}
+          <form onSubmit={submit} className="grid gap-4" aria-describedby={`${id}-body`}>
+            {checks.map((check) => (
+              <label
+                key={check.id}
+                className="flex min-h-11 items-start gap-3 text-sm text-foreground"
               >
-                {pending ? <Spinner className="size-4" aria-hidden="true" /> : null}
-                {confirmLabel}
+                <input
+                  type="checkbox"
+                  checked={Boolean(ticked[check.id])}
+                  onChange={(event) =>
+                    setTicked((current) => ({ ...current, [check.id]: event.target.checked }))
+                  }
+                  disabled={pending || Boolean(done)}
+                  className="mt-0.5 size-5 shrink-0 accent-brand"
+                />
+                <span>{check.label}</span>
+              </label>
+            ))}
+
+            {reason !== 'none' ? (
+              <div>
+                <label htmlFor={`${id}-reason`} className="text-sm font-medium text-foreground">
+                  {reasonLabel}
+                  {reason === 'optional' ? ' (optional)' : ''}
+                </label>
+                <Textarea
+                  id={`${id}-reason`}
+                  value={reasonText}
+                  onChange={(event) => setReasonText(event.target.value)}
+                  maxLength={reasonMax}
+                  rows={3}
+                  required={reason === 'required'}
+                  disabled={pending || Boolean(done)}
+                  aria-describedby={`${id}-reason-hint`}
+                  className="mt-1.5"
+                />
+                <p id={`${id}-reason-hint`} className="mt-1.5 text-xs text-muted-foreground">
+                  Don't include personal details.
+                  {reason === 'required' ? ` At least ${REASON_MIN} characters.` : ''} It is kept in
+                  the audit log.
+                </p>
+              </div>
+            ) : null}
+
+            {typeToConfirm !== undefined ? (
+              <div>
+                <label htmlFor={`${id}-typed`} className="text-sm font-medium text-foreground">
+                  Type <span className="font-mono break-all">{typeToConfirm}</span> to confirm
+                </label>
+                <input
+                  id={`${id}-typed`}
+                  value={typed}
+                  onChange={(event) => setTyped(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={pending || Boolean(done)}
+                  className={cn(inputClass, 'mt-1.5 font-mono')}
+                />
+              </div>
+            ) : null}
+
+            {needsCode ? (
+              <div>
+                <label htmlFor={`${id}-code`} className="text-sm font-medium text-foreground">
+                  Code from your authenticator app
+                </label>
+                <input
+                  id={`${id}-code`}
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  required
+                  disabled={pending || Boolean(done)}
+                  className={cn(inputClass, 'mt-1.5 w-40 font-mono tracking-widest tabular-nums')}
+                />
+              </div>
+            ) : null}
+
+            {!canConfirm && notReadyHint && !done ? (
+              <p className="text-xs text-muted-foreground">{notReadyHint}</p>
+            ) : null}
+            <ActionError message={error} returnTo={returnTo} />
+            {done ? <FormMessage tone="success">{done}</FormMessage> : null}
+
+            <DialogFooter className="gap-2 sm:gap-2">
+              <button
+                ref={cancelRef}
+                type="button"
+                onClick={() => onOpenChange(false)}
+                disabled={pending}
+                className={QUIET_BUTTON}
+              >
+                {done ? 'Close' : cancelLabel}
               </button>
-            )}
-          </DialogFooter>
-        </form>
+              {done ? null : (
+                <button
+                  type="submit"
+                  disabled={!ready}
+                  aria-busy={pending || undefined}
+                  className={cn(
+                    BUTTON,
+                    destructive
+                      ? 'border border-destructive/50 bg-destructive/10 text-foreground hover:bg-destructive/20'
+                      : 'bg-brand text-brand-foreground hover:bg-brand/90',
+                    FOCUS,
+                  )}
+                >
+                  {pending ? <Spinner className="size-4" aria-hidden="true" /> : null}
+                  {confirmLabel}
+                </button>
+              )}
+            </DialogFooter>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   )

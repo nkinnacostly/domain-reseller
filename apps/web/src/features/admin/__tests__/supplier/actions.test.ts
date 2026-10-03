@@ -10,7 +10,7 @@ import {
   previewSslList,
   recordTopup,
 } from '@/features/admin/actions/supplier'
-import { SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
+import { ADMIN_ERROR_WORDS, SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
 import { createClient } from '@/lib/supabase/server'
 import { server } from '../../../../../tests/mocks/server'
 import { sessionClient, whoami } from '../foundation/fixtures'
@@ -252,14 +252,15 @@ describe('top-up costs (money, owner; §3.2b)', () => {
     expect(result.data).toEqual({ ok: true, auditId: 60 })
   })
 
-  it('words the wrapper’s refusals for a top-up, not a refund', async () => {
+  it('words the wrapper’s refusals in the shared words, none of them about a refund', async () => {
     owner({ admin_record_float_topup: { data: { ok: false, code: 'BAD_REFERENCE', auditId: 61 } } })
     expect((await recordTopup(record)).data).toEqual({
       ok: false,
       code: 'BAD_REFERENCE',
-      message: 'Give the payment reference in 1 to 80 characters.',
+      message: ADMIN_ERROR_WORDS.BAD_REFERENCE,
       auditId: 61,
     })
+    expect(ADMIN_ERROR_WORDS.BAD_REFERENCE).not.toMatch(/refund/i)
     owner({
       admin_record_float_topup: { data: { ok: false, code: 'ALREADY_RECORDED', auditId: 62 } },
     })

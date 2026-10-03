@@ -178,3 +178,34 @@ export async function listAuditEntries(
     rows: rows.map((row) => toEntry(row, results.get(row.id) ?? null)),
   }
 }
+
+/** How many entries the overview shows (§5.2 B1). */
+export const LATEST_AUDIT_COUNT = 10
+
+/**
+ * The newest entries, for the overview (§5.2 B1): the same read and the
+ * same safe text as the log's first page, under the same `test_actor` rule
+ * — a test administrator sees test administrators' entries only.
+ */
+export async function latestAuditEntries(
+  admin: AdminPrincipal,
+  side: AdminSide,
+  count: number = LATEST_AUDIT_COUNT,
+): Promise<AuditEntry[]> {
+  const answer = await adminDb(admin, side)
+    .from('admin_audit_log')
+    .select(
+      'id, created_at, admin_label, admin_role, test_actor, session_hash, action, side, target_type, target_id, target_test_mode, reason, redacted_at, outcome, error_code, detail, parent_id, request_id',
+    )
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(count)
+  if (answer.error) throw new AuditReadError('latest entries', answer.error.code)
+  const rows = (answer.data ?? []) as Row[]
+  const results = await resultsFor(
+    admin,
+    side,
+    rows.filter((row) => row.outcome === 'intent').map((row) => row.id),
+  )
+  return rows.map((row) => toEntry(row, results.get(row.id) ?? null))
+}

@@ -182,6 +182,8 @@ export function recordCopy(amountKobo: number) {
 
 export const CHECK_STEP = {
   heading: 'Record a Flutterwave refund',
+  /** Opens the dialog that holds the check and the record. */
+  trigger: 'Check and record a Flutterwave refund',
   intro:
     'For money already returned from the Flutterwave dashboard. Check the refund from here first: it must be this charge, this amount, and completed.',
   idLabel: 'Flutterwave refund id',
@@ -191,7 +193,6 @@ export const CHECK_STEP = {
   pending: 'Checking…',
   /** Shown beside the record button until a check backs it. */
   needsCheck: 'Check the refund with Flutterwave first. A check is good for 15 minutes.',
-  refundCharge: "The database also checks it is on this order's charge before it records anything.",
 } as const
 
 const STATE_WORDS: Record<AdminFlwRefundCheck['state'], string> = {

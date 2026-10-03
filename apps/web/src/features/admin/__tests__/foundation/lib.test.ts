@@ -178,6 +178,20 @@ describe('errors: every code has words (§2.4)', () => {
     expect(adminErrorWords(null)).toBe(FALLBACK_WORDS)
   })
 
+  it('words the codes several pages share once, for all of them', () => {
+    // A refund id and a top-up's reference; a setting, a price and a top-up's naira.
+    expect(adminErrorWords('BAD_REFERENCE')).not.toMatch(/refund/i)
+    expect(adminErrorWords('OUT_OF_RANGE')).not.toMatch(/setting/i)
+    // A reveal answered on a replayed key carries no details: customers and domains alike.
+    expect(adminErrorWords('REPLAYED')).toBe(
+      'That view was recorded, but its details are shown only once. Ask again: it is a new view, and it is recorded too.',
+    )
+    // Migration 42 records a taken featured rank as a refusal; the extensions page also checks first.
+    expect(adminErrorWords('RANK_TAKEN')).toMatch(
+      /^That featured rank belongs to another extension/,
+    )
+  })
+
   it('never passes a database message through, and calls an unknown error an unknown outcome', () => {
     // A timeout or a lost answer may come after the wrapper committed: not a
     // refusal, so the words never say "nothing changed" and the key is kept.
@@ -522,11 +536,20 @@ describe('href', () => {
     expect(adminHref.customer(id)).toMatch(/^\/admin\/customers\//)
     expect(adminHref.certificate(id)).toMatch(/^\/admin\/ssl\//)
     expect(adminHref.preset(id)).toMatch(/^\/admin\/settings\/presets\//)
-    expect(adminHref.incident(12)).toBe('/admin/refunds/incidents#incident-12')
+    expect(adminHref.incident(12)).toBe('/admin/refunds/incidents?id=12#incident-12')
     expect(adminHref.incident('x')).toBe('/admin/refunds/incidents')
     expect(adminHref.audit('42')).toBe('/admin/audit?id=42')
     expect(adminHref.audit(undefined)).toBe('/admin/audit')
     expect(adminHref.overview()).toBe('/admin')
-    expect(adminHref.alert('admin_burst:ops')).toBe('/admin/audit?label=ops')
+    // A list narrowed to one id: never an email or a name in the URL.
+    expect(adminHref.customerEmails(id)).toBe(
+      '/admin/emails?user=0f0e0d0c-0b0a-4908-8706-050403020100',
+    )
+    expect(adminHref.customerEmails('e2e-x@example.com')).toBe('/admin/emails')
+    expect(adminHref.certificateForLine(id)).toBe(
+      '/admin/ssl?line=0f0e0d0c-0b0a-4908-8706-050403020100',
+    )
+    expect(adminHref.certificateForLine('shop.ng')).toBe('/admin/ssl')
+    expect(adminHref.alert('admin_burst:ops')).toBe('/admin/audit?admin=ops')
   })
 })

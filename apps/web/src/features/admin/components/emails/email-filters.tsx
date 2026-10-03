@@ -23,6 +23,8 @@ import {
   OUTBOX_STATUSES,
   type OutboxParams,
 } from '@/features/admin/lib/emails-params'
+import { shortId } from '@/features/admin/lib/format'
+import { adminHref } from '@/features/admin/lib/href'
 import { nextSort } from '@/features/admin/lib/list-params'
 import { cn } from '@/lib/utils'
 import { LINK, Note, QUIET_LINK } from './email-parts'
@@ -150,6 +152,23 @@ export function OutboxFilters({ params }: { params: OutboxParams }) {
           </Link>
         </p>
       ) : null}
+      {params.user ? (
+        <p
+          data-testid="emails-user-filter"
+          className="flex flex-wrap items-center gap-x-3 px-1 text-sm text-foreground"
+        >
+          <span>
+            Only{' '}
+            <Link href={adminHref.customer(params.user)} className={LINK}>
+              account {shortId(params.user)}
+            </Link>
+            ’s emails
+          </span>
+          <Link href={emailsHref(params, { user: null })} className={LINK}>
+            Show every account
+          </Link>
+        </p>
+      ) : null}
       <DatesForm params={params} idPrefix="outbox" label="Queued" />
     </div>
   )
@@ -221,7 +240,7 @@ export function SortLinks<P extends EmailsParams>({
                 aria-current={current ? 'true' : undefined}
                 data-current={current ? 'true' : undefined}
                 className={cn(
-                  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.98]',
+                  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition-transform hover:bg-brand-subtle active:scale-[0.98]',
                   'data-[current=true]:border-brand data-[current=true]:bg-brand data-[current=true]:text-brand-foreground',
                   FOCUS,
                 )}

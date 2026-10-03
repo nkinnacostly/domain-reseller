@@ -209,21 +209,36 @@ describe('RefundActions', () => {
 
 describe('RecordRefund: the record step stays shut without a matching check', () => {
   const recordButton = () => screen.getByRole('button', { name: 'Record ₦19,672.50 as refunded' })
-
-  async function checkWith(answer: unknown) {
-    vi.mocked(checkFlutterwaveRefund).mockResolvedValue(answer as never)
-    const user = userEvent.setup()
-    render(<RecordRefund refund={refund} />)
-    await user.type(screen.getByLabelText('Flutterwave refund id'), 'RF-123')
-    await user.click(screen.getByRole('button', { name: 'Check with Flutterwave' }))
-    return user
+  const withCharge: typeof refund & { providerReference: string | null } = {
+    ...refund,
+    providerReference: '456',
   }
 
-  it('is disabled before any check, and says why', () => {
-    render(<RecordRefund refund={refund} />)
+  /** Opens the dialog, where the check and the record both sit. */
+  async function open(props: typeof withCharge = withCharge) {
+    const user = userEvent.setup()
+    render(<RecordRefund refund={props} />)
+    await user.click(screen.getByRole('button', { name: 'Check and record a Flutterwave refund' }))
+    return { user, dialog: screen.getByRole('dialog', { name: 'Record this Flutterwave refund?' }) }
+  }
+
+  async function checkWith(answer: unknown, props: typeof withCharge = withCharge) {
+    vi.mocked(checkFlutterwaveRefund).mockResolvedValue(answer as never)
+    const opened = await open(props)
+    await opened.user.type(within(opened.dialog).getByLabelText('Flutterwave refund id'), 'RF-123')
+    await opened.user.click(
+      within(opened.dialog).getByRole('button', { name: 'Check with Flutterwave' }),
+    )
+    return opened
+  }
+
+  it('opens with the check inside, disabled before any check, and says why', async () => {
+    const { dialog } = await open()
+    expect(within(dialog).getByText('Charge')).toBeInTheDocument()
+    expect(within(dialog).getByText('456')).toBeInTheDocument()
     expect(recordButton()).toBeDisabled()
-    expect(screen.getByText(/Check the refund with Flutterwave first/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Check with Flutterwave' })).toBeDisabled()
+    expect(within(dialog).getByText(/Check the refund with Flutterwave first/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Check with Flutterwave' })).toBeDisabled()
   })
 
   it('stays disabled for another amount, and says so', async () => {
@@ -234,6 +249,14 @@ describe('RecordRefund: the record step stays shut without a matching check', ()
     expect(checkFlutterwaveRefund).toHaveBeenCalledWith({ flwRefundId: 'RF-123', refundId: REFUND })
   })
 
+  it("stays disabled for a refund on another charge than the order's", async () => {
+    await checkWith({ data: { ok: true, auditId: 3, data: check({ transactionId: '999' }) } })
+    expect(
+      await screen.findByText("It is on charge 999, not this refund's charge 456."),
+    ).toBeInTheDocument()
+    expect(recordButton()).toBeDisabled()
+  })
+
   it('stays disabled for a refund Flutterwave has not finished', async () => {
     await checkWith({ data: { ok: true, auditId: 3, data: check({ state: 'pending' }) } })
     expect(await screen.findByText(/hasn't finished this refund yet/)).toBeInTheDocument()
@@ -241,31 +264,27 @@ describe('RecordRefund: the record step stays shut without a matching check', ()
   })
 
   it('shows a refused check in words and stays disabled', async () => {
-    await checkWith({
+    const { dialog } = await checkWith({
       data: {
         ok: false,
         code: 'FLW_REFUND_NOT_FOUND',
         message: 'Flutterwave has no refund with that id.',
       },
     })
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'Flutterwave has no refund with that id.',
     )
     expect(recordButton()).toBeDisabled()
   })
 
-  it('opens for a matching, fresh check and records against it', async () => {
+  it('opens for a matching, fresh check on the charge and records against it', async () => {
     vi.mocked(recordManualRefund).mockResolvedValue(ok as never)
-    const user = await checkWith({ data: { ok: true, auditId: 3, data: check() } })
+    const { user, dialog } = await checkWith({ data: { ok: true, auditId: 3, data: check() } })
     expect(
-      await screen.findByText(
+      await within(dialog).findByText(
         'Flutterwave refund RF-123: ₦19,672.50 on charge 456, completed — matches this refund',
       ),
     ).toBeInTheDocument()
-    expect(recordButton()).toBeEnabled()
-
-    await user.click(recordButton())
-    const dialog = screen.getByRole('dialog', { name: 'Record this Flutterwave refund?' })
     expect(
       within(dialog).getByText(
         "Nothing is sent. The customer's order page will show ₦19,672.50 as refunded.",
@@ -273,7 +292,8 @@ describe('RecordRefund: the record step stays shut without a matching check', ()
     ).toBeInTheDocument()
     await user.type(within(dialog).getByLabelText('Reason'), REASON)
     await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '654321')
-    await user.click(within(dialog).getByRole('button', { name: 'Record ₦19,672.50 as refunded' }))
+    expect(recordButton()).toBeEnabled()
+    await user.click(recordButton())
     expect(recordManualRefund).toHaveBeenCalledWith({
       refundId: REFUND,
       checkId: 7,
@@ -285,16 +305,32 @@ describe('RecordRefund: the record step stays shut without a matching check', ()
     })
   })
 
+  it('leaves the charge to the database when it could not be read here', async () => {
+    const { user, dialog } = await checkWith(
+      { data: { ok: true, auditId: 3, data: check({ transactionId: '999' }) } },
+      { ...refund, providerReference: null },
+    )
+    expect(await within(dialog).findByText(/matches this refund/)).toBeInTheDocument()
+    expect(within(dialog).getByText('Not recorded')).toBeInTheDocument()
+    await user.type(within(dialog).getByLabelText('Reason'), REASON)
+    await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '654321')
+    expect(recordButton()).toBeEnabled()
+  })
+
   it('shuts again once the check is 15 minutes old', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    await checkWith({ data: { ok: true, auditId: 3, data: check() } })
-    expect(await screen.findByText(/matches this refund/)).toBeInTheDocument()
+    const { user, dialog } = await checkWith({ data: { ok: true, auditId: 3, data: check() } })
+    expect(await within(dialog).findByText(/matches this refund/)).toBeInTheDocument()
+    await user.type(within(dialog).getByLabelText('Reason'), REASON)
+    await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '654321')
     expect(recordButton()).toBeEnabled()
     act(() => {
       vi.advanceTimersByTime(15 * 60 * 1000 + 15_000)
     })
     await waitFor(() => expect(recordButton()).toBeDisabled())
-    expect(screen.getByText('This check is over 15 minutes old. Check again.')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('This check is over 15 minutes old. Check again.'),
+    ).toBeInTheDocument()
   })
 })
 
@@ -373,25 +409,37 @@ describe('ResolveIncident', () => {
     ],
   }
 
-  it('records a look, with no code, where nothing is owed', async () => {
-    vi.mocked(resolveIncident).mockResolvedValue(ok as never)
+  /** Opens the dialog: the outcome is chosen inside it. */
+  async function open(
+    incident: typeof owed,
+    outcomes: Parameters<typeof ResolveIncident>[0]['outcomes'],
+  ) {
     const user = userEvent.setup()
-    render(
-      <ResolveIncident
-        incident={{ ...owed, kind: 'tx_ref_mismatch', owed: false, completedRefunds: [] }}
-        outcomes={[]}
-      />,
-    )
+    render(<ResolveIncident incident={incident} outcomes={outcomes} />)
     await user.click(screen.getByRole('button', { name: 'Mark resolved' }))
     const dialog = screen.getByRole('dialog', { name: 'Mark this incident resolved?' })
+    return {
+      user,
+      dialog,
+      confirm: () => within(dialog).getByRole('button', { name: 'Mark resolved' }),
+    }
+  }
+
+  it('records a look, with no code, where nothing is owed', async () => {
+    vi.mocked(resolveIncident).mockResolvedValue(ok as never)
+    const { user, dialog, confirm } = await open(
+      { ...owed, kind: 'tx_ref_mismatch', owed: false, completedRefunds: [] },
+      [],
+    )
     expect(
       within(dialog).getByText(
         "This records that you've looked at it. Nothing is charged or refunded.",
       ),
     ).toBeInTheDocument()
     expect(within(dialog).queryByLabelText('Code from your authenticator app')).toBeNull()
+    expect(within(dialog).queryByRole('group', { name: 'What happened?' })).toBeNull()
     await user.type(within(dialog).getByLabelText('Reason'), REASON)
-    await user.click(within(dialog).getByRole('button', { name: 'Mark resolved' }))
+    await user.click(confirm())
     expect(resolveIncident).toHaveBeenCalledWith({
       incidentId: 42,
       reason: REASON,
@@ -399,38 +447,42 @@ describe('ResolveIncident', () => {
     })
   })
 
-  it('waits for what happened before an owed incident can be resolved', () => {
-    render(
-      <ResolveIncident
-        incident={owed}
-        outcomes={['payment_recorded', 'refund_completed', 'flw_refund_verified']}
-      />,
-    )
-    expect(screen.getByRole('group', { name: 'What happened?' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Mark resolved' })).toBeDisabled()
-    expect(screen.queryByRole('radio', { name: /Handled outside/ })).not.toBeInTheDocument()
+  it('asks what happened inside the dialog, and waits for it', async () => {
+    const { user, dialog, confirm } = await open(owed, [
+      'payment_recorded',
+      'refund_completed',
+      'flw_refund_verified',
+    ])
+    expect(within(dialog).getByRole('group', { name: 'What happened?' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('radio', { name: /Handled outside/ })).not.toBeInTheDocument()
+    // Each fact is said once: no rows repeat the choice.
+    expect(within(dialog).queryByText('Evidence')).toBeNull()
+    await user.type(within(dialog).getByLabelText('Reason'), REASON)
+    await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '123456')
+    expect(confirm()).toBeDisabled()
+    expect(within(dialog).getByText('Choose what happened first.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('radio', { name: 'The payment is now recorded' }))
+    expect(confirm()).toBeEnabled()
   })
 
   it('resolves with the completed refund picked', async () => {
     vi.mocked(resolveMoneyIncident).mockResolvedValue(ok as never)
-    const user = userEvent.setup()
-    render(
-      <ResolveIncident
-        incident={owed}
-        outcomes={['payment_recorded', 'refund_completed', 'flw_refund_verified']}
-      />,
+    const { user, dialog, confirm } = await open(owed, [
+      'payment_recorded',
+      'refund_completed',
+      'flw_refund_verified',
+    ])
+    await user.click(
+      within(dialog).getByRole('radio', { name: 'A refund for this order completed' }),
     )
-    await user.click(screen.getByRole('radio', { name: 'A refund for this order completed' }))
     await user.selectOptions(
-      screen.getByLabelText('Which refund'),
+      within(dialog).getByLabelText('Which refund'),
       owed.completedRefunds[1]?.id ?? '',
     )
-    await user.click(screen.getByRole('button', { name: 'Mark resolved' }))
-    const dialog = screen.getByRole('dialog', { name: 'Mark this incident resolved?' })
-    expect(within(dialog).getByText('₦500 refunded —')).toBeInTheDocument()
+    expect(within(dialog).getByRole('option', { name: '₦500 · —' })).toBeInTheDocument()
     await user.type(within(dialog).getByLabelText('Reason'), REASON)
     await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '123456')
-    await user.click(within(dialog).getByRole('button', { name: 'Mark resolved' }))
+    await user.click(confirm())
     expect(resolveMoneyIncident).toHaveBeenCalledWith({
       incidentId: 42,
       outcome: 'refund_completed',
@@ -444,23 +496,19 @@ describe('ResolveIncident', () => {
 
   it('needs the owner to confirm outside handling', async () => {
     vi.mocked(resolveMoneyIncident).mockResolvedValue(ok as never)
-    const user = userEvent.setup()
-    render(
-      <ResolveIncident
-        incident={{ ...owed, kind: 'currency_mismatch', completedRefunds: [] }}
-        outcomes={['refund_completed', 'flw_refund_verified', 'handled_outside']}
-      />,
+    const { user, dialog, confirm } = await open(
+      { ...owed, kind: 'currency_mismatch', completedRefunds: [] },
+      ['refund_completed', 'flw_refund_verified', 'handled_outside'],
     )
-    expect(screen.getByRole('radio', { name: /A refund for this order completed/ })).toBeDisabled()
-    await user.click(screen.getByRole('radio', { name: /Handled outside the dashboard/ }))
-    await user.click(screen.getByRole('button', { name: 'Mark resolved' }))
-    const dialog = screen.getByRole('dialog', { name: 'Mark this incident resolved?' })
+    expect(
+      within(dialog).getByRole('radio', { name: /A refund for this order completed/ }),
+    ).toBeDisabled()
+    await user.click(within(dialog).getByRole('radio', { name: /Handled outside the dashboard/ }))
     await user.type(within(dialog).getByLabelText('Reason'), REASON)
     await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '123456')
-    const confirm = within(dialog).getByRole('button', { name: 'Mark resolved' })
-    expect(confirm).toBeDisabled()
+    expect(confirm()).toBeDisabled()
     await user.click(within(dialog).getByRole('checkbox', { name: /I confirmed in Flutterwave/ }))
-    await user.click(confirm)
+    await user.click(confirm())
     expect(resolveMoneyIncident).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'handled_outside', confirmed: true }),
     )
@@ -475,28 +523,27 @@ describe('ResolveIncident', () => {
       .mockResolvedValueOnce({
         data: { ok: true, auditId: 2, data: check({ checkId: 8 }) },
       } as never)
-    const user = userEvent.setup()
-    render(
-      <ResolveIncident
-        incident={owed}
-        outcomes={['payment_recorded', 'refund_completed', 'flw_refund_verified']}
-      />,
+    const { user, dialog, confirm } = await open(owed, [
+      'payment_recorded',
+      'refund_completed',
+      'flw_refund_verified',
+    ])
+    await user.click(
+      within(dialog).getByRole('radio', { name: 'A Flutterwave refund I checked just now' }),
     )
-    await user.click(screen.getByRole('radio', { name: 'A Flutterwave refund I checked just now' }))
-    await user.type(screen.getByLabelText('Flutterwave refund id'), 'RF-123')
-    await user.click(screen.getByRole('button', { name: 'Check with Flutterwave' }))
-    expect(
-      await screen.findByText("It is on charge 999, not this incident's charge 456."),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Mark resolved' })).toBeDisabled()
-
-    await user.click(screen.getByRole('button', { name: 'Check with Flutterwave' }))
-    expect(await screen.findByText(/matches this incident/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Mark resolved' }))
-    const dialog = screen.getByRole('dialog', { name: 'Mark this incident resolved?' })
     await user.type(within(dialog).getByLabelText('Reason'), REASON)
     await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '123456')
-    await user.click(within(dialog).getByRole('button', { name: 'Mark resolved' }))
+    await user.type(within(dialog).getByLabelText('Flutterwave refund id'), 'RF-123')
+    await user.click(within(dialog).getByRole('button', { name: 'Check with Flutterwave' }))
+    expect(
+      await within(dialog).findByText("It is on charge 999, not this incident's charge 456."),
+    ).toBeInTheDocument()
+    expect(confirm()).toBeDisabled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Check with Flutterwave' }))
+    expect(await within(dialog).findByText(/matches this incident/)).toBeInTheDocument()
+    expect(confirm()).toBeEnabled()
+    await user.click(confirm())
     expect(resolveMoneyIncident).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'flw_refund_verified', checkId: 8 }),
     )

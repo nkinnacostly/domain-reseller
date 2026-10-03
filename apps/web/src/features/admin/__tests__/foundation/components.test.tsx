@@ -74,6 +74,10 @@ describe('DataTable', () => {
         .map((th) => th.textContent),
     ).toEqual(['MDH-1', 'MDH-2'])
     expect(table.parentElement).toHaveClass('relative', 'overflow-x-auto')
+    // A scroll box a keyboard reaches and a screen reader names (axe scrollable-region-focusable).
+    const box = screen.getByRole('region', { name: 'Refunds' })
+    expect(box).toBe(table.parentElement)
+    expect(box).toHaveAttribute('tabindex', '0')
     const cards = screen.getByRole('list', { name: 'Refunds' })
     expect(within(cards).getAllByRole('listitem')).toHaveLength(2)
     expect(within(cards).getAllByText('Held for approval')).toHaveLength(1)
@@ -115,6 +119,42 @@ describe('DataTable', () => {
     )
     expect(screen.queryByRole('table')).toBeNull()
     expect(screen.getByText('Nothing is held.')).toBeInTheDocument()
+  })
+})
+
+describe('chips and tabs change colour at once', () => {
+  // Only the press animates: a colour fading in after a click is read half-way (axe did).
+  const fades = (element: Element) =>
+    element.className.split(/\s+/).some((name) => /^transition(-colors|-all)?$/.test(name))
+
+  it('in FilterChips', () => {
+    render(
+      <FilterChips
+        label="Status"
+        chips={[{ value: 'held', label: 'Held' }]}
+        selected={['held']}
+        href={(value) => `/admin/refunds?status=${value}`}
+        allHref="/admin/refunds"
+      />,
+    )
+    for (const link of screen.getAllByRole('link')) {
+      expect(fades(link), link.textContent ?? '').toBe(false)
+      expect(link.className).toContain('transition-transform')
+    }
+  })
+
+  it('in RouteTabs', () => {
+    pathname = '/admin/emails'
+    render(
+      <RouteTabs
+        label="Email views"
+        tabs={[
+          { href: '/admin/emails', label: 'Outbox', current: true },
+          { href: '/admin/emails?tab=compliance', label: 'Compliance notices', current: false },
+        ]}
+      />,
+    )
+    for (const link of screen.getAllByRole('link')) expect(fades(link)).toBe(false)
   })
 })
 
@@ -304,6 +344,28 @@ describe('small parts', () => {
     )
     expect(screen.getByRole('link', { name: 'Orders (2)' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+    // A tick as well as colour (S13).
+    expect(screen.getByRole('link', { name: 'Orders (2)' }).querySelector('svg')).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Overview' }).querySelector('svg')).toBeNull()
+  })
+
+  it('marks the tab the page names when tabs share a path and differ by ?tab=', () => {
+    pathname = '/admin/emails'
+    render(
+      <RouteTabs
+        label="Email views"
+        tabs={[
+          { href: '/admin/emails', label: 'Outbox', current: false },
+          { href: '/admin/emails?tab=compliance', label: 'Compliance notices', current: true },
+        ]}
+      />,
+    )
+    const open = screen.getByRole('link', { name: 'Compliance notices' })
+    expect(open).toHaveAttribute('aria-current', 'page')
+    expect(open).toHaveAttribute('data-current', 'true')
+    expect(open.querySelector('svg')).not.toBeNull()
+    // The path alone would have marked the outbox; the page's word wins.
+    expect(screen.getByRole('link', { name: 'Outbox' })).not.toHaveAttribute('aria-current')
   })
 
   it('copies an id and says so', async () => {

@@ -187,6 +187,7 @@ export async function listOutbox(
   }
   if (params.category) query = query.eq('category', params.category)
   if (params.kind) query = query.eq('kind', params.kind)
+  if (params.user) query = query.eq('user_id', params.user)
   if (params.from) query = query.gte('created_at', watDayStart(params.from))
   if (params.to) query = query.lt('created_at', watDayEnd(params.to))
   const { from, to } = pageRange(params)

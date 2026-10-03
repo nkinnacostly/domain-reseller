@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmAction, type ConfirmExtra } from '@/features/admin/components/confirm-action'
 import { type AdminResult, adminOutcome, LOST_ANSWER_WORDS } from '@/features/admin/lib/errors'
@@ -153,6 +154,51 @@ describe('ConfirmAction', () => {
       'href',
       '/verify?next=%2Fadmin%2Frefunds%2Fx',
     )
+  })
+
+  it('holds what the action needs inside the dialog, and waits for it before it confirms', async () => {
+    const run = vi.fn<Run>(async () => ({ ok: true, auditId: 5 }))
+    const user = userEvent.setup()
+    function WithChoice() {
+      const [picked, setPicked] = useState(false)
+      return (
+        <ConfirmAction
+          trigger="Resolve"
+          title="Mark this incident resolved?"
+          confirmLabel="Mark resolved"
+          returnTo="/admin/refunds/incidents"
+          canConfirm={picked}
+          notReadyHint="Choose what happened first."
+          run={run}
+        >
+          {/* A form of its own: the dialog's form must not wrap it. */}
+          <form aria-label="Check" onSubmit={(event) => event.preventDefault()}>
+            <label>
+              <input type="checkbox" checked={picked} onChange={() => setPicked(!picked)} />
+              The payment is now recorded
+            </label>
+          </form>
+        </ConfirmAction>
+      )
+    }
+    render(<WithChoice />)
+    // The trigger opens it whatever was chosen: the choice is made inside.
+    await user.click(screen.getByRole('button', { name: 'Resolve' }))
+    const dialog = screen.getByRole('dialog', { name: 'Mark this incident resolved?' })
+    const form = within(dialog).getByRole('form', { name: 'Check' })
+    expect(form.parentElement?.closest('form')).toBeNull()
+    const button = within(dialog).getByRole('button', { name: 'Mark resolved' })
+    expect(button).toBeDisabled()
+    expect(within(dialog).getByText('Choose what happened first.')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('checkbox', { name: /payment is now recorded/ }))
+    expect(button).toBeEnabled()
+    expect(within(dialog).queryByText('Choose what happened first.')).toBeNull()
+    await user.click(button)
+    expect(run).toHaveBeenCalledTimes(1)
+    // Once done, the choice is spent: only the outcome and Close remain.
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('Done.')
+    expect(within(dialog).queryByRole('checkbox')).toBeNull()
   })
 
   it('shows success in words and refreshes the page', async () => {
