@@ -2,7 +2,13 @@ import { cookies, headers } from 'next/headers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { switchAdminSide } from '@/features/admin/actions/side'
-import { NEEDS_CODE_WORDS, WRONG_CODE_WORDS } from '@/features/admin/lib/errors'
+import {
+  adminOutcome,
+  NEEDS_CODE_WORDS,
+  SERVER_CRASH_WORDS,
+  UNKNOWN_OUTCOME,
+  WRONG_CODE_WORDS,
+} from '@/features/admin/lib/errors'
 import { SIDE_COOKIE } from '@/features/admin/lib/side'
 import { adminAction, adminMoneyAction } from '@/lib/safe-action'
 import { createClient } from '@/lib/supabase/server'
@@ -78,7 +84,8 @@ describe('adminAction (ADMIN-SPEC §2.4)', () => {
     ['admin:not_admin', 'This needs an administrator.'],
     ['admin:weak_sign_in', /A sign-in link can't open the admin area/],
     ['admin:factor_mismatch', /isn't linked to your admin access/],
-    ['relation "admins" does not exist', "That didn't go through, and nothing changed. Try again."],
+    // Not an admin code: it may not be a refusal, so it is not worded as one.
+    ['relation "admins" does not exist', SERVER_CRASH_WORDS],
   ])('words the refusal %s without showing the database', async (message, words) => {
     use(sessionClient({ rpc: { admin_whoami: { error: { message } } } }))
     const result = await requeue({ emailId: REQUEST_ID })
@@ -161,6 +168,40 @@ describe('adminMoneyAction (D6)', () => {
     expect(result).toEqual({ serverError: WRONG_CODE_WORDS })
     expect(session.rpc).not.toHaveBeenCalled()
     expect(session.challengeAndVerify).not.toHaveBeenCalled()
+    expect(body).not.toHaveBeenCalled()
+  })
+
+  it('stops when SQL refuses the second, five-minute whoami after a verified code', async () => {
+    // The code verified, but SQL does not see a fresh one (a clock or session
+    // refresh problem): no wrapper runs, and the words ask for a code again.
+    const session = use(
+      sessionClient({
+        rpc: { admin_whoami: [{ data: whoami() }, { error: { message: 'admin:needs_code' } }] },
+      }),
+    )
+    const result = await approve({ refundId: REQUEST_ID, code: '123456' })
+
+    expect(session.challengeAndVerify).toHaveBeenCalledTimes(1)
+    expect(session.rpc).toHaveBeenNthCalledWith(2, 'admin_whoami', { p_fresh_minutes: 5 })
+    expect(result).toEqual({ serverError: NEEDS_CODE_WORDS })
+    expect(body).not.toHaveBeenCalled()
+  })
+
+  it('calls a transport failure on the second whoami an unknown outcome, not a refusal', async () => {
+    use(
+      sessionClient({
+        rpc: {
+          admin_whoami: [{ data: whoami() }, { error: { message: 'TypeError: fetch failed' } }],
+        },
+      }),
+    )
+    const result = await approve({ refundId: REQUEST_ID, code: '123456' })
+
+    expect(result).toEqual({ serverError: SERVER_CRASH_WORDS })
+    expect(adminOutcome({ serverError: result.serverError })).toMatchObject({
+      ok: false,
+      code: UNKNOWN_OUTCOME,
+    })
     expect(body).not.toHaveBeenCalled()
   })
 

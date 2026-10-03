@@ -35,6 +35,8 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   bad_range: 'Choose dates in order, at most three years apart.',
   bad_outcome: 'That outcome is not one the database records.',
   not_claimed: 'That note was never claimed by the gateway.',
+  target_mismatch: "That Flutterwave check doesn't match the refund or incident it was asked for.",
+  check_recorded: 'That Flutterwave check was already recorded. Check the refund again.',
   request_key: 'This request had no key, so it could not be checked for a repeat. Try again.',
   request_key_mismatch:
     'This looks like a repeat of a different request. Close the dialog and start again.',
@@ -296,13 +298,24 @@ export function adminOutcome<T>(answer: SafeActionAnswer<T> | undefined): AdminR
 
 const RAISED = /^admin:[a-z_]+$/
 
+/** What an unrecognised admin call error says in the server log; never shown. */
+export const UNRECOGNISED_ADMIN_ERROR =
+  'an admin call failed with an error that is not an admin code'
+
 /**
  * §2.4: a raise from the gate (`admin:role`) or a wrapper's JSON `code`
- * (`ROLE`), as an error whose message is safe to show. Anything else — a
- * database message nobody wrote for people — gets the fallback words (N10).
+ * (`ROLE`), as a refusal whose words are safe to show: the call was refused,
+ * nothing changed, and the dialog takes a new request key.
+ *
+ * Anything else — a transport failure (`fetch failed`), a statement timeout,
+ * a database message nobody wrote for people — may have come after the
+ * wrapper committed. It is a plain Error, never its text (N10): the action
+ * answers SERVER_CRASH_WORDS, adminOutcome reads that as UNKNOWN_OUTCOME,
+ * and the dialog keeps its key, so trying again replays instead of acting
+ * twice.
  */
-export function adminAccessError(raw: string | null | undefined): AdminRefusal {
+export function adminAccessError(raw: string | null | undefined): AdminRefusal | Error {
   const code = raw?.trim() ?? ''
-  if (RAISED.test(code) || code in ADMIN_ERROR_WORDS) return new AdminRefusal(code)
-  return new AdminRefusal('UNKNOWN')
+  if (RAISED.test(code) || Object.hasOwn(ADMIN_ERROR_WORDS, code)) return new AdminRefusal(code)
+  return new Error(UNRECOGNISED_ADMIN_ERROR)
 }

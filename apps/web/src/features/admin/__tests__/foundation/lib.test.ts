@@ -14,10 +14,14 @@ import {
   AdminRefusal,
   adminAccessError,
   adminErrorWords,
+  adminOutcome,
   FALLBACK_WORDS,
   NEEDS_CODE_WORDS,
   refusedResult,
+  SERVER_CRASH_WORDS,
   toAdminResult,
+  UNKNOWN_OUTCOME,
+  UNRECOGNISED_ADMIN_ERROR,
   WRONG_CODE_WORDS,
 } from '@/features/admin/lib/errors'
 import {
@@ -162,11 +166,25 @@ describe('errors: every code has words (§2.4)', () => {
     expect(adminErrorWords(null)).toBe(FALLBACK_WORDS)
   })
 
-  it('never passes a database message through', () => {
-    const error = adminAccessError('duplicate key value violates unique constraint "admins_pkey"')
-    expect(error).toBeInstanceOf(AdminRefusal)
-    expect(error.message).toBe(FALLBACK_WORDS)
-    expect(adminAccessError(undefined).message).toBe(FALLBACK_WORDS)
+  it('never passes a database message through, and calls an unknown error an unknown outcome', () => {
+    // A timeout or a lost answer may come after the wrapper committed: not a
+    // refusal, so the words never say "nothing changed" and the key is kept.
+    for (const raw of [
+      'duplicate key value violates unique constraint "admins_pkey"',
+      'canceling statement due to statement timeout',
+      'TypeError: fetch failed',
+      'constructor',
+      undefined,
+    ]) {
+      const error = adminAccessError(raw)
+      expect(error, String(raw)).not.toBeInstanceOf(AdminRefusal)
+      expect(error.message).toBe(UNRECOGNISED_ADMIN_ERROR)
+      expect(error.message).not.toContain('admins_pkey')
+    }
+    expect(adminOutcome({ serverError: SERVER_CRASH_WORDS })).toMatchObject({
+      ok: false,
+      code: UNKNOWN_OUTCOME,
+    })
     expect(adminAccessError('admin:needs_code')).toMatchObject({
       adminCode: 'needs_code',
       code: 'MFA_REQUIRED',
