@@ -1766,19 +1766,19 @@ Each B package's area paths:
 
 | Package | Permitted sensitive reads |
 |---|---|
-| B1 | `admin_overview`, `admin_attention_counts`, `admin_float` |
-| B2 | `admin_payments_v` (fee, charged, absorbed), `order_item_costs` (embedded), `admin_customers` (masked email) |
+| B1 | `admin_overview`, `admin_attention_counts`, `admin_float`, `admin_audit_log` (the latest 10 entries, through B14's read, `test_actor`-filtered by `adminDb`) |
+| B2 | `admin_payments_v` (fee, charged, absorbed), `order_item_costs` (embedded), `admin_customers` (masked email), `admin_domains_v` |
 | B3 | `admin_refund_stats.limits`, `checkFlutterwaveRefund` results (ids and amounts), `admin_payments_v` (`provider_reference` only: the charge a Flutterwave check must be on) |
 | B4 | `admin_domains_v`, `AdminTransferState`, `AdminRenewCheck` |
-| B5 | `ops_alerts.key` (in `queries/alerts.ts`), `admin_overview.health.cron` |
+| B5 | `ops_alerts.key` (in `queries/alerts.ts`), `admin_overview` (`health.cron`) |
 | B6 | `admin_float`, `admin_ledger_daily`, `supplier_ledger_entries`, `supplier_ledger_revisions`, `float_topups` |
 | B7 | `admin_revenue`, `admin_margin` |
-| B8 | `admin_customers`, `admin_customer`, `admin_find_customers`, `admin_reveal_customer` |
+| B8 | `admin_customers`, `admin_customer`, `admin_customer_stats`, `admin_find_customers`, `admin_reveal_customer`; by `user_id`, `admin_domains_v`, `admin_ssl_certificates_v` and `admin_email_outbox_v` — never their sensitive columns (`registrant_*`, `certificate_pem`, `ca_bundle_pem`, `approver_masked`, `masked_to`, `last_error_safe`) |
 | B9 | `admin_domains_v` (`registrant_country`, `registrant_type`), `admin_reveal_registrant` |
 | B10 | `admin_ssl_certificates_v` (`approver_masked`, `certificate_pem`, `ca_bundle_pem`) |
 | B11 | `admin_email_outbox_v` (`masked_to`, `last_error_safe`), `admin_compliance_notices_v` (`masked_recipient`) |
 | B12 | `admin_pricing_status` |
-| B13 | `admin_tld_held_counts`, `admin_preset_usage`, `admin_list_admins`, `nameserver_preset_drafts` |
+| B13 | `admin_tld_held_counts`, `admin_preset_usage`, `admin_list_admins`, `nameserver_preset_drafts`, `admin_float` (`alertCents` only: no `*_usd` column is read under `features/admin`, D24) |
 | B14 | `admin_audit_log` (side-filtered by `adminDb`) |
 
 ### Package A: Foundation (must land first, after the ADR-006 sign-off)

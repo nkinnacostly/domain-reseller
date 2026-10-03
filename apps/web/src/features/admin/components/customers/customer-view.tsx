@@ -119,7 +119,11 @@ function Body({
         </Suspense>
       )
     case 'emails':
-      return <CustomerEmailsTab />
+      return (
+        <Suspense fallback={<TableSkeleton rows={5} />}>
+          <CustomerEmailsTab {...props} />
+        </Suspense>
+      )
   }
 }
 

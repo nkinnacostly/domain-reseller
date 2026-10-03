@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  type CustomerLine,
-  certificatesFromLines,
-  domainsFromLines,
   parseContact,
   parseCustomer,
   parseCustomerStats,
@@ -168,63 +165,5 @@ describe('parseContact', () => {
     expect(parseContact({ ok: true, auditId: 9, contact: null })).toBeNull()
     expect(parseContact(null)).toBeNull()
     expect(parseContact({ contact: 'a@b.ng' })).toBeNull()
-  })
-})
-
-const line = (overrides: Partial<CustomerLine>): CustomerLine => ({
-  id: ids.line,
-  orderId: ids.order,
-  orderNumber: 'ND-001035',
-  domain: 'getpaid.com',
-  domainId: null,
-  itemType: 'register',
-  status: 'completed',
-  sslProductCode: null,
-  createdAt: '2026-09-01T10:00:00Z',
-  ...overrides,
-})
-
-describe('domainsFromLines', () => {
-  it('lists each domain once, with its newest line, newest first', () => {
-    const domains = domainsFromLines([
-      line({ id: 'a', domain: 'getpaid.com', createdAt: '2026-09-01T10:00:00Z' }),
-      line({
-        id: 'b',
-        domain: 'GetPaid.com',
-        itemType: 'renew',
-        domainId: ids.domain,
-        createdAt: '2026-10-01T10:00:00Z',
-      }),
-      line({ id: 'c', domain: 'other.ng', createdAt: '2026-09-15T10:00:00Z' }),
-      line({ id: 'd', domain: 'site.com', itemType: 'ssl', createdAt: '2026-10-02T10:00:00Z' }),
-    ])
-    expect(domains.map((d) => [d.domain, d.latest.id, d.lines, d.domainId])).toEqual([
-      ['GetPaid.com', 'b', 2, ids.domain],
-      ['other.ng', 'c', 1, null],
-    ])
-  })
-
-  it('keeps the newest domain id any line names', () => {
-    const [domain] = domainsFromLines([
-      line({ id: 'new', createdAt: '2026-10-01T10:00:00Z' }),
-      line({ id: 'old', domainId: ids.domain, createdAt: '2026-09-01T10:00:00Z' }),
-    ])
-    expect(domain).toMatchObject({ domainId: ids.domain, latest: { id: 'new' }, lines: 2 })
-  })
-
-  it('lists nothing for no lines', () => {
-    expect(domainsFromLines([])).toEqual([])
-  })
-})
-
-describe('certificatesFromLines', () => {
-  it('keeps the certificate lines, newest first', () => {
-    expect(
-      certificatesFromLines([
-        line({ id: 'a', itemType: 'ssl', createdAt: '2026-09-01T10:00:00Z' }),
-        line({ id: 'b', itemType: 'register' }),
-        line({ id: 'c', itemType: 'ssl', createdAt: '2026-10-01T10:00:00Z' }),
-      ]).map((l) => l.id),
-    ).toEqual(['c', 'a'])
   })
 })

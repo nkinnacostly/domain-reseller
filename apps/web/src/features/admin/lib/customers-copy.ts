@@ -122,29 +122,32 @@ export const OVERVIEW_SIDE_HEADING = (side: AdminSide) => `On the ${sideWord(sid
 export const ALLOWANCE_HEADING = 'New domains allowed'
 export const ALLOWANCE_UNREAD = 'The daily allowance couldn’t be read.'
 
-export const DOMAINS_HEADING = 'Domains on this customer’s orders'
+export const DOMAINS_HEADING = 'Domains'
 export const DOMAINS_NOTE = (side: AdminSide) =>
-  `From the lines of this customer’s orders on the ${sideWord(side)} side, newest first. A domain’s registry state is on its own page.`
+  `This customer’s domains on the ${sideWord(side)} side, newest first, as our records hold them. Each one’s registry state is on its own page.`
 export const NO_DOMAINS = (side: AdminSide) =>
-  `No domains on this customer’s orders on the ${sideWord(side)} side.`
+  `No domains for this customer on the ${sideWord(side)} side.`
 
-export const CERTIFICATES_HEADING = 'Certificates on this customer’s orders'
+export const CERTIFICATES_HEADING = 'Certificates'
 export const CERTIFICATES_NOTE = (side: AdminSide) =>
-  `From the lines of this customer’s orders on the ${sideWord(side)} side, newest first. Each order shows what became of its certificate.`
+  `This customer’s certificates on the ${sideWord(side)} side, newest first. Each one’s set-up and checks are on its own page.`
 export const NO_CERTIFICATES = (side: AdminSide) =>
-  `No certificates on this customer’s orders on the ${sideWord(side)} side.`
+  `No certificates for this customer on the ${sideWord(side)} side.`
 
 export const ORDERS_HEADING = 'Orders'
 export const NO_ORDERS = (side: AdminSide) =>
   `No orders from this customer on the ${sideWord(side)} side.`
 
 export const EMAILS_HEADING = 'Emails'
-export const EMAILS_UNAVAILABLE = 'This customer’s emails aren’t listed here yet.'
-export const EMAILS_UNAVAILABLE_BODY =
-  'The Emails page lists every email on this side, with the recipient masked.'
+export const EMAILS_NOTE = (side: AdminSide, shown: number) =>
+  `The newest ${shown} emails queued for this customer on the ${sideWord(side)} side. The Emails page has them all, with the recipient masked.`
+export const NO_EMAILS = (side: AdminSide) =>
+  `No emails queued for this customer on the ${sideWord(side)} side.`
+export const ALL_EMAILS = 'All of this customer’s emails'
 
-export const LINES_CAPPED = (orders: number) =>
-  `This customer has more orders than one read takes, so only lines from the newest ${orders} are listed.`
+/** A tab shows the newest rows only: past that, it says how many there are. */
+export const ROWS_CAPPED = (shown: number, total: number) =>
+  `Showing the newest ${shown} of ${total}.`
 
 export const OTHER_SIDE = (side: AdminSide) =>
   `Switch to the ${side === 'test' ? 'Live' : 'Test'} side above to see that side’s records.`

@@ -541,6 +541,15 @@ describe('href', () => {
     expect(adminHref.audit('42')).toBe('/admin/audit?id=42')
     expect(adminHref.audit(undefined)).toBe('/admin/audit')
     expect(adminHref.overview()).toBe('/admin')
+    // A list narrowed to one id: never an email or a name in the URL.
+    expect(adminHref.customerEmails(id)).toBe(
+      '/admin/emails?user=0f0e0d0c-0b0a-4908-8706-050403020100',
+    )
+    expect(adminHref.customerEmails('e2e-x@example.com')).toBe('/admin/emails')
+    expect(adminHref.certificateForLine(id)).toBe(
+      '/admin/ssl?line=0f0e0d0c-0b0a-4908-8706-050403020100',
+    )
+    expect(adminHref.certificateForLine('shop.ng')).toBe('/admin/ssl')
     expect(adminHref.alert('admin_burst:ops')).toBe('/admin/audit?label=ops')
   })
 })

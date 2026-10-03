@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CustomerCertificatesTab,
   CustomerDomainsTab,
+  CustomerEmailsTab,
   CustomerOrdersTab,
 } from '@/features/admin/components/customers/customer-tabs'
 import { CustomerView } from '@/features/admin/components/customers/customer-view'
@@ -198,32 +199,20 @@ describe('the customer page', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Customer' })).toBeInTheDocument()
   })
 
-  it('points to the Emails page from the emails tab', async () => {
+  it('has an Emails tab, read once the account may be shown', async () => {
     signedIn({ admin_customer: { data: customerJson() } })
     render(await CustomerView({ params, tab: 'emails' }))
-    expect(screen.getByText('This customer’s emails aren’t listed here yet.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Go to Emails' })).toHaveAttribute(
-      'href',
-      '/admin/emails',
-    )
+    expect(
+      within(screen.getByRole('navigation', { name: 'Customer' })).getByRole('link', {
+        name: 'Emails',
+      }),
+    ).toHaveAttribute('href', `/admin/customers/${ids.user}/emails`)
   })
 })
 
 describe('the tabs', () => {
   const customer = parseCustomer(customerJson())
   if (!customer) throw new Error('fixture')
-
-  const line = (overrides: Record<string, unknown>) => ({
-    id: ids.line,
-    order_id: ids.order,
-    domain: 'getpaid.com',
-    domain_id: ids.domain,
-    item_type: 'register',
-    status: 'completed',
-    ssl_product_code: null,
-    created_at: '2026-10-02T09:00:00Z',
-    ...overrides,
-  })
 
   it('lists the orders, with what each bought and a pager', async () => {
     const admin = await principal({ role: 'operator' })
@@ -291,66 +280,98 @@ describe('the tabs', () => {
     )
   })
 
-  it('lists each domain once from the order lines, linked by id', async () => {
+  it('lists the customer’s domains from the masked view, linked by id', async () => {
     const admin = await principal({ role: 'operator' })
-    fakeService((read) =>
-      read.table === 'admin_orders_v'
-        ? { data: [{ id: ids.order, order_number: 'ND-001035' }], count: 1 }
-        : {
-            data: [
-              line({ id: ids.line, item_type: 'renew', created_at: '2026-10-03T09:00:00Z' }),
-              line({ id: ids.line2, domain_id: null }),
-              line({ id: ids.line3, item_type: 'ssl', domain: 'shop.ng', ssl_product_code: '351' }),
-            ],
-          },
-    )
+    const reads = fakeService(() => ({
+      data: [
+        {
+          id: ids.domain,
+          domain_name: 'getpaid.com',
+          local_status: 'active',
+          expires_at: '2027-10-02T09:00:00Z',
+          auto_renew: false,
+          registered_at: '2026-10-02T09:00:00Z',
+          created_at: '2026-10-02T08:00:00Z',
+          test_mode: false,
+        },
+      ],
+      count: 1,
+    }))
     render(await CustomerDomainsTab({ admin, side: 'live', customer }))
-    expect(
-      screen.getByRole('heading', { level: 2, name: 'Domains on this customer’s orders · 1' }),
-    ).toBeInTheDocument()
+    expect(reads.map((read) => read.table)).toEqual(['admin_domains_v'])
+    expect(screen.getByRole('heading', { level: 2, name: 'Domains · 1' })).toBeInTheDocument()
     const table = screen.getByRole('table')
     expect(within(table).getByRole('link', { name: 'getpaid.com' })).toHaveAttribute(
       'href',
       `/admin/domains/${ids.domain}`,
     )
-    expect(within(table).getByText('Renewal')).toBeInTheDocument()
-    expect(within(table).getByRole('link', { name: 'ND-001035' })).toBeInTheDocument()
-    expect(within(table).queryByText('shop.ng')).not.toBeInTheDocument()
+    expect(within(table).getByText('Active')).toBeInTheDocument()
+    expect(within(table).getByText('Off')).toBeInTheDocument()
   })
 
-  it('says when there are no domains, or more orders than one read takes', async () => {
+  it('says when there are no domains, and how many past the newest it shows', async () => {
     const admin = await principal({ role: 'operator' })
-    fakeService((read) =>
-      read.table === 'admin_orders_v'
-        ? { data: [{ id: ids.order, order_number: 'ND-1' }], count: 500 }
-        : { data: [] },
-    )
+    fakeService(() => ({ data: [], count: 0 }))
+    const empty = render(await CustomerDomainsTab({ admin, side: 'test', customer }))
+    expect(screen.getByText('No domains for this customer on the Test side.')).toBeInTheDocument()
+    empty.unmount()
+
+    fakeService(() => ({
+      data: [
+        {
+          id: ids.domain,
+          domain_name: 'getpaid.com',
+          local_status: 'active',
+          expires_at: null,
+          auto_renew: true,
+          registered_at: null,
+          created_at: '2026-10-02T08:00:00Z',
+          test_mode: true,
+        },
+      ],
+      count: 250,
+    }))
     render(await CustomerDomainsTab({ admin, side: 'test', customer }))
-    expect(
-      screen.getByText('No domains on this customer’s orders on the Test side.'),
-    ).toBeInTheDocument()
-    expect(screen.getByText(/only lines from the newest 100 are listed/)).toBeInTheDocument()
+    expect(screen.getByText('Showing the newest 1 of 250.')).toBeInTheDocument()
   })
 
-  it('lists the certificate lines with their product names', async () => {
+  it('lists the certificates from the masked view, each linked to its page', async () => {
     const admin = await principal({ role: 'operator' })
-    fakeService((read) => {
-      if (read.table === 'admin_orders_v')
-        return { data: [{ id: ids.order, order_number: 'ND-9' }] }
-      if (read.table === 'ssl_products')
-        return { data: [{ product_code: '351', name: 'PositiveSSL' }] }
-      return {
-        data: [
-          line({ id: ids.line, item_type: 'ssl', domain: 'shop.ng', ssl_product_code: '351' }),
-          line({ id: ids.line2, item_type: 'ssl', domain: 'blog.ng', ssl_product_code: '999' }),
-        ],
-      }
-    })
+    fakeService(() => ({
+      data: [
+        {
+          id: ids.line,
+          common_name: 'shop.ng',
+          product_name: 'PositiveSSL',
+          status: 'issued',
+          issued_at: '2026-10-02T09:00:00Z',
+          expires_at: '2027-04-20T09:00:00Z',
+          created_at: '2026-10-01T09:00:00Z',
+          test_mode: false,
+        },
+        {
+          id: ids.line2,
+          common_name: '*.blog.ng',
+          product_name: null,
+          status: 'awaiting_setup',
+          issued_at: null,
+          expires_at: null,
+          created_at: '2026-10-01T08:00:00Z',
+          test_mode: false,
+        },
+      ],
+    }))
     render(await CustomerCertificatesTab({ admin, side: 'live', customer }))
     const table = screen.getByRole('table')
+    expect(within(table).getByRole('link', { name: 'shop.ng' })).toHaveAttribute(
+      'href',
+      `/admin/ssl/${ids.line}`,
+    )
     expect(within(table).getByText('PositiveSSL')).toBeInTheDocument()
-    expect(within(table).getByText('Product 999')).toBeInTheDocument()
-    expect(within(table).getAllByRole('link', { name: 'ND-9' })).toHaveLength(2)
+    // The column and the status share a word: one header, one pill.
+    expect(within(table).getAllByText('Issued')).toHaveLength(2)
+    expect(within(table).getByText('Waiting for set-up')).toBeInTheDocument()
+    expect(within(table).getByText('Not yet')).toBeInTheDocument()
   })
 
   it('says when there are no certificates, or they could not be read', async () => {
@@ -358,7 +379,7 @@ describe('the tabs', () => {
     fakeService(() => ({ data: [] }))
     const { unmount } = render(await CustomerCertificatesTab({ admin, side: 'live', customer }))
     expect(
-      screen.getByText('No certificates on this customer’s orders on the Live side.'),
+      screen.getByText('No certificates for this customer on the Live side.'),
     ).toBeInTheDocument()
     unmount()
     fakeService(() => ({ error: { message: 'boom' } }))
@@ -369,5 +390,42 @@ describe('the tabs', () => {
     fakeService(() => ({ error: { message: 'boom' } }))
     const domains = render(await CustomerDomainsTab({ admin, side: 'live', customer }))
     expect(within(domains.container).getByRole('alert')).toBeInTheDocument()
+  })
+
+  it('shows the newest emails and links to all of them by the account’s id, never its address', async () => {
+    const admin = await principal({ role: 'operator' })
+    fakeService(() => ({
+      data: [
+        {
+          id: ids.key,
+          kind: 'order_receipt',
+          category: 'transactional',
+          status: 'sent',
+          delivery_status: 'bounced',
+          created_at: '2026-10-02T09:00:00Z',
+          sent_at: '2026-10-02T09:01:00Z',
+          test_mode: false,
+        },
+      ],
+      count: 12,
+    }))
+    render(await CustomerEmailsTab({ admin, side: 'live', customer }))
+    expect(screen.getByRole('heading', { level: 2, name: 'Emails · 12' })).toBeInTheDocument()
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('Order receipt')).toBeInTheDocument()
+    expect(within(table).getByText('Bounced')).toBeInTheDocument()
+    const all = screen.getByRole('link', { name: 'All of this customer’s emails' })
+    expect(all).toHaveAttribute('href', `/admin/emails?user=${ids.user}`)
+    expect(all.getAttribute('href')).not.toContain('@')
+  })
+
+  it('says when no email was queued, with no link to an empty list', async () => {
+    const admin = await principal({ role: 'operator' })
+    fakeService(() => ({ data: [], count: 0 }))
+    render(await CustomerEmailsTab({ admin, side: 'test', customer }))
+    expect(
+      screen.getByText('No emails queued for this customer on the Test side.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'All of this customer’s emails' })).toBeNull()
   })
 })

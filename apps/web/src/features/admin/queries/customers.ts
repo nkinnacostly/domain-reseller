@@ -2,7 +2,6 @@ import 'server-only'
 
 import {
   type CustomerDetail,
-  type CustomerLine,
   type CustomerRow,
   type CustomerStats,
   parseCustomer,
@@ -20,8 +19,8 @@ import { createClient } from '@/lib/supabase/server'
  * The customers pages' reads (docs/ADMIN-SPEC.md §5.2, B8). Who a customer
  * is comes only from the admin_* functions, which mask the email and keep a
  * test admin to e2e accounts (D4, D15); nothing here reads a profile. A
- * customer's orders and their lines come through `adminDb`, by user id, on
- * the side shown — and only after `admin_customer` has said this admin may
+ * customer's orders, domains, certificates and emails come through `adminDb`
+ * (orders and the masked views), by user id, on the side shown — and only after `admin_customer` has said this admin may
  * see the account. Logs carry codes and counts, never an id, email or
  * domain (N13).
  */
@@ -222,77 +221,168 @@ export async function listCustomerOrders(
   return { rows, total: answer.count ?? rows.length }
 }
 
-/** How many of the newest orders the domain and certificate tabs read lines from. */
-export const LINE_ORDERS_CAP = 100
+/** How many of the newest rows the Domains and Certificates tabs show; the Emails tab, fewer. */
+export const TAB_ROWS_CAP = 100
+export const TAB_EMAILS_SHOWN = 10
 
-export type CustomerLines = { lines: CustomerLine[]; capped: boolean }
+export type Capped<Row> = { rows: Row[]; total: number }
+
+export type CustomerDomainRow = {
+  id: string
+  domainName: string
+  status: string
+  expiresAt: string | null
+  autoRenew: boolean
+  registeredAt: string | null
+  createdAt: string
+  testMode: boolean
+}
 
 /**
- * The lines of the customer's newest orders on the side, for the Domains and
- * Certificates tabs: what was bought, renewed or transferred, and each
- * line's state. Read by order id in one run (at most 100 ids, the
- * address-length rule for `.in()`).
+ * The customer's domains on the side, newest first, from `admin_domains_v`
+ * by user id — the masked view, without the registrant or contacts (§9).
+ * Demo rows are left out, as every count of a customer's domains leaves
+ * them out.
  */
-export async function listCustomerLines(
+export async function listCustomerDomains(
   admin: AdminPrincipal,
   side: AdminSide,
   customer: ShownCustomer,
-): Promise<CustomerLines> {
-  const db = adminDb(admin, side)
-  const answer = await db
-    .from('admin_orders_v')
-    .select('id, order_number', { count: 'exact' })
+): Promise<Capped<CustomerDomainRow>> {
+  const answer = await adminDb(admin, side)
+    .from('admin_domains_v')
+    .select(
+      'id, domain_name, local_status, expires_at, auto_renew, registered_at, created_at, test_mode',
+      { count: 'exact' },
+    )
     .eq('user_id', customer.userId)
+    .neq('source', 'demo')
     .order('created_at', { ascending: false, nullsFirst: false })
-    .limit(LINE_ORDERS_CAP)
-  const orders = read('orders', answer) ?? []
-  const numbers = new Map(
-    orders.flatMap((order) => (order.id ? [[order.id, order.order_number] as const] : [])),
-  )
-  const ids = [...numbers.keys()]
-  if (ids.length === 0) return { lines: [], capped: false }
-  const rows =
-    read(
-      'order lines',
-      await db
-        .from('order_items')
-        .select('id, order_id, domain, domain_id, item_type, status, ssl_product_code, created_at')
-        .in('order_id', ids)
-        .order('created_at', { ascending: false }),
-    ) ?? []
+    .order('id', { ascending: true })
+    .limit(TAB_ROWS_CAP)
+  const rows = read('domains', answer) ?? []
   return {
-    lines: rows.map((line) => ({
-      id: line.id,
-      orderId: line.order_id,
-      orderNumber: numbers.get(line.order_id) ?? null,
-      domain: line.domain,
-      domainId: line.domain_id,
-      itemType: line.item_type,
-      status: line.status,
-      sslProductCode: line.ssl_product_code,
-      createdAt: line.created_at,
-    })),
-    capped: (answer.count ?? orders.length) > LINE_ORDERS_CAP,
+    rows: rows.flatMap((row) =>
+      row.id && row.domain_name
+        ? [
+            {
+              id: row.id,
+              domainName: row.domain_name,
+              status: row.local_status ?? '',
+              expiresAt: row.expires_at,
+              autoRenew: row.auto_renew === true,
+              registeredAt: row.registered_at,
+              createdAt: row.created_at ?? '',
+              testMode: row.test_mode === true,
+            },
+          ]
+        : [],
+    ),
+    total: answer.count ?? rows.length,
   }
 }
 
-/** Certificate products' names by code (the storefront's own list). */
-export async function sslProductNames(
+export type CustomerCertificateRow = {
+  id: string
+  name: string
+  product: string | null
+  status: string
+  issuedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+  testMode: boolean
+}
+
+/**
+ * The customer's certificates on the side, newest first, from
+ * `admin_ssl_certificates_v` by user id: the name, product, status and
+ * dates only (§9).
+ */
+export async function listCustomerCertificates(
   admin: AdminPrincipal,
   side: AdminSide,
-  codes: readonly string[],
-): Promise<Map<string, string>> {
-  const wanted = [...new Set(codes)]
-  if (wanted.length === 0) return new Map()
-  const rows =
-    read(
-      'certificate products',
-      await adminDb(admin, side)
-        .from('ssl_products')
-        .select('product_code, name')
-        .in('product_code', wanted),
-    ) ?? []
-  return new Map(
-    rows.flatMap((row) => (row.name ? [[String(row.product_code), row.name] as const] : [])),
-  )
+  customer: ShownCustomer,
+): Promise<Capped<CustomerCertificateRow>> {
+  const answer = await adminDb(admin, side)
+    .from('admin_ssl_certificates_v')
+    .select('id, common_name, product_name, status, issued_at, expires_at, created_at, test_mode', {
+      count: 'exact',
+    })
+    .eq('user_id', customer.userId)
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: true })
+    .limit(TAB_ROWS_CAP)
+  const rows = read('certificates', answer) ?? []
+  return {
+    rows: rows.flatMap((row) =>
+      row.id
+        ? [
+            {
+              id: row.id,
+              name: row.common_name ?? '—',
+              product: row.product_name,
+              status: row.status ?? '',
+              issuedAt: row.issued_at,
+              expiresAt: row.expires_at,
+              createdAt: row.created_at ?? '',
+              testMode: row.test_mode === true,
+            },
+          ]
+        : [],
+    ),
+    total: answer.count ?? rows.length,
+  }
+}
+
+export type CustomerEmailRow = {
+  id: string
+  kind: string
+  category: string
+  status: string
+  deliveryStatus: string | null
+  createdAt: string
+  sentAt: string | null
+  testMode: boolean
+}
+
+/**
+ * The newest emails queued for the customer on the side, from
+ * `admin_email_outbox_v` by user id: what and when only. The recipient and
+ * the provider's error, even masked, stay on the Emails page (§9), which
+ * the tab links to by the account's id.
+ */
+export async function listCustomerEmails(
+  admin: AdminPrincipal,
+  side: AdminSide,
+  customer: ShownCustomer,
+): Promise<Capped<CustomerEmailRow>> {
+  const answer = await adminDb(admin, side)
+    .from('admin_email_outbox_v')
+    .select('id, kind, category, status, delivery_status, created_at, sent_at, test_mode', {
+      count: 'exact',
+    })
+    .eq('user_id', customer.userId)
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: true })
+    .limit(TAB_EMAILS_SHOWN)
+  const rows = read('emails', answer) ?? []
+  return {
+    rows: rows.flatMap((row) =>
+      row.id
+        ? [
+            {
+              id: row.id,
+              kind: row.kind ?? '',
+              category: row.category ?? '',
+              status: row.status ?? '',
+              deliveryStatus: row.delivery_status,
+              createdAt: row.created_at ?? '',
+              sentAt: row.sent_at,
+              testMode: row.test_mode === true,
+            },
+          ]
+        : [],
+    ),
+    total: answer.count ?? rows.length,
+  }
 }
