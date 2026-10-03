@@ -21,7 +21,8 @@ import { createClient } from '@/lib/supabase/server'
  * which applies the side; aggregates and the automatic limits come from
  * `admin_refund_stats`, called as the admin, which refuses a test admin the
  * live side itself. Nothing here selects a payment's raw answer, a contact
- * or a provider's free-text error: codes, ids, statuses and kobo only.
+ * or a provider's free-text error: codes, ids, statuses and kobo only — and
+ * from `admin_payments_v`, the charge's reference alone (§9).
  */
 
 type Failed = { ok: false }
@@ -245,6 +246,8 @@ export type RefundDetail = {
   providerStatus: string | null
   failedProviderRefundIds: string[]
   paymentId: string
+  /** The charge's Flutterwave transaction id (`admin_payments_v.provider_reference`). */
+  providerReference: string | null
   testMode: boolean
   order: {
     id: string
@@ -318,7 +321,7 @@ export async function getRefund(
   if (!data) return { ok: true, refund: null }
   const row = data as RefundDetailRow
 
-  const [order, line, events] = await Promise.all([
+  const [order, line, events, payment] = await Promise.all([
     db
       .from('admin_orders_v')
       .select('id, order_number, status, total_kobo, paid_at, tx_ref')
@@ -338,10 +341,17 @@ export async function getRefund(
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(100),
+    // The charge's reference only: what a Flutterwave check must be on (§9).
+    db
+      .from('admin_payments_v')
+      .select('id, provider_reference')
+      .eq('id', row.payment_id)
+      .maybeSingle(),
   ])
   if (order.error) return failed('order', order.error)
   if (line.error) return failed('line', line.error)
   if (events.error) return failed('events', events.error)
+  if (payment.error) return failed('payment', payment.error)
 
   const lineRow = line.data as {
     id: string
@@ -373,6 +383,7 @@ export async function getRefund(
       providerStatus: row.provider_status,
       failedProviderRefundIds: row.failed_provider_refund_ids ?? [],
       paymentId: row.payment_id,
+      providerReference: payment.data?.provider_reference ?? null,
       testMode: row.test_mode,
       order: {
         id: row.order_id,

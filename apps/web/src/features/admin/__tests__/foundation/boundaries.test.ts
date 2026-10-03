@@ -82,7 +82,7 @@ const PERMITTED: Readonly<Record<string, readonly string[]>> = {
   foundation: ['admin_attention_counts', 'checkFlutterwaveRefund'],
   overview: ['admin_overview', 'admin_attention_counts', 'admin_float'],
   orders: ['admin_payments_v', 'order_item_costs', 'admin_customers', 'admin_domains_v'],
-  refunds: ['admin_refund_stats', 'checkFlutterwaveRefund'],
+  refunds: ['admin_refund_stats', 'checkFlutterwaveRefund', 'admin_payments_v'],
   queue: ['admin_domains_v'],
   alerts: ['admin_overview'],
   supplier: [
@@ -220,6 +220,24 @@ describe('admin boundaries', () => {
         expect(permitted, `${file.rel} (${area}) uses ${name}`).toContain(name)
       }
     }
+  })
+
+  it("reads only a charge's reference from admin_payments_v on the refunds pages", () => {
+    // B2 shows fees; a refund needs only the charge a Flutterwave check must be on (§9).
+    const allowed = new Set(['id', 'order_id', 'provider_reference', 'test_mode'])
+    let seen = 0
+    for (const file of ALL.filter((f) => areaOf(f.rel) === 'refunds')) {
+      for (const { columns, table } of selects(file.text)) {
+        if (table !== 'admin_payments_v' || columns === null) continue
+        seen += 1
+        for (const column of columns.split(',').map((name) => name.trim())) {
+          expect(allowed.has(column), `${file.rel} selects ${column} from admin_payments_v`).toBe(
+            true,
+          )
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(0)
   })
 
   it('places every B package path in its area, and the rest in Package A', () => {

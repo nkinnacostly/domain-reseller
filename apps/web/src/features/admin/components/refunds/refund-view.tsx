@@ -136,6 +136,7 @@ export async function RefundView({ params }: { params: Promise<{ id: string }> }
     orderNumber: refund.order.orderNumber,
     forWhat,
     providerCalled,
+    providerReference: refund.providerReference,
   }
   const anyAction = offers.approve || offers.retry || offers.cancel
 
@@ -209,6 +210,14 @@ export async function RefundView({ params }: { params: Promise<{ id: string }> }
       label: 'Payment reference',
       value: refund.order.txRef ? (
         <CopyValue value={refund.order.txRef} label="payment reference" />
+      ) : (
+        '—'
+      ),
+    },
+    {
+      label: 'Flutterwave charge',
+      value: refund.providerReference ? (
+        <CopyValue value={refund.providerReference} label="Flutterwave charge id" />
       ) : (
         '—'
       ),

@@ -1768,7 +1768,7 @@ Each B package's area paths:
 |---|---|
 | B1 | `admin_overview`, `admin_attention_counts`, `admin_float` |
 | B2 | `admin_payments_v` (fee, charged, absorbed), `order_item_costs` (embedded), `admin_customers` (masked email) |
-| B3 | `admin_refund_stats.limits`, `checkFlutterwaveRefund` results (ids and amounts) |
+| B3 | `admin_refund_stats.limits`, `checkFlutterwaveRefund` results (ids and amounts), `admin_payments_v` (`provider_reference` only: the charge a Flutterwave check must be on) |
 | B4 | `admin_domains_v`, `AdminTransferState`, `AdminRenewCheck` |
 | B5 | `ops_alerts.key` (in `queries/alerts.ts`), `admin_overview.health.cron` |
 | B6 | `admin_float`, `admin_ledger_daily`, `supplier_ledger_entries`, `supplier_ledger_revisions`, `float_topups` |
