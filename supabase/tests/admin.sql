@@ -260,6 +260,17 @@ begin
   -- ── 3. A code 13 hours old is too old to view; 20 minutes old views, but not money.
   perform pg_temp.act(u_owner, s_owner, interval '13 hours');
   perform pg_temp.expect_raise('select public.admin_whoami(null)', 'admin:needs_code');
+  -- The view window's edge (D8): 12 hours, a minute either side.
+  perform pg_temp.act(u_owner, s_owner, interval '11 hours 59 minutes');
+  if public.admin_status() is distinct from 'ok' then
+    raise exception 'FAILED 3: a code 11 h 59 min old could not view (%)', public.admin_status();
+  end if;
+  perform public.admin_whoami(null);
+  perform pg_temp.act(u_owner, s_owner, interval '12 hours 1 minute');
+  if public.admin_status() is distinct from 'needs_code' then
+    raise exception 'FAILED 3: a code 12 h 1 min old could view (%)', public.admin_status();
+  end if;
+  perform pg_temp.expect_raise('select public.admin_whoami(null)', 'admin:needs_code');
   perform pg_temp.act(u_owner, s_owner, interval '20 minutes');
   v_j := public.admin_whoami(null);
   if v_j ->> 'label' is distinct from l_owner or v_j ->> 'role' is distinct from 'owner' or (v_j ->> 'factorId')::uuid is distinct from f_o2
@@ -272,15 +283,20 @@ begin
     raise exception 'FAILED 3: a 20-minute code passed a money wrapper (%)', v_j;
   end if;
   -- The money tier's edge (D6): a code 4 minutes old passes the gate (the
-  -- refusal is the wrapper's own, UNKNOWN_KEY); 6 minutes old does not.
-  perform pg_temp.act(u_owner, s_owner, interval '4 minutes');
-  perform public.admin_whoami(5);
-  perform pg_temp.expect_code(public.admin_update_ops_settings('{"nope": 1}', 'a reason of ten words', gen_random_uuid()),
-                              'UNKNOWN_KEY', 'FAILED 3: a 4-minute code was refused by a money wrapper');
-  perform pg_temp.act(u_owner, s_owner, interval '6 minutes');
-  perform pg_temp.expect_raise('select public.admin_whoami(5)', 'admin:needs_code');
-  perform pg_temp.expect_code(public.admin_update_ops_settings('{"nope": 1}', 'a reason of ten words', gen_random_uuid()),
-                              'NEEDS_CODE', 'FAILED 3: a 6-minute code passed a money wrapper');
+  -- refusal is the wrapper's own, UNKNOWN_KEY); 6 minutes old does not. And
+  -- just either side of 5 minutes: 4 min 59 s passes, 5 min 1 s does not.
+  foreach v_text in array array['4 minutes', '4 minutes 59 seconds'] loop
+    perform pg_temp.act(u_owner, s_owner, v_text::interval);
+    perform public.admin_whoami(5);
+    perform pg_temp.expect_code(public.admin_update_ops_settings('{"nope": 1}', 'a reason of ten words', gen_random_uuid()),
+                                'UNKNOWN_KEY', 'FAILED 3: a code ' || v_text || ' old was refused by a money wrapper');
+  end loop;
+  foreach v_text in array array['5 minutes 1 second', '6 minutes'] loop
+    perform pg_temp.act(u_owner, s_owner, v_text::interval);
+    perform pg_temp.expect_raise('select public.admin_whoami(5)', 'admin:needs_code');
+    perform pg_temp.expect_code(public.admin_update_ops_settings('{"nope": 1}', 'a reason of ten words', gen_random_uuid()),
+                                'NEEDS_CODE', 'FAILED 3: a code ' || v_text || ' old passed a money wrapper');
+  end loop;
   v_passed := v_passed + 1;
 
   -- ── 4. Factor pinning: the second device passes; an unpinned or unverified one,
@@ -766,6 +782,15 @@ begin
   returning id into v_note2;
   perform pg_temp.expect_code(public.admin_claim_note(v_note2, 'supplier.balance', l_test, 'live', 'live'),
                               'TEST_ADMIN', 'FAILED 25: a test admin''s live note');
+  -- Nor on the global side (the catalogue, prices), which a test admin never reads.
+  insert into public.admin_audit_log (admin_id, admin_label, admin_role, test_actor, action, side, target_id, outcome)
+  values (u_test, l_test, 'operator', true, 'supplier.catalogue_preview', 'global', 'catalogue', 'intent')
+  returning id into v_note2;
+  perform pg_temp.expect_code(public.admin_claim_note(v_note2, 'supplier.catalogue_preview', l_test, 'global', 'catalogue'),
+                              'TEST_ADMIN', 'FAILED 25: a test admin''s global note');
+  if exists (select 1 from public.admin_note_claims c where c.audit_id = v_note2) then
+    raise exception 'FAILED 25: a refused claim was recorded as claimed';
+  end if;
   perform pg_temp.act(u_test, s_test);
   v_j := public.admin_note('supplier.balance', 'live', 'side', 'live', '{}');
   perform pg_temp.expect_code(v_j, 'TEST_ADMIN', 'FAILED 25: a test admin noted the live side');
@@ -1039,16 +1064,31 @@ begin
      or not has_function_privilege('service_role', 'public.activate_fx_rate(uuid, uuid)', 'execute') then
     raise exception 'FAILED 30: activate_fx_rate grants';
   end if;
-  -- The identity sequences too: Supabase's default privileges would give them to the API roles.
-  foreach v_text in array array['admin_changes', 'admin_audit_log', 'flw_refund_checks', 'float_topups',
-                                'supplier_ledger_revisions'] loop
-    v_sql := pg_get_serial_sequence('public.' || v_text, 'id');
-    if v_sql is null
-       or has_sequence_privilege('anon', v_sql, 'usage, select, update')
-       or has_sequence_privilege('authenticated', v_sql, 'usage, select, update') then
-      raise exception 'FAILED 30: the sequence of % is open to the API roles', v_text;
+  -- The identity sequences too: Supabase's default privileges would give them
+  -- to the API roles. Every sequence owned by a table of migrations 40–41.
+  v_n := 0;
+  for v_row in
+    select s.oid::regclass::text as seq, t.relname
+      from pg_class s
+      join pg_depend d on d.classid = 'pg_class'::regclass and d.objid = s.oid
+                      and d.refclassid = 'pg_class'::regclass and d.deptype in ('a', 'i')
+      join pg_class t on t.oid = d.refobjid
+     where s.relkind = 'S' and t.relnamespace = 'public'::regnamespace
+       and t.relname = any (array['admins', 'admin_changes', 'admin_audit_log', 'admin_note_claims',
+                                  'flw_refund_checks', 'nameserver_preset_sources', 'nameserver_preset_drafts',
+                                  'order_item_costs', 'supplier_ledger_entries', 'supplier_ledger_revisions',
+                                  'float_topups', 'funnel_daily', 'metrics_daily'])
+  loop
+    if has_sequence_privilege('anon', v_row.seq, 'usage, select, update')
+       or has_sequence_privilege('authenticated', v_row.seq, 'usage, select, update')
+       or has_sequence_privilege('public', v_row.seq, 'usage, select, update') then
+      raise exception 'FAILED 30: the sequence % of % is open to the API roles', v_row.seq, v_row.relname;
     end if;
+    v_n := v_n + 1;
   end loop;
+  if v_n < 5 then
+    raise exception 'FAILED 30: only % admin sequences found; admin_changes, admin_audit_log, flw_refund_checks, float_topups and supplier_ledger_revisions each have one', v_n;
+  end if;
   v_passed := v_passed + 1;
 
   -- ── 31. A test admin reveals, and sends again, nothing of a real account's —
