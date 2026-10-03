@@ -52,8 +52,9 @@ function rpcs(rpc: Rpc) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('the limits', () => {
-  it('reads the 11 columns, the float alert becoming integer cents at this edge (D24)', async () => {
+  it('reads ten columns, and the float alert already in cents from admin_float (D24)', async () => {
     const reads = fakeService(() => ({ data: opsRow() }))
+    const session = rpcs({ admin_float: { data: { alertCents: 4_321, balanceCents: 1 } } })
     const admin = await principal({ role: 'owner' })
     expect(await getLimits(admin, 'live')).toEqual({
       auto_refund_max_kobo: 31_250_050,
@@ -69,32 +70,34 @@ describe('the limits', () => {
       float_alert_cents: 4_321,
     })
     expect(reads[0]?.table).toBe('ops_settings')
-    expect(reads[0]?.select).toContain('float_alert_usd')
-  })
-
-  it('reads a numeric sent as text exactly: "0.29" is 29 cents', async () => {
-    fakeService(() => ({ data: opsRow({ float_alert_usd: '0.29' }) }))
-    const limits = await getLimits(await principal(), 'live')
-    expect(limits).toMatchObject({ float_alert_cents: 29 })
+    // No dollar figure is read under features/admin.
+    expect(reads[0]?.select).not.toMatch(/_usd/)
+    expect(session.rpc).toHaveBeenCalledWith('admin_float', { p_test_mode: false })
   })
 
   it('shows a test admin none, and never asks', async () => {
     const reads = fakeService(() => ({ data: opsRow() }))
+    const session = rpcs({ admin_float: { data: { alertCents: 1 } } })
     expect(await getLimits(await principal({ testOnly: true, role: 'operator' }), 'test')).toBe(
       'hidden',
     )
     expect(reads).toHaveLength(0)
+    expect(session.rpc).not.toHaveBeenCalledWith('admin_float', expect.anything())
   })
 
   it('answers null for a failed read, a missing row or a shape it cannot trust', async () => {
     const admin = await principal()
+    rpcs({ admin_float: { data: { alertCents: 4_321 } } })
     fakeService(() => ({ error: { message: 'timeout', code: '57014' } }))
     expect(await getLimits(admin, 'live')).toBeNull()
     fakeService(() => ({ data: null }))
     expect(await getLimits(admin, 'live')).toBeNull()
     fakeService(() => ({ data: opsRow({ refund_delay_minutes: 'ten' }) }))
     expect(await getLimits(admin, 'live')).toBeNull()
-    fakeService(() => ({ data: opsRow({ float_alert_usd: 'lots' }) }))
+    fakeService(() => ({ data: opsRow() }))
+    rpcs({ admin_float: { data: { alertCents: 43.21 } } })
+    expect(await getLimits(admin, 'live')).toBeNull()
+    rpcs({ admin_float: { error: { message: 'admin:needs_code' } } })
     expect(await getLimits(admin, 'live')).toBeNull()
   })
 })
