@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { redactAuditReason } from '@/features/admin/actions/audit'
 import { AuditSkeleton, AuditView } from '@/features/admin/components/audit/audit-view'
 import {
   AUDIT_READ_FAILED,
@@ -23,6 +24,8 @@ vi.mock('@/features/admin/queries/session', () => ({
   getAdminSide: vi.fn(),
 }))
 vi.mock('@/features/admin/queries/audit', () => ({ listAuditEntries: vi.fn() }))
+vi.mock('@/features/admin/actions/audit', () => ({ redactAuditReason: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 
 const owner = { role: 'owner', testOnly: false, label: 'owner' }
 const testAdmin = { role: 'operator', testOnly: true, label: 'e2e-1a2b3c4d' }
@@ -207,20 +210,70 @@ describe('AuditView', () => {
     expect(within(row).getByText('Redacted on 3 Oct 2026')).toBeInTheDocument()
   })
 
-  it('has no control that changes an entry, for anyone', async () => {
-    vi.mocked(listAuditEntries).mockResolvedValue({ rows: [entry()], total: 1 })
+  it('has no control that changes an entry for anyone but the owner', async () => {
+    for (const who of [
+      testAdmin,
+      { role: 'operator', testOnly: false, label: 'ops' },
+      { role: 'viewer', testOnly: false, label: 'look' },
+    ]) {
+      vi.mocked(requireAdmin).mockResolvedValue(who as never)
+      vi.mocked(listAuditEntries).mockResolvedValue({ rows: [entry()], total: 1 })
+      const { unmount } = render(await AuditView({ searchParams: Promise.resolve({}) }))
+      const main = document.body
+      expect(
+        within(main).queryAllByRole('button', { name: /redact|edit|delete|remove/i }),
+        who.label,
+      ).toEqual([])
+      // The only buttons: the filter form's Show, and each details summary is not a button.
+      expect(
+        within(main)
+          .getAllByRole('button')
+          .map((button) => button.textContent),
+      ).toEqual(['Show'])
+      for (const form of main.querySelectorAll('form')) expect(form.method).toBe('get')
+      unmount()
+    }
+  })
+
+  it('offers the owner "Redact reason" on a typed reason, a money action with the spec’s words', async () => {
+    vi.mocked(redactAuditReason).mockResolvedValue({ data: { ok: true, auditId: 900 } } as never)
+    vi.mocked(listAuditEntries).mockResolvedValue({
+      rows: [
+        entry(),
+        entry({ id: 102, reason: null }),
+        entry({ id: 103, reason: null, redactedAt: '2026-10-03T12:00:00Z' }),
+      ],
+      total: 3,
+    })
     await show()
-    const main = document.body
-    expect(within(main).queryAllByRole('button', { name: /redact|edit|delete|remove/i })).toEqual(
-      [],
-    )
-    // The only buttons: the filter form's Show, and each details summary is not a button.
+    // Only the entry with a reason offers it, named for its entry.
+    const buttons = within(table()).getAllByRole('button', { name: /^Redact reason/ })
+    expect(buttons.map((button) => button.textContent)).toEqual(['Redact reason of entry #101'])
+    const user = userEvent.setup()
+    await user.click(buttons[0] as HTMLElement)
+    const dialog = screen.getByRole('dialog', { name: 'Remove the reason text from this entry?' })
     expect(
-      within(main)
-        .getAllByRole('button')
-        .map((button) => button.textContent),
-    ).toEqual(['Show'])
-    for (const form of main.querySelectorAll('form')) expect(form.method).toBe('get')
+      within(dialog).getByText(
+        'Only the typed reason is removed; who did what, when, and the amounts stay. The removal is recorded.',
+      ),
+    ).toBeInTheDocument()
+    // Nothing is removed by a stray key: Cancel takes the focus.
+    expect(within(dialog).getByRole('button', { name: 'Keep it' })).toHaveFocus()
+    const confirm = within(dialog).getByRole('button', { name: 'Remove the reason' })
+    await user.type(
+      within(dialog).getByLabelText('Why remove it'),
+      'It named the customer by email',
+    )
+    expect(confirm).toBeDisabled()
+    await user.type(within(dialog).getByLabelText('Code from your authenticator app'), '123456')
+    await user.click(confirm)
+    expect(redactAuditReason).toHaveBeenCalledWith({
+      auditId: 101,
+      why: 'It named the customer by email',
+      requestKey: expect.any(String),
+      code: '123456',
+    })
+    expect(await within(dialog).findByRole('status')).toHaveTextContent('Reason removed.')
   })
 
   it('offers every filter: action, result, side, who, and the admin and days', async () => {
