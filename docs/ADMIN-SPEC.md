@@ -39,7 +39,7 @@ Each of these was checked against the code. Every other review point is applied 
 2. **Presets are staged as drafts, not as hidden rows.** `presets_for_check()` skips presets a person hid, so a "hidden, pending" preset would never be checked (§3.1.2, D21).
 3. **Hiding a preset stays at operator level.** Fewer choices cannot point a domain anywhere. Save, publish and show are owner-only.
 4. **B12 does not seed an FX row.** `fx_rates` has no `test_mode`, so a seeded pending row would show on the live dashboard and in the FX job's review count. The "too old" rule is unit-tested and checked in rolled-back SQL. The e2e test does not depend on the live row.
-5. **No helper that ages a test session's code.** Money actions now take a code inside the dialog. The 12-hour path is covered by SQL check 3 and the safe-action unit test. That GoTrue rebuilds `amr` from `mfa_amr_claims` is unverified (D8).
+5. **No helper that ages a test session's code.** Money actions now take a code inside the dialog. The 12-hour path is covered by SQL check 3 and the safe-action unit test. That GoTrue rebuilds `amr` from `mfa_amr_claims` was unverified (D8); a step-up was observed refreshing it on 3 Oct 2026 (`step-up.db.test.ts`).
 6. **Sensitive projections are SQL views, not one function per read.** Lists still need PostgREST filtering, sorting and paging. Each view is `security_invoker`, revoked from `anon` and `authenticated`, and covered by the ACL check.
 7. **Refund limit ceilings use the strictest proposal.** The ceilings are ₦1,000,000 per refund and ₦5,000,000 a day, with daily ≥ single and a delay of at least 5 minutes.
 8. **`domains/renew/check` is used only after an OTE proof.** It takes the same input as Renew. Package A must first show that it changes neither the balance nor the expiry.
@@ -60,8 +60,8 @@ Each of these was checked against the code. Every other review point is applied 
 | D5 | RLS bypass for admins | **None.** | A bypass exposes every column to the browser in an admin's session. |
 | D6 | How fresh the second factor must be | **Standard tier** (viewing and ordinary acts): AAL2, a pinned factor, a code within **12 h**. **Money tier** (money, prices, settings, irreversible acts): **a code typed into the confirm dialog and verified in the same action, at most 5 min old**, plus no 24 h password-reset hold. | Injected script cannot spend money with an old code. Ordinary pages do not ask for a code each time. |
 | D7 | Factor pinning | `admins.mfa_factor_ids uuid[]` pins **every** verified TOTP factor the admin enrolled. `auth.sessions.factor_id` must be in the set and still verified. The live session row must exist and not be expired. The sign-in must be strong (`password` or `oauth`). | A leaked secret key can enrol a new factor through the Auth admin API; the pin defeats that. A backup device keeps working (recovery codes are off, §15). |
-| D8 | Code freshness source | The `totp` timestamp in the JWT's `amr`. | `auth.mfa_amr_claims.updated_at` behaviour on re-verify is unobserved. |
-| D9 | Non-admins and signed-out visitors on `/admin` | The proxy **rewrites to a 404**. **A signed-in user at `/sign-in?next=/admin…` is sent to that `/admin` path**, not to `/app/domains`. | `/admin` looks like any missing page, and the owner's bookmark works whether or not they are signed in. |
+| D8 | Code freshness source | The `totp` timestamp in the JWT's `amr`. | Observed on the hosted project, 3 Oct 2026 (`step-up.db.test.ts`): a second `challengeAndVerify` on an aal2 session moves the totp timestamp to now. Its money half (`admin_whoami(5)` and a wrapper) runs once migrations 40–41 are applied (BACKLOG A8). |
+| D9 | Non-admins and signed-out visitors on `/admin` | The proxy **rewrites to a 404**. **A signed-in user at `/sign-in?next=/admin…` is sent to that `/admin` path**, not to `/app/domains`. | A stranger sees the plain not-found page with no admin words, and the owner's bookmark works whether or not they are signed in. *(Amended in the Package A review, 3 Oct 2026; owner to acknowledge:)* the 404's **headers** are those of every `/admin` answer (§2.3: `noindex`, `private, no-store`, a nonce CSP), which no other 404 carries, so they show `/admin` is special. Accepted: a 404 there must never be cached or indexed, and the path is guessable anyway; the claim is "no admin chrome", not "indistinguishable". |
 | D10 | Supplier calls from admin | Never during render. Live reads happen on a click. Each is audited, runs in the `normal` or `low` lane (**never `high`**), uses caches and a shared bucket, and **runs only after the gateway claims a fresh audit note** (D22). | N1. Two requests a second across the whole account. |
 | D11 | Supplier writes from admin | **None.** Two POST *reads* are allowlisted: `domains/transfers/query`, and `domains/renew/check` (only after its OTE proof). | N3. Registry state changes only through the queue. |
 | D12 | `GET /order/{orderCode}` | **Not built.** | Nothing we hold resolves it. |
@@ -363,7 +363,7 @@ export const adminMoneyAction = adminBase.useValidated(/* as above, plus the cod
 - **Roles are checked again in the database.** The web role check is for the message only; the wrapper's `admin_gate` and `admin_note` decide.
 - **`adminAccessError()`** maps each code (from a raise or from a wrapper's JSON `code`) to an `AppError`:
   - `needs_code` / `NEEDS_CODE`: "Confirm it's you with the code from your authenticator app to continue."
-  - `held` / `HELD`: `describeHold()`.
+  - `held` / `HELD`: `describeHold()`'s words without a time — "For your security, changes like this are paused for 24 hours after a password reset." *(Amended in the Package A review, 3 Oct 2026; owner to acknowledge:)* the gate knows the hold but not when it ends, and `admin_whoami` does not return `password_reset_at`; adding it later lets the words give the time.
   - `role` / `ROLE`: "Your admin role can't do this. Ask the owner."
   - `weak_sign_in`: "Sign in with your password or Google, then enter your code. A sign-in link can't open the admin area."
   - `factor_mismatch`: "This sign-in used an authenticator that isn't linked to your admin access."
@@ -1794,7 +1794,7 @@ Each B package's area paths:
   - the shared components; `__tests__/foundation/**`.
 - **Tests and CI:** `apps/web/tests/mocks/handlers.ts`, `tests/e2e/support/{accounts.mjs, admin.ts, admin-seed.mjs, mock-gateway.mjs, global-teardown.mjs}`, `tests/e2e/admin.spec.ts`, `playwright.config.ts`, `.github/workflows/ci.yml`.
 - **Docs:** `CLAUDE.md`, `docs/PRD.md`, `docs/DEPLOY.md`, `docs/BACKLOG.md`.
-- **Clean-up:** deleting the empty `app/(admin)/admin/{float,abuse,catalogue,presets}` folders.
+- **Clean-up:** deleting the empty `app/(admin)/admin/{float,abuse,catalogue,presets}` folders. Git does not track empty folders, so no commit removes them: `rmdir` them in the main checkout when Package A is merged.
 
 **Acceptance:**
 - Both SQL files pass against the hosted project, **including the ACL loops**.
@@ -1808,6 +1808,7 @@ Each B package's area paths:
 - The 3 stale test alerts have cleared.
 - The owner can sign in through `/sign-in?next=/admin` and see placeholders.
 - `sessions.spec.ts`, `accounts.spec.ts` and `two-factor-required.spec.ts` still pass after the httpOnly change.
+- **A hard gate before any B package deploys (BACKLOG A8):** once migrations 40–41 are applied, both SQL files run standalone, `admin.spec.ts` passes on `chromium-desktop` and `mobile-ios` with zero skips, and both admin DB tests pass with zero skips — `step-up.db.test.ts` approving a refund held by `hold_test_refund` through `admin_approve_refund` after a step-up (D6, D8).
 
 | Package | Owns (its area paths) | Acceptance tests |
 |---|---|---|

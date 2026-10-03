@@ -5,7 +5,9 @@ import { safeNext } from '@/features/auth/lib/redirect'
  * decisions are tested without a request.
  *
  * - A stranger, a signed-out visitor, or a database that cannot say gets a
- *   404: `/admin` looks like any page that does not exist.
+ *   404: the plain not-found page, with no admin words. Its headers are every
+ *   /admin answer's (noindex, no-store, a nonce CSP) — a 404 there must never
+ *   be cached — so they do show the path is special (D9, accepted).
  * - An admin whose code is missing or too old enters one first.
  * - An admin signed in the wrong way, or on an unlinked device, reaches the
  *   layout, which says what to do — never the pages.
