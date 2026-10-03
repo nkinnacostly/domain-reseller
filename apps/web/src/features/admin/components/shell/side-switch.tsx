@@ -1,5 +1,6 @@
 'use client'
 
+import { Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
 import { FOCUS } from '@/components/layout/panel'
@@ -8,12 +9,13 @@ import type { AdminSide } from '@/features/admin/lib/side'
 import { cn } from '@/lib/utils'
 
 const BUTTON =
-  'inline-flex h-11 min-w-20 items-center justify-center rounded-full px-4 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 aria-pressed:bg-brand aria-pressed:text-brand-foreground'
+  'inline-flex h-11 min-w-20 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 aria-pressed:bg-brand aria-pressed:font-semibold aria-pressed:text-brand-foreground'
 
 /**
  * Live or Test: which records the pages show (ADMIN-SPEC §5.1). Two submit
- * buttons; the pressed one is the side in use, said by `aria-pressed` and
- * by its own words, not by colour alone.
+ * buttons; the pressed one is the side in use, said by `aria-pressed`, a
+ * tick and bolder words — never by colour alone (S8, WCAG 1.4.1). The Live
+ * side has no banner, so the tick is what shows it on its own.
  */
 export function SideSwitch({ side, testOnly }: { side: AdminSide; testOnly: boolean }) {
   const router = useRouter()
@@ -43,6 +45,9 @@ export function SideSwitch({ side, testOnly }: { side: AdminSide; testOnly: bool
             disabled={isPending || (testOnly && value === 'live')}
             className={cn(BUTTON, side !== value && 'text-foreground hover:bg-muted', FOCUS)}
           >
+            {side === value ? (
+              <Check className="size-4 shrink-0" aria-hidden="true" data-testid="side-current" />
+            ) : null}
             {value === 'live' ? 'Live' : 'Test'}
           </button>
         ))}

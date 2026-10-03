@@ -124,6 +124,14 @@ describe('SideSwitch', () => {
     expect(refresh).toHaveBeenCalled()
   })
 
+  it('marks the side in use with a tick as well as colour (S8), on the live side too', () => {
+    render(<SideSwitch side="live" testOnly={false} />)
+    const live = screen.getByRole('button', { name: 'Live' })
+    const test = screen.getByRole('button', { name: 'Test' })
+    expect(within(live).getByTestId('side-current')).toBeInTheDocument()
+    expect(within(test).queryByTestId('side-current')).not.toBeInTheDocument()
+  })
+
   it('does nothing for the side already in use', async () => {
     const user = userEvent.setup()
     render(<SideSwitch side="live" testOnly={false} />)
