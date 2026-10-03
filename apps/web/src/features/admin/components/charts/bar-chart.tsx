@@ -33,7 +33,9 @@ export function BarChart({
   const y = (value: number) => BOTTOM - (Math.max(0, value) / max) * (BOTTOM - TOP)
 
   return (
-    <figure className={cn('min-w-0', className)}>
+    // `relative overflow-hidden`: the sr-only table never shrinks below its
+    // content, and would otherwise widen a phone page (S5).
+    <figure className={cn('relative min-w-0 overflow-hidden', className)}>
       <svg
         role="img"
         aria-label={`${title}. The figures follow in a table.`}

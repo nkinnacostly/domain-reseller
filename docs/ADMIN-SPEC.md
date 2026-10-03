@@ -1829,6 +1829,22 @@ Each B package's area paths:
 | **B14 Audit** | `audit/**`, `queries/audit.ts`, `__tests__/audit/**`, `tests/e2e/admin-audit.spec.ts` | **E2E:** rows from earlier steps appear (a side switch does not audit; a lookup writes an intent row); filters by prefix and outcome; `detail` expands; no edit controls for an operator. |
 | **B15 Instrumentation** | `features/checkout/actions/place-order.ts`, `features/renewals/actions/{place-renewal,place-renewals}.ts`, `features/transfers/actions/place-transfer.ts`, `features/cart/actions/{cart,ssl}.ts`, `features/checkout/lib/cost.ts` (`lineCostUsd()` → `{supplierCents, icannCents}`), **`features/renewals/lib/renewal.ts`** (`renewalCostUsd`), **`features/transfers/lib/start.ts`** (`transferCostUsd`), and their existing tests | **Unit:** per-line cents equal the pre-flight total summed, cent-exact, for register (including .ai 2-year), renew, transfer and SSL; the ICANN share is split out; a failed cost insert never fails the order; `bump_funnel` is called once per add and a failure never fails the add. **Integration:** inserted lines get `order_item_costs` rows; `order_items` gains no cost column. The existing checkout, renewals, transfers and cart e2e suites stay green. |
 
+**Cross-page link contract (added 3 Oct 2026, from B1).** The overview links into other pages with these query parameters; each page must accept them and open with that filter applied (unknown values fall back to the unfiltered list):
+
+| Page | Accepts |
+|---|---|
+| Refunds | `?status=held,failed,needs_attention` (comma list) |
+| Incidents | `?status=unresolved` |
+| Queue | `?status=needs_attention`, `?tab=pending-without-job` |
+| Alerts | `?severity=critical`, `?tab=drift`, `?tab=health` |
+| Orders | `?stuck=1`, `?kind=register\|renew\|transfer\|ssl`, `?from=YYYY-MM-DD&to=YYYY-MM-DD` |
+| Money | `?from=YYYY-MM-DD&to=YYYY-MM-DD` |
+| Emails | `?status=failed` |
+| Supplier ledger | `?status=unexplained` |
+| Presets | `?status=draft` |
+
+Shared charts (`components/charts/*`) clip their screen-reader table (`relative overflow-hidden` on the figure), so pages need no wrapper of their own.
+
 **Deploy order** after all packages merge:
 1. Migrations 40 and 41.
 2. The gateway with `GATEWAY_ADMIN_SECRET`.
