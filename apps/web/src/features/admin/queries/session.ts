@@ -397,25 +397,149 @@ export type AdminDb = {
 // biome-ignore lint/suspicious/noExplicitAny: the builder's own generics are restored by AdminDb's type
 type AnyBuilder = any
 
+/** Builder methods whose first argument names a column (or a path through an embed or JSON). */
+const COLUMN_METHODS: ReadonlySet<string> = new Set([
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'like',
+  'likeAllOf',
+  'likeAnyOf',
+  'ilike',
+  'ilikeAllOf',
+  'ilikeAnyOf',
+  'regexMatch',
+  'regexIMatch',
+  'is',
+  'isDistinct',
+  'in',
+  'notIn',
+  'contains',
+  'containedBy',
+  'rangeGt',
+  'rangeGte',
+  'rangeLt',
+  'rangeLte',
+  'rangeAdjacent',
+  'overlaps',
+  'textSearch',
+  'not',
+  'filter',
+  'order',
+])
+
+/** The rest of the builder a read may use: paging, its answer's shape, and running it. */
+const PLAIN_METHODS: ReadonlySet<string> = new Set([
+  'limit',
+  'range',
+  'single',
+  'maybeSingle',
+  'abortSignal',
+  'returns',
+  'overrideTypes',
+  'throwOnError',
+  'then',
+])
+
+/** `admin_side.orders.test_mode` or `detail->>kind` → each name in the path. */
+function pathNames(column: string): string[] {
+  return column.split(/->>?|\./).map((part) => part.trim().replace(/^["']|["']$/g, ''))
+}
+
 /**
- * The builder with select() spent. PostgREST's builder can select again
- * after a filter, which would replace the checked columns with any string.
+ * A filter or an order may not name a private column either — through an
+ * embed (`admin_side.registrant->>email` reads the parent table) or a JSON
+ * path — or it could probe what a select may not show (D4).
  */
-function selectedOnce(builder: AnyBuilder): AnyBuilder {
+function assertColumn(column: unknown, allow: readonly string[]): void {
+  if (typeof column !== 'string' || column.trim() === '') {
+    throw new Error('adminDb filters and orders by named columns only')
+  }
+  const refused = pathNames(column).find(
+    (name) => PRIVATE_COLUMNS.has(name) && !allow.includes(name),
+  )
+  if (refused) throw new Error(`adminDb never filters or orders by ${refused}`)
+}
+
+/** Each condition's column in a PostgREST `or` string: `status.eq.held,and(kind.eq.x,…)`. */
+function orColumns(filters: unknown): string[] {
+  if (typeof filters !== 'string') throw new Error('adminDb filters by named columns only')
+  return filters
+    .split(/[,()]/)
+    .map((part) => part.trim())
+    .filter((part) => part !== '' && !/^(not\.)?(and|or)$/.test(part))
+    .map((part) => part.split('.')[0] ?? '')
+}
+
+function checkArguments(method: string, args: unknown[], allow: readonly string[]): void {
+  if (COLUMN_METHODS.has(method)) {
+    assertColumn(args[0], allow)
+  } else if (method === 'match') {
+    const query = args[0]
+    if (typeof query !== 'object' || query === null)
+      throw new Error('adminDb matches named columns only')
+    for (const column of Object.keys(query)) assertColumn(column, allow)
+  } else if (method === 'or') {
+    for (const column of orColumns(args[0])) assertColumn(column, allow)
+  } else if (!PLAIN_METHODS.has(method)) {
+    throw new Error(`adminDb does not allow .${method}()`)
+  }
+}
+
+const isBuilder = (value: unknown): value is AnyBuilder =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { eq?: unknown }).eq === 'function'
+
+/**
+ * The builder with select() spent, and nothing else reachable. PostgREST's
+ * builder can select again after a filter, which would replace the checked
+ * columns with any string; and its `url`, `method` and `headers` are plain
+ * properties, so code holding it could turn the read into a DELETE or drop
+ * the side filter — with the service key, which RLS does not stop. Only the
+ * filter, order and paging methods pass, each column checked; every other
+ * property reads as undefined, and nothing can be set, defined or deleted.
+ */
+function selectedOnce(builder: AnyBuilder, allow: readonly string[]): AnyBuilder {
+  const refuse = () => {
+    throw new Error('adminDb builders are read-only')
+  }
   const guarded: AnyBuilder = new Proxy(builder, {
     get(target, property) {
+      if (typeof property === 'symbol') return Reflect.get(target, property, target)
       if (property === 'select') {
         return () => {
           throw new Error('adminDb selects once: name every column in the first select')
         }
       }
       const value = Reflect.get(target, property, target)
-      if (typeof value !== 'function') return value
+      if (typeof value !== 'function') return undefined
       return (...args: unknown[]) => {
+        checkArguments(property, args, allow)
         const result = value.apply(target, args)
-        return result === target ? guarded : result
+        if (result === target) return guarded
+        return isBuilder(result) ? selectedOnce(result, allow) : result
       }
     },
+    has(target, property) {
+      if (typeof property === 'symbol') return Reflect.has(target, property)
+      return (
+        COLUMN_METHODS.has(property) ||
+        PLAIN_METHODS.has(property) ||
+        property === 'match' ||
+        property === 'or'
+      )
+    },
+    getOwnPropertyDescriptor: () => undefined,
+    ownKeys: () => [],
+    getPrototypeOf: () => null,
+    set: refuse,
+    defineProperty: refuse,
+    deleteProperty: refuse,
+    setPrototypeOf: refuse,
   })
   return guarded
 }
@@ -470,7 +594,7 @@ export function adminDb(admin: AdminPrincipal, side: AdminSide): AdminDb {
         if (refused) throw new Error(`adminDb never reads ${refused}`)
         const list = rule.kind === 'parent' ? `${columns}, ${rule.embed}` : columns
         const builder = (entry.from(db()) as AnyBuilder).select(list, options)
-        return selectedOnce(applySide(builder, rule, effective, admin))
+        return selectedOnce(applySide(builder, rule, effective, admin), allow)
       }
       return { select } as AnyBuilder
     },

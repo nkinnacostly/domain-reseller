@@ -42,8 +42,27 @@ type Call = [method: string, ...args: unknown[]]
 /** A service client that records the query each read builds. */
 function recordingService() {
   const calls: Call[] = []
-  const builder: Record<string, (...args: unknown[]) => unknown> = {}
-  for (const method of ['select', 'eq', 'in', 'order', 'range', 'limit']) {
+  // Shaped like PostgREST's builder: methods that return it, and the request
+  // it will send as plain properties.
+  const builder: Record<string, unknown> = {
+    url: new URL('https://db.test/rest/v1/refunds?test_mode=eq.false'),
+    method: 'GET',
+    headers: new Headers(),
+  }
+  for (const method of [
+    'select',
+    'eq',
+    'in',
+    'order',
+    'range',
+    'limit',
+    'ilike',
+    'match',
+    'or',
+    'not',
+    'csv',
+    'setHeader',
+  ]) {
     builder[method] = (...args: unknown[]) => {
       calls.push([method, ...args])
       return builder
@@ -202,6 +221,96 @@ describe('adminDb', () => {
       >
       expect(() => filtered.select?.('*')).toThrow('adminDb selects once')
       expect(filtered.limit?.(5)).toBe(filtered)
+    })
+  })
+
+  describe('the builder it hands back (D4)', () => {
+    type Loose = Record<string, (...args: unknown[]) => unknown> & Record<string, unknown>
+    async function read(table: Parameters<ReturnType<typeof adminDb>['from']>[0] = 'refunds') {
+      const calls = recordingService()
+      const query = adminDb(await principal(), 'live')
+        .from(table)
+        .select('id') as unknown as Loose
+      return { calls, query }
+    }
+
+    it('cannot be rewritten into another request: nothing is set, defined or deleted', async () => {
+      const { query } = await read()
+      const plain = query as Record<string, unknown>
+      expect(() => {
+        plain.method = 'DELETE'
+      }).toThrow('adminDb builders are read-only')
+      expect(() =>
+        Object.defineProperty(query, 'url', { value: new URL('https://db.test/') }),
+      ).toThrow('adminDb builders are read-only')
+      expect(() => {
+        delete query.url
+      }).toThrow('adminDb builders are read-only')
+      expect(() => Object.setPrototypeOf(query, {})).toThrow('adminDb builders are read-only')
+    })
+
+    it('hides the request it will send: no url, method or headers, and no setHeader', async () => {
+      const { query, calls } = await read()
+      expect(query.url).toBeUndefined()
+      expect(query.method).toBeUndefined()
+      expect(query.headers).toBeUndefined()
+      expect('url' in query).toBe(false)
+      expect(Object.keys(query)).toEqual([])
+      expect(Object.getOwnPropertyDescriptor(query, 'url')).toBeUndefined()
+      expect(Object.getPrototypeOf(query)).toBeNull()
+      expect(() => query.setHeader?.('Accept-Profile', 'auth')).toThrow(
+        'adminDb does not allow .setHeader()',
+      )
+      expect(() => query.csv?.()).toThrow('adminDb does not allow .csv()')
+      expect(calls.map(([method]) => method)).not.toContain('setHeader')
+    })
+
+    it.each([
+      ['an embedded parent column', 'ilike', ['admin_side.registrant->>email', '%@gmail.com']],
+      ['a JSON path into a private field', 'eq', ['detail->>email', 'someone@example.com']],
+      ['a private column', 'order', ['email']],
+      ['a quoted JSON key', 'eq', ["detail->>'phone'", '1']],
+      ['a negated private column', 'not', ['full_name', 'is', null]],
+    ])('refuses a filter or an order on %s', async (_, method, args) => {
+      const { query, calls } = await read()
+      const sent = calls.length
+      expect(() => query[method]?.(...args)).toThrow('adminDb never filters or orders by')
+      expect(calls).toHaveLength(sent)
+    })
+
+    it('refuses a private column inside match() and or()', async () => {
+      const { query } = await read()
+      expect(() => query.match?.({ status: 'held', phone: '0803' })).toThrow(
+        'adminDb never filters or orders by phone',
+      )
+      expect(() => query.or?.('status.eq.held,and(kind.eq.x,email.ilike.%a%)')).toThrow(
+        'adminDb never filters or orders by email',
+      )
+      expect(() => query.eq?.('', 1)).toThrow('adminDb filters and orders by named columns only')
+    })
+
+    it('passes ordinary filters, orders and pages, and keeps them guarded', async () => {
+      const { query, calls } = await read()
+      const next = query.eq?.('status', 'held') as Loose
+      expect(next).toBe(query)
+      expect(next.or?.('status.eq.held,not.and(kind.eq.x,reason.is.null)')).toBe(query)
+      expect(next.match?.({ status: 'held' })).toBe(query)
+      expect(next.order?.('created_at', { ascending: false })).toBe(query)
+      expect(next.range?.(0, 49)).toBe(query)
+      expect(calls.slice(-5).map(([method]) => method)).toEqual([
+        'eq',
+        'or',
+        'match',
+        'order',
+        'range',
+      ])
+    })
+
+    it("filters by an alert's key on ops_alerts, and nowhere else", async () => {
+      const alerts = await read('ops_alerts')
+      expect(() => alerts.query.eq?.('key', 'ledger_gap:live')).not.toThrow()
+      const drift = await read('registry_drift')
+      expect(() => drift.query.eq?.('key', 'x')).toThrow('adminDb never filters or orders by key')
     })
   })
 
