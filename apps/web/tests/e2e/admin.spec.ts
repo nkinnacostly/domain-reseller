@@ -19,6 +19,15 @@ import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from '.
 type TestUser = { id: string; email: string; password: string }
 
 const ADMIN_WORDS = ['Operations', 'Audit log', 'Records shown', 'Back to your account']
+/** Admin chrome as it sits in the HTML: aria-labels, the title template, the sidebar. */
+const ADMIN_HTML = [
+  'Admin panel',
+  'Pages in the admin area',
+  'admin — overview',
+  ' · Admin</title>',
+  'Back to your account',
+  'Records shown',
+]
 const TEST_ADMIN_BANNER =
   "Test administrator: live records and customers' details are hidden, and live actions are refused."
 
@@ -30,6 +39,8 @@ async function expectNotFound(page: Page, path: string) {
   for (const words of ADMIN_WORDS) {
     await expect(page.getByText(words, { exact: true })).toHaveCount(0)
   }
+  const html = await page.content()
+  for (const words of ADMIN_HTML) expect(html, `${path} holds "${words}"`).not.toContain(words)
 }
 
 /** The script-src directive of a CSP. */
@@ -57,6 +68,24 @@ test.describe('the admin area to anyone who is not an admin', () => {
   }) => {
     await expectNotFound(page, '/admin')
     await expectNotFound(page, '/admin/refunds')
+  })
+
+  test('a page under /admin named like an image is gated too: a 404 under the admin headers', async ({
+    page,
+    request,
+  }) => {
+    // The proxy skips static files by extension; /admin is matched on its own (§2.3).
+    for (const path of ['/admin/orders/x.png', '/admin/orders/x.svg', '/admin/domains/a.webp']) {
+      const response = await request.get(path, { maxRedirects: 0 })
+      expect(response.status(), path).toBe(404)
+      const headers = response.headers()
+      expect(headers['x-robots-tag'], path).toBe('noindex, nofollow')
+      expect(headers['cache-control'], path).toContain('no-store')
+      expect(scriptSrc(headers['content-security-policy'] ?? ''), path).toMatch(/'nonce-/)
+      const html = await response.text()
+      for (const words of ADMIN_HTML) expect(html, `${path} holds "${words}"`).not.toContain(words)
+    }
+    await expectNotFound(page, '/admin/orders/x.png')
   })
 
   test('every /admin answer is unindexed, uncached, and under a nonce CSP with no unsafe-inline', async ({

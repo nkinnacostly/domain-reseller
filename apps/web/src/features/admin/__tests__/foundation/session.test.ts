@@ -8,6 +8,7 @@ import {
   adminDb,
   adminSessionStatus,
   adminWhoami,
+  assertAdminArea,
   findAdmin,
   getAdminSide,
   isAdminPrincipal,
@@ -303,6 +304,28 @@ describe('adminSessionStatus', () => {
     )
     expect(await adminSessionStatus()).toBe('not_admin')
   })
+})
+
+describe('assertAdminArea', () => {
+  it('is a 404 for a stranger before any admin chrome renders', async () => {
+    vi.mocked(createClient).mockResolvedValue(sessionClient({ user: null }).client as never)
+    await expect(assertAdminArea()).rejects.toThrow('NEXT_NOT_FOUND')
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_status: { data: 'not_admin' } } }).client as never,
+    )
+    await expect(assertAdminArea()).rejects.toThrow('NEXT_NOT_FOUND')
+  })
+
+  it.each(['ok', 'needs_code', 'factor_mismatch', 'weak_sign_in'])(
+    'lets %s through to AdminGate, which explains it',
+    async (status) => {
+      vi.mocked(createClient).mockResolvedValue(
+        sessionClient({ rpc: { admin_status: { data: status } } }).client as never,
+      )
+      expect(await assertAdminArea()).toBe(status)
+      expect(notFound).not.toHaveBeenCalled()
+    },
+  )
 })
 
 describe('getAdminSide', () => {

@@ -4,12 +4,17 @@ import { Suspense } from 'react'
 import { AdminGate } from '@/features/admin/components/shell/admin-gate'
 import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
 import { AdminSidebar, AdminSidebarSkeleton } from '@/features/admin/components/shell/admin-sidebar'
+import { adminSessionStatus, assertAdminArea } from '@/features/admin/queries/session'
 import { PRIVATE } from '@/features/seo/lib/metadata'
 
-/** Never indexed or followed; the proxy also sends X-Robots-Tag and a 404 to everyone else. */
-export const metadata: Metadata = {
-  robots: PRIVATE,
-  title: { template: '%s · Admin', default: 'Admin' },
+/**
+ * Never indexed or followed; the proxy also sends X-Robots-Tag and a 404 to
+ * everyone else. A stranger's title names no admin area either, should the
+ * proxy ever not run for a path (§2.3).
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  if ((await adminSessionStatus()) === 'not_admin') return { robots: PRIVATE }
+  return { robots: PRIVATE, title: { template: '%s · Admin', default: 'Admin' } }
 }
 
 /**
@@ -26,6 +31,8 @@ export const instant = false
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await connection()
+  // Before the sidebar or any admin words: a stranger gets the not-found page.
+  await assertAdminArea()
   return (
     <div className="min-h-dvh bg-linear-to-br from-brand-subtle via-background to-brand-subtle">
       <div className="mx-auto flex w-full max-w-[100rem] flex-col lg:flex-row lg:items-start lg:gap-4 lg:p-4">

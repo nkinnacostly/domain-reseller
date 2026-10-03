@@ -131,8 +131,8 @@ const STATUSES = new Set<AdminSessionStatus>([
   'not_admin',
 ])
 
-/** The gate's word for this session, for AdminGate; never an error. */
-export async function adminSessionStatus(): Promise<AdminSessionStatus> {
+/** The gate's word for this session, once per request; never an error. */
+export const adminSessionStatus = cache(async (): Promise<AdminSessionStatus> => {
   const supabase = await createClient()
   const {
     data: { user },
@@ -143,6 +143,19 @@ export async function adminSessionStatus(): Promise<AdminSessionStatus> {
     return 'not_admin'
   }
   return data as AdminSessionStatus
+})
+
+/**
+ * The admin layout's first step, before any admin chrome: a stranger gets the
+ * not-found page here, with no sidebar and no admin title, even if the proxy
+ * never ran for this path (§2.3). Only the proxy can make the status a 404 —
+ * the page's static shell has gone out by now. Anyone else goes on to
+ * AdminGate, which explains or lets them in.
+ */
+export async function assertAdminArea(): Promise<AdminSessionStatus> {
+  const status = await adminSessionStatus()
+  if (status === 'not_admin') notFound()
+  return status
 }
 
 /** Live or Test from the cookie; a test admin is always on the test side (D15). */
