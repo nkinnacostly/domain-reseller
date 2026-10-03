@@ -116,6 +116,16 @@ fly deploy --ha=false -a mydomainshub-gateway   # first
 git push                                         # then the web deploys on Vercel
 ```
 
+**The admin dashboard (ADR-006)** goes out in this order, each step after the
+last has finished:
+
+1. Migrations 40 and 41 (`supabase db push`), then `pnpm db:types`. Run
+   `supabase/tests/admin.sql` and `admin_data.sql` against the project.
+2. The gateway, with `GATEWAY_ADMIN_SECRET` set on Fly (§6b) — it serves
+   `/v1/admin/*` and starts the hourly supplier-ledger sync.
+3. The web, with the same `GATEWAY_ADMIN_SECRET` on Vercel.
+4. Enrol yourself (§6b).
+
 The gateway's first start after 24 Sept 2026 syncs the supplier catalogue at
 once (no earlier run is recorded) and writes `is_transferable` — until then
 transfers in are closed. `APP_URL` (in `fly.toml`) lets it refresh the site's
@@ -440,36 +450,46 @@ needs them on GitHub.
 
 ### When an alert arrives
 
-Every alert names an order or a domain and a code. What they mean, and what
-to do — the functions below run in the Supabase **SQL editor** (they are not
-open to the service key, on purpose):
+Every alert names an order or a domain and a code, and links to its page in
+the admin dashboard (`/admin`, ADR-006). What they mean, and what to do: the
+**In the dashboard** column names the page and the button, each audited and
+each money button asking for your authenticator code. The functions in the
+last column run in the Supabase **SQL editor** (they are not open to the
+service key, on purpose) — that stays the fallback whenever the dashboard is
+down, and is the only way for the rows marked **SQL editor only**:
 
-| Alert | What it means | What to do |
-|---|---|---|
-| Refund … is **held** — `OVER_SINGLE_LIMIT` / `OVER_DAILY_LIMIT` | Above the automatic limit (₦250,000 per refund, ₦1,000,000 per day) | Check the order, then `select approve_refund('<refund id>', 'your name');` |
-| Refund … **needs attention** — `REGISTERED_AT_REGISTRY` | The line failed here, but the registry has the domain in our account (and no other customer here holds it) | Don't refund. Finish the registration for the customer (ask Claude), then `select cancel_refund('<id>', 'your name', 'registered after all');` |
-| … `CHARGE_NOT_OURS` / `CHARGE_NOT_FOUND` | The charge at Flutterwave does not match our record — another reference, amount or currency, or no such charge for this key. The Flutterwave account is shared with other apps, so a refund is never sent to a charge that is not provably this order's | Don't refund. Compare the order with the charge in the Flutterwave dashboard. If the row looks tampered with, rotate `SUPABASE_SECRET_KEY` (Supabase → API keys, then Vercel, Fly and GitHub). `cancel_refund` once understood. |
-| … `CHARGEBACK_ON_CHARGE` | The customer disputed the charge with their bank | Answer the dispute in Flutterwave; refunding as well could pay them twice. `cancel_refund` once settled. |
-| … `REFUND_OUTCOME_UNKNOWN` / `UNTRACKED_REFUND_AT_PROVIDER` / `ALREADY_AT_PROVIDER` | A refund may already have been sent, or someone refunded by hand | Look at the charge in the Flutterwave dashboard. **Refunded** (by us or by hand): `select record_manual_refund('<id>', '<Flutterwave refund id>', 'your name');` — it is then shown to the customer as refunded. **Not refunded:** `select retry_refund('<id>', 'your name');` |
-| … `AMOUNT_MISMATCH` | Flutterwave refunded a different amount from the one asked for; its reference is kept | Check the refund in the dashboard. If the right money went back, `record_manual_refund` with that refund's id; otherwise ask Claude before doing anything. |
-| Refund … **failed** — `FLW_HTTP_…` / `PROVIDER_REFUND_FAILED` | Flutterwave refused it, or the money bounced | Read the code; fix the cause (often our Flutterwave balance), then `retry_refund`. A bounced refund's reference is kept on record and the retry gets a new one. |
-| Refund … has waited … — `INSUFFICIENT_BALANCE` | Our Flutterwave balance can't cover it | Top up or wait for settlement; it retries by itself |
-| Payment incident: **underpayment** | Someone paid less than the total; it is being refunded | Nothing, unless it repeats. `select resolve_payment_incident(<id>, 'your name');` |
-| Payment incident: **tx ref mismatch** / **currency mismatch** | A transaction was presented for the wrong order, or not in naira | Check Flutterwave. Repeats for one account look like someone probing. Resolve when done. |
-| Payment incident: **unrecorded payment** | Flutterwave has the money; we could not record it | Urgent: ask Claude to record it. Flutterwave also resends the webhook (we answer it 503 until it is recorded), and the gateway lists every charge on unpaid and recently paid orders every 5 minutes for 3 days. |
-| Payment incident: **registered after refund** | A line registered after its refund had already gone to Flutterwave: the customer may have the domain and the money | Check both. Decide with the customer; nothing is undone automatically. |
-| Payment incident: **mode mismatch** | A test payment was presented for a live order, or the reverse | Nothing was recorded. Check the order; repeats look like probing. |
-| Registration of … needs a person (`PAYMENT_NOT_VERIFIED`) | A line was about to be registered, but Flutterwave does not confirm the charge behind it (no such charge, another reference, another amount). Nothing was registered and nothing refunded | Look at the order and the charge in the Flutterwave dashboard. A real payment the check misread: ask Claude. A payment row nobody can explain: rotate `SUPABASE_SECRET_KEY` (Supabase → API keys, then Vercel, Fly and GitHub). |
-| Order … is still `paid`/`provisioning` (I5) | Paid over 15 minutes ago, not registered | Is the gateway running? `fly status -a mydomainshub-gateway` |
-| The gateway has gone quiet | No heartbeat: nothing is being registered, refunded or alerted | `fly status -a mydomainshub-gateway`; add the card (L19) if the trial stopped it |
-| Transfer of … needs a person (`TRANSFER_OVERDUE`) | A transfer the registry accepted has not landed or been refused in 10 days | Check the domain at DomainNameAPI. Landed: ask Claude to record it. Refused or stuck: ask the customer, then `fail_job` or `retry_job` with Claude. |
-| Transfer lock / privacy / contact change of … needs a person | The registry's answer to a settings change could not be read after several tries | Read the domain at DomainNameAPI; `select retry_job('<job id>');` once it answers. The customer's newest request stays pending until then. |
-| Contact change of … needs a person (`CONTACTS_NOT_VISIBLE`) | The registry accepted new contacts but does not show them. In the sandbox this always happens; on live it is unconfirmed | Look at the domain's contacts in the DomainNameAPI panel. Showing the new ones: `select retry_job('<job id>');` records them. Not showing: ask DomainNameAPI why SaveContacts did not apply, then retry. |
-| Host preset … is not resolving / is hidden | Its nameservers stopped resolving in public DNS (FR-D2); after a day it is hidden from customers | Read the provider's own documentation. Changed: update the preset's nameservers and `verified_at` in the table editor — it is checked again within 6 hours and shown once it passes. Gone: leave it hidden. A *Registrar default* row has no documentation page: read a domain freshly registered on the defaults from its registry's RDAP (live), or ask the supplier's support (sandbox). |
-| Host preset … was last verified … | 90 days since it was checked against the provider's documentation | Check it again; update `verified_at`, and the nameservers if they changed. |
-| A compliance / security email … has no delivery report (`email_unconfirmed`) | Sent over a day ago, and neither delivered nor bounced has come back — from Brevo's read-back or SES's events (migration 34). It is not counted as delivered | Brevo: look the message up under Transactional → Logs. SES keeps no per-message log of its own: check the SNS subscription is still *Confirmed* and Vercel's log shows `SES events` lines arriving. For an ERRP notice you cannot confirm, reach the registrant another way. |
-| A … email … was reported as spam (`email_complaint`) | The recipient marked it as spam; SES has put the address on the account's suppression list | Nothing to send. If it was a mistake the customer can ask; remove the address from the suppression list in SES only then. Several in a week: look at what we send. |
-| The supplier catalogue sync failed / was refused / hasn't run for 8 days | The weekly sync in the gateway stopped updating costs; prices can drift from the supplier's | `fly logs -a mydomainshub-gateway` for `catalogue`. To run it now, set `CATALOGUE_SYNC_EVERY_HOURS=1` on Fly, wait for it, then unset it. |
+| Alert | What it means | In the dashboard | What to do in the SQL editor |
+|---|---|---|---|
+|  Refund … is **held** — `OVER_SINGLE_LIMIT` / `OVER_DAILY_LIMIT` | Above the automatic limit (₦250,000 per refund, ₦1,000,000 per day) | Refunds → the refund → **Approve** (reason and code) | Check the order, then `select approve_refund('<refund id>', 'your name');`  |
+|  Refund … **needs attention** — `REGISTERED_AT_REGISTRY` | The line failed here, but the registry has the domain in our account (and no other customer here holds it) | Queue → the job → **Retry**: it reads the registry, records the domain and cancels the refund | Don't refund. Finish the registration for the customer (ask Claude), then `select cancel_refund('<id>', 'your name', 'registered after all');`  |
+|  … `CHARGE_NOT_OURS` / `CHARGE_NOT_FOUND` | The charge at Flutterwave does not match our record — another reference, amount or currency, or no such charge for this key. The Flutterwave account is shared with other apps, so a refund is never sent to a charge that is not provably this order's | Refunds → the refund → **Cancel** (owner; reason, checks and code) | Don't refund. Compare the order with the charge in the Flutterwave dashboard. If the row looks tampered with, rotate `SUPABASE_SECRET_KEY` (Supabase → API keys, then Vercel, Fly and GitHub). `cancel_refund` once understood.  |
+|  … `CHARGEBACK_ON_CHARGE` | The customer disputed the charge with their bank | Refunds → the refund → **Cancel** (owner), once the dispute is settled | Answer the dispute in Flutterwave; refunding as well could pay them twice. `cancel_refund` once settled.  |
+|  … `REFUND_OUTCOME_UNKNOWN` / `UNTRACKED_REFUND_AT_PROVIDER` / `ALREADY_AT_PROVIDER` | A refund may already have been sent, or someone refunded by hand | Refunds → the refund → **Check with Flutterwave**, then **Record a Flutterwave refund**; not refunded: **Retry** | Look at the charge in the Flutterwave dashboard. **Refunded** (by us or by hand): `select record_manual_refund('<id>', '<Flutterwave refund id>', 'your name');` — it is then shown to the customer as refunded. **Not refunded:** `select retry_refund('<id>', 'your name');`  |
+|  … `AMOUNT_MISMATCH` | Flutterwave refunded a different amount from the one asked for; its reference is kept | Refunds → the refund → **Check with Flutterwave**, then **Record a Flutterwave refund** when it matches | Check the refund in the dashboard. If the right money went back, `record_manual_refund` with that refund's id; otherwise ask Claude before doing anything.  |
+|  Refund … **failed** — `FLW_HTTP_…` / `PROVIDER_REFUND_FAILED` | Flutterwave refused it, or the money bounced | Refunds → the refund → **Retry** | Read the code; fix the cause (often our Flutterwave balance), then `retry_refund`. A bounced refund's reference is kept on record and the retry gets a new one.  |
+|  Refund … has waited … — `INSUFFICIENT_BALANCE` | Our Flutterwave balance can't cover it | Refunds → the refund (read only); nothing to press | Top up or wait for settlement; it retries by itself  |
+|  Payment incident: **underpayment** | Someone paid less than the total; it is being refunded | Refunds → Incidents → **Mark resolved** | Nothing, unless it repeats. `select resolve_payment_incident(<id>, 'your name');`  |
+|  Payment incident: **tx ref mismatch** / **currency mismatch** | A transaction was presented for the wrong order, or not in naira | Refunds → Incidents → **Mark resolved** | Check Flutterwave. Repeats for one account look like someone probing. Resolve when done.  |
+|  Payment incident: **unrecorded payment** | Flutterwave has the money; we could not record it | **SQL editor only** to record it (`record_order_payment`); then Refunds → Incidents → **Mark resolved** | Urgent: ask Claude to record it. Flutterwave also resends the webhook (we answer it 503 until it is recorded), and the gateway lists every charge on unpaid and recently paid orders every 5 minutes for 3 days.  |
+|  Payment incident: **registered after refund** | A line registered after its refund had already gone to Flutterwave: the customer may have the domain and the money | Refunds → Incidents → **Mark resolved**, once decided | Check both. Decide with the customer; nothing is undone automatically.  |
+|  Payment incident: **mode mismatch** | A test payment was presented for a live order, or the reverse | Refunds → Incidents → **Mark resolved** | Nothing was recorded. Check the order; repeats look like probing.  |
+|  Registration of … needs a person (`PAYMENT_NOT_VERIFIED`) | A line was about to be registered, but Flutterwave does not confirm the charge behind it (no such charge, another reference, another amount). Nothing was registered and nothing refunded | Queue → the job → **Retry** only. Closing it for good: **SQL editor only** | Look at the order and the charge in the Flutterwave dashboard. A real payment the check misread: ask Claude. A payment row nobody can explain: rotate `SUPABASE_SECRET_KEY` (Supabase → API keys, then Vercel, Fly and GitHub).  |
+|  Order … is still `paid`/`provisioning` (I5) | Paid over 15 minutes ago, not registered | Orders → "Stuck only"; Alerts → Health | Is the gateway running? `fly status -a mydomainshub-gateway`  |
+|  The gateway has gone quiet | No heartbeat: nothing is being registered, refunded or alerted | Alerts → Health | `fly status -a mydomainshub-gateway`; add the card (L19) if the trial stopped it  |
+|  Transfer of … needs a person (`TRANSFER_OVERDUE`) | A transfer the registry accepted has not landed or been refused in 10 days | Queue → the job → **Read the transfer state**; refused: **Fail**. Landed: **SQL editor only** (`complete_transfer`) | Check the domain at DomainNameAPI. Landed: ask Claude to record it. Refused or stuck: ask the customer, then `fail_job` or `retry_job` with Claude.  |
+|  Transfer lock / privacy / contact change of … needs a person | The registry's answer to a settings change could not be read after several tries | Queue → the job → **Read the registry now**, then **Retry** | Read the domain at DomainNameAPI; `select retry_job('<job id>');` once it answers. The customer's newest request stays pending until then.  |
+|  Contact change of … needs a person (`CONTACTS_NOT_VISIBLE`) | The registry accepted new contacts but does not show them. In the sandbox this always happens; on live it is unconfirmed | Queue → the job → **Read the registry now**, then **Retry** | Look at the domain's contacts in the DomainNameAPI panel. Showing the new ones: `select retry_job('<job id>');` records them. Not showing: ask DomainNameAPI why SaveContacts did not apply, then retry.  |
+|  Host preset … is not resolving / is hidden | Its nameservers stopped resolving in public DNS (FR-D2); after a day it is hidden from customers | Settings → Presets → **Save a change** (a draft), **Check now**, **Publish** (owner). Registrar-default rows: **SQL editor only** | Read the provider's own documentation. Changed: update the preset's nameservers and `verified_at` in the table editor — it is checked again within 6 hours and shown once it passes. Gone: leave it hidden. A *Registrar default* row has no documentation page: read a domain freshly registered on the defaults from its registry's RDAP (live), or ask the supplier's support (sandbox).  |
+|  Host preset … was last verified … | 90 days since it was checked against the provider's documentation | Settings → Presets → the preset; a change goes through a draft as above | Check it again; update `verified_at`, and the nameservers if they changed.  |
+|  A compliance / security email … has no delivery report (`email_unconfirmed`) | Sent over a day ago, and neither delivered nor bounced has come back — from Brevo's read-back or SES's events (migration 34). It is not counted as delivered | Emails → Outbox (read only) | Brevo: look the message up under Transactional → Logs. SES keeps no per-message log of its own: check the SNS subscription is still *Confirmed* and Vercel's log shows `SES events` lines arriving. For an ERRP notice you cannot confirm, reach the registrant another way.  |
+|  A … email … was reported as spam (`email_complaint`) | The recipient marked it as spam; SES has put the address on the account's suppression list | Emails → Outbox; **Send again** is not offered for it | Nothing to send. If it was a mistake the customer can ask; remove the address from the suppression list in SES only then. Several in a week: look at what we send.  |
+|  The supplier catalogue sync failed / was refused / hasn't run for 8 days | The weekly sync in the gateway stopped updating costs; prices can drift from the supplier's | Supplier → Price list → **Preview**, then **Apply price list** (owner, code) | `fly logs -a mydomainshub-gateway` for `catalogue`. To run it now, set `CATALOGUE_SYNC_EVERY_HOURS=1` on Fly, wait for it, then unset it.  |
+
+**SQL editor only**, whatever the dashboard shows: recording a landed transfer
+(`complete_transfer`), recording an unrecorded payment (`record_order_payment`),
+closing a `PAYMENT_NOT_VERIFIED` job, changing `vat_pct`, registrar-default
+presets, adding or removing a preset's source domains
+(`nameserver_preset_sources`), and admins (§6b).
 
 `cancel_refund` means "no money went back and none will"; use
 `record_manual_refund` whenever money did go back, so the customer's order
@@ -477,6 +497,67 @@ page tells the truth. Retrying a failed registration (`select retry_job('<job
 id>');`) takes back its pending refund first, and is refused once that refund
 has reached Flutterwave.
 
-Limits and timings live in the `ops_settings` table (edit it in the Supabase
-table editor). Refunds are refused anything that would take more than their
-charge — that rule is in the database, so no setting changes it.
+Limits and timings live in the `ops_settings` table (change them in the
+dashboard under Settings, as the owner, or in the SQL editor). Refunds are
+refused anything that would take more than their charge — that rule is in the
+database, so no setting changes it.
+
+## 6b. Admin access (ADR-006)
+
+The dashboard at `/admin` is open only to rows in `public.admins`, checked in
+SQL on every request: a password or Google sign-in, then the code from an
+authenticator **pinned** to your admin row, and for any money button a code
+typed into its dialog. Anyone else gets a plain 404. Admins are added and
+changed only here, in the Supabase **SQL editor** — never in a migration, in
+git, or from the dashboard.
+
+1. **You:** turn on two-factor in Settings on every device you will use for the
+   dashboard (a backup phone included), from `/app/settings`.
+2. **You:** after migration 40, in the SQL editor — type your email here only:
+   ```sql
+   -- List your verified authenticators: one row per device.
+   select f.id as factor_id, f.friendly_name, f.created_at
+     from auth.users u join auth.mfa_factors f on f.user_id = u.id
+    where u.email = 'OWNER_EMAIL' and f.factor_type = 'totp' and f.status = 'verified';
+
+   -- Enrol, pinning every verified authenticator.
+   insert into public.admins (user_id, label, role, mfa_factor_ids, added_by)
+   select u.id, 'owner', 'owner',
+          (select array_agg(f.id order by f.created_at) from auth.mfa_factors f
+            where f.user_id = u.id and f.factor_type = 'totp' and f.status = 'verified'),
+          'sql-editor'
+     from auth.users u where u.email = 'OWNER_EMAIL';
+   ```
+3. **After adding, removing or replacing a device**, re-pin every verified
+   authenticator — a sign-in with an unpinned one is told "This sign-in used an
+   authenticator that isn't linked to your admin access":
+   ```sql
+   update public.admins a
+      set mfa_factor_ids = (select array_agg(f.id order by f.created_at) from auth.mfa_factors f
+                             where f.user_id = a.user_id and f.factor_type = 'totp' and f.status = 'verified')
+    where a.label = 'owner';
+   ```
+   An operator is the same insert with role `'operator'` (or `'viewer'`) and
+   their own label (lower-case letters, digits, `-` and `_`; never an email).
+   Removing anyone: `update public.admins set revoked_at = now() where label = '<label>';`
+4. **Every change raises an `admin_changed` Telegram alert.** That alert is how
+   you know nobody else made one: an `admin_changed` you did not cause means
+   someone with database access is adding admins — rotate the database
+   password and `SUPABASE_SECRET_KEY` at once.
+5. **You:** the gateway's admin secret, which the web sends on every live read
+   (`/v1/admin/*`). Make it in your terminal, not here, and set the same value
+   on both sides:
+   ```bash
+   openssl rand -hex 32                                         # copy the output
+   fly secrets set GATEWAY_ADMIN_SECRET=… -a mydomainshub-gateway
+   vercel env add GATEWAY_ADMIN_SECRET production                # paste when asked
+   ```
+   Without it the dashboard works, but live reads answer "Live reads are off".
+   Neither secret alone reaches the supplier: the gateway also claims the
+   read's audit note in the database first.
+6. **`SUPABASE_ACCESS_TOKEN` and the database password are never set in CI or
+   on Vercel.** The dashboard needs neither; with either, a leaked build log
+   could add an admin.
+
+Deploy order for the dashboard: migrations 40 and 41, then the gateway with
+`GATEWAY_ADMIN_SECRET`, then the web, then step 2 above (§5b).

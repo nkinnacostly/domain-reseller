@@ -1523,20 +1523,20 @@ Purposeful only: state transitions, list reordering, skeleton→content. Spring 
 
 A real internal tool, not a Supabase Studio session. Separate route group, admins checked in SQL (ADR-006), full audit logging. Built to `docs/ADMIN-SPEC.md`: Package A (the foundation) and packages B1–B15 (the pages). Deferred, and done in the SQL editor meanwhile (ADMIN-SPEC D20): impersonation, force-refund, status override, manual supplier operations, abuse, risk scores, the DSAR queue and SSL revoke.
 
-| Module | Capability |
-|---|---|
-| **Order queue** | Live view of orders in `provisioning`, failures, orphans. Manual retry of a provision job. Force-refund. Per-item supplier call trace |
-| **Reconciliation** | Domains where `registry_status ≠ local_status`. One-click resync. Diff view |
-| **Float monitor** | Supplier balance time series, burn rate, projected days of cover, top-up log, alert thresholds |
-| **Pricing** | Catalogue with wholesale/retail/margin per TLD and trade type. Edit rules. Schedule future changes. Preview the effect of an FX move before applying |
-| **Catalogue** | Sync status, TLD merchandising toggles, popularity scores, per-TLD required attributes |
-| **Nameserver presets** | Add, edit and order presets. Quarterly re-verification queue. Automatic health check — a preset whose nameservers stop resolving is flagged and hidden from customers. Shows how many domains currently use each preset, so a breakage has a known blast radius |
-| **Customers** | Search, view portfolio, wallet ledger, order history. **Impersonation** (read-only by default, write requires a second admin's approval, always logged and always disclosed to the user afterwards) |
-| **Domains** | Global search, force sync, status override, manual supplier operation with a mandatory reason field |
-| **Abuse** | Inbound reports, triage, forward to supplier abuse, resolution tracking, SLA timers |
-| **Fraud** | Manual-review queue, risk scores, velocity overrides, blocklists |
-| **Compliance** | ERRP notice log with delivery proof, verification-status dashboard, DSAR queue, retention jobs |
-| **Supplier calls** | Searchable log of every DNA request/response for debugging |
+| Module | Capability | Status |
+|---|---|---|
+| **Order queue** | Live view of orders in `provisioning`, failures, orphans. Manual retry of a provision job. Force-refund. Per-item supplier call trace | Foundation built (A, 3 Oct 2026); pages B2 orders, B3 refunds, B4 queue. Force-refund deferred (D20) |
+| **Reconciliation** | Domains where `registry_status ≠ local_status`. One-click resync. Diff view | B9 domains (diff view, "Queue a deep sync"), B5 drift |
+| **Float monitor** | Supplier balance time series, burn rate, projected days of cover, top-up log, alert thresholds | Ledger mirror and float functions built (A); page B6 |
+| **Pricing** | Catalogue with wholesale/retail/margin per TLD and trade type. Edit rules. Schedule future changes. Preview the effect of an FX move before applying | B12. Scheduled changes deferred |
+| **Catalogue** | Sync status, TLD merchandising toggles, popularity scores, per-TLD required attributes | B6 price list (preview, apply), B13 extensions. Popularity scores deferred |
+| **Nameserver presets** | Add, edit and order presets. Quarterly re-verification queue. Automatic health check — a preset whose nameservers stop resolving is flagged and hidden from customers. Shows how many domains currently use each preset, so a breakage has a known blast radius | Drafts, checks and blast radius built (A); page B13 |
+| **Customers** | Search, view portfolio, wallet ledger, order history. **Impersonation** (read-only by default, write requires a second admin's approval, always logged and always disclosed to the user afterwards) | B8 (masked, audited reveal). Impersonation and the wallet ledger deferred (D20) |
+| **Domains** | Global search, force sync, status override, manual supplier operation with a mandatory reason field | B9. Status override and manual supplier operations deferred (D20) |
+| **Abuse** | Inbound reports, triage, forward to supplier abuse, resolution tracking, SLA timers | Deferred (D20) |
+| **Fraud** | Manual-review queue, risk scores, velocity overrides, blocklists | Deferred (D20): velocity limits are in Settings (B13) |
+| **Compliance** | ERRP notice log with delivery proof, verification-status dashboard, DSAR queue, retention jobs | B11 ERRP notice log. DSAR queue deferred (D20) |
+| **Supplier calls** | Searchable log of every DNA request/response for debugging | B6 (calls and audited live lookups) |
 
 ---
 
