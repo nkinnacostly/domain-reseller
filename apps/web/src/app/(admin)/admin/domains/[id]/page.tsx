@@ -1,19 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { DomainView } from '@/features/admin/components/domains/domain-view'
+import { DomainSkeleton } from '@/features/admin/components/domains/domains-skeleton'
 
 export const metadata: Metadata = { title: 'Domain' }
 
-/** Package B9 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminDomainsDetailPage() {
+/** One domain: ours against the registry, the registrant, drift, history, jobs (§5.2 B9). */
+export default function AdminDomainPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Domain"
-        description="Ours against the registry, drift, history and jobs."
-        parent={{ label: 'Domains', href: '/admin/domains' }}
-      />
+    <Suspense fallback={<DomainSkeleton />}>
+      <DomainView params={params} />
     </Suspense>
   )
 }
