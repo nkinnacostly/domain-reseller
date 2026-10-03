@@ -411,6 +411,16 @@ begin
   if (select r.status::text from public.refunds r where r.id = v_refund) is distinct from 'held' then
     raise exception 'FAILED 11: the live refund moved';
   end if;
+  -- D15: a test admin reads its own rows, so a refusal on a live target keeps
+  -- none of its facts — not even a stale-code refusal, which the gate gives
+  -- before TEST_ADMIN.
+  perform pg_temp.act(u_test, s_test, interval '20 minutes');
+  perform pg_temp.expect_code(public.admin_approve_refund(v_refund, 'customer confirmed by phone', gen_random_uuid()),
+                              'NEEDS_CODE', 'FAILED 11: a test admin''s stale code on a live refund');
+  if exists (select 1 from public.admin_audit_log a
+              where a.admin_label = l_test and a.outcome = 'refused' and a.detail <> '{}'::jsonb) then
+    raise exception 'FAILED 11: a test admin''s refusal kept a live refund''s facts';
+  end if;
   v_passed := v_passed + 1;
 
   -- ── 12. Retry: only failed or waiting jobs; never a failed transfer.

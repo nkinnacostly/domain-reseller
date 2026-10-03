@@ -504,6 +504,14 @@ begin
   if pg_column_size(v_detail) > 4096 then
     v_detail := jsonb_build_object('truncated', true);
   end if;
+  -- D15: a test admin reads its own rows (adminDb's test_actor rule), and a
+  -- wrapper reads the target's facts before the gate. So a test admin's
+  -- refusal on anything but a test-mode target keeps none of them: no live
+  -- refund amount, limit, incident or job kind for whoever knows an id.
+  if p_admin.test_only and p_outcome = 'refused'
+     and (p_code = 'TEST_ADMIN' or p_target_test_mode is not true) then
+    v_detail := '{}'::jsonb;
+  end if;
   insert into public.admin_audit_log (
     admin_id, admin_label, admin_role, test_actor, session_hash, action, side, target_type,
     target_id, target_test_mode, reason, outcome, error_code, error, detail, parent_id,

@@ -426,6 +426,7 @@ revoke all on public.admin_note_claims from public, anon, authenticated, service
   - It inserts one row. `session_hash` is `encode(sha256(convert_to(auth.jwt()->>'session_id','UTF8')),'hex')`.
   - `request_id` is the `x-request-id` header only when it matches the uuid pattern.
   - It returns `{ok, auditId, code, message: null, after}`.
+  - **A test admin's refusal on anything but a test-mode target is stored with `detail = '{}'`** (always for `TEST_ADMIN`). A test admin reads its own rows (`adminDb`'s `test_actor` rule), and wrappers read the target's facts before the gate, so otherwise a refusal on a live id would store that refund's amount and limits, an incident's kind and order, or a job's kind for the test admin to read. *(Package A review, 3 Oct 2026.)*
 - **`admin_reason_problem(p_reason text) returns text`**: `'REASON'` unless the trimmed reason is 10–500 characters, else null.
 - **`admin_mask_email(text) returns text`**: `left(local, 1) || '•••@' || domain`. This is the format `maskEmail()` in `format.ts` uses. Granted to `service_role`, because the masked views call it as the invoker.
 
@@ -898,7 +899,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
    - The same key on another refund raises `admin:request_key_mismatch`.
    - A refused attempt's key runs again once the cause is fixed.
 10. Approving a non-held refund gives `{ok:false, code:'NOT_HELD'}` **and** a `refused` row.
-11. A `test_only` admin on a live refund gives `TEST_ADMIN`, and on `admin_update_ops_settings` gives `TEST_ADMIN`.
+11. A `test_only` admin on a live refund gives `TEST_ADMIN`, and on `admin_update_ops_settings` gives `TEST_ADMIN`. With a stale code it gives `NEEDS_CODE`. Every one of its refusals is stored with `detail = '{}'`.
 12. `admin_retry_job` on a `queued` job gives `NOT_RETRYABLE`. On a failed transfer it gives `TRANSFER_CODE_GONE`.
 13. `admin_fail_job` on `register_domain`:
     - no `not_found` read gives `READ_REGISTRY_FIRST`;
