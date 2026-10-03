@@ -124,6 +124,7 @@ declare
   v_expected jsonb;
   v_want    text;
   v_n       integer := 0;
+  v_seq     text;
   v_passed  integer := 0;
 begin
   insert into auth.users (id, aud, role, email, created_at, updated_at) values
@@ -719,6 +720,15 @@ begin
           join public.email_outbox e on e.id = v.id where e.dedupe_key = 'm41-mask:' || v_tag) is distinct from 'e•••@example.com' then
     raise exception 'FAILED 14: the outbox view does not mask';
   end if;
+  foreach v_text in array array['admin_changes', 'admin_audit_log', 'flw_refund_checks', 'float_topups',
+                                'supplier_ledger_revisions'] loop
+    v_seq := pg_get_serial_sequence('public.' || v_text, 'id');
+    if v_seq is null
+       or has_sequence_privilege('anon', v_seq, 'usage, select, update')
+       or has_sequence_privilege('authenticated', v_seq, 'usage, select, update') then
+      raise exception 'FAILED 14: the sequence of % is open to the API roles', v_text;
+    end if;
+  end loop;
   v_passed := v_passed + 1;
 
   raise notice 'migration 41: % checks passed', v_passed;

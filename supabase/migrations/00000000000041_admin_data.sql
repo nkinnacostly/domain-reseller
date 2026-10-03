@@ -2389,6 +2389,10 @@ revoke all on public.admin_payments_v, public.admin_email_outbox_v, public.admin
 grant select on public.admin_payments_v, public.admin_email_outbox_v, public.admin_compliance_notices_v,
   public.admin_ssl_certificates_v, public.admin_domains_v, public.admin_orders_v to service_role;
 
+-- Default privileges give anon and authenticated every new sequence (§3.0).
+revoke all on sequence public.supplier_ledger_revisions_id_seq, public.float_topups_id_seq
+  from public, anon, authenticated;
+
 -- ── Schedules and one-offs ──────────────────────────────────────────────────
 
 select cron.schedule('admin-metrics-daily', '20 23 * * *',

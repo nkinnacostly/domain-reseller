@@ -826,6 +826,28 @@ begin
   -- and nobody else's ever do.
   perform pg_temp.expect_raise(format('select public.grant_test_admin(%L)', u_real), '%only an e2e%');
   perform pg_temp.expect_raise(format('select public.grant_test_admin(%L)', u_nofactor), '%verified authenticator%');
+  perform pg_temp.expect_raise(format('select public.grant_test_admin(%L)', u_owner), '%is a real admin%');
+  if (select a.test_only from public.admins a where a.user_id = u_owner) is not false then
+    raise exception 'FAILED 27: grant_test_admin touched a real admin';
+  end if;
+  insert into public.admin_audit_log (created_at, admin_id, admin_label, admin_role, test_actor, action, side, target_id, outcome)
+  values (now() - interval '31 days', u_test, l_test, 'operator', true, 'supplier.balance', 'test', 'test', 'intent')
+  returning id into v_note;
+  insert into public.admin_note_claims (audit_id, claimed_at) values (v_note, now() - interval '31 days');
+  insert into public.admin_audit_log (created_at, admin_id, admin_label, admin_role, test_actor, action, side, target_id, outcome)
+  values (now() - interval '29 days', u_test, l_test, 'operator', true, 'supplier.balance', 'test', 'test', 'intent')
+  returning id into v_note2;
+  insert into public.admin_audit_log (created_at, admin_id, admin_label, admin_role, test_actor, action, side, target_id, outcome)
+  values (now() - interval '31 days', u_op, l_op, 'operator', false, 'supplier.balance', 'live', 'live', 'intent')
+  returning id into v_audit;
+  v_count := public.purge_test_admin_audit();
+  if v_count < 1
+     or exists (select 1 from public.admin_audit_log a where a.id = v_note)
+     or exists (select 1 from public.admin_note_claims c where c.audit_id = v_note)
+     or not exists (select 1 from public.admin_audit_log a where a.id = v_note2)
+     or not exists (select 1 from public.admin_audit_log a where a.id = v_audit) then
+    raise exception 'FAILED 27: the purge (% rows)', v_count;
+  end if;
   v_passed := v_passed + 1;
 
   -- ── 28. Pins are the user's own; every change is logged and alerted.
