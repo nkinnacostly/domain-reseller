@@ -304,6 +304,28 @@ describe('small parts', () => {
     )
     expect(screen.getByRole('link', { name: 'Orders (2)' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+    // A tick as well as colour (S13).
+    expect(screen.getByRole('link', { name: 'Orders (2)' }).querySelector('svg')).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Overview' }).querySelector('svg')).toBeNull()
+  })
+
+  it('marks the tab the page names when tabs share a path and differ by ?tab=', () => {
+    pathname = '/admin/emails'
+    render(
+      <RouteTabs
+        label="Email views"
+        tabs={[
+          { href: '/admin/emails', label: 'Outbox', current: false },
+          { href: '/admin/emails?tab=compliance', label: 'Compliance notices', current: true },
+        ]}
+      />,
+    )
+    const open = screen.getByRole('link', { name: 'Compliance notices' })
+    expect(open).toHaveAttribute('aria-current', 'page')
+    expect(open).toHaveAttribute('data-current', 'true')
+    expect(open.querySelector('svg')).not.toBeNull()
+    // The path alone would have marked the outbox; the page's word wins.
+    expect(screen.getByRole('link', { name: 'Outbox' })).not.toHaveAttribute('aria-current')
   })
 
   it('copies an id and says so', async () => {
