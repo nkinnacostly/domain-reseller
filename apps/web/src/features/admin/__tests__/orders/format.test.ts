@@ -113,10 +113,9 @@ describe('the orders pages’ words', () => {
   })
 
   it('says why the stuck filter lists every settling order', () => {
-    expect(STUCK_NOTE.test_admin).toBe(
-      'Test administrators can’t read the stuck-order threshold, so this lists every paid order still settling.',
+    expect(STUCK_NOTE.no_threshold).toBe(
+      'The stuck-order threshold couldn’t be read, so this lists every paid order still settling.',
     )
-    expect(STUCK_NOTE.no_threshold).toContain('couldn’t be read')
   })
 
   it('words every supplier call outcome, and colours none alone', () => {

@@ -37,6 +37,13 @@ describe('reading admin_overview', () => {
     })
     expect(parseOverview(null)).toMatchObject({ issues: expect.any(Number) })
   })
+
+  it('needs line counts for every period the picker offers (migration 42)', () => {
+    const answer = overviewAnswer()
+    const read = parseOverview(answer)
+    expect('overview' in read && read.overview.lines.d90.register).toBe(11)
+    expect(parseOverview({ ...answer, lines: { d30: answer.lines.d30 } })).toEqual({ issues: 2 })
+  })
 })
 
 describe('the chart series', () => {

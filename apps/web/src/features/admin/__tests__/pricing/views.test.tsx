@@ -45,11 +45,9 @@ vi.mock('@/features/admin/actions/pricing', () => ({
 }))
 vi.mock('@/features/admin/queries/session', () => ({ requireAdmin: vi.fn() }))
 vi.mock('@/features/admin/queries/pricing', () => ({
-  SAMPLE_TLD: 'com',
   getPricingStatus: vi.fn(),
   getCurrentRates: vi.fn(),
   getRecentRates: vi.fn(),
-  getSampleTld: vi.fn(),
   getSettingsChangedAt: vi.fn(),
 }))
 
@@ -75,7 +73,6 @@ beforeEach(() => {
   vi.mocked(queries.getPricingStatus).mockResolvedValue(status())
   vi.mocked(queries.getCurrentRates).mockResolvedValue([staleRow(), rateRow()])
   vi.mocked(queries.getRecentRates).mockResolvedValue([rateRow(), staleRow()])
-  vi.mocked(queries.getSampleTld).mockResolvedValue(comSample())
   vi.mocked(queries.getSettingsChangedAt).mockResolvedValue('2026-09-20T19:44:56.567115+00:00')
 })
 
@@ -164,6 +161,17 @@ describe('/admin/pricing', () => {
       within(catalogue).getByRole('link', { name: /Extensions in the catalogue\s+812/ }),
     ).toHaveAttribute('href', '/admin/settings/extensions')
     expect(within(catalogue).getByText('798 sellable, 3 paused by us, 6 featured')).toBeVisible()
+  })
+
+  it('prices the example from what admin_pricing_status sends, and says when it sent none', async () => {
+    vi.mocked(queries.getPricingStatus).mockResolvedValue(status({ example: null }))
+    render(await PricingSections({ admin: as(OWNER) }))
+    const built = screen.getByRole('region', { name: 'How a price is built' })
+    expect(
+      within(built).getByText("No example price: .com's catalogue row couldn't be read."),
+    ).toBeInTheDocument()
+    // The rest of the page stands without it.
+    expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument()
   })
 
   it('tells a test administrator up front that only the owner saves', async () => {

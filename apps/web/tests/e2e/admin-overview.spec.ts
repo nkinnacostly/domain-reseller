@@ -114,8 +114,8 @@ test.describe('the admin overview', () => {
       'href',
       /^\/admin\/money\?from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}$/,
     )
-    // Line counts are SQL's 30 days whatever the period, and say so.
-    await expect(sales.locator('[data-kpi="register"] a')).toContainText('Last 30 days')
+    // What was sold is counted over the same period, and says so.
+    await expect(sales.locator('[data-kpi="register"] a')).toContainText('Last 7 days')
 
     // The float: balance with runway, and the 21-day target, both opening Supplier.
     const float = main.getByRole('region', { name: 'Supplier float' })

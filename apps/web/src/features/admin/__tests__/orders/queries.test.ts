@@ -92,13 +92,14 @@ describe('listOrders', () => {
     expect(filterOf(lines, 'in', 'order_id')).toEqual([ids.order])
     // The lines' side comes from their order (adminDb's parent rule).
     expect(lines?.select).toContain('admin_side:orders!inner(test_mode)')
+    // The page's buyers, by id (migration 42), not a page of every profile.
     expect(rpc.rpc).toHaveBeenCalledWith('admin_customers', {
       p_test_mode: true,
       p_sort: 'joined',
       p_dir: 'desc',
       p_offset: 0,
       p_limit: 100,
-      p_filter: {},
+      p_filter: { userIds: [ids.user] },
     })
 
     expect(list.total).toBe(1)
@@ -229,11 +230,10 @@ describe('listOrders', () => {
 
   it('lists stuck orders as SQL counts them, skipping a transfer still being released', async () => {
     const admin = await principal()
-    session({ admin_customers: { data: [] } })
+    const rpc = session({ admin_customers: { data: [] }, admin_stuck_order_minutes: { data: 15 } })
     const now = new Date('2026-10-03T12:00:00Z')
     const transferLine = '9a9b9c9d-0e0f-4a1b-8c2d-3e3f4a4b5c5d'
     const reads = fakeService((read) => {
-      if (read.table === 'ops_settings') return { data: [{ stuck_order_minutes: 15 }] }
       if (read.table === 'admin_orders_v' && read.select === 'id, paid_at') {
         return { data: [{ id: ids.order }, { id: ids.other }] }
       }
@@ -252,6 +252,9 @@ describe('listOrders', () => {
     const list = await listOrders(admin, 'live', parseOrderListParams({ stuck: '1' }), now)
 
     expect(list.stuckNote).toBeNull()
+    expect(rpc.rpc).toHaveBeenCalledWith('admin_stuck_order_minutes')
+    // The threshold alone, from SQL: ops_settings is never read here.
+    expect(byTable(reads, 'ops_settings')).toEqual([])
     const [candidates, page] = byTable(reads, 'admin_orders_v')
     expect(filterOf(candidates, 'in', 'status')).toEqual(['paid', 'provisioning'])
     expect(filterOf(candidates, 'lt', 'paid_at')).toBe('2026-10-03T11:45:00.000Z')
@@ -263,15 +266,32 @@ describe('listOrders', () => {
     expect(filterOf(page, 'in', 'id')).toEqual([ids.order])
   })
 
-  it('tells a test admin the stuck filter has no threshold, without reading settings', async () => {
+  it('gives a test admin the same exact threshold, without reading settings', async () => {
     const admin = await principal({ testOnly: true })
-    session()
+    session({ admin_stuck_order_minutes: { data: 30 } })
+    const now = new Date('2026-10-03T12:00:00Z')
     const reads = fakeService(() => ({ data: [] }))
-    const list = await listOrders(admin, 'test', parseOrderListParams({ stuck: '1' }))
-    expect(list.stuckNote).toBe('test_admin')
+    const list = await listOrders(admin, 'test', parseOrderListParams({ stuck: '1' }), now)
+    expect(list.stuckNote).toBeNull()
     expect(byTable(reads, 'ops_settings')).toEqual([])
     const [candidates] = byTable(reads, 'admin_orders_v')
-    expect(filterOf(candidates, 'lt', 'paid_at')).toBeUndefined()
+    expect(filterOf(candidates, 'lt', 'paid_at')).toBe('2026-10-03T11:30:00.000Z')
+  })
+
+  it('lists every settling order, and says so, when the threshold cannot be read', async () => {
+    const admin = await principal()
+    for (const answer of [
+      { error: { message: 'admin:needs_code', code: '42501' } },
+      { data: null },
+      { data: 0 },
+    ]) {
+      session({ admin_stuck_order_minutes: answer })
+      const reads = fakeService(() => ({ data: [] }))
+      const list = await listOrders(admin, 'live', parseOrderListParams({ stuck: '1' }))
+      expect(list.stuckNote).toBe('no_threshold')
+      const [candidates] = byTable(reads, 'admin_orders_v')
+      expect(filterOf(candidates, 'lt', 'paid_at')).toBeUndefined()
+    }
   })
 
   it('counts the list when a page is past its end, rather than failing', async () => {
@@ -299,23 +319,44 @@ describe('listOrders', () => {
 })
 
 describe('maskedCustomers', () => {
-  it('pages through customers until every buyer is found', async () => {
+  it('asks for each buyer by id, once, and keeps only those asked for', async () => {
     const other = '9f9f9f9f-0e0f-4a1b-8c2d-3e3f4a4b5c5d'
-    const filler = Array.from({ length: 100 }, (_, n) =>
-      customerRow(`00000000-0000-4000-8000-${String(n).padStart(12, '0')}`, 'x•••@example.com'),
+    const rpc = session({
+      admin_customers: {
+        data: [customerRow(ids.user, 'a•••@gmail.com'), customerRow(other, 'b•••@x.ng')],
+      },
+    })
+    const found = await maskedCustomers('live', [ids.user, null, ids.user])
+    expect([...found]).toEqual([[ids.user, 'a•••@gmail.com']])
+    expect(rpc.rpc).toHaveBeenCalledTimes(1)
+    expect(rpc.rpc).toHaveBeenCalledWith('admin_customers', {
+      p_test_mode: false,
+      p_sort: 'joined',
+      p_dir: 'desc',
+      p_offset: 0,
+      p_limit: 100,
+      p_filter: { userIds: [ids.user] },
+    })
+  })
+
+  it('asks in runs of 100, which is all one answer holds', async () => {
+    const buyers = Array.from(
+      { length: 150 },
+      (_, n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
     )
     const rpc = session({
       admin_customers: [
-        { data: filler },
-        { data: [customerRow(ids.user, 'a•••@gmail.com'), customerRow(other, 'b•••@x.ng')] },
+        { data: buyers.slice(0, 100).map((id) => customerRow(id, 'x•••@example.com')) },
+        { data: buyers.slice(100).map((id) => customerRow(id, 'y•••@example.com')) },
       ],
     })
-    const found = await maskedCustomers('live', [ids.user, null, ids.user])
-    expect(found.get(ids.user)).toBe('a•••@gmail.com')
+    const found = await maskedCustomers('test', buyers)
+    expect(found.size).toBe(150)
+    expect(found.get(buyers[149] as string)).toBe('y•••@example.com')
     expect(rpc.rpc).toHaveBeenCalledTimes(2)
     expect(rpc.rpc).toHaveBeenLastCalledWith(
       'admin_customers',
-      expect.objectContaining({ p_offset: 100, p_test_mode: false }),
+      expect.objectContaining({ p_test_mode: true, p_filter: { userIds: buyers.slice(100) } }),
     )
   })
 

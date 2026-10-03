@@ -83,7 +83,7 @@ const PERMITTED: Readonly<Record<string, readonly string[]>> = {
   overview: ['admin_overview', 'admin_attention_counts', 'admin_float'],
   orders: ['admin_payments_v', 'order_item_costs', 'admin_customers', 'admin_domains_v'],
   refunds: ['admin_refund_stats', 'checkFlutterwaveRefund'],
-  queue: ['admin_domains_v'],
+  queue: ['admin_domains_v', 'admin_job_ledger', 'admin_ssl_job_certificate'],
   alerts: ['admin_overview'],
   supplier: [
     'admin_float',

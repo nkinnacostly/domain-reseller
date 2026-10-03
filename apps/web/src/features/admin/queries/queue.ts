@@ -8,13 +8,17 @@ import {
   type DomainJobKind,
   JOB_SORT_COLUMN,
   type JobFilters,
+  type JobLedger,
   type JobSort,
   type JobStatus,
   type LineRefund,
   linesWithoutJob,
   PENDING_GRACE_MS,
+  parseJobLedger,
+  parseSslJobCertificate,
   type ReadCall,
   type RefundLine,
+  type SslJobCertificate,
   watDate,
   watDayEnd,
   watDayStart,
@@ -31,6 +35,9 @@ import { createClient } from '@/lib/supabase/server'
  * Row lists come through adminDb, which applies the side; the provisioning
  * aggregate through `admin_provisioning`. A job's domain name comes from
  * `admin_domains_v` — never from `domains`, and never a registrant (§9).
+ * Two narrow SQL reads (migration 42) give what the queue may not read
+ * itself: a registration's ledger check as a count (`admin_job_ledger`), and
+ * a certificate job's name and line (`admin_ssl_job_certificate`).
  */
 
 /** A read that failed: the page shows its error state with "Try again". */
@@ -390,14 +397,18 @@ export type JobRecord = {
   orderItemId: string | null
 }
 
-export type JobDetail = {
-  job: JobRecord
-  domain: JobDomain | null
+/** A job's order line, with what its refund depends on. */
+export type LineContext = {
   line: JobLine | null
   /** Every line of the line's order, for its share of the VAT. */
   orderLines: RefundLine[]
   order: { subtotalKobo: number; vatKobo: number } | null
   refunds: JobRefund[]
+}
+
+export type JobDetail = LineContext & {
+  job: JobRecord
+  domain: JobDomain | null
   calls: SupplierCallRow[]
   /** The newest registry read of this domain, by the worker or an admin. */
   registryRead: ReadCall | null
@@ -405,6 +416,11 @@ export type JobDetail = {
   transferRead: ReadCall | null
   /** When the worker last sent the write this job exists for. */
   lastAttemptAt: string | null
+  /**
+   * A registration's ledger check, as admin_fail_job makes it (migration 42);
+   * 'unreadable' when SQL could not answer, null for other kinds.
+   */
+  ledger: JobLedger | 'unreadable' | null
   events: JobEvent[]
 }
 
@@ -647,6 +663,44 @@ const ATTEMPT_OPERATION: Readonly<Record<string, string>> = {
   transfer_domain: 'Transfer',
 }
 
+/** A job's order line, its order's lines and totals, and its refunds; empty without a line. */
+async function readLineContext(db: Db, lineId: string | null): Promise<LineContext> {
+  if (!lineId) return { line: null, orderLines: [], order: null, refunds: [] }
+  const [line, refunds] = await Promise.all([readLine(db, lineId), readRefunds(db, lineId)])
+  const [order, orderLines] = await Promise.all([
+    line ? readOrder(db, line.orderId) : Promise.resolve(null),
+    line ? readOrderLines(db, line.orderId) : Promise.resolve([]),
+  ])
+  return {
+    line: line ? { ...line, orderNumber: order?.orderNumber ?? null } : null,
+    orderLines,
+    order:
+      order && order.subtotalKobo !== null && order.vatKobo !== null
+        ? { subtotalKobo: order.subtotalKobo, vatKobo: order.vatKobo }
+        : null,
+    refunds,
+  }
+}
+
+/**
+ * When the supplier ledger was last read, and how many charges name the
+ * job's domain since it started — `admin_job_ledger`, admin_fail_job's own
+ * LEDGER_SHOWS_CHARGE test as a count (migration 42). No ledger row reaches
+ * the queue (§9). 'unreadable' when SQL could not answer.
+ */
+async function readJobLedger(job: JobRecord): Promise<JobLedger | 'unreadable'> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('admin_job_ledger', {
+    p_test_mode: job.testMode,
+    p_job_id: job.id,
+  })
+  if (error) {
+    logger.warn({ code: error.code }, 'admin queue: job ledger check unavailable')
+    return 'unreadable'
+  }
+  return parseJobLedger(data) ?? 'unreadable'
+}
+
 /** One job with what its page shows, or null when this side has no such job. */
 export async function getJob(
   admin: AdminPrincipal,
@@ -657,16 +711,15 @@ export async function getJob(
   const job = await readJob(db, id)
   if (!job) return null
 
-  const [domain, line, refunds, calls, events] = await Promise.all([
+  const [domain, context, calls, events, ledger] = await Promise.all([
     readDomain(db, job.domainId),
-    job.orderItemId ? readLine(db, job.orderItemId) : Promise.resolve(null),
-    job.orderItemId ? readRefunds(db, job.orderItemId) : Promise.resolve([]),
+    readLineContext(db, job.orderItemId),
     readJobCalls(db, job.id),
     readEvents(db, job.domainId, job.createdAt),
+    // Only a registration's Fail is refused for a charge (admin_fail_job).
+    job.kind === 'register_domain' ? readJobLedger(job) : Promise.resolve(null),
   ])
-  const [order, orderLines, registryRead, transferRead] = await Promise.all([
-    line ? readOrder(db, line.orderId) : Promise.resolve(null),
-    line ? readOrderLines(db, line.orderId) : Promise.resolve([]),
+  const [registryRead, transferRead] = await Promise.all([
     domain ? readRegistryRead(db, domain.name) : Promise.resolve(null),
     domain && job.kind === 'transfer_domain'
       ? readTransferRead(db, domain.name)
@@ -677,36 +730,52 @@ export async function getJob(
   return {
     job,
     domain,
-    line: line ? { ...line, orderNumber: order?.orderNumber ?? null } : null,
-    orderLines,
-    order:
-      order && order.subtotalKobo !== null && order.vatKobo !== null
-        ? { subtotalKobo: order.subtotalKobo, vatKobo: order.vatKobo }
-        : null,
-    refunds,
+    ...context,
     calls,
     registryRead,
     transferRead,
     lastAttemptAt: attempt
       ? (calls.find((call) => call.operation === attempt)?.createdAt ?? null)
       : null,
+    ledger,
     events,
   }
 }
 
 // ── One certificate job ────────────────────────────────────────────────────
 
-export type SslJobDetail = {
+export type SslJobDetail = LineContext & {
   job: SslJobRow & {
     finishedAt: string | null
     lockedAt: string | null
     lockedBy: string | null
   }
-  /** The certificate's name, from the supplier calls that carry it. */
+  /** The certificate's common name; from its supplier calls when SQL could not say. */
   name: string | null
   calls: SupplierCallRow[]
   /** The certificate's other jobs, newest first. */
   siblings: { id: string; kind: string; status: string; createdAt: string }[]
+}
+
+/**
+ * The certificate's name and order line, and nothing else of it —
+ * `admin_ssl_job_certificate` (migration 42); the certificate view is B10's.
+ * Null when SQL could not answer: the page then names it from its calls.
+ */
+async function readSslJobCertificate(
+  testMode: boolean,
+  jobId: string,
+): Promise<SslJobCertificate | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('admin_ssl_job_certificate', {
+    p_test_mode: testMode,
+    p_job_id: jobId,
+  })
+  if (error) {
+    logger.warn({ code: error.code }, 'admin queue: certificate of a job unavailable')
+    return null
+  }
+  return parseSslJobCertificate(data)
 }
 
 export async function getSslJob(
@@ -726,7 +795,8 @@ export async function getSslJob(
       .maybeSingle(),
   )
   if (!row) return null
-  const [calls, siblings] = await Promise.all([
+  const certificate = await readSslJobCertificate(row.test_mode, row.id)
+  const [calls, siblings, context] = await Promise.all([
     db
       .from('supplier_calls')
       .select(
@@ -744,8 +814,10 @@ export async function getSslJob(
       .order('created_at', { ascending: false })
       .limit(20)
       .then((answer) => must('certificate jobs', answer) ?? []),
+    readLineContext(db, certificate?.orderItemId ?? null),
   ])
   return {
+    ...context,
     job: {
       id: row.id,
       kind: row.kind,
@@ -762,7 +834,7 @@ export async function getSslJob(
       lockedAt: row.locked_at,
       lockedBy: row.locked_by,
     },
-    name: calls.find((call) => call.domain_name)?.domain_name ?? null,
+    name: certificate?.commonName ?? calls.find((call) => call.domain_name)?.domain_name ?? null,
     calls: calls.map(toCall),
     siblings: siblings.map((sibling) => ({
       id: sibling.id,

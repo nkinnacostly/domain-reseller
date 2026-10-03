@@ -446,7 +446,9 @@ begin
     format('select public.admin_customer(%L, false)', u_none), 'select public.admin_domain_stats(false)',
     'select * from public.admin_tld_held_counts(false)', 'select * from public.admin_preset_usage(false)',
     'select public.admin_email_stats(false, 30)', 'select public.admin_alert_stats(false, 30)',
-    'select public.admin_ssl_stats(false)'
+    'select public.admin_ssl_stats(false)',
+    'select public.admin_job_ledger(false, gen_random_uuid())',
+    'select public.admin_ssl_job_certificate(false, gen_random_uuid())'
   ] loop
     begin
       execute v_sql;
@@ -714,6 +716,7 @@ begin
     "admin_domain_stats":"authenticated", "admin_tld_held_counts":"authenticated",
     "admin_preset_usage":"authenticated", "admin_email_stats":"authenticated", "admin_alert_stats":"authenticated",
     "admin_pricing_status":"authenticated", "admin_ssl_stats":"authenticated", "admin_list_admins":"authenticated",
+    "admin_stuck_order_minutes":"authenticated", "admin_job_ledger":"authenticated", "admin_ssl_job_certificate":"authenticated",
     "record_supplier_ledger":"service_role", "bump_funnel":"service_role", "seed_test_failed_email":"service_role",
     "hold_test_refund":"service_role", "purge_test_ledger_entries":"service_role",
     "current_alert_conditions":"service_role", "activate_fx_rate":"service_role"

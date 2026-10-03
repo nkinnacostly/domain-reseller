@@ -8,15 +8,18 @@ import {
   deleteTestUser,
   freshTotpCode,
   hasAdminSchema,
+  hasSslSchema,
 } from './support/accounts.mjs'
 import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from './support/admin'
 
 /**
  * The queue (docs/ADMIN-SPEC.md §5.2 B4, §9): a failed test registration is
  * retried with a code — back in the queue, its pending refund cancelled; Fail
- * without a fresh registry read is refused in words; the live reads show the
- * mock gateway's answers; the "Paid, no job" tab renders. A test-only admin,
- * on the test side, with no failure artifacts (support/admin.ts).
+ * without a fresh registry read is refused in words, beside the supplier
+ * ledger's word (migration 42); the live reads show the mock gateway's
+ * answers; a certificate order names its certificate, line and refund; the
+ * "Paid, no job" tab renders. A test-only admin, on the test side, with no
+ * failure artifacts (support/admin.ts).
  *
  * Seeds are test-mode rows of the admin's own e2e account, written as the
  * payment and the worker write them — record_order_payment, claim_job,
@@ -41,16 +44,15 @@ function service(): SupabaseClient {
 type Seeded = { orderId: string; jobId: string; domain: string }
 
 /**
- * A paid test order of one line for the admin's own e2e account, its job
- * claimed and failed the way the worker fails it: `failed` queues the line's
- * refund; `needs_attention` waits for a person.
+ * A paid test order of one ₦1,000 line (₦1,075 with VAT) for the admin's own
+ * e2e account, paid through record_order_payment, which queues its job.
  */
-async function seedJob(
+async function paidOrder(
+  db: SupabaseClient,
   userId: string,
-  kind: 'register' | 'transfer',
-  outcome: { code: string; needsAttention: boolean },
-): Promise<Seeded> {
-  const db = service()
+  kind: 'register' | 'transfer' | 'ssl',
+  productCode: string | null = null,
+): Promise<{ orderId: string; domain: string }> {
   const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
   const domain = `e2equeue${stamp}.com`
   const { data: rate, error: rateError } = await db.from('fx_rates').select('id').limit(1).single()
@@ -82,6 +84,7 @@ async function seedJob(
     auto_renew: false,
     price_kobo: 100_000,
     renewal_kobo: 100_000,
+    ...(productCode ? { ssl_product_code: productCode } : {}),
   })
   if (line.error) throw line.error
   const paid = await db.rpc('record_order_payment', {
@@ -93,13 +96,28 @@ async function seedJob(
     p_raw: { id: `queue-${stamp}`, status: 'successful' },
   })
   if (paid.error) throw paid.error
+  return { orderId: order.id, domain }
+}
+
+/**
+ * A paid test registration or transfer, its job claimed and failed the way
+ * the worker fails it: `failed` queues the line's refund; `needs_attention`
+ * waits for a person.
+ */
+async function seedJob(
+  userId: string,
+  kind: 'register' | 'transfer',
+  outcome: { code: string; needsAttention: boolean },
+): Promise<Seeded> {
+  const db = service()
+  const { orderId, domain } = await paidOrder(db, userId, kind)
   const { data: jobs, error: jobsError } = await db
     .from('jobs')
     .select('id, order_items!inner(order_id)')
-    .eq('order_items.order_id', order.id)
+    .eq('order_items.order_id', orderId)
   if (jobsError) throw jobsError
   const job = jobs?.[0]
-  if (!job) throw new Error(`no job for order ${order.id}`)
+  if (!job) throw new Error(`no job for order ${orderId}`)
   const claim = await db.rpc('claim_job', {
     p_worker: 'e2e',
     p_test_mode: true,
@@ -113,7 +131,44 @@ async function seedJob(
     p_needs_attention: outcome.needsAttention,
   })
   if (failed.error) throw failed.error
-  return { orderId: order.id, jobId: job.id, domain }
+  return { orderId, jobId: job.id, domain }
+}
+
+/**
+ * A paid test certificate order whose order job timed out at the supplier
+ * before it was sent: it waits for a person, and Fail is offered.
+ */
+async function seedSslJob(userId: string): Promise<Seeded> {
+  const db = service()
+  const { data: product, error: productError } = await db
+    .from('ssl_products')
+    .select('product_code')
+    .eq('is_sellable', true)
+    .not('create_usd', 'is', null)
+    .limit(1)
+    .single()
+  if (productError) throw productError
+  const { orderId, domain } = await paidOrder(db, userId, 'ssl', product.product_code)
+  const { data: job, error } = await db
+    .from('ssl_jobs')
+    .select('id, ssl_certificates!inner(order_items!inner(order_id))')
+    .eq('ssl_certificates.order_items.order_id', orderId)
+    .single()
+  if (error) throw error
+  const claim = await db.rpc('claim_ssl_job', {
+    p_worker: 'e2e',
+    p_test_mode: true,
+    p_job_id: job.id,
+  })
+  if (claim.error) throw claim.error
+  const failed = await db.rpc('fail_ssl_job', {
+    p_job_id: job.id,
+    p_code: 'SUPPLIER_TIMEOUT',
+    p_message: 'e2e',
+    p_needs_attention: true,
+  })
+  if (failed.error) throw failed.error
+  return { orderId, jobId: job.id, domain }
 }
 
 async function jobStatus(jobId: string): Promise<string | null> {
@@ -280,6 +335,11 @@ test.describe('the queue to a test administrator', () => {
     await expect(page.getByRole('heading', { level: 1, name: seeded.domain })).toBeVisible()
     const before = page.getByRole('region', { name: 'Before failing' })
     await expect(before).toContainText('No registry read is recorded for this domain on this side.')
+    // The ledger's word (admin_job_ledger): a job this new can show no charge,
+    // whether or not the test side's ledger has been read since it started.
+    const ledger = before.locator('[data-ledger]')
+    await expect(ledger).toHaveAttribute('data-ledger', /^(never_read|before_job|clear)$/)
+    await expect(ledger).toContainText(seeded.domain)
     expect((await axe(page)).violations).toEqual([])
 
     // The mock gateway answers "not in our account"; it records no call, so Fail still needs one.
@@ -352,5 +412,39 @@ test.describe('the queue to a test administrator', () => {
     ).toHaveAttribute('aria-current', 'page')
     expect((await axe(page)).violations).toEqual([])
     await expectNoOverflow(page)
+  })
+
+  test('a certificate order waiting for a person names its certificate, line and refund', async ({
+    page,
+  }) => {
+    if (!admin) throw new Error('no admin')
+    test.skip(!(await hasSslSchema()), 'no sellable, priced certificate on this database')
+    const seeded = await seedSslJob(admin.user.id)
+
+    await signInAsAdmin(page, admin, `/admin/queue/ssl-jobs/${seeded.jobId}`)
+    // Named by its certificate (admin_ssl_job_certificate), not by an id.
+    await expect(page.getByRole('heading', { level: 1, name: seeded.domain })).toBeVisible()
+    const line = page.getByRole('region', { name: 'Order line and refund' })
+    await expect(line.getByText('Certificate', { exact: true })).toBeVisible()
+    await expect(line).toContainText('₦1,000 for a 1-year subscription')
+    await expect(line).toContainText('No refund for this line.')
+    await expect(line.getByRole('link').first()).toHaveAttribute(
+      'href',
+      `/admin/orders/${seeded.orderId}`,
+    )
+    expect((await axe(page)).violations).toEqual([])
+    await expectNoOverflow(page)
+
+    // Never sent, so Fail is offered, naming the refund it queues: price and VAT share.
+    await page.getByRole('button', { name: 'Fail', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(
+      dialog.getByRole('heading', { name: `Fail the certificate order for ${seeded.domain}?` }),
+    ).toBeVisible()
+    await expect(dialog).toContainText(
+      'a refund of ₦1,075 is queued to the card or account that paid',
+    )
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 })

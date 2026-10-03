@@ -9,10 +9,14 @@ import {
   JOB_LIST_SPEC,
   jobsHref,
   type LineRefund,
+  ledgerVerdict,
+  lineRefundFacts,
   lineRefundKobo,
   linesWithoutJob,
   openLineRefund,
+  parseJobLedger,
   parseKind,
+  parseSslJobCertificate,
   parseUuid,
   READ_WINDOW_MS,
   readVerdict,
@@ -276,5 +280,87 @@ describe('paid lines with no job', () => {
       { id: '5', orderId: 'o', itemType: 'transfer', status: 'pending' },
     ]
     expect(linesWithoutJob(lines, new Set(['2'])).map((line) => line.id)).toEqual(['1', '5'])
+  })
+})
+
+describe('a line’s money, for Retry and Fail', () => {
+  const refund = (overrides: Partial<LineRefund> = {}): LineRefund => ({
+    id: 'r',
+    status: 'queued',
+    amountKobo: 107_500,
+    providerRefundId: null,
+    ...overrides,
+  })
+
+  it('names the open refund Retry cancels, and the share Fail queues', () => {
+    expect(lineRefundFacts([refund()], 107_500)).toEqual({
+      pendingRefundKobo: 107_500,
+      refundAtProvider: false,
+      failRefundKobo: 107_500,
+    })
+    expect(lineRefundFacts([], null)).toEqual({
+      pendingRefundKobo: null,
+      refundAtProvider: false,
+      failRefundKobo: null,
+    })
+  })
+
+  it('names no pending refund once it has reached Flutterwave', () => {
+    expect(lineRefundFacts([refund({ status: 'submitted' })], 107_500)).toMatchObject({
+      pendingRefundKobo: null,
+      refundAtProvider: true,
+    })
+  })
+})
+
+describe('the supplier ledger check (admin_job_ledger)', () => {
+  const answer = {
+    jobId: ID,
+    since: '2026-10-03T09:00:00.5+00:00',
+    syncedAt: '2026-10-03T11:15:05+00:00',
+    outcome: 'ok',
+    readAt: '2026-10-03T11:15:00+00:00',
+    charges: 0,
+  }
+
+  it('reads SQL’s answer, and refuses another shape', () => {
+    expect(parseJobLedger(answer)).toEqual({
+      since: answer.since,
+      syncedAt: answer.syncedAt,
+      outcome: 'ok',
+      readAt: answer.readAt,
+      charges: 0,
+    })
+    expect(
+      parseJobLedger({ ...answer, readAt: null, syncedAt: null, outcome: null }),
+    ).toMatchObject({
+      readAt: null,
+    })
+    expect(parseJobLedger(null)).toBeNull()
+    expect(parseJobLedger({ ...answer, charges: 1.5 })).toBeNull()
+    expect(parseJobLedger({ ...answer, since: '' })).toBeNull()
+  })
+
+  it('judges a charge first, then whether a read could have seen one', () => {
+    const ledger = parseJobLedger(answer)
+    if (!ledger) throw new Error('unparsed')
+    expect(ledgerVerdict(ledger)).toBe('clear')
+    expect(ledgerVerdict({ ...ledger, charges: 2, readAt: null })).toBe('charge')
+    expect(ledgerVerdict({ ...ledger, readAt: null })).toBe('never_read')
+    expect(ledgerVerdict({ ...ledger, readAt: 'not a time' })).toBe('never_read')
+    expect(ledgerVerdict({ ...ledger, readAt: '2026-10-03T09:00:00.5+00:00' })).toBe('before_job')
+    expect(ledgerVerdict('unreadable')).toBe('unreadable')
+  })
+})
+
+describe('a certificate job’s certificate (admin_ssl_job_certificate)', () => {
+  it('reads the name and line, and nothing that is not one', () => {
+    expect(parseSslJobCertificate({ commonName: '*.example.com', orderItemId: ID })).toEqual({
+      commonName: '*.example.com',
+      orderItemId: ID,
+    })
+    expect(parseSslJobCertificate(null)).toBeNull()
+    expect(parseSslJobCertificate({ commonName: '', orderItemId: ID })).toBeNull()
+    expect(parseSslJobCertificate({ commonName: 'example.com', orderItemId: 'line-1' })).toBeNull()
   })
 })

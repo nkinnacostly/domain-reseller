@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { ListParams, ListSpec } from '@/features/admin/lib/list-params'
 import { listHref } from '@/features/admin/lib/list-params'
 
@@ -258,6 +259,76 @@ export function readVerdict(
   return read.outcome === 'ok' && (read.state === 'rejected' || read.state === 'cancelled')
     ? 'ok'
     : 'not_qualifying'
+}
+
+/** What a Fail or Retry would do with a line's money, from its refunds and its share. */
+export function lineRefundFacts(
+  refunds: readonly LineRefund[],
+  share: number | null,
+): { pendingRefundKobo: number | null; refundAtProvider: boolean; failRefundKobo: number | null } {
+  const open = openLineRefund(refunds)
+  return {
+    pendingRefundKobo: open && !refundAtProvider(open) ? open.amountKobo : null,
+    refundAtProvider: refundAtProvider(open),
+    failRefundKobo: failRefundKobo(refunds, share),
+  }
+}
+
+// ── The supplier ledger, as admin_fail_job reads it (migration 42) ─────────
+
+const when = z.string().min(1).nullable()
+
+const jobLedgerSchema = z.object({
+  since: z.string().min(1),
+  readAt: when,
+  syncedAt: when,
+  outcome: z.string().nullable(),
+  charges: z.number().int().nonnegative(),
+})
+
+/**
+ * `admin_job_ledger`: when the mirror was last read from the supplier (the
+ * last good read), and how many domain charges name the job's domain since
+ * the job was made — the count admin_fail_job refuses LEDGER_SHOWS_CHARGE on.
+ */
+export type JobLedger = z.infer<typeof jobLedgerSchema>
+
+/** SQL's answer, or null when it is not that shape. */
+export function parseJobLedger(data: unknown): JobLedger | null {
+  const parsed = jobLedgerSchema.safeParse(data)
+  return parsed.success ? parsed.data : null
+}
+
+export type LedgerVerdict = 'charge' | 'clear' | 'before_job' | 'never_read' | 'unreadable'
+
+/**
+ * What the ledger says about failing: a charge refuses it; otherwise the
+ * mirror shows none, but only a read after the job started could have.
+ */
+export function ledgerVerdict(ledger: JobLedger | 'unreadable'): LedgerVerdict {
+  if (ledger === 'unreadable') return 'unreadable'
+  if (ledger.charges > 0) return 'charge'
+  if (!ledger.readAt) return 'never_read'
+  const read = Date.parse(ledger.readAt)
+  const since = Date.parse(ledger.since)
+  if (Number.isNaN(read) || Number.isNaN(since)) return 'never_read'
+  return read <= since ? 'before_job' : 'clear'
+}
+
+// ── A certificate job's certificate (migration 42) ─────────────────────────
+
+const sslJobCertificateSchema = z.object({
+  commonName: z.string().min(1),
+  orderItemId: z.string().regex(UUID),
+})
+
+/** `admin_ssl_job_certificate`: the certificate's name and its order line, nothing more. */
+export type SslJobCertificate = z.infer<typeof sslJobCertificateSchema>
+
+/** SQL's answer, or null when there is none or it is not that shape. */
+export function parseSslJobCertificate(data: unknown): SslJobCertificate | null {
+  const parsed = sslJobCertificateSchema.safeParse(data)
+  return parsed.success ? parsed.data : null
 }
 
 // ── Paid lines with no job ─────────────────────────────────────────────────

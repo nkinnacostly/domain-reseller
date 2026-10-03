@@ -1,21 +1,17 @@
 import { formatNaira } from '@dr/shared'
 import { formatCount } from '@/features/admin/lib/format'
-import type { Overview, SalesWindow } from './overview-data'
+import type { LinesWindow, Overview, SalesWindow } from './overview-data'
 
 /**
  * The overview's KPI row (docs/ADMIN-SPEC.md §5.2 B1, §6): sales over the
- * last 7, 30 or 90 days, from `admin_overview.sales`, and what was sold, from
- * `admin_overview.lines` — which SQL counts over 30 days only, so those four
- * tiles say "last 30 days" whatever the period (N9b). Each figure links to
- * the page that breaks it down, over the same dates.
+ * last 7, 30 or 90 days, from `admin_overview.sales`, and what was sold over
+ * the same days, from `admin_overview.lines` (migration 42). Each figure
+ * links to the page that breaks it down, over the same dates.
  */
 
 export const PERIODS = [7, 30, 90] as const
 export type Period = (typeof PERIODS)[number]
 export const DEFAULT_PERIOD: Period = 30
-
-/** Line counts come for 30 days only (`admin_overview.lines.d30`). */
-export const LINES_PERIOD: Period = 30
 
 /** `?period=7|30|90`; anything else is the default. */
 export function parsePeriod(value: string | string[] | undefined): Period {
@@ -72,16 +68,20 @@ function window(overview: Overview, period: Period): SalesWindow {
   return overview.sales.d30
 }
 
+function linesIn(overview: Overview, period: Period): LinesWindow {
+  if (period === 7) return overview.lines.d7
+  if (period === 90) return overview.lines.d90
+  return overview.lines.d30
+}
+
 /** The ten KPI tiles, in §5.2's order. */
 export function kpis(overview: Overview, period: Period, now: Date): Kpi[] {
   const sales = window(overview, period)
-  const lines = overview.lines.d30
+  const lines = linesIn(overview, period)
   const range = periodRange(period, now)
-  const linesRange = periodRange(LINES_PERIOD, now)
   const money = href('/admin/money', range)
-  const orders = (kind: string) => href('/admin/orders', { kind, ...linesRange })
+  const orders = (kind: string) => href('/admin/orders', { kind, ...range })
   const hint = periodLabel(period)
-  const linesHint = periodLabel(LINES_PERIOD)
 
   return [
     { key: 'cash', label: 'Cash in', value: formatNaira(sales.cashKobo), hint, href: money },
@@ -98,28 +98,28 @@ export function kpis(overview: Overview, period: Period, now: Date): Kpi[] {
       key: 'register',
       label: 'Registrations',
       value: formatCount(lines.register),
-      hint: linesHint,
+      hint,
       href: orders('register'),
     },
     {
       key: 'renew',
       label: 'Renewals',
       value: formatCount(lines.renew),
-      hint: linesHint,
+      hint,
       href: orders('renew'),
     },
     {
       key: 'transfer',
       label: 'Transfers in',
       value: formatCount(lines.transfer),
-      hint: linesHint,
+      hint,
       href: orders('transfer'),
     },
     {
       key: 'ssl',
       label: 'SSL sold',
       value: formatCount(lines.ssl),
-      hint: linesHint,
+      hint,
       href: orders('ssl'),
     },
     {

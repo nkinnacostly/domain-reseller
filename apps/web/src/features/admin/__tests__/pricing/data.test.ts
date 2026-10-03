@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  exactCents,
-  parsePricingStatus,
-  parseRateRows,
-  parseSampleTld,
-} from '@/features/admin/lib/pricing-data'
-import { rateRow, rawRate, staleRow, status } from './fixtures'
+import { parsePricingStatus, parseRateRows } from '@/features/admin/lib/pricing-data'
+import { comSample, rateRow, rawRate, staleRow, status, statusJson } from './fixtures'
 
 /**
  * What the Pricing & FX pages read, parsed (docs/ADMIN-SPEC.md §3.2h): an
@@ -13,10 +8,9 @@ import { rateRow, rawRate, staleRow, status } from './fixtures'
  * dollars become whole cents only when that is exactly the amount (D24).
  */
 
-/** `admin_pricing_status()` as jsonb arrives: numerics as numbers. */
+/** `admin_pricing_status()` as jsonb arrives: numerics as numbers, the example as SQL builds it. */
 function answer() {
-  const value = status()
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>
+  return statusJson(status())
 }
 
 describe('admin_pricing_status', () => {
@@ -65,57 +59,38 @@ describe('fx_rates rows', () => {
 })
 
 describe('the example extension', () => {
-  const row = {
-    name: 'com',
-    register_usd: 11.31,
-    renew_usd: '11.5100',
-    is_country_code: false,
-    min_period: 1,
-    max_period: 10,
-    register_periods: [1, 2, 3],
-    renew_periods: [1, 2],
-    is_sellable: true,
-    is_paused: false,
+  /** The answer with its example changed as SQL might send it. */
+  function withExample(example: Record<string, unknown> | null | undefined) {
+    const json = answer()
+    if (example === undefined) delete json.example
+    else json.example = example === null ? null : { ...(json.example as object), ...example }
+    const parsed = parsePricingStatus(json)
+    if (!('status' in parsed)) throw new Error(`refused: ${JSON.stringify(parsed)}`)
+    return parsed.status.example
   }
 
-  it('turns dollars into whole cents only when that is exactly the amount', () => {
-    expect(exactCents(11.31)).toBe(1131)
-    expect(exactCents('11.3100')).toBe(1131)
-    expect(exactCents(0)).toBe(0)
-    expect(exactCents(79.995)).toBeNull()
-    expect(exactCents('11.315')).toBeNull()
-    expect(exactCents(-1)).toBeNull()
-    expect(exactCents('abc')).toBeNull()
-    expect(exactCents(null)).toBeNull()
-    expect(exactCents(Number.NaN)).toBeNull()
-  })
-
-  it('reads the row, in cents, and says whether the storefront sells it', () => {
-    expect(parseSampleTld(row)).toEqual({
-      name: 'com',
-      registerCents: 1131,
-      renewCents: 1151,
-      isCountryCode: false,
-      minPeriod: 1,
-      maxPeriod: 10,
-      registerPeriods: [1, 2, 3],
+  it('reads .com in the cents SQL sends, and whether the storefront sells it (D24)', () => {
+    expect(withExample({})).toEqual(comSample())
+    expect(withExample({ isPaused: true })?.onSale).toBe(false)
+    expect(withExample({ isSellable: false })?.onSale).toBe(false)
+    expect(withExample({ registerPeriods: null, renewPeriods: [1, 2] })).toMatchObject({
+      registerPeriods: null,
       renewPeriods: [1, 2],
-      onSale: true,
     })
-    expect(parseSampleTld({ ...row, is_paused: true })?.onSale).toBe(false)
-    expect(parseSampleTld({ ...row, is_sellable: false })?.onSale).toBe(false)
   })
 
-  it('reads a row synced before the period columns as listing none', () => {
-    const { register_periods: _r, renew_periods: _n, ...older } = row
-    expect(parseSampleTld(older)).toMatchObject({ registerPeriods: null, renewPeriods: null })
-    expect(parseSampleTld({ ...row, register_periods: null })?.registerPeriods).toBeNull()
+  it('shows no example for a cost SQL could not give in whole cents, or no row (N5b)', () => {
+    expect(withExample({ registerCents: null })).toBeNull()
+    expect(withExample({ renewCents: null })).toBeNull()
+    expect(withExample(null)).toBeNull()
+    // A database before migration 42 sends none at all.
+    expect(withExample(undefined)).toBeNull()
   })
 
-  it('shows no example for a missing, malformed or sub-cent row', () => {
-    expect(parseSampleTld(undefined)).toBeNull()
-    expect(parseSampleTld({ ...row, name: '' })).toBeNull()
-    expect(parseSampleTld({ ...row, register_usd: 11.3125 })).toBeNull()
-    expect(parseSampleTld({ ...row, renew_usd: 'n/a' })).toBeNull()
+  it('shows no example, and keeps the rest of the page, when it is malformed', () => {
+    expect(withExample({ registerCents: 1131.5 })).toBeNull()
+    expect(withExample({ renewCents: -1 })).toBeNull()
+    expect(withExample({ name: '' })).toBeNull()
+    expect(withExample({ minPeriod: '1' })).toBeNull()
   })
 })

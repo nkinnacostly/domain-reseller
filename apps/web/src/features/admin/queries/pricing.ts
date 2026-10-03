@@ -4,9 +4,7 @@ import {
   type PricingStatus,
   parsePricingStatus,
   parseRateRows,
-  parseSampleTld,
   type RateRow,
-  type SampleTld,
 } from '@/features/admin/lib/pricing-data'
 import { type AdminPrincipal, adminDb } from '@/features/admin/queries/session'
 import { logger } from '@/lib/logger'
@@ -15,15 +13,13 @@ import { createClient } from '@/lib/supabase/server'
 /**
  * The Pricing & FX pages' reads (docs/ADMIN-SPEC.md §3.2h, §5.2 B12).
  * `admin_pricing_status` — called as the admin, so SQL checks who is asking —
- * answers the settings, the catalogue's counts and each rate's review state.
- * The rest is storefront-public data read through adminDb (`fx_rates` and
- * `tlds` are global and public-safe, so a test administrator reads them
- * too): each rate's own buffer and why it was held, the recent history, and
- * the catalogue row the pages price as their example. Nothing here writes.
+ * answers the settings, the catalogue's counts, each rate's review state and
+ * the example extension's costs in whole cents (migration 42): no `*_usd`
+ * column is read here (D24). The rest is storefront-public data read through
+ * adminDb (`fx_rates` is global and public-safe, so a test administrator
+ * reads it too): each rate's own buffer and why it was held, and the recent
+ * history. Nothing here writes.
  */
-
-/** The extension whose price the pages show before and after a change. */
-export const SAMPLE_TLD = 'com'
 
 /** How many rates the history shows. */
 export const RECENT_RATES = 10
@@ -99,32 +95,6 @@ export async function getRecentRates(admin: AdminPrincipal): Promise<RateRow[] |
     return rows
   } catch (error) {
     warn(error, 'admin recent rates refused')
-    return null
-  }
-}
-
-/**
- * The example extension's catalogue row: its yearly costs become whole cents
- * here, at the edge (D24), and go only into the shared pricing functions —
- * the same inputs the storefront prices it from (N5b). Null when it is
- * missing, unreadable or not cent-exact: the pages then show no example.
- */
-export async function getSampleTld(admin: AdminPrincipal): Promise<SampleTld | null> {
-  try {
-    const { data, error } = await adminDb(admin, 'live')
-      .from('tlds')
-      .select(
-        'name, register_usd, renew_usd, is_country_code, min_period, max_period, register_periods, renew_periods, is_sellable, is_paused',
-      )
-      .eq('name', SAMPLE_TLD)
-      .limit(1)
-    if (error) {
-      warn(error, 'admin sample extension unavailable')
-      return null
-    }
-    return parseSampleTld(Array.isArray(data) ? data[0] : null)
-  } catch (error) {
-    warn(error, 'admin sample extension refused')
     return null
   }
 }
