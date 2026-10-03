@@ -266,6 +266,16 @@ begin
   if v_j ->> 'code' is distinct from 'NEEDS_CODE' or pg_temp.audit_count(l_owner, 'settings.update', 'refused', 'NEEDS_CODE') is distinct from 1 then
     raise exception 'FAILED 3: a 20-minute code passed a money wrapper (%)', v_j;
   end if;
+  -- The money tier's edge (D6): a code 4 minutes old passes the gate (the
+  -- refusal is the wrapper's own, UNKNOWN_KEY); 6 minutes old does not.
+  perform pg_temp.act(u_owner, s_owner, interval '4 minutes');
+  perform public.admin_whoami(5);
+  perform pg_temp.expect_code(public.admin_update_ops_settings('{"nope": 1}', 'a reason of ten words', gen_random_uuid()),
+                              'UNKNOWN_KEY', 'FAILED 3: a 4-minute code was refused by a money wrapper');
+  perform pg_temp.act(u_owner, s_owner, interval '6 minutes');
+  perform pg_temp.expect_raise('select public.admin_whoami(5)', 'admin:needs_code');
+  perform pg_temp.expect_code(public.admin_update_ops_settings('{"nope": 1}', 'a reason of ten words', gen_random_uuid()),
+                              'NEEDS_CODE', 'FAILED 3: a 6-minute code passed a money wrapper');
   v_passed := v_passed + 1;
 
   -- ── 4. Factor pinning: the second device passes; an unpinned or unverified one,

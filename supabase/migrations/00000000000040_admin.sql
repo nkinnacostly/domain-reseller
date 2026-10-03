@@ -2159,6 +2159,7 @@ declare
   v_admin  public.admins := public.admin_session('viewer', null, false);
   v_prior  jsonb;
   v_email  public.email_outbox;
+  v_owner  text;
   v_code   text;
   v_detail jsonb;
   v_side   text;
@@ -2243,17 +2244,23 @@ end $$;
 -- session count one after another instead of all reading the same total.
 create function public.admin_lookup_rate_limited(p_admin_id uuid)
 returns boolean
-language sql
-stable
+language plpgsql
+volatile
 security definer
 set search_path = ''
 as $$
-  select count(*) >= 30
+declare
+  v_count integer;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('admin_lookup:' || p_admin_id::text, 0));
+  select count(*) into v_count
     from public.admin_audit_log a
    where a.admin_id = p_admin_id
      and a.action in ('customer.search', 'customer.reveal', 'domain.reveal_contacts')
      and a.outcome = 'ok'
-     and a.created_at > now() - interval '1 hour'
+     and a.created_at > now() - interval '1 hour';
+  return v_count >= 30;
+end;
 $$;
 
 -- customer.search: an exact email, order number or domain; masked rows only.

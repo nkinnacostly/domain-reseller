@@ -525,6 +525,8 @@ revoke insert, update, delete, truncate on public.fx_rates, public.pricing_setti
   public.ssl_products, public.nameserver_presets, public.market_references from anon, authenticated;
 revoke truncate on all tables in schema public from anon, authenticated;  -- PostgREST never truncates
 ```
+**Sequences.** Supabase's default privileges also give `anon` and `authenticated` every new sequence. Each migration revokes all on its identity sequences (`admin_changes_id_seq`, `admin_audit_log_id_seq`, `flw_refund_checks_id_seq`; `supplier_ledger_revisions_id_seq`, `float_topups_id_seq`) from them, and both ACL checks assert it with `has_sequence_privilege`.
+
 `select` stays where a public policy needs it: `tlds`, `nameserver_presets`, `fx_rates`, `pricing_settings` and `market_references` keep their current read grant and policy. Nothing working is affected, because RLS refuses these writes today.
 
 **ACL checks** (in both `admin.sql` and `admin_data.sql`):
@@ -651,13 +653,13 @@ The tier comes from `admin_tier` (§2.2). A `test_only` admin is refused `TEST_A
 | `admin_reject_fx_rate(p_rate_id, p_reason, …)` | `pending_review`. | `update fx_rates set status='rejected', reviewed_by, reviewed_at` | rate, source |
 | `admin_update_pricing_settings(p_changes jsonb, p_reason, …)` | Keys must be a subset of these (`UNKNOWN_KEY`), each in range (`OUT_OF_RANGE`):<br>• `margin_ngn`: integer 1,000–50,000<br>• `fx_buffer_pct`: 0–20, at most 2 decimals<br>• `icann_fee_cents`: integer 0–200, stored as `icann_fee_usd = cents/100`<br>• `fx_move_threshold_pct`: 1–50<br>**`vat_pct` is not a key** (statutory; SQL editor). | `update pricing_settings … where id` | before/after per key |
 | `admin_update_ops_settings(p_changes jsonb, p_reason, …)` | Keys must be a subset of the **11** tunable columns (`UNKNOWN_KEY`). The wrapper's own bounds (`OUT_OF_RANGE`):<br>• `auto_refund_max_kobo`: 1–100,000,000 (₦1,000,000)<br>• `auto_refund_daily_max_kobo`: ≥ the single limit and ≤ 500,000,000 (₦5,000,000)<br>• `refund_delay_minutes`: 5–1440<br>• `stuck_order_minutes`: 5–1440<br>• `max_domains_per_account_day`: 1–1000<br>• `float_alert_cents`: 0–1,000,000, stored as `float_alert_usd`<br>• `velocity_new_max`: 1–1000<br>• `velocity_trusted_max`: 1–5000 and ≥ new<br>• `velocity_standard_after_days`: 0–365<br>• `velocity_trusted_after_days`: 0–3650<br>• `velocity_trusted_after_paid_orders`: 0–1000<br>Integers must be integers. **A rise in either refund limit, or a lower refund delay, is recorded as `settings.refund_limit_raise`** (and alerted); everything else is `settings.update`. | `update ops_settings … where id` | before/after per key |
-| `admin_set_tld_flags(p_name, p_is_paused, p_paused_reason, p_featured_rank, p_featured_tagline, p_reason, …)` | The extension exists. Pausing needs a reason of 3–120 characters. Rank is null or 1–50. Tagline is at most 60 characters. | `update tlds set …` | before/after, held domains on the extension |
+| `admin_set_tld_flags(p_name, p_is_paused, p_paused_reason, p_featured_rank, p_featured_tagline, p_reason, …)` | The extension exists. Pausing needs a reason of 3–120 characters. Rank is null or 1–50. Tagline is at most 60 characters. **A null `p_is_paused` keeps the stored pause; rank and tagline are set as sent, null clearing them** (that is how an extension is un-featured), so a caller sends all four — B13 sends the current rank and tagline with a pause. `admin.sql` check 34 pins this. | `update tlds set …` | before/after, held domains on the extension |
 | `admin_set_ssl_sellable(p_product_code, p_sellable, p_reason, …)` | The product exists. **`p_sellable` with `create_usd is null` gives `NO_PRICE`.** A `ssl_products_check` violation gives `INCOMPLETE_PRODUCT`. | `update ssl_products set is_sellable` | before/after |
 | `admin_save_preset_draft(p_preset_id, p_provider, p_nameservers, p_source_url, p_notes, p_assigns_per_zone, p_reason, …)` | `^https://` and **the URL's host is in `nameserver_preset_sources` for that provider** (`SOURCE_NOT_ALLOWED`). `are_hostnames`. 2–13 entries unless per-zone. Registrar-default rows give `REGISTRAR_DEFAULT`. One open draft per preset or provider (`DRAFT_OPEN`). | inserts a draft; **the live preset is unchanged** | before/after nameservers, source host |
 | `admin_publish_preset_draft(p_draft_id, p_reason, …)` | The draft is open. Unless per-zone: `check_ok` and `checked_at > saved_at` (`NOT_CHECKED`). | inserts or updates `nameserver_presets` (`verified_at = now()`, `last_checked_at = checked_at`, new rows visible); marks the draft published | before/after nameservers, check time |
 | `admin_discard_preset_draft(p_draft_id, p_reason, …)` | Open. | stamps `discarded_at` | — |
 | `admin_set_preset_hidden(p_id, p_hidden, p_reason, …)` | Hide is `preset.hide` (operator). Show is `preset.show` (owner, money), and a preset with `auto_hidden_at` set gives `CHECKER_HID_IT`. Registrar defaults give `REGISTRAR_DEFAULT`. | `update nameserver_presets set is_hidden` | blast radius counts |
-| `admin_requeue_email(p_email_id, p_reason, …)` | Status `failed`. `complained_at` null. `coalesce(delivery_status,'') <> 'bounced'`. | `update email_outbox set status='pending', attempts=0, next_attempt_at=now(), last_error=null, claimed_by=null, claimed_at=null` | kind, category |
+| `admin_requeue_email(p_email_id, p_reason, …)` | A test admin: a `test_mode` email to a reserved address, of a reserved account or none (`reserved_target`). Status `failed`. `complained_at` null. `coalesce(delivery_status,'') <> 'bounced'`. | `update email_outbox set status='pending', attempts=0, next_attempt_at=now(), last_error=null, claimed_by=null, claimed_at=null` | kind, category |
 | `admin_queue_deep_sync(p_domain_id, p_reason, …)` | The domain exists, `source <> 'demo'`, and `local_status in ('active','expired_grace','redemption')` (`NOT_SYNCABLE`). The side's `gateway:<production\|ote>` heartbeat is under 15 min old (`NO_GATEWAY`). | `update domains set deep_checked_at = null` | domain id |
 | `admin_find_customers(p_query text)` | `customer.search`. A test admin sees reserved-email profiles only. 30 searches and reveals per admin per hour (`RATE_LIMITED`), counted by `admin_lookup_rate_limited` under `pg_advisory_xact_lock(hashtextextended('admin_lookup:' \|\| admin_id, 0))`, so parallel calls from one session queue instead of all reading the same count. | Exact match on a lower-cased email, order number, or domain. Returns at most 20 masked rows: `{userId, maskedEmail, joinedAt, domainsHeld, ordersPaid}`. | `{kind, matched: [user ids]}`; the query text is never stored |
 | `admin_reveal_customer(p_user_id, p_reason, …)` | `customer.reveal`. A reserved-email target for a test admin. Same rate limit. Reason optional. | Returns `{email, fullName, phone, businessName}`. **A replayed key returns `{ok, auditId, replayed}` with no details**: they are read only after the gate, the limit and a new audit row, so a key kept from before a demotion shows nothing. | target id only |
@@ -951,7 +953,11 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 27. `grant_test_admin` refuses a non-`e2e-` email, a user without a verified factor, and a user with a non-test `admins` row. `purge_test_admin_audit()` deletes a `test_actor` row over 30 days old and its claim, and keeps a test row 29 days old and a live row 31 days old.
 28. An `admins` insert with someone else's factor raises. Any insert or update writes one `admin_changes` row, and `admin_alert_conditions(false)` shows `admin_changed`.
 29. The 31st reveal or search within an hour gives `RATE_LIMITED`. A test admin revealing a non-reserved profile gives `TEST_ADMIN`.
-30. The ACL loop and table-privilege assertions (§3.0).
+30. The ACL loop and table-privilege assertions (§3.0), and the identity sequences' privileges.
+31. A test admin is refused (`TEST_ADMIN`, nothing shown) the registrant of a test-mode domain held by a non-reserved account, and a requeue of a test email to a real address or of a real account; it may reveal and requeue an e2e user's. Its refusals keep `detail = '{}'`.
+32. A search takes the per-admin lookup lock (`pg_locks`, advisory, held to the end of the transaction).
+33. A real operator inserted, flipped to `test_only`, then re-pinned gives three `admin_changed` alerts and `admin_test_not_e2e`; `admin_changes` holds `was_test_only`. Revoking an e2e user's test admin raises nothing.
+34. `admin_set_tld_flags` with a null pause keeps the pause and sets rank and tagline; a pause sent with null rank and tagline clears them.
 
 **`supabase/tests/admin_data.sql`** (migration 41):
 1. `record_supplier_ledger` is idempotent. A re-read with a new `status` updates it, writes an applied revision and re-classifies. A re-read with a new balance writes an unapplied revision, keeps the facts, and shows `ledger_changed`.
@@ -970,7 +976,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
    - a differing snapshot inside the window gives a gap.
 7. Top-ups: `admin_record_float_topup` refuses a debit and a duplicate; a correction supersedes once; a second correction of the same row is refused.
 8. `bump_funnel` increments. `record_metrics_daily` is idempotent.
-9. Every read function raises for a non-admin. A test admin on the live side gets `admin:test_admin`. `admin_customers` for a test admin returns only reserved-email rows. `admin_list_admins` returns only the caller's own row.
+9. Every read function raises for a non-admin. A test admin on the live side gets `admin:test_admin`. `admin_customers` for a test admin returns only reserved-email rows. `admin_list_admins` returns only the caller's own row. A code 13 h old gets `admin:needs_code`, and a revoked admin `admin:not_admin`, from the reads themselves.
 10. `admin_margin` gives `ledger` for a matched line, `checkout` for an `order_item_costs` line, and `none` otherwise, and never estimates. A matched debit on a failed line appears as `row_kind = 'lost'`.
 11. `admin_float`:
     - zero burn gives `runwayDays` null;
@@ -979,7 +985,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
     - 9 days of cover gives `float_cover` warning, and 2 days gives critical.
 12. `current_alert_conditions(true)` still returns every pre-existing key family (a fixture of one row per kind).
 13. `cron_alert_conditions`: no `email-notices` success in 26 h gives `cron_stale:email-notices`. This is done by inserting `cron.job_run_details` rows inside the rollback.
-14. The ACL loop, the views, and `order_item_costs` (§3.0).
+14. The ACL loop, the views, `order_item_costs` and the identity sequences (§3.0).
 15. The test-only helpers (§2.7, N12): `seed_test_failed_email` refuses a non-e2e user; `hold_test_refund` refuses a missing refund, a live refund, a non-e2e user's test refund and a refund that is not `queued`, and holds an e2e user's queued test refund; `purge_test_ledger_entries` deletes a test `e2e-` row and keeps a test row with another description and a live `e2e-` row.
 
 ---
