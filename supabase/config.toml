@@ -60,20 +60,18 @@ secure_password_change = false
 max_frequency = "1m0s"
 otp_length = 8
 
-# Auth emails go out through Brevo from the authenticated subdomain
-# notify.mydomainshub.com (SPF, DKIM, DMARC in Cloudflare, 24 Sept 2026) — the
-# built-in sender only reached the Supabase organisation's members (L1). The
-# login and key come from the environment at push time, never this file:
+# Auth emails go out through Amazon SES (eu-west-2) from the authenticated
+# subdomain notify.mydomainshub.com (DKIM and MAIL FROM in Cloudflare) since the
+# cutover on 3 Oct 2026 (docs/DEPLOY.md §5c); Brevo before it. The built-in
+# sender only reached the Supabase organisation's members (L1). The SES SMTP
+# credentials come from the environment at push time, never this file:
 #   set -a; . ./.env; set +a; supabase config push
-# At the SES cutover (docs/DEPLOY.md §5c) this becomes
-# email-smtp.eu-west-2.amazonaws.com:587 with env(SES_SMTP_USERNAME) and
-# env(SES_SMTP_PASSWORD).
 [auth.email.smtp]
 enabled = true
-host = "smtp-relay.brevo.com"
+host = "email-smtp.eu-west-2.amazonaws.com"
 port = 587
-user = "env(BREVO_SMTP_LOGIN)"
-pass = "env(BREVO_SMTP_KEY)"
+user = "env(SES_SMTP_USERNAME)"
+pass = "env(SES_SMTP_PASSWORD)"
 admin_email = "no-reply@notify.mydomainshub.com"
 sender_name = "MyDomainsHub"
 

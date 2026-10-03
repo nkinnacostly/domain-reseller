@@ -206,9 +206,10 @@ SES after the cutover below: from `no-reply@notify.mydomainshub.com`, replies to
 ### Amazon SES — what is set up, and the cutover
 
 `EMAIL_PROVIDER=ses` sends the auth emails (web) and the outbox (gateway)
-through SES instead of Brevo — same From, same Reply-To, same templates. Brevo
-stays the default until AWS lets the account out of the SES sandbox, which
-only delivers to verified addresses, one message a second.
+through SES instead of Brevo — same From, same Reply-To, same templates.
+**Cut over on 3 Oct 2026**: AWS granted production access (50,000 a day, 14 a
+second; `SES_MAX_SEND_RATE=10` on Fly), steps 1–5 below are done, and Brevo is
+kept only for rollback (step 7) until it is retired (step 8).
 
 Already in AWS (do not change): region **eu-west-2**; identity
 `notify.mydomainshub.com` with Easy DKIM and custom MAIL FROM

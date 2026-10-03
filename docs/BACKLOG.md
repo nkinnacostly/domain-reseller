@@ -44,13 +44,13 @@ The site side is built (24 Sept 2026, `apps/web/src/features/seo`): robots.txt, 
 
 ## 1c. Email through Amazon SES — owner steps
 
-Built 25 Sept 2026 (migration 34): `EMAIL_PROVIDER=ses` sends the auth emails and the outbox through SES in eu-west-2, and `/api/email/ses-events` records SES's delivery events from SNS. Brevo stays the default until these are done, in order — the checklist is `docs/DEPLOY.md` §5c.
+Built 25 Sept 2026 (migration 34): `EMAIL_PROVIDER=ses` sends the auth emails and the outbox through SES in eu-west-2, and `/api/email/ses-events` records SES's delivery events from SNS. Live since 3 Oct 2026; Brevo is kept only for rollback until E4 — the checklist is `docs/DEPLOY.md` §5c.
 
 | # | Item | Why it matters | Where |
 |---|---|---|---|
-| E1 | **SES production access** | The account is in the SES sandbox: it delivers only to verified addresses, one message a second. Customers' email cannot go through SES until AWS lifts that. Note the send rate AWS grants (it becomes `SES_MAX_SEND_RATE`). | Owner, AWS console → SES → Account dashboard |
-| E2 | **SES SMTP credentials for Supabase Auth's fallback** | With the Send Email hook off, Supabase sends over SMTP; after the cutover that should be SES too (`email-smtp.eu-west-2.amazonaws.com:587`). `.env` already names `SES_SMTP_USERNAME` / `SES_SMTP_PASSWORD`: confirm they are SES SMTP credentials made for eu-west-2 (not the API key), then switch `[auth.email.smtp]` and push at cutover. | Owner, AWS console → SES → SMTP settings |
-| E3 | **Cut over to SES** | Subscribe `/api/email/ses-events` to the `mydomainshub-ses-events` topic (HTTPS, raw delivery off) with `SES_EVENTS_TOPIC_ARN` on Vercel; then `EMAIL_PROVIDER=ses` and the `AWS_SES_*` values on Vercel and Fly, the SMTP fallback (E2), and a few days of watching deliveries. | Owner, `docs/DEPLOY.md` §5c |
+| E1 | ~~SES production access~~ | Done 3 Oct 2026: granted, 50,000 a day at 14 a second; `SES_MAX_SEND_RATE=10` on Fly. | Done |
+| E2 | ~~SES SMTP credentials for Supabase Auth's fallback~~ | Done 3 Oct 2026: the SES SMTP login was checked against eu-west-2 and `[auth.email.smtp]` pushed. | Done |
+| E3 | ~~Cut over to SES~~ | Done 3 Oct 2026: `EMAIL_PROVIDER=ses` and the `AWS_SES_*` values on Vercel and Fly, the events webhook confirmed. Watch deliveries for a few days (`docs/DEPLOY.md` §5c step 6). | Done |
 | E4 | **Retire Brevo** | Once SES has run clean for a couple of weeks: remove `BREVO_*` from Vercel, Fly and `.env`, delete Brevo's DNS records on `notify.mydomainshub.com` (keeping SES's DKIM, MAIL FROM and DMARC) and close the account, so a second sender is not left authorised for the domain. | Owner, Vercel, Fly, Cloudflare, Brevo |
 
 ## 1d. SSL certificates — owner steps
