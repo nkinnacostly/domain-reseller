@@ -113,8 +113,16 @@ test.describe('the admin area to anyone who is not an admin', () => {
   })
 
   test('the rest of the site keeps its own CSP', async ({ request }) => {
-    const csp = (await request.get('/')).headers()['content-security-policy'] ?? ''
-    expect(csp).not.toMatch(/'nonce-/)
+    // Present, and the site's own (next.config.ts): a NOT_ADMIN source that
+    // stopped matching would leave these pages with no policy at all.
+    for (const path of ['/', '/legal/privacy']) {
+      const csp = (await request.get(path)).headers()['content-security-policy'] ?? ''
+      expect(csp, path).not.toBe('')
+      expect(scriptSrc(csp), path).not.toMatch(/'nonce-/)
+      expect(scriptSrc(csp), path).toContain("'unsafe-inline'")
+      expect(scriptSrc(csp), path).toContain('https://challenges.cloudflare.com')
+      expect(csp, path).toContain("frame-ancestors 'none'")
+    }
   })
 
   test('robots.txt does not name /admin', async ({ request }) => {
