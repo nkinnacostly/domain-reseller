@@ -2779,7 +2779,6 @@ export type Database = {
           paid_at: string | null
           payment_checked_at: string | null
           payment_id: string | null
-          registrant_country: string | null
           status: Database["public"]["Enums"]["order_status"] | null
           subtotal_kobo: number | null
           test_mode: boolean | null

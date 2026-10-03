@@ -2222,8 +2222,7 @@ create view public.admin_domains_v with (security_invoker = true) as
 create view public.admin_orders_v with (security_invoker = true) as
   select o.id, o.user_id, o.order_number, o.status, o.test_mode, o.subtotal_kobo, o.vat_pct, o.vat_kobo,
          o.total_kobo, o.fx_rate_id, o.tx_ref, o.float_check, o.invoice_number, o.nameserver_preset_id,
-         o.nameservers, o.paid_at, o.payment_checked_at, o.payment_id, o.created_at, o.updated_at,
-         o.registrant ->> 'country' as registrant_country
+         o.nameservers, o.paid_at, o.payment_checked_at, o.payment_id, o.created_at, o.updated_at
     from public.orders o;
 
 -- ── (j) Test-only helpers ───────────────────────────────────────────────────
