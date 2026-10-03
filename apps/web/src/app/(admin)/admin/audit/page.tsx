@@ -1,18 +1,18 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { AuditSkeleton, AuditView } from '@/features/admin/components/audit/audit-view'
 
 export const metadata: Metadata = { title: 'Audit log' }
 
-/** Package B14 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminAuditPage() {
+/** The audit log, read-only (docs/ADMIN-SPEC.md §5.2 B14). `searchParams` is read inside Suspense. */
+export default function AdminAuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Audit log"
-        description="Every admin action and refusal, newest first."
-      />
+    <Suspense fallback={<AuditSkeleton />}>
+      <AuditView searchParams={searchParams} />
     </Suspense>
   )
 }
