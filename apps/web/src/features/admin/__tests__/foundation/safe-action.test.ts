@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { switchAdminSide } from '@/features/admin/actions/side'
 import {
   adminOutcome,
+  CODE_NOT_CHECKED_WORDS,
+  CODE_RATE_LIMITED_WORDS,
   NEEDS_CODE_WORDS,
   SERVER_CRASH_WORDS,
   UNKNOWN_OUTCOME,
@@ -166,23 +168,55 @@ describe('adminMoneyAction (D6)', () => {
   )
 
   it.each([
-    ['a rate limit', { message: 'Too many requests', code: 'over_request_rate_limit' }],
-    ['a failed request', { message: 'TypeError: fetch failed' }],
-  ])("calls %s while verifying an unknown outcome, never the person's code", async (_, error) => {
-    use(sessionClient({ rpc: { admin_whoami: { data: whoami() } }, verify: { error } }))
-    const result = await approve({ refundId: REQUEST_ID, code: '123456' })
+    [
+      'a rate limit by code',
+      { message: 'Too many requests', code: 'over_request_rate_limit', status: 429 },
+      CODE_RATE_LIMITED_WORDS,
+    ],
+    [
+      'a rate limit by status alone',
+      { message: 'Too many requests', status: 429 },
+      CODE_RATE_LIMITED_WORDS,
+    ],
+    ['a failed request', { message: 'TypeError: fetch failed', status: 0 }, CODE_NOT_CHECKED_WORDS],
+    ['an auth server error', { message: 'Internal error', status: 500 }, CODE_NOT_CHECKED_WORDS],
+    [
+      'a factor Auth no longer knows',
+      { message: 'Factor not found', code: 'mfa_factor_not_found', status: 404 },
+      CODE_NOT_CHECKED_WORDS,
+    ],
+  ])(
+    "says %s in its own words, never the person's code: nothing reached a wrapper",
+    async (_, error, words) => {
+      const session = use(
+        sessionClient({ rpc: { admin_whoami: { data: whoami() } }, verify: { error } }),
+      )
+      const result = await approve({ refundId: REQUEST_ID, code: '123456' })
 
-    expect(result).toEqual({ serverError: SERVER_CRASH_WORDS })
-    expect(adminOutcome({ serverError: result.serverError })).toMatchObject({
-      ok: false,
-      code: UNKNOWN_OUTCOME,
-    })
-    expect(body).not.toHaveBeenCalled()
+      expect(result).toEqual({ serverError: words })
+      expect(words).not.toBe(WRONG_CODE_WORDS)
+      // Known: nothing changed, so a refusal (a new key), not an unknown outcome.
+      expect(adminOutcome({ serverError: result.serverError })).toMatchObject({
+        ok: false,
+        code: 'REFUSED',
+      })
+      expect(session.rpc).toHaveBeenCalledTimes(1)
+      expect(body).not.toHaveBeenCalled()
+    },
+  )
+
+  it('words a rate limit apart from a failed request', () => {
+    expect(CODE_RATE_LIMITED_WORDS).not.toBe(CODE_NOT_CHECKED_WORDS)
+    expect(CODE_RATE_LIMITED_WORDS).toMatch(/nothing changed/)
+    expect(CODE_NOT_CHECKED_WORDS).toMatch(/nothing changed/)
   })
 
-  it('will not build a standard action, which would demand a code it does not need', () => {
-    expect(() => adminMoneyAction('email.requeue', schema)).toThrow(/standard action/)
-  })
+  it.each(['email.requeue', 'supplier.balance', 'customer.reveal'] as const)(
+    'will not build a standard action (%s), which would demand a code it does not need',
+    (action) => {
+      expect(() => adminMoneyAction(action, schema)).toThrow(/standard action/)
+    },
+  )
 
   it('refuses a code that is not six digits before any call', async () => {
     const session = use(sessionClient({ rpc: { admin_whoami: { data: whoami() } } }))

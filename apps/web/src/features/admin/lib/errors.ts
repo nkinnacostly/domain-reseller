@@ -10,6 +10,12 @@ import { RESET_HOLD_HOURS } from '@/features/auth/lib/security'
 export const NEEDS_CODE_WORDS =
   "Confirm it's you with the code from your authenticator app to continue."
 export const WRONG_CODE_WORDS = "That code didn't work. Check your authenticator app and try again."
+/** A money dialog's code that Supabase Auth would not check yet: too many tries (D6). */
+export const CODE_RATE_LIMITED_WORDS =
+  'Too many codes were tried just now, so nothing changed. Wait a minute, then enter a new code.'
+/** A money dialog's code that could not be checked at all: the request failed (D6). */
+export const CODE_NOT_CHECKED_WORDS =
+  "We couldn't check your code just now, so nothing changed. Try again in a moment."
 
 /** describeHold's words, without a time the gate does not know (§2.4). */
 const HELD_WORDS = `For your security, changes like this are paused for ${RESET_HOLD_HOURS} hours after a password reset.`
@@ -46,6 +52,8 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   REFUSED_BY_DATABASE:
     'The database refused this, so nothing changed. Reload the page: the record may have moved on.',
   WRONG_CODE: WRONG_CODE_WORDS,
+  CODE_RATE_LIMITED: CODE_RATE_LIMITED_WORDS,
+  CODE_NOT_CHECKED: CODE_NOT_CHECKED_WORDS,
 
   // ── Refunds ──
   NOT_HELD: 'This refund is no longer held. Reload the page to see where it is.',
@@ -193,6 +201,8 @@ export function adminErrorWords(code: string | null | undefined): string {
 const APP_CODES: Readonly<Record<string, AppErrorCode>> = {
   needs_code: 'MFA_REQUIRED',
   wrong_code: 'MFA_REQUIRED',
+  code_rate_limited: 'RATE_LIMITED',
+  code_not_checked: 'MFA_REQUIRED',
   weak_sign_in: 'MFA_REQUIRED',
   rate_limited: 'RATE_LIMITED',
   not_found: 'NOT_FOUND',

@@ -13,7 +13,7 @@ import {
   type AdminActionId,
   rank,
 } from '@/features/admin/lib/actions'
-import { AdminRefusal, adminAccessError, SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
+import { AdminRefusal, SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
 import { type AdminPrincipal, adminWhoami } from '@/features/admin/queries/session'
 import {
   describeHold,
@@ -191,6 +191,28 @@ const WRONG_CODE_ERRORS: ReadonlySet<string> = new Set([
   'mfa_challenge_expired',
 ])
 
+/** Supabase Auth's answers that mean it would not check a code yet. */
+const RATE_LIMIT_ERRORS: ReadonlySet<string> = new Set([
+  'over_request_rate_limit',
+  'too_many_requests',
+])
+
+/**
+ * Why challengeAndVerify refused, in words the person can act on. None of
+ * these reached a wrapper, so each is a refusal with nothing changed — the
+ * dialog may take a new key — never the unknown outcome a lost wrapper
+ * answer is: a wrong or expired code, too many tries, or a code that could
+ * not be checked at all (a failed request, an error Auth did not explain).
+ */
+function codeRefusal(error: { code?: string | undefined; status?: number | undefined }) {
+  const code = error.code ?? ''
+  if (WRONG_CODE_ERRORS.has(code)) return new AdminRefusal('WRONG_CODE')
+  if (error.status === 429 || RATE_LIMIT_ERRORS.has(code)) {
+    return new AdminRefusal('CODE_RATE_LIMITED')
+  }
+  return new AdminRefusal('CODE_NOT_CHECKED')
+}
+
 /**
  * A money action (D6): the input carries the six-digit code from the dialog.
  * After validation the code is verified against this session's own factor —
@@ -216,13 +238,7 @@ export function adminMoneyAction<S extends z.ZodType<{ code: string }>>(
         factorId: first.admin.factorId,
         code,
       })
-      if (error) {
-        // Only a wrong or expired code is the person's to fix. A rate limit or
-        // a failed request is not their code: adminAccessError makes it an
-        // unknown outcome, so the dialog keeps its key and a retry is safe.
-        if (WRONG_CODE_ERRORS.has(error.code ?? '')) throw new AdminRefusal('WRONG_CODE')
-        throw adminAccessError(error.code)
-      }
+      if (error) throw codeRefusal(error)
       const admin = await adminWhoami(first.db, 5)
       return next({ ctx: { user: first.user, db: first.db, admin, action: metadata.action } })
     }) as unknown as AdminActionClient<S>

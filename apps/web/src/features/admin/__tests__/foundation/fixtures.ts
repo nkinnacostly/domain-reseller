@@ -23,7 +23,9 @@ type RpcAnswer = { data?: unknown; error?: { message: string; code?: string } | 
 export function sessionClient({
   user = { id: '11111111-2222-4333-8444-555555555555' } as { id: string } | null,
   rpc = {} as Record<string, RpcAnswer | RpcAnswer[]>,
-  verify = { error: null } as { error: { message: string; code?: string } | null },
+  verify = { error: null } as {
+    error: { message: string; code?: string; status?: number } | null
+  },
 } = {}) {
   const queues = new Map(
     Object.entries(rpc).map(([name, answer]) => [
