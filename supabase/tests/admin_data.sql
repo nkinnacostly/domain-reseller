@@ -48,6 +48,24 @@ create function pg_temp.has_key(p_test boolean, p_key text) returns boolean lang
   select exists (select 1 from public.current_alert_conditions(p_test) c where c.key = p_key)
 $f$;
 
+-- A wrapper's answer must carry exactly this code. `v_j ->> 'code' <> 'X'` is
+-- NULL when the wrapper wrongly succeeds, and NULL never raises (CLAUDE.md
+-- §15, "NULL never passes a money guard"): every refusal goes through here.
+create or replace function pg_temp.expect_code(p_j jsonb, p_code text, p_what text) returns void language plpgsql as $f$
+begin
+  if p_j is null or (p_j ->> 'code') is distinct from p_code then
+    raise exception '% (expected %, got %)', p_what, p_code, p_j;
+  end if;
+end $f$;
+
+-- A wrapper's answer must be ok.
+create or replace function pg_temp.expect_ok(p_j jsonb, p_what text) returns void language plpgsql as $f$
+begin
+  if p_j is null or (p_j ->> 'ok')::boolean is not true then
+    raise exception '% (expected ok, got %)', p_what, p_j;
+  end if;
+end $f$;
+
 create function pg_temp.paid_line(p_user uuid, p_test boolean, p_domain text, p_status text, p_ref text,
                                   p_paid timestamptz default now())
 returns table (o_order uuid, o_payment uuid, o_item uuid) language plpgsql as $f$
@@ -145,31 +163,31 @@ begin
   t1 := pg_temp.trace('one' || v_tag);
   v_j := public.record_supplier_ledger(true, jsonb_build_array(
     pg_temp.lrow(t1, now() - interval '20 days', 5, 1, 0, 3, 'Ziraat Payment (Order: m41-1)', 0, 1500)));
-  if (v_j ->> 'inserted')::int <> 1 or pg_temp.state(true, t1) <> 'topup' then
+  if (v_j ->> 'inserted')::int is distinct from 1 or pg_temp.state(true, t1) is distinct from 'topup' then
     raise exception 'FAILED 1: first read % %', v_j, pg_temp.state(true, t1);
   end if;
   v_j := public.record_supplier_ledger(true, jsonb_build_array(
     pg_temp.lrow(t1, now() - interval '20 days', 5, 1, 0, 3, 'Ziraat Payment (Order: m41-1)', 0, 1500)));
-  if v_j <> '{"inserted": 0, "revised": 0, "statusChanged": 0}'::jsonb then
+  if v_j is distinct from '{"inserted": 0, "revised": 0, "statusChanged": 0}'::jsonb then
     raise exception 'FAILED 1: a re-read was not idempotent %', v_j;
   end if;
   v_j := public.record_supplier_ledger(true, jsonb_build_array(
     pg_temp.lrow(t1, now() - interval '20 days', 5, 2, 0, 3, 'Ziraat Payment (Order: m41-1)', 0, 1500)));
-  if (v_j ->> 'statusChanged')::int <> 1 or pg_temp.state(true, t1) <> 'unclassified'
-     or (select e.status from public.supplier_ledger_entries e where e.test_mode and e.trace_id = t1::uuid) <> 2
+  if (v_j ->> 'statusChanged')::int is distinct from 1 or pg_temp.state(true, t1) is distinct from 'unclassified'
+     or (select e.status from public.supplier_ledger_entries e where e.test_mode and e.trace_id = t1::uuid) is distinct from 2
      or not exists (select 1 from public.supplier_ledger_revisions r where r.test_mode and r.trace_id = t1::uuid and r.applied) then
     raise exception 'FAILED 1: a status change %', v_j;
   end if;
   v_j := public.record_supplier_ledger(true, jsonb_build_array(
     pg_temp.lrow(t1, now() - interval '20 days', 5, 2, 0, 3, 'Ziraat Payment (Order: m41-1)', 0, 1600)));
-  if (v_j ->> 'revised')::int <> 1
-     or (select e.balance_cents from public.supplier_ledger_entries e where e.test_mode and e.trace_id = t1::uuid) <> 1500
+  if (v_j ->> 'revised')::int is distinct from 1
+     or (select e.balance_cents from public.supplier_ledger_entries e where e.test_mode and e.trace_id = t1::uuid) is distinct from 1500
      or not exists (select 1 from public.ledger_alert_conditions(true) c where c.key = 'ledger_changed:' || t1) then
     raise exception 'FAILED 1: a changed balance %', v_j;
   end if;
   v_j := public.record_supplier_ledger(true, jsonb_build_array(
     pg_temp.lrow(t1, now() - interval '20 days', 5, 2, 0, 3, 'Ziraat Payment (Order: m41-1)', 0, 1600)));
-  if (v_j ->> 'revised')::int <> 0 then raise exception 'FAILED 1: the same difference twice %', v_j; end if;
+  if (v_j ->> 'revised')::int is distinct from 0 then raise exception 'FAILED 1: the same difference twice %', v_j; end if;
   v_passed := v_passed + 1;
 
   -- ── 2. The facts are never rewritten; only e2e rows are ever deleted.
@@ -205,10 +223,10 @@ begin
     pg_temp.lrow(t2, now() - interval '19 days', 5, 1, 0, 3, 'Ziraat Payment (Order: m41-3)', 1500, 3000),
     pg_temp.lrow(upper(pg_temp.trace('upper' || v_tag)), now() - interval '18 days', 5, 1, 0, 3,
                  'Ziraat Payment (Order: m41-4)', 3000, 4500)));
-  if (v_j ->> 'inserted')::int <> 2
-     or pg_temp.state(true, t2) <> 'topup'
+  if (v_j ->> 'inserted')::int is distinct from 2
+     or pg_temp.state(true, t2) is distinct from 'topup'
      or (select e.trace_id::text from public.supplier_ledger_entries e
-          where e.test_mode and e.trace_id = pg_temp.trace('upper' || v_tag)::uuid) <> pg_temp.trace('upper' || v_tag) then
+          where e.test_mode and e.trace_id = pg_temp.trace('upper' || v_tag)::uuid) is distinct from pg_temp.trace('upper' || v_tag) then
     raise exception 'FAILED 3: GUID shapes %', v_j;
   end if;
   begin
@@ -241,13 +259,13 @@ begin
                  'Renewal of m41-o-' || v_tag || '.com for 1 year', 3369, 3000),
     pg_temp.lrow(pg_temp.trace('unset' || v_tag), now() - interval '3 hours', 1, 2, 1, 1,
                  'm41-u-' || v_tag || '.com', 3000, 2900)));
-  if pg_temp.state(true, pg_temp.trace('match' || v_tag)) <> 'matched'
+  if pg_temp.state(true, pg_temp.trace('match' || v_tag)) is distinct from 'matched'
      or (select e.match_order_item_id from public.supplier_ledger_entries e
-          where e.test_mode and e.trace_id = pg_temp.trace('match' || v_tag)::uuid) <> v_ord.o_item
+          where e.test_mode and e.trace_id = pg_temp.trace('match' || v_tag)::uuid) is distinct from v_ord.o_item
      or (select e.match_call_id from public.supplier_ledger_entries e
-          where e.test_mode and e.trace_id = pg_temp.trace('match' || v_tag)::uuid) <> v_call
-     or pg_temp.state(true, pg_temp.trace('other' || v_tag)) <> 'unclassified'
-     or pg_temp.state(true, pg_temp.trace('unset' || v_tag)) <> 'unclassified' then
+          where e.test_mode and e.trace_id = pg_temp.trace('match' || v_tag)::uuid) is distinct from v_call
+     or pg_temp.state(true, pg_temp.trace('other' || v_tag)) is distinct from 'unclassified'
+     or pg_temp.state(true, pg_temp.trace('unset' || v_tag)) is distinct from 'unclassified' then
     raise exception 'FAILED 4: matching on the test side';
   end if;
   -- A registration-shaped debit nobody made, on the live side: critical.
@@ -256,12 +274,31 @@ begin
                  'm41-ghost-' || v_tag || '.com', 900000, 898869),
     pg_temp.lrow(pg_temp.trace('fresh' || v_tag), now() - interval '30 minutes', 1, 1, 1, 1,
                  'm41-fresh-' || v_tag || '.com', 898869, 897738)));
-  if pg_temp.state(false, pg_temp.trace('ghost' || v_tag)) <> 'unexplained'
-     or pg_temp.state(false, pg_temp.trace('fresh' || v_tag)) <> 'pending'
+  if pg_temp.state(false, pg_temp.trace('ghost' || v_tag)) is distinct from 'unexplained'
+     or pg_temp.state(false, pg_temp.trace('fresh' || v_tag)) is distinct from 'pending'
      or not pg_temp.has_key(false, 'ledger_unexplained:' || pg_temp.trace('ghost' || v_tag))
      or not exists (select 1 from public.current_alert_conditions(false) c
                      where c.key = 'ledger_unexplained:' || pg_temp.trace('ghost' || v_tag) and c.severity = 'critical') then
     raise exception 'FAILED 4: an unexplained live charge';
+  end if;
+  -- Anyone can register an e2e-* name: on the live side such a debit is a
+  -- real one and alerts; only the test side's seeded e2e- rows are ignored.
+  v_j := public.record_supplier_ledger(false, jsonb_build_array(
+    pg_temp.lrow(pg_temp.trace('livee2e' || v_tag), now() - interval '3 hours', 1, 1, 1, 1,
+                 'e2e-m41-live-' || v_tag || '.com', 897738, 896607)));
+  v_j := public.record_supplier_ledger(true, jsonb_build_array(
+    pg_temp.lrow(pg_temp.trace('teste2e' || v_tag), now() - interval '3 hours', 1, 1, 1, 1,
+                 'e2e-m41-test-' || v_tag || '.com', 1769, 638)));
+  if pg_temp.state(false, pg_temp.trace('livee2e' || v_tag)) is distinct from 'unexplained'
+     or not exists (select 1 from public.current_alert_conditions(false) c
+                     where c.key = 'ledger_unexplained:' || pg_temp.trace('livee2e' || v_tag) and c.severity = 'critical')
+     or exists (select 1 from public.ledger_alert_conditions(true) c
+                 where c.key like '%' || pg_temp.trace('teste2e' || v_tag)) then
+    raise exception 'FAILED 4: an e2e-named live charge was ignored, or a seeded test one alerted';
+  end if;
+  perform pg_temp.act_data(u_owner, s_owner);
+  if (public.admin_attention_counts(false) ->> 'ledgerUnexplained')::integer < 2 then
+    raise exception 'FAILED 4: the live e2e-named charge is not counted %', public.admin_attention_counts(false);
   end if;
   v_passed := v_passed + 1;
 
@@ -269,7 +306,7 @@ begin
   v_j := public.record_supplier_ledger(true, jsonb_build_array(
     pg_temp.lrow(pg_temp.trace('double' || v_tag), now() - interval '1 hour' + interval '40 seconds', 1, 1, 1, 1,
                  'm41-m-' || v_tag || '.com', 2900, 1769)));
-  if pg_temp.state(true, pg_temp.trace('double' || v_tag)) <> 'matched'
+  if pg_temp.state(true, pg_temp.trace('double' || v_tag)) is distinct from 'matched'
      or not exists (select 1 from public.ledger_alert_conditions(true) c
                      where c.key = 'ledger_double:' || pg_temp.trace('double' || v_tag) and c.severity = 'critical') then
     raise exception 'FAILED 5: a double charge';
@@ -307,21 +344,21 @@ begin
   perform public.record_supplier_ledger(false, jsonb_build_array(
     pg_temp.lrow(pg_temp.trace('topup' || v_tag), now() - interval '2 days', 5, 1, 0, 3, 'Ziraat Payment (Order: m41-t)', 897738, 901338)));
   perform pg_temp.act_data(u_owner, s_owner);
-  if public.admin_record_float_topup(pg_temp.trace('ghost' || v_tag)::uuid, 5000000, 'GTB-1', 'paid from GTBank today', gen_random_uuid()) ->> 'code' <> 'NOT_TOPUP' then
+  if public.admin_record_float_topup(pg_temp.trace('ghost' || v_tag)::uuid, 5000000, 'GTB-1', 'paid from GTBank today', gen_random_uuid()) ->> 'code' is distinct from 'NOT_TOPUP' then
     raise exception 'FAILED 7: a debit recorded as a top-up';
   end if;
   v_j := public.admin_record_float_topup(pg_temp.trace('topup' || v_tag)::uuid, 5500000, 'GTB-1', 'paid from GTBank today', gen_random_uuid());
-  if not (v_j ->> 'ok')::boolean
-     or (select t.usd_cents from public.float_topups t where t.trace_id = pg_temp.trace('topup' || v_tag)::uuid) <> 3600 then
+  if (v_j ->> 'ok')::boolean is not true
+     or (select t.usd_cents from public.float_topups t where t.trace_id = pg_temp.trace('topup' || v_tag)::uuid) is distinct from 3600 then
     raise exception 'FAILED 7: record %', v_j;
   end if;
-  if public.admin_record_float_topup(pg_temp.trace('topup' || v_tag)::uuid, 5500000, 'GTB-1', 'paid from GTBank today', gen_random_uuid()) ->> 'code' <> 'ALREADY_RECORDED' then
+  if public.admin_record_float_topup(pg_temp.trace('topup' || v_tag)::uuid, 5500000, 'GTB-1', 'paid from GTBank today', gen_random_uuid()) ->> 'code' is distinct from 'ALREADY_RECORDED' then
     raise exception 'FAILED 7: a duplicate';
   end if;
   select t.id into v_topup from public.float_topups t where t.trace_id = pg_temp.trace('topup' || v_tag)::uuid;
   v_j := public.admin_correct_float_topup(v_topup, 5600000, 'GTB-1b', 'the bank fee was missed', gen_random_uuid());
-  if not (v_j ->> 'ok')::boolean then raise exception 'FAILED 7: correct %', v_j; end if;
-  if public.admin_correct_float_topup(v_topup, 5700000, 'GTB-1c', 'the bank fee was missed', gen_random_uuid()) ->> 'code' <> 'NOT_CURRENT' then
+  if (v_j ->> 'ok')::boolean is not true then raise exception 'FAILED 7: correct %', v_j; end if;
+  if public.admin_correct_float_topup(v_topup, 5700000, 'GTB-1c', 'the bank fee was missed', gen_random_uuid()) ->> 'code' is distinct from 'NOT_CURRENT' then
     raise exception 'FAILED 7: a second correction of the same row';
   end if;
   v_passed := v_passed + 1;
@@ -332,15 +369,15 @@ begin
   perform public.bump_funnel('cart_add', true);
   perform public.bump_funnel('cart_add', true);
   if (select f.count from public.funnel_daily f
-       where f.test_mode and f.event = 'cart_add' and f.day = (now() at time zone 'Africa/Lagos')::date) <> v_count + 2 then
+       where f.test_mode and f.event = 'cart_add' and f.day = (now() at time zone 'Africa/Lagos')::date) is distinct from v_count + 2 then
     raise exception 'FAILED 8: bump_funnel';
   end if;
   perform public.record_metrics_daily((now() at time zone 'Africa/Lagos')::date);
   select count(*), sum(m.value) into v_count, v_count2 from public.metrics_daily m
    where m.day = (now() at time zone 'Africa/Lagos')::date;
   perform public.record_metrics_daily((now() at time zone 'Africa/Lagos')::date);
-  if (select count(*) from public.metrics_daily m where m.day = (now() at time zone 'Africa/Lagos')::date) <> v_count
-     or (select sum(m.value) from public.metrics_daily m where m.day = (now() at time zone 'Africa/Lagos')::date) <> v_count2
+  if (select count(*) from public.metrics_daily m where m.day = (now() at time zone 'Africa/Lagos')::date) is distinct from v_count
+     or (select sum(m.value) from public.metrics_daily m where m.day = (now() at time zone 'Africa/Lagos')::date) is distinct from v_count2
      or v_count < 30 then
     raise exception 'FAILED 8: record_metrics_daily is not idempotent (% rows)', v_count;
   end if;
@@ -372,25 +409,50 @@ begin
       execute v_sql;
       raise exception 'FAILED 9: % ran for a non-admin', v_sql;
     exception when insufficient_privilege then
-      if sqlerrm <> 'admin:not_admin' then raise exception 'FAILED 9: % said % (a missing grant?)', v_sql, sqlerrm; end if;
+      if sqlerrm is distinct from 'admin:not_admin' then raise exception 'FAILED 9: % said % (a missing grant?)', v_sql, sqlerrm; end if;
     end;
   end loop;
   execute 'reset role';
   perform pg_temp.act_data(u_test, s_test);
+  -- Every read that takes a side, asked for the live side by a test admin.
+  v_count := 0;
   foreach v_sql in array array[
     'select public.admin_attention_counts(false)', 'select public.admin_overview(false)',
-    'select public.admin_float(false)', 'select public.admin_customer_stats()',
-    'select * from public.admin_ledger_daily(false, current_date - 7, current_date)'
+    'select * from public.admin_revenue(false, ''day'', current_date - 7, current_date)',
+    'select * from public.admin_margin(false, current_date - 7, current_date)',
+    'select public.admin_funnel(false, current_date - 7, current_date)',
+    'select public.admin_provisioning(false, current_date - 7, current_date)',
+    'select public.admin_refund_stats(false)', 'select public.admin_float(false)',
+    'select * from public.admin_ledger_daily(false, current_date - 7, current_date)',
+    'select * from public.admin_customers(false, ''joined'', ''desc'', 0, 10, ''{}'')',
+    format('select public.admin_customer(%L, false)', u_none), 'select public.admin_domain_stats(false)',
+    'select * from public.admin_tld_held_counts(false)', 'select * from public.admin_preset_usage(false)',
+    'select public.admin_email_stats(false, 30)', 'select public.admin_alert_stats(false, 30)',
+    'select public.admin_ssl_stats(false)'
   ] loop
     begin
       execute v_sql;
       raise exception 'FAILED 9: % ran for a test admin on the live side', v_sql;
     exception when insufficient_privilege then
-      if sqlerrm <> 'admin:test_admin' then raise exception 'FAILED 9: % said %', v_sql, sqlerrm; end if;
+      if sqlerrm is distinct from 'admin:test_admin' then raise exception 'FAILED 9: % said %', v_sql, sqlerrm; end if;
     end;
+    v_count := v_count + 1;
   end loop;
+  -- The list above is every granted read with a side: a new one must join it.
+  if v_count is distinct from (select count(*)::integer from pg_proc p
+                                where p.pronamespace = 'public'::regnamespace and p.proname like 'admin\_%'
+                                  and 'p_test_mode' = any (p.proargnames)
+                                  and has_function_privilege('authenticated', p.oid, 'execute')) then
+    raise exception 'FAILED 9: a read with a side is missing from the test-admin loop';
+  end if;
+  begin
+    perform public.admin_customer_stats();
+    raise exception 'FAILED 9: a test admin read the customer stats';
+  exception when insufficient_privilege then
+    if sqlerrm is distinct from 'admin:test_admin' then raise exception 'FAILED 9: admin_customer_stats said %', sqlerrm; end if;
+  end;
   v_j := public.admin_overview(true);
-  if v_j #> '{health,cron}' is not null or v_j -> 'float' ->> 'side' <> 'test' then
+  if v_j #> '{health,cron}' is not null or v_j -> 'float' ->> 'side' is distinct from 'test' then
     raise exception 'FAILED 9: a test admin''s overview %', v_j -> 'health';
   end if;
   if exists (select 1 from public.admin_customers(true, 'joined', 'desc', 0, 100, '{}') c
@@ -398,8 +460,8 @@ begin
      or not exists (select 1 from public.admin_customers(true, 'joined', 'desc', 0, 100, '{}') c where c.user_id = u_none) then
     raise exception 'FAILED 9: a test admin''s customer list';
   end if;
-  if (select count(*) from public.admin_list_admins()) <> 1
-     or (select a.label from public.admin_list_admins() a) <> l_test then
+  if (select count(*) from public.admin_list_admins()) is distinct from 1
+     or (select a.label from public.admin_list_admins() a) is distinct from l_test then
     raise exception 'FAILED 9: a test admin saw other admins';
   end if;
   begin
@@ -409,7 +471,7 @@ begin
   end;
   perform pg_temp.act_data(u_owner, s_owner);
   if (public.admin_overview(false) #> '{health,cron}') is null
-     or jsonb_typeof(public.admin_attention_counts(false)) <> 'object'
+     or jsonb_typeof(public.admin_attention_counts(false)) is distinct from 'object'
      or (select count(*) from public.admin_list_admins()) < 2 then
     raise exception 'FAILED 9: the owner''s reads';
   end if;
@@ -433,7 +495,7 @@ begin
       or (m.row_kind = 'sold' and m.cost_source = 'checkout' and m.lines = 1 and m.costed_lines = 1)
       or (m.row_kind = 'sold' and m.cost_source = 'none' and m.lines = 1 and m.costed_lines = 0 and m.cost_kobo is null and m.margin_kobo is null)
       or (m.row_kind = 'lost' and m.cost_source = 'ledger' and m.lines = 1 and m.revenue_kobo = 0 and m.margin_kobo < 0);
-  if v_count <> 4 then
+  if v_count is distinct from 4 then
     raise exception 'FAILED 10: margin rows %', (select jsonb_agg(to_jsonb(m)) from public.admin_margin(true, '2020-03-01', '2020-03-31') m);
   end if;
   v_passed := v_passed + 1;
@@ -448,7 +510,7 @@ begin
     pg_temp.lrow(pg_temp.trace('f1' || v_tag), now() - interval '10 days', 5, 1, 0, 3, 'Ziraat Payment (Order: m41-f)', 0, 10000)));
   insert into public.supplier_balance_snapshots (test_mode, balance_usd, taken_at) values (true, 100.00, now());
   v_j := public.float_runway(true);
-  if v_j ->> 'burnState' <> 'known' or v_j -> 'runwayDays' <> 'null'::jsonb or (v_j ->> 'burn7dCents')::bigint <> 0 then
+  if v_j ->> 'burnState' is distinct from 'known' or v_j -> 'runwayDays' is distinct from 'null'::jsonb or (v_j ->> 'burn7dCents')::bigint is distinct from 0 then
     raise exception 'FAILED 11: zero burn %', v_j;
   end if;
   -- 7 days at $1 a day; balance $9 over nothing committed → 9 days: a warning.
@@ -458,8 +520,8 @@ begin
       from generate_series(1, 7) g));
   insert into public.supplier_balance_snapshots (test_mode, balance_usd, taken_at) values (true, 9.00, now() + interval '1 second');
   v_j := public.float_runway(true);
-  if (v_j ->> 'burn7dCents')::bigint <> 700 or (v_j ->> 'runwayDays')::numeric <> 9
-     or (v_j ->> 'target21dCents')::bigint <> 2100 or (v_j ->> 'topUpToTargetCents')::bigint <> 1200
+  if (v_j ->> 'burn7dCents')::bigint is distinct from 700 or (v_j ->> 'runwayDays')::numeric is distinct from 9
+     or (v_j ->> 'target21dCents')::bigint is distinct from 2100 or (v_j ->> 'topUpToTargetCents')::bigint is distinct from 1200
      or not exists (select 1 from public.ledger_alert_conditions(true) c
                      where c.key = 'float_cover:test' and c.severity = 'warning') then
     raise exception 'FAILED 11: nine days %', v_j;
@@ -477,8 +539,8 @@ begin
   values ('register_domain', 'm41-c:' || v_tag, v_domain, v_ord.o_item, true, 'queued');
   insert into public.order_item_costs (order_item_id, supplier_cost_cents, icann_fee_cents) values (v_ord.o_item, 1131, 20);
   v_j := public.float_runway(true);
-  if (v_j ->> 'committedCents')::bigint <> 1151 or (v_j ->> 'shortByCents')::bigint <> 951
-     or (v_j ->> 'uncostedLines')::int <> 0 then
+  if (v_j ->> 'committedCents')::bigint is distinct from 1151 or (v_j ->> 'shortByCents')::bigint is distinct from 951
+     or (v_j ->> 'uncostedLines')::int is distinct from 0 then
     raise exception 'FAILED 11: short by %', v_j;
   end if;
   -- A stale read: unknown now, with the last known runway.
@@ -486,7 +548,7 @@ begin
     jsonb_build_object('outcome', 'failed', 'reason', 'timeout', 'lastOkReadAt', now() - interval '4 hours'));
   update public.service_heartbeats set beat_at = now() - interval '4 hours' where name = 'supplier_ledger:ote';
   v_j := public.float_runway(true);
-  if v_j ->> 'burnState' <> 'stale' or v_j -> 'runwayDays' <> 'null'::jsonb or v_j -> 'lastKnownRunway' is null
+  if v_j ->> 'burnState' is distinct from 'stale' or v_j -> 'runwayDays' is distinct from 'null'::jsonb or v_j -> 'lastKnownRunway' is null
      or v_j -> 'lastKnownRunway' = 'null'::jsonb
      or exists (select 1 from public.ledger_alert_conditions(true) c where c.key = 'float_cover:test')
      or not exists (select 1 from public.ledger_alert_conditions(true) c where c.key = 'ledger_stale:test') then
@@ -615,8 +677,8 @@ begin
     v_want := v_expected ->> v_row.proname;
     if v_want is null then raise exception 'FAILED 14: function % has no expected grant', v_row.proname; end if;
     if has_function_privilege('anon', v_row.oid, 'execute') then raise exception 'FAILED 14: % is anon-executable', v_row.proname; end if;
-    if has_function_privilege('authenticated', v_row.oid, 'execute') <> (v_want = 'authenticated')
-       or has_function_privilege('service_role', v_row.oid, 'execute') <> (v_want = 'service_role') then
+    if has_function_privilege('authenticated', v_row.oid, 'execute') is distinct from (v_want = 'authenticated')
+       or has_function_privilege('service_role', v_row.oid, 'execute') is distinct from (v_want = 'service_role') then
       raise exception 'FAILED 14: % has the wrong grants', v_row.proname;
     end if;
     v_n := v_n + 1;
@@ -625,7 +687,7 @@ begin
     raise exception 'FAILED 14: an expected function is missing';
   end if;
   foreach v_text in array array['admin_payments_v', 'admin_email_outbox_v', 'admin_compliance_notices_v',
-                                'admin_ssl_certificates_v', 'admin_domains_v'] loop
+                                'admin_ssl_certificates_v', 'admin_domains_v', 'admin_orders_v'] loop
     if has_table_privilege('anon', 'public.' || v_text, 'select')
        or has_table_privilege('authenticated', 'public.' || v_text, 'select')
        or not has_table_privilege('service_role', 'public.' || v_text, 'select') then
@@ -639,7 +701,8 @@ begin
   if exists (select 1 from information_schema.columns c
               where c.table_schema = 'public' and c.table_name like 'admin\_%\_v'
                 and c.column_name in ('raw', 'to_email', 'recipient', 'csr', 'contact', 'approver_email',
-                                      'registrant', 'contacts', 'pending_registrant', 'pending_contacts', 'data')) then
+                                      'registrant', 'contacts', 'pending_registrant', 'pending_contacts', 'data',
+                                      'contact_profile_id', 'email', 'phone', 'full_name', 'business_name')) then
     raise exception 'FAILED 14: a masked view exposes a sensitive column';
   end if;
   if has_table_privilege('authenticated', 'public.order_item_costs', 'select')
@@ -651,9 +714,9 @@ begin
   values ('order_receipt', 'transactional', u_none, 'e2e-x@example.com', 'm41-mask:' || v_tag, true, 'failed',
           'rejected e2e-x@example.com by policy');
   if (select v.last_error_safe from public.admin_email_outbox_v v
-       join public.email_outbox e on e.id = v.id where e.dedupe_key = 'm41-mask:' || v_tag) <> 'rejected [address] by policy'
+       join public.email_outbox e on e.id = v.id where e.dedupe_key = 'm41-mask:' || v_tag) is distinct from 'rejected [address] by policy'
      or (select v.masked_to from public.admin_email_outbox_v v
-          join public.email_outbox e on e.id = v.id where e.dedupe_key = 'm41-mask:' || v_tag) <> 'e•••@example.com' then
+          join public.email_outbox e on e.id = v.id where e.dedupe_key = 'm41-mask:' || v_tag) is distinct from 'e•••@example.com' then
     raise exception 'FAILED 14: the outbox view does not mask';
   end if;
   v_passed := v_passed + 1;
