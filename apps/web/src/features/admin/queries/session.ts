@@ -172,7 +172,8 @@ type Service = ReturnType<typeof createServiceClient>
  * How the side is applied to a table:
  * - `test_mode`: its own column;
  * - `environment`: `supplier_calls`, `ote` or `production`;
- * - `parent`: an inner embed of the parent's `test_mode`, under `admin_side`;
+ * - `parent`: an inner embed of the parent's `test_mode`, under `admin_side`.
+ *   `parent` is the one table a select on it may embed, by plain columns;
  * - `live_only`: rows that exist only on the live side (`float_topups`);
  * - `test_actor`: `admin_audit_log`, the test admin's own kind of rows;
  * - `global`: no filter.
@@ -180,28 +181,109 @@ type Service = ReturnType<typeof createServiceClient>
 type SideRule =
   | { kind: 'test_mode' }
   | { kind: 'environment' }
-  | { kind: 'parent'; embed: string; column: string }
+  | { kind: 'parent'; parent: string; embed: string; column: string }
   | { kind: 'live_only' }
   | { kind: 'test_actor' }
   | { kind: 'global'; publicSafe: boolean }
 
-type Entry = Readonly<{ side: SideRule; from: (db: Service) => unknown }>
+/** `allow`: private column names this one table may still select (ops_alerts' `key`). */
+type Entry = Readonly<{
+  side: SideRule
+  from: (db: Service) => unknown
+  allow?: readonly string[]
+}>
+
+/**
+ * Column names no admin read selects, from any table, view or embed (D4,
+ * N13): personal data, secrets and raw provider answers. Personal data is
+ * shown only by the audited, rate-limited admin_reveal_* functions. `key` is
+ * an alert's key, allowed on ops_alerts alone. boundaries.test.ts holds the
+ * source to the same list.
+ */
+export const PRIVATE_COLUMNS: ReadonlySet<string> = new Set([
+  'auth_code',
+  'raw',
+  'csr',
+  'contact',
+  'contacts',
+  'contact_profile_id',
+  'registrant',
+  'pending_registrant',
+  'pending_contacts',
+  'to_email',
+  'recipient',
+  'approver_email',
+  'delivery_detail',
+  'data',
+  'private_key',
+  'secret',
+  'key',
+  'email',
+  'phone',
+  'full_name',
+  'business_name',
+  'tax_id',
+])
+
+const NAME = /^[a-z_][a-z0-9_]*$/
+const EMBED = /^([a-z_][a-z0-9_]*)\(([^()]*)\)$/
+
+/**
+ * The column names in a select string, or null. Only plain names pass, and
+ * one embed of the table's own side parent (`orders(order_number)` on
+ * order_items) by plain names. No other embed — the service key would follow
+ * a foreign key to profiles or contact_profiles — and no alias, cast, spread,
+ * JSON path or `*`.
+ */
+export function selectedColumns(text: unknown, parent: string | null): string[] | null {
+  if (typeof text !== 'string') return null
+  const parts: string[] = []
+  let depth = 0
+  let start = 0
+  for (let at = 0; at < text.length; at++) {
+    const char = text[at]
+    if (char === '(') depth += 1
+    else if (char === ')') depth -= 1
+    if (depth < 0 || depth > 1) return null
+    if (char === ',' && depth === 0) {
+      parts.push(text.slice(start, at))
+      start = at + 1
+    }
+  }
+  if (depth !== 0) return null
+  parts.push(text.slice(start))
+  const names: string[] = []
+  for (const part of parts.map((value) => value.trim())) {
+    if (NAME.test(part)) {
+      names.push(part)
+      continue
+    }
+    const embed = EMBED.exec(part)
+    if (!embed || parent === null || embed[1] !== parent) return null
+    const inner = (embed[2] ?? '').split(',').map((value) => value.trim())
+    if (!inner.every((value) => NAME.test(value))) return null
+    names.push(...inner)
+  }
+  return names
+}
 
 const TEST_MODE = { kind: 'test_mode' } as const
 const GLOBAL = { kind: 'global', publicSafe: false } as const
 const PUBLIC = { kind: 'global', publicSafe: true } as const
 
 /**
- * Every table and view admin pages may read (§2.3). Never here: profiles,
- * payments, email_outbox, compliance_notices, ssl_certificates, domains,
- * transfer_secrets, admins, admin_changes — their rows come through the
- * masked views or the admin_* functions.
+ * Every table and view admin pages may read (§2.3). Never here: orders,
+ * profiles, payments, email_outbox, compliance_notices, ssl_certificates,
+ * domains, transfer_secrets, admins, admin_changes, contact_profiles — their
+ * rows come through the masked views (admin_orders_v, …) or the admin_*
+ * functions.
  */
 export const ADMIN_TABLES = {
-  orders: { side: TEST_MODE, from: (db: Service) => db.from('orders') },
+  admin_orders_v: { side: TEST_MODE, from: (db: Service) => db.from('admin_orders_v') },
   order_items: {
     side: {
       kind: 'parent',
+      parent: 'orders',
       embed: 'admin_side:orders!inner(test_mode)',
       column: 'admin_side.test_mode',
     },
@@ -210,6 +292,7 @@ export const ADMIN_TABLES = {
   order_item_costs: {
     side: {
       kind: 'parent',
+      parent: 'order_items',
       embed: 'admin_side:order_items!inner(orders!inner(test_mode))',
       column: 'admin_side.orders.test_mode',
     },
@@ -219,6 +302,7 @@ export const ADMIN_TABLES = {
   refund_events: {
     side: {
       kind: 'parent',
+      parent: 'refunds',
       embed: 'admin_side:refunds!inner(test_mode)',
       column: 'admin_side.test_mode',
     },
@@ -234,6 +318,7 @@ export const ADMIN_TABLES = {
   domain_events: {
     side: {
       kind: 'parent',
+      parent: 'domains',
       embed: 'admin_side:domains!inner(test_mode)',
       column: 'admin_side.test_mode',
     },
@@ -242,6 +327,7 @@ export const ADMIN_TABLES = {
   domain_nameserver_history: {
     side: {
       kind: 'parent',
+      parent: 'domains',
       embed: 'admin_side:domains!inner(test_mode)',
       column: 'admin_side.test_mode',
     },
@@ -249,7 +335,7 @@ export const ADMIN_TABLES = {
   },
   registry_drift: { side: TEST_MODE, from: (db: Service) => db.from('registry_drift') },
   reconcile_runs: { side: TEST_MODE, from: (db: Service) => db.from('reconcile_runs') },
-  ops_alerts: { side: TEST_MODE, from: (db: Service) => db.from('ops_alerts') },
+  ops_alerts: { side: TEST_MODE, from: (db: Service) => db.from('ops_alerts'), allow: ['key'] },
   supplier_ledger_entries: {
     side: TEST_MODE,
     from: (db: Service) => db.from('supplier_ledger_entries'),
@@ -301,7 +387,8 @@ export type SelectOptions = { head?: boolean; count?: 'exact' | 'planned' | 'est
 
 /**
  * Select, and nothing else: no insert, update, delete, upsert or rpc. Name
- * the columns; a parent-filtered table also returns `admin_side`.
+ * the columns (plain names, and the side parent's embed); a parent-filtered
+ * table also returns `admin_side`. Select once: the builder refuses another.
  */
 export type AdminDb = {
   from<N extends AdminTableName>(name: N): { select: Builder<N>['select'] }
@@ -309,6 +396,29 @@ export type AdminDb = {
 
 // biome-ignore lint/suspicious/noExplicitAny: the builder's own generics are restored by AdminDb's type
 type AnyBuilder = any
+
+/**
+ * The builder with select() spent. PostgREST's builder can select again
+ * after a filter, which would replace the checked columns with any string.
+ */
+function selectedOnce(builder: AnyBuilder): AnyBuilder {
+  const guarded: AnyBuilder = new Proxy(builder, {
+    get(target, property) {
+      if (property === 'select') {
+        return () => {
+          throw new Error('adminDb selects once: name every column in the first select')
+        }
+      }
+      const value = Reflect.get(target, property, target)
+      if (typeof value !== 'function') return value
+      return (...args: unknown[]) => {
+        const result = value.apply(target, args)
+        return result === target ? guarded : result
+      }
+    },
+  })
+  return guarded
+}
 
 function applySide(query: AnyBuilder, rule: SideRule, side: AdminSide, admin: AdminPrincipal) {
   switch (rule.kind) {
@@ -351,9 +461,16 @@ export function adminDb(admin: AdminPrincipal, side: AdminSide): AdminDb {
       }
       const select = (columns: string, options?: SelectOptions) => {
         const rule = entry.side
+        const names = selectedColumns(columns, rule.kind === 'parent' ? rule.parent : null)
+        if (!names) throw new Error(`adminDb reads named columns only, from ${name}`)
+        const allow = entry.allow ?? []
+        const refused = names.find(
+          (column) => PRIVATE_COLUMNS.has(column) && !allow.includes(column),
+        )
+        if (refused) throw new Error(`adminDb never reads ${refused}`)
         const list = rule.kind === 'parent' ? `${columns}, ${rule.embed}` : columns
         const builder = (entry.from(db()) as AnyBuilder).select(list, options)
-        return applySide(builder, rule, effective, admin)
+        return selectedOnce(applySide(builder, rule, effective, admin))
       }
       return { select } as AnyBuilder
     },

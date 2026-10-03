@@ -12,7 +12,9 @@ import {
   findAdmin,
   getAdminSide,
   isAdminPrincipal,
+  PRIVATE_COLUMNS,
   requireAdmin,
+  selectedColumns,
 } from '@/features/admin/queries/session'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
@@ -76,7 +78,7 @@ describe('adminDb', () => {
   it('has a select and nothing else: no insert, update, delete, upsert or rpc', async () => {
     recordingService()
     const db = adminDb(await principal(), 'live')
-    const table = db.from('orders') as unknown as Record<string, unknown>
+    const table = db.from('admin_orders_v') as unknown as Record<string, unknown>
     expect(Object.keys(table)).toEqual(['select'])
     expect('rpc' in db).toBe(false)
   })
@@ -89,8 +91,8 @@ describe('adminDb', () => {
   })
 
   it.each([
-    ['orders', 'live', [['eq', 'test_mode', false]]],
-    ['orders', 'test', [['eq', 'test_mode', true]]],
+    ['admin_orders_v', 'live', [['eq', 'test_mode', false]]],
+    ['admin_orders_v', 'test', [['eq', 'test_mode', true]]],
     ['supplier_calls', 'live', [['eq', 'environment', 'production']]],
     ['supplier_calls', 'test', [['eq', 'environment', 'ote']]],
     ['order_items', 'test', [['eq', 'admin_side.test_mode', true]]],
@@ -121,6 +123,86 @@ describe('adminDb', () => {
       'id, orders(order_number), admin_side:orders!inner(test_mode)',
       undefined,
     ])
+  })
+
+  describe('reads named columns only (D4)', () => {
+    it.each([
+      ['refunds', 'id, profiles(email)'],
+      ['admin_orders_v', 'id, profiles(full_name, phone)'],
+      ['admin_orders_v', 'id, contact_profiles(id)'],
+      ['order_items', 'id, orders(id, profiles(email))'],
+      ['order_items', 'id, payments(raw)'],
+      ['refunds', 'who:profiles(email)'],
+      ['refunds', '...profiles(email)'],
+      ['refunds', 'id::text'],
+      ['jobs', 'last_error->>x'],
+      ['jobs', '*'],
+      ['jobs', 'id, *'],
+      ['jobs', ''],
+      ['jobs', 'id,'],
+      ['jobs', 'id, (status)'],
+      ['order_items', 'id, orders!inner(order_number)'],
+    ] as const)('refuses %s with %j', async (table, columns) => {
+      const calls = recordingService()
+      const db = adminDb(await principal(), 'live')
+      expect(() => db.from(table).select(columns)).toThrow('adminDb reads named columns only')
+      expect(calls).toEqual([])
+    })
+
+    it.each([
+      ['admin_orders_v', 'id, user_id, contact_profile_id'],
+      ['order_items', 'id, orders(order_number, registrant)'],
+      ['order_items', 'id, orders(contacts)'],
+      ['refund_events', 'id, refunds(id), detail, data'],
+      ['domain_events', 'id, domains(domain_name, pending_registrant)'],
+      ['jobs', 'id, key'],
+    ] as const)('refuses a private column in %s: %j', async (table, columns) => {
+      const calls = recordingService()
+      const db = adminDb(await principal(), 'live')
+      expect(() => db.from(table).select(columns)).toThrow('adminDb never reads')
+      expect(calls).toEqual([])
+    })
+
+    it("reads an alert's key on ops_alerts, and nowhere else", async () => {
+      recordingService()
+      const db = adminDb(await principal(), 'live')
+      expect(() => db.from('ops_alerts').select('id, key, summary')).not.toThrow()
+      expect(() => db.from('registry_drift').select('id, key')).toThrow('adminDb never reads key')
+    })
+
+    it('reads plain names and the side parent by plain names', () => {
+      expect(selectedColumns(' id , status ', null)).toEqual(['id', 'status'])
+      expect(selectedColumns('id, orders(order_number, paid_at)', 'orders')).toEqual([
+        'id',
+        'order_number',
+        'paid_at',
+      ])
+      expect(selectedColumns('id, orders(order_number)', null)).toBeNull()
+      expect(selectedColumns(undefined, null)).toBeNull()
+      expect(selectedColumns('id)', null)).toBeNull()
+      expect(selectedColumns('orders(id', 'orders')).toBeNull()
+    })
+
+    it('holds the names the spec bans, and personal data', () => {
+      for (const name of ['registrant', 'contacts', 'raw', 'email', 'phone', 'full_name']) {
+        expect(PRIVATE_COLUMNS.has(name), name).toBe(true)
+      }
+      expect(PRIVATE_COLUMNS.has('idempotency_key')).toBe(false)
+    })
+
+    it('selects once: the builder refuses a second select, even after a filter', async () => {
+      recordingService()
+      const query = adminDb(await principal(), 'live')
+        .from('refunds')
+        .select('id') as unknown as Record<string, (...args: unknown[]) => unknown>
+      expect(() => query.select?.('id, profiles(email)')).toThrow('adminDb selects once')
+      const filtered = query.eq?.('status', 'held') as Record<
+        string,
+        (...args: unknown[]) => unknown
+      >
+      expect(() => filtered.select?.('*')).toThrow('adminDb selects once')
+      expect(filtered.limit?.(5)).toBe(filtered)
+    })
   })
 
   it('passes count options through', async () => {
@@ -211,7 +293,7 @@ describe('every mapped table', () => {
   it('makes one service client per reader', async () => {
     recordingService()
     const db = adminDb(await principal(), 'live')
-    db.from('orders').select('id')
+    db.from('admin_orders_v').select('id')
     db.from('jobs').select('id')
     expect(createServiceClient).toHaveBeenCalledTimes(1)
   })
