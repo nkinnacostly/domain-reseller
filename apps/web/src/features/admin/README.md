@@ -10,8 +10,9 @@ no RLS bypass. Everything for this feature lives here — `app/(admin)/admin/**`
 | `queries/gateway.ts` | `callAdminGateway()` — the gateway's `/v1/admin/*` routes, logged by route template. |
 | `queries/attention.ts` | What needs a person, per side (`admin_attention_counts`). |
 | `queries/<area>.ts` | A B package's reads: `adminDb` row lists, or `admin_*` SQL functions for aggregates and anything personal. |
-| `actions/` | Server Actions built with `adminAction` / `adminMoneyAction` from `@/lib/safe-action`. Writes are `rpc('admin_*')` wrappers called with `ctx.db` (the session client) — never a table. Live reads write an `admin_note` first, then call the gateway with its id (`actions/supplier-live.ts`). |
+| `actions/` | Server Actions built with `adminAction` / `adminMoneyAction` from `@/lib/safe-action`. Writes are `rpc('admin_*')` wrappers called with `ctx.db` (the session client) — never a table. Live reads and price-list calls go through `liveRead` (`actions/live-read.ts`, server-only, not `'use server'`: every export of those is an action a browser can call): an `admin_note` first, then the gateway with its id. |
 | `components/` | Shared: `table/*`, `confirm-action`, `admin-status-pill`, `stat-tile`, `charts/*`, `dl-grid`, `timeline`, `copy-value`, `empty-state`, `error-state`, `route-tabs`, `diff-table`, `shell/*`. A B package's own go in `components/<area>/`. |
+| `lib/href.ts` | Links between pages, by id only: `adminHref.order(id)`, `.incident(n)` (`?id=n#incident-n`, resolved or not), `.customerEmails(userId)` (`/admin/emails?user=`), `.certificateForLine(orderItemId)` (`/admin/ssl?line=`), `.audit(n)`, `.alert(key)`. ADMIN-SPEC §9's link contract lists what each page accepts. |
 | `lib/` | Pure functions: the tier mirror (`actions.ts`), list params, WAT/USD/mask formatting, labels, tones, the DEPLOY §6 playbook, error words, the side, links by id. |
 | `schemas/` | Zod inputs. `common.ts` has the reason, request key, code and id schemas. |
 | `__tests__/` | `foundation/` is Package A's, including `boundaries.test.ts`, which every B package must pass. |
@@ -45,6 +46,23 @@ keys; writes are only `rpc('admin_*')`; the service client is imported only by
   (`fetch failed`, a statement timeout) is a plain `Error`: the action answers
   `SERVER_CRASH_WORDS`, `adminOutcome` reads it as `UNKNOWN_OUTCOME`, and the dialog keeps its
   key — the wrapper may have committed, and trying again with the same key replays it.
+- **`ConfirmAction`.** Every change asks here. A choice the action needs — an outcome, a
+  Flutterwave check — goes inside the dialog as `children` (rendered outside the dialog's own
+  form, so it may hold a form of its own), with `canConfirm` holding the confirm button until it
+  is made and `notReadyHint` saying why; the trigger always opens. Don't repeat the choice in
+  `rows`.
+- **Tabs.** `RouteTabs` marks the current page (`aria-current`, a tick, heavier words). Tabs that
+  share a path and differ by `?tab=` pass `current` from the page. Chips and tabs animate the press
+  only (`transition-transform`): a colour that fades in is read half-way, by axe too.
+- **Shared refusal words.** `lib/errors.ts` words each code once, for every page that meets it
+  (`BAD_REFERENCE`, `OUT_OF_RANGE`, `RANK_TAKEN`, `REPLAYED`): don't reword one locally.
+- **Money and CSV.** No `*_usd` column is read here (`boundaries.test.ts`): take cents from the
+  `admin_*` functions (`admin_float.alertCents`). A CSV cell goes through `csvCell` in `@/lib/csv`.
+- **E2E.** Admin specs import `test` from `tests/e2e/support/admin.ts` (no screenshot, video, trace
+  or `error-context.md`), sign in with `signInAsAdmin`, type money codes from `codeAfter(secret,
+  signedInAt)`, and seed with `support/admin-seed.mjs`: `seedPaidTestOrder`, `settleTestJob`
+  (needs attention or failed), `holdTestRefund`, `seedTestFailedEmail`, `bounceTestEmail`,
+  `seedTestLedgerEntries`, and `adminSqlSession` to ask SQL as the admin directly.
 - **Reveals.** `admin_reveal_customer` / `admin_reveal_registrant` show details only on a fresh
   request key. A replayed key answers `{ ok, auditId, replayed: true }` with no details: take a
   new key and ask again (gated, rate-limited and audited again).
