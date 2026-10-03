@@ -9,12 +9,14 @@ import {
   userMessageFor,
   vatKobo,
 } from '@dr/shared'
+import { after } from 'next/server'
 import { z } from 'zod'
 import { purchaseNeedsTwoFactor } from '@/features/auth/lib/security'
 import { mustTurnOnTwoFactor } from '@/features/auth/queries/two-factor'
 import { checkoutOpenTo } from '@/features/checkout/lib/access'
 import { allowanceRefusal, exceedsAllowance } from '@/features/checkout/lib/allowance'
 import { registrantFormSchema, toContact } from '@/features/checkout/lib/contact'
+import { costRows, type OrderItemCostRow, totalCents } from '@/features/checkout/lib/cost'
 import { renewalTermColumn } from '@/features/checkout/lib/periods'
 import { readAllowance } from '@/features/checkout/queries/allowance'
 import { saveDefaultContact } from '@/features/checkout/queries/registrant'
@@ -104,11 +106,12 @@ export const placeTransfer = authAction
 
     // ── The extension: sold, not paused, and priced for a transfer (N5b) ─
     const service = createServiceClient()
+    // Prices are read as decimal text and costed in integer cents (N5, D24).
     const [priced, { data: tldRow }] = await Promise.all([
       getPricedCatalogue(),
       service
         .from('tlds')
-        .select('transfer_usd, is_country_code, is_transferable')
+        .select('transfer_usd::text, is_country_code, is_transferable')
         .eq('name', tld)
         .maybeSingle(),
     ])
@@ -224,17 +227,20 @@ export const placeTransfer = authAction
     }
 
     const [{ data: settings }, { data: rate }] = await Promise.all([
-      service.from('pricing_settings').select('icann_fee_usd').maybeSingle(),
+      service.from('pricing_settings').select('icann_fee_usd::text').maybeSingle(),
       service.from('fx_rates').select('id').eq('status', 'active').maybeSingle(),
     ])
     if (!rate) {
       logger.error('no active FX rate at transfer checkout')
       return { error: `Prices are unavailable right now. ${NOT_CHARGED} Try again shortly.` }
     }
-    const costUsd = transferCostUsd(
-      { transferUsd: Number(tldRow.transfer_usd), isCountryCode: Boolean(tldRow.is_country_code) },
-      Number(settings?.icann_fee_usd ?? 0),
+    // The line records exactly the cents the float is checked against.
+    const lineCost = transferCostUsd(
+      // A price: takesTransfers() held it above zero.
+      { transferUsd: tldRow.transfer_usd ?? '', isCountryCode: Boolean(tldRow.is_country_code) },
+      settings?.icann_fee_usd ?? 0,
     )
+    const costUsd = totalCents([lineCost]) / 100
     let balanceUsd: number
     try {
       balanceUsd = accountBalanceSchema.parse(
@@ -324,6 +330,7 @@ export const placeTransfer = authAction
       await abandon()
       return { error: `We couldn't create your order. ${NOT_CHARGED}` }
     }
+    recordLineCosts(service, order.id, costRows([line.id], [lineCost]))
 
     // ── Hand over to Flutterwave ─────────────────────────────────────────
     try {
@@ -349,3 +356,30 @@ export const placeTransfer = authAction
       }
     }
   })
+
+/**
+ * ADMIN-SPEC §6, D13: what the line costs us, in the service-only
+ * `order_item_costs` (customers can read `order_items`). Written once the
+ * response has gone (`after`): a cost that cannot be recorded leaves the line
+ * uncosted, and never fails, delays or changes the order. Only the order's id
+ * is logged (N13).
+ */
+function recordLineCosts(
+  service: ReturnType<typeof createServiceClient>,
+  orderId: string,
+  rows: OrderItemCostRow[],
+) {
+  const failed = (code?: string) => logger.error({ orderId, code }, 'line costs not recorded')
+  try {
+    after(async () => {
+      try {
+        const { error } = await service.from('order_item_costs').insert(rows)
+        if (error) failed(error.code)
+      } catch {
+        failed()
+      }
+    })
+  } catch {
+    failed()
+  }
+}
