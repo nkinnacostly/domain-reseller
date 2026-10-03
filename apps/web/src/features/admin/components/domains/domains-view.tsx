@@ -76,6 +76,8 @@ export function DelegationPill({ state }: { state: string | null }) {
       value={state}
       labels={DELEGATION_LABEL}
       tone={DELEGATION_TONE[known] ?? 'neutral'}
+      // The words are long for a phone's card: they wrap rather than widen the page (S6).
+      className="h-auto min-h-6 shrink py-0.5 whitespace-normal"
     />
   )
 }

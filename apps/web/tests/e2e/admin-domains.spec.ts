@@ -109,7 +109,9 @@ test.describe('domains to anyone who is not an admin', () => {
       const response = await page.goto(path)
       expect(response?.status(), path).toBe(404)
       await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Domains' })).toHaveCount(0)
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Domains', exact: true }),
+      ).toHaveCount(0)
     }
   })
 })
@@ -243,6 +245,7 @@ test.describe('domains to a test administrator', () => {
     ).toBeVisible()
     expect((await axe(page)).violations).toEqual([])
     await dialog.getByRole('button', { name: 'Close' }).click()
+    await expect(dialog).toHaveCount(0)
     await expect(panel.getByText(person.email)).toBeVisible()
     await expect(panel.getByText(`Adaeze ${person.lastName}`)).toBeVisible()
     await expect
@@ -322,6 +325,7 @@ test.describe('domains to a test administrator', () => {
       .getByRole('button', { name: 'Close' })
       .or(dialog.getByRole('button', { name: 'Not now' }))
       .click()
+    await expect(dialog).toHaveCount(0)
     expect((await axe(page)).violations).toEqual([])
 
     await test.step('Dark theme: the domain page passes axe too (S3, S8)', async () => {
