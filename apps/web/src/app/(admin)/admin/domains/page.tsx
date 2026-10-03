@@ -1,15 +1,17 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { DomainsSkeleton } from '@/features/admin/components/domains/domains-skeleton'
+import { DomainsView } from '@/features/admin/components/domains/domains-view'
 
 export const metadata: Metadata = { title: 'Domains' }
 
-/** Package B9 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminDomainsPage() {
+type Search = Promise<Record<string, string | string[] | undefined>>
+
+/** Every domain on the side (docs/ADMIN-SPEC.md §5.2, B9). The URL holds the list. */
+export default function AdminDomainsPage({ searchParams }: { searchParams: Search }) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder title="Domains" description="Every domain we hold, by status and side." />
+    <Suspense fallback={<DomainsSkeleton />}>
+      <DomainsView searchParams={searchParams} />
     </Suspense>
   )
 }
