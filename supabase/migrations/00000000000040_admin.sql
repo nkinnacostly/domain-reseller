@@ -45,6 +45,8 @@ create table public.admin_changes (                              -- written only
   label        text not null,
   role         text,
   test_only    boolean not null,
+  was_test_only boolean,                                         -- the row before an update or delete; null on insert
+  e2e_user     boolean not null,                                 -- the user is an e2e-*@example.com reserved address
   factor_count integer,
   revoked      boolean not null,
   db_user      text not null default current_user
@@ -83,10 +85,12 @@ end;
 $$;
 
 -- One change-log row per insert, update or delete: the label, role, flags and
--- how many devices are pinned — never the factor ids or an email. A change to
--- a non-test admin raises a critical alert (admin_alert_conditions, migration
--- 41), so anyone with SQL access is seen. `db_user` is the session's login
--- role: the definer would always be the owner.
+-- how many devices are pinned — never the factor ids or an email. A change
+-- that touches a non-test admin, before or after (`was_test_only`), or that
+-- writes a test admin for anyone but an e2e user, raises a critical alert
+-- (admin_alert_conditions, migration 41): a test admin can reveal test-side
+-- contacts, so minting one quietly must be seen too. `db_user` is the
+-- session's login role: the definer would always be the owner.
 create function public.admins_log_change()
 returns trigger
 language plpgsql
@@ -95,11 +99,18 @@ set search_path = ''
 as $$
 declare
   v_row public.admins;
+  v_e2e boolean;
 begin
   if tg_op = 'DELETE' then v_row := old; else v_row := new; end if;
-  insert into public.admin_changes (op, label, role, test_only, factor_count, revoked, db_user)
-  values (tg_op, v_row.label, v_row.role, v_row.test_only, cardinality(v_row.mfa_factor_ids),
-          v_row.revoked_at is not null or tg_op = 'DELETE', session_user);
+  -- After a cascade from auth.users the user is gone: false, which only
+  -- matters for a test row being written, never for one deleted.
+  select coalesce(u.email ~ '^e2e-[^@]+@example\.com$' and public.is_reserved_email(u.email), false)
+    into v_e2e from auth.users u where u.id = v_row.user_id;
+  insert into public.admin_changes (op, label, role, test_only, was_test_only, e2e_user, factor_count,
+                                    revoked, db_user)
+  values (tg_op, v_row.label, v_row.role, v_row.test_only,
+          case when tg_op = 'INSERT' then null else old.test_only end, coalesce(v_e2e, false),
+          cardinality(v_row.mfa_factor_ids), v_row.revoked_at is not null or tg_op = 'DELETE', session_user);
   return null;
 end;
 $$;
@@ -2361,6 +2372,7 @@ declare
   v_admin  public.admins := public.admin_session('viewer', null, false);
   v_prior  jsonb;
   v_domain public.domains;
+  v_owner  text;
   v_code   text;
   v_side   text;
   v_out    jsonb;

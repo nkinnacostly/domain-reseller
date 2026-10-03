@@ -68,6 +68,7 @@ export function adminHrefForAlertKey(key: string): string {
       return UUID.test(id) ? `/admin/orders?line=${id.toLowerCase()}` : '/admin/orders'
     case 'admin_changed':
     case 'admin_factor_missing':
+    case 'admin_test_not_e2e':
       return '/admin/settings/admins'
     case 'admin_burst':
       // Keyed by the admin's label, not an audit row.

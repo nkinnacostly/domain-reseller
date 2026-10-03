@@ -133,6 +133,7 @@ describe('adminHrefForAlertKey', () => {
     ['ledger_gap:live', '/admin/supplier/ledger'],
     ['admin_changed:12', '/admin/settings/admins'],
     ['admin_factor_missing:owner', '/admin/settings/admins'],
+    ['admin_test_not_e2e:e2e-1a2b3c4d', '/admin/settings/admins'],
     ['admin_burst:owner', '/admin/audit?label=owner'],
     ['admin_limit_raised:99', '/admin/audit?id=99'],
     ['admin_preset_changed:100', '/admin/audit?id=100'],

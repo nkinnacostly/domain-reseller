@@ -148,6 +148,8 @@ create table public.admin_changes (                              -- written only
   at timestamptz not null default now(),
   op text not null check (op in ('INSERT', 'UPDATE', 'DELETE')),
   label text not null, role text, test_only boolean not null,
+  was_test_only boolean,                                         -- the row before an update or delete; null on insert
+  e2e_user boolean not null,                                     -- the user is an e2e-*@example.com reserved address
   factor_count integer, revoked boolean not null,
   db_user text not null default current_user
 );
@@ -156,7 +158,7 @@ revoke all on public.admin_changes from public, anon, authenticated, service_rol
 ```
 - **`admins_factor_is_theirs`** (BEFORE INSERT OR UPDATE): raises unless each element of `mfa_factor_ids` is a `verified` `totp` factor of `user_id`.
 - **`admins_log_change`** (AFTER INSERT OR UPDATE OR DELETE): writes one `admin_changes` row. It holds the label, role, flags and factor count, and **never the factor ids or an email**. A trigger on `admin_changes` refuses update, delete and truncate.
-- **Alert.** `admin_alert_conditions` raises `admin_changed:<id>` (critical, 24 h) for every change to a non-test row. A mint, re-pin or role change by anyone with SQL access therefore reaches Telegram.
+- **Alert.** `admin_alert_conditions` raises `admin_changed:<id>` (critical, 24 h) for every change that touches a non-test row **before or after** (`was_test_only`), and for any insert or update of a test row whose user is not an e2e user. Only removing or revoking an e2e user's test admin is quiet. A standing test admin for anyone else also raises `admin_test_not_e2e:<label>` (critical) for as long as it exists. A mint, re-pin, role change or flip to test-only by anyone with SQL access therefore reaches Telegram — a test admin can read test-side contacts, so minting one must be seen too. *(Package A review, 3 Oct 2026.)*
 - **Roles:**
   - `viewer` reads everything except personal data.
   - `operator` also works refunds, jobs, incidents, emails, deep syncs, preset hiding, live lookups, customer search and reveal.
@@ -663,7 +665,7 @@ The tier comes from `admin_tier` (§2.2). A `test_only` admin is refused `TEST_A
 | `admin_queue_deep_sync(p_domain_id, p_reason, …)` | The domain exists, `source <> 'demo'`, and `local_status in ('active','expired_grace','redemption')` (`NOT_SYNCABLE`). The side's `gateway:<production\|ote>` heartbeat is under 15 min old (`NO_GATEWAY`). | `update domains set deep_checked_at = null` | domain id |
 | `admin_find_customers(p_query text)` | `customer.search`. A test admin sees reserved-email profiles only. 30 searches and reveals per admin per hour (`RATE_LIMITED`), counted by `admin_lookup_rate_limited` under `pg_advisory_xact_lock(hashtextextended('admin_lookup:' \|\| admin_id, 0))`, so parallel calls from one session queue instead of all reading the same count. | Exact match on a lower-cased email, order number, or domain. Returns at most 20 masked rows: `{userId, maskedEmail, joinedAt, domainsHeld, ordersPaid}`. | `{kind, matched: [user ids]}`; the query text is never stored |
 | `admin_reveal_customer(p_user_id, p_reason, …)` | `customer.reveal`. A reserved-email target for a test admin. Same rate limit. Reason optional. | Returns `{email, fullName, phone, businessName}`. **A replayed key returns `{ok, auditId, replayed}` with no details**: they are read only after the gate, the limit and a new audit row, so a key kept from before a demotion shows nothing. | target id only |
-| `admin_reveal_registrant(p_domain_id, p_reason, …)` | `domain.reveal_contacts`. A `test_mode` domain for a test admin. Same rate limit. | Returns the registrant and `contacts`. A replay carries no details, as above. | target id only |
+| `admin_reveal_registrant(p_domain_id, p_reason, …)` | `domain.reveal_contacts`. A test admin: a `test_mode` domain whose owner has a reserved email (`reserved_target`). Same rate limit. | Returns the registrant and `contacts`. A replay carries no details, as above. | target id only |
 
 `admin_record_float_topup` and `admin_correct_float_topup` are in migration 41 (§3.2b).
 
@@ -892,7 +894,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 **`supabase/tests/admin.sql`** (migration 40). It uses the `begin; do $$ … $$; rollback;` pattern. It creates `auth.users`, `auth.mfa_factors` (two factors), `auth.sessions` and `auth.mfa_amr_claims` rows for `e2e-admin-<tag>@example.com`. It sets claims with `set_config('request.jwt.claims', …, true)` and `set local role authenticated`. **Live payment and refund rows are inserted directly inside the rolled-back transaction, never through `record_order_payment`**, because the invoice sequence does not roll back. Each check raises on failure:
 1. A non-admin's `admin_status()` is `not_admin`; `admin_whoami()` raises; each wrapper and `admin_note` raises.
 2. `aal1` claims give `needs_code`.
-3. A totp 13 h old gives `needs_code` for `admin_whoami(null)`. A totp 20 min old passes `admin_whoami(null)` and gives `NEEDS_CODE` from a money wrapper.
+3. A totp 13 h old gives `needs_code` for `admin_whoami(null)`. A totp 20 min old passes `admin_whoami(null)` and gives `NEEDS_CODE` from a money wrapper. At the money tier's edge, a totp 4 min old passes `admin_whoami(5)` and a money wrapper's gate; 6 min old gives `needs_code` and `NEEDS_CODE`.
 4. A session factor equal to the **second** pinned factor passes. An unpinned factor gives `factor_mismatch`. A pinned but unverified factor gives `factor_mismatch`. A deleted session row gives `needs_code`.
 5. An `amr` of only `otp` and `totp` gives `weak_sign_in`.
 6. `password_reset_at` within 24 h: money wrappers return `HELD` with a `refused` row; `admin_whoami(null)` passes.
@@ -944,6 +946,8 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
     - `admin_claim_note` with the wrong action gives `ACTION_MISMATCH`, and a wrong target gives `TARGET_MISMATCH`;
     - a second claim gives `USED`;
     - a row aged 61 s gives `EXPIRED`;
+    - a missing id gives `NOT_FOUND`; a `refused` row and an `ok` row give `NOT_INTENT`;
+    - a `test_actor` intent on `live`, written directly, gives `TEST_ADMIN` at the claim;
     - a `test_actor` note on `live` cannot be created (`TEST_ADMIN` at `admin_note`);
     - `admin_note_result` twice for the same note raises.
 26. Audit immutability:
@@ -1122,7 +1126,7 @@ The periodic preset checker also checks open drafts (`preset_drafts_for_check()`
 | `emails_waiting:` | `/admin/emails?status=pending` |
 | `ledger_missing:` | `/admin/orders?line=<id>` |
 | `ledger_*:` (others) | `/admin/supplier/ledger?trace=<id>` |
-| `admin_changed:`, `admin_factor_missing:` | `/admin/settings/admins` |
+| `admin_changed:`, `admin_factor_missing:`, `admin_test_not_e2e:` | `/admin/settings/admins` |
 | `admin_burst:`, `admin_limit_raised:`, `admin_preset_changed:` | `/admin/audit?id=<id>` |
 | anything else | `/admin/alerts` |
 

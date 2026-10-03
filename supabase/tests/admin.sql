@@ -821,7 +821,9 @@ begin
   end if;
   v_passed := v_passed + 1;
 
-  -- ── 27. Test admins only for e2e users with a verified authenticator.
+  -- ── 27. Test admins only for e2e users with a verified authenticator and no
+  -- real admin row; their audit rows go after 30 days, with their claims,
+  -- and nobody else's ever do.
   perform pg_temp.expect_raise(format('select public.grant_test_admin(%L)', u_real), '%only an e2e%');
   perform pg_temp.expect_raise(format('select public.grant_test_admin(%L)', u_nofactor), '%verified authenticator%');
   v_passed := v_passed + 1;

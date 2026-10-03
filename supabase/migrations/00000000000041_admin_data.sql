@@ -921,12 +921,28 @@ stable
 security definer
 set search_path = ''
 as $$
+  -- Any change that touches a non-test admin, before or after, and any test
+  -- admin written for someone who is not an e2e user. Removing an e2e test
+  -- admin (teardown, a cascade from auth.users) is the one quiet change.
   select 'admin_changed:' || c.id, 'critical', 'admin_changed',
-         format('Admin access changed in the database: %s of %s (%s, %s linked devices%s) by %s. If you did not do this, revoke it now (DEPLOY.md §6b).',
-                lower(c.op), c.label, coalesce(c.role, 'no role'), coalesce(c.factor_count, 0),
+         format('Admin access changed in the database: %s of %s (%s%s, %s linked devices%s) by %s. If you did not do this, revoke it now (DEPLOY.md §6b).',
+                lower(c.op), c.label, coalesce(c.role, 'no role'),
+                case when c.test_only then ', test only' else '' end, coalesce(c.factor_count, 0),
                 case when c.revoked then ', revoked' else '' end, c.db_user)
     from public.admin_changes c
-   where not p_test_mode and not c.test_only and c.at > now() - interval '24 hours'
+   where not p_test_mode and c.at > now() - interval '24 hours'
+     and (not c.test_only or c.was_test_only is false or (c.op <> 'DELETE' and not c.e2e_user))
+
+  union all
+  -- A standing test admin whose user is not an e2e-*@example.com address: a
+  -- real person with test access sees test-side contacts (D15).
+  select 'admin_test_not_e2e:' || a.label, 'critical', 'admin_test_not_e2e',
+         format('Test admin %s belongs to an account that is not an e2e test user. Revoke it unless you meant this (DEPLOY.md §6b).',
+                a.label)
+    from public.admins a
+    left join auth.users u on u.id = a.user_id
+   where not p_test_mode and a.test_only and a.revoked_at is null
+     and not coalesce(u.email ~ '^e2e-[^@]+@example\.com$' and public.is_reserved_email(u.email), false)
 
   union all
   select 'admin_factor_missing:' || a.label,

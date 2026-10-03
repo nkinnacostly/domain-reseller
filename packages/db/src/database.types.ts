@@ -115,6 +115,7 @@ export type Database = {
         Row: {
           at: string
           db_user: string
+          e2e_user: boolean
           factor_count: number | null
           id: number
           label: string
@@ -122,10 +123,12 @@ export type Database = {
           revoked: boolean
           role: string | null
           test_only: boolean
+          was_test_only: boolean | null
         }
         Insert: {
           at?: string
           db_user?: string
+          e2e_user: boolean
           factor_count?: number | null
           id?: never
           label: string
@@ -133,10 +136,12 @@ export type Database = {
           revoked: boolean
           role?: string | null
           test_only: boolean
+          was_test_only?: boolean | null
         }
         Update: {
           at?: string
           db_user?: string
+          e2e_user?: boolean
           factor_count?: number | null
           id?: never
           label?: string
@@ -144,6 +149,7 @@ export type Database = {
           revoked?: boolean
           role?: string | null
           test_only?: boolean
+          was_test_only?: boolean | null
         }
         Relationships: []
       }
