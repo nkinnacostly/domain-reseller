@@ -720,9 +720,10 @@ begin
          coalesce(sum(-e.delta_cents) filter (where e.occurred_at > now() - interval '30 days'), 0)
     into v_burn7, v_burn30
     from public.supplier_ledger_entries e
-   where e.test_mode = p_test_mode and e.status = 1 and e.delta_cents < 0 and e.description not like 'e2e-%';
+   where e.test_mode = p_test_mode and e.status = 1 and e.delta_cents < 0
+     and (not p_test_mode or e.description not like 'e2e-%');
   select min(e.occurred_at) into v_first from public.supplier_ledger_entries e
-   where e.test_mode = p_test_mode and e.description not like 'e2e-%';
+   where e.test_mode = p_test_mode and (not p_test_mode or e.description not like 'e2e-%');
 
   v_state := case
                when v_hb.name is null or v_hb.beat_at < now() - interval '3 hours'
@@ -739,7 +740,8 @@ begin
   if v_state = 'stale' and v_read_at is not null and v_balance is not null then
     select coalesce(sum(-e.delta_cents), 0) into v_last_burn
       from public.supplier_ledger_entries e
-     where e.test_mode = p_test_mode and e.status = 1 and e.delta_cents < 0 and e.description not like 'e2e-%'
+     where e.test_mode = p_test_mode and e.status = 1 and e.delta_cents < 0
+     and (not p_test_mode or e.description not like 'e2e-%')
        and e.occurred_at > v_read_at - interval '7 days' and e.occurred_at <= v_read_at;
     if v_last_burn > 0 then
       v_last := jsonb_build_object('days', greatest(round((v_balance - v_committed)::numeric / (v_last_burn::numeric / 7), 1), 0),
@@ -756,7 +758,8 @@ begin
            order by e.occurred_at desc), '[]'::jsonb)
     into v_topups
     from (select * from public.supplier_ledger_entries x
-           where x.test_mode = p_test_mode and x.match_state = 'topup' and x.description not like 'e2e-%'
+           where x.test_mode = p_test_mode and x.match_state = 'topup'
+             and (not p_test_mode or x.description not like 'e2e-%')
            order by x.occurred_at desc limit 20) e
     left join public.float_topups t
       on not p_test_mode and t.trace_id = e.trace_id
@@ -793,7 +796,9 @@ as $$
        and h.test_mode = p_test_mode
   ), e as (
     select x.* from public.supplier_ledger_entries x
-     where x.test_mode = p_test_mode and x.description not like 'e2e-%' and exists (select 1 from hb)
+     where x.test_mode = p_test_mode and exists (select 1 from hb)
+       -- e2e's seeded rows exist on the test side only; a live e2e-* name is a real one.
+       and (not p_test_mode or x.description not like 'e2e-%')
   ), side as (
     select case when p_test_mode then 'test' else 'live' end as name
   )
@@ -1849,7 +1854,8 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_admin public.admins := public.admin_session('viewer', null, false);
+  -- A test admin reads the test side only (D15); reserved profiles only, below.
+  v_admin public.admins := public.admin_read_gate(p_test_mode);
   v_sort  text := case when p_sort in ('joined', 'domains', 'orders', 'paid', 'last_sign_in') then p_sort else 'joined' end;
   v_asc   boolean := lower(coalesce(p_dir, 'desc')) = 'asc';
   v_limit integer := least(greatest(coalesce(p_limit, 25), 1), 100);
@@ -1907,7 +1913,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_admin   public.admins := public.admin_session('viewer', null, false);
+  v_admin   public.admins := public.admin_read_gate(p_test_mode);
   v_profile public.profiles;
 begin
   select * into v_profile from public.profiles where id = p_user_id;
@@ -2211,6 +2217,15 @@ create view public.admin_domains_v with (security_invoker = true) as
               else 'individual' end as registrant_type
     from public.domains d;
 
+-- Orders without the registrant, the contacts or the saved contact profile
+-- they came from (D4): adminDb reads orders only through this view.
+create view public.admin_orders_v with (security_invoker = true) as
+  select o.id, o.user_id, o.order_number, o.status, o.test_mode, o.subtotal_kobo, o.vat_pct, o.vat_kobo,
+         o.total_kobo, o.fx_rate_id, o.tx_ref, o.float_check, o.invoice_number, o.nameserver_preset_id,
+         o.nameservers, o.paid_at, o.payment_checked_at, o.payment_id, o.created_at, o.updated_at,
+         o.registrant ->> 'country' as registrant_country
+    from public.orders o;
+
 -- ── (j) Test-only helpers ───────────────────────────────────────────────────
 
 create function public.seed_test_failed_email(p_user_id uuid)
@@ -2354,9 +2369,10 @@ grant execute on function public.admin_ssl_stats(boolean) to authenticated;
 grant execute on function public.admin_list_admins() to authenticated;
 
 revoke all on public.admin_payments_v, public.admin_email_outbox_v, public.admin_compliance_notices_v,
-  public.admin_ssl_certificates_v, public.admin_domains_v from public, anon, authenticated, service_role;
+  public.admin_ssl_certificates_v, public.admin_domains_v, public.admin_orders_v
+  from public, anon, authenticated, service_role;
 grant select on public.admin_payments_v, public.admin_email_outbox_v, public.admin_compliance_notices_v,
-  public.admin_ssl_certificates_v, public.admin_domains_v to service_role;
+  public.admin_ssl_certificates_v, public.admin_domains_v, public.admin_orders_v to service_role;
 
 -- ── Schedules and one-offs ──────────────────────────────────────────────────
 

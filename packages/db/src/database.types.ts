@@ -2766,6 +2766,32 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_orders_v: {
+        Row: {
+          created_at: string | null
+          float_check: string | null
+          fx_rate_id: string | null
+          id: string | null
+          invoice_number: string | null
+          nameserver_preset_id: string | null
+          nameservers: string[] | null
+          order_number: string | null
+          paid_at: string | null
+          payment_checked_at: string | null
+          payment_id: string | null
+          registrant_country: string | null
+          status: Database["public"]["Enums"]["order_status"] | null
+          subtotal_kobo: number | null
+          test_mode: boolean | null
+          total_kobo: number | null
+          tx_ref: string | null
+          updated_at: string | null
+          user_id: string | null
+          vat_kobo: number | null
+          vat_pct: number | null
+        }
+        Relationships: []
+      }
       admin_payments_v: {
         Row: {
           absorbed: boolean | null
