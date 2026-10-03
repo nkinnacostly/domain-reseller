@@ -231,6 +231,13 @@ export type Database = {
             foreignKeyName: "bulk_operation_items_domain_id_fkey"
             columns: ["domain_id"]
             isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_operation_items_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
             referencedRelation: "domains"
             referencedColumns: ["id"]
           },
@@ -486,7 +493,21 @@ export type Database = {
             foreignKeyName: "compliance_notices_domain_id_fkey"
             columns: ["domain_id"]
             isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_notices_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
             referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_notices_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: true
+            referencedRelation: "admin_email_outbox_v"
             referencedColumns: ["id"]
           },
           {
@@ -618,6 +639,13 @@ export type Database = {
             foreignKeyName: "domain_events_domain_id_fkey"
             columns: ["domain_id"]
             isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domain_events_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
             referencedRelation: "domains"
             referencedColumns: ["id"]
           },
@@ -640,6 +668,13 @@ export type Database = {
           label_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "domain_label_links_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "domain_label_links_domain_id_fkey"
             columns: ["domain_id"]
@@ -711,6 +746,13 @@ export type Database = {
           id?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "domain_nameserver_history_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "domain_nameserver_history_domain_id_fkey"
             columns: ["domain_id"]
@@ -934,7 +976,21 @@ export type Database = {
             foreignKeyName: "email_outbox_domain_id_fkey"
             columns: ["domain_id"]
             isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
             referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "admin_orders_v"
             referencedColumns: ["id"]
           },
           {
@@ -1177,6 +1233,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "jobs_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "jobs_domain_id_fkey"
             columns: ["domain_id"]
@@ -1604,6 +1667,13 @@ export type Database = {
             foreignKeyName: "order_items_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
+            referencedRelation: "admin_orders_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
@@ -1762,6 +1832,13 @@ export type Database = {
             foreignKeyName: "payment_incidents_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
+            referencedRelation: "admin_orders_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_incidents_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
@@ -1811,6 +1888,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "admin_orders_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_order_id_fkey"
             columns: ["order_id"]
@@ -2075,6 +2159,13 @@ export type Database = {
             foreignKeyName: "refunds_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
+            referencedRelation: "admin_orders_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
@@ -2083,6 +2174,13 @@ export type Database = {
             columns: ["order_item_id"]
             isOneToOne: false
             referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "admin_payments_v"
             referencedColumns: ["id"]
           },
           {
@@ -2139,6 +2237,13 @@ export type Database = {
           test_mode?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "registry_drift_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "registry_drift_domain_id_fkey"
             columns: ["domain_id"]
@@ -2363,6 +2468,13 @@ export type Database = {
             foreignKeyName: "ssl_jobs_certificate_id_fkey"
             columns: ["certificate_id"]
             isOneToOne: false
+            referencedRelation: "admin_ssl_certificates_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssl_jobs_certificate_id_fkey"
+            columns: ["certificate_id"]
+            isOneToOne: false
             referencedRelation: "ssl_certificates"
             referencedColumns: ["id"]
           },
@@ -2528,7 +2640,7 @@ export type Database = {
         Insert: {
           balance_cents: number
           charge_type: number
-          delta_cents?: never
+          delta_cents?: number | null
           description?: string
           match_call_id?: number | null
           match_operation?: string | null
@@ -2549,7 +2661,7 @@ export type Database = {
         Update: {
           balance_cents?: number
           charge_type?: number
-          delta_cents?: never
+          delta_cents?: number | null
           description?: string
           match_call_id?: number | null
           match_operation?: string | null
@@ -2713,7 +2825,29 @@ export type Database = {
           user_id: string | null
           window: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "compliance_notices_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_notices_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compliance_notices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_domains_v: {
         Row: {
@@ -2721,7 +2855,9 @@ export type Database = {
           created_at: string | null
           deep_checked_at: string | null
           delegation_checked_at: string | null
-          delegation_status: Database["public"]["Enums"]["delegation_status"] | null
+          delegation_status:
+            | Database["public"]["Enums"]["delegation_status"]
+            | null
           domain_name: string | null
           expires_at: string | null
           id: string | null
@@ -2747,7 +2883,95 @@ export type Database = {
           updated_at: string | null
           user_id: string | null
         }
-        Relationships: []
+        Insert: {
+          auto_renew?: boolean | null
+          created_at?: string | null
+          deep_checked_at?: string | null
+          delegation_checked_at?: string | null
+          delegation_status?:
+            | Database["public"]["Enums"]["delegation_status"]
+            | null
+          domain_name?: string | null
+          expires_at?: string | null
+          id?: string | null
+          local_status?: Database["public"]["Enums"]["domain_status"] | null
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
+          order_item_id?: string | null
+          pending_nameservers?: string[] | null
+          pending_privacy?: boolean | null
+          pending_transfer_lock?: boolean | null
+          previous_nameservers?: string[] | null
+          privacy_enabled?: boolean | null
+          registered_at?: string | null
+          registrant_country?: never
+          registrant_type?: never
+          registry_checked_at?: string | null
+          registry_renewal_mode?: string | null
+          registry_status?: string | null
+          source?: string | null
+          test_mode?: boolean | null
+          tld?: string | null
+          transfer_lock?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          auto_renew?: boolean | null
+          created_at?: string | null
+          deep_checked_at?: string | null
+          delegation_checked_at?: string | null
+          delegation_status?:
+            | Database["public"]["Enums"]["delegation_status"]
+            | null
+          domain_name?: string | null
+          expires_at?: string | null
+          id?: string | null
+          local_status?: Database["public"]["Enums"]["domain_status"] | null
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
+          order_item_id?: string | null
+          pending_nameservers?: string[] | null
+          pending_privacy?: boolean | null
+          pending_transfer_lock?: boolean | null
+          previous_nameservers?: string[] | null
+          privacy_enabled?: boolean | null
+          registered_at?: string | null
+          registrant_country?: never
+          registrant_type?: never
+          registry_checked_at?: string | null
+          registry_renewal_mode?: string | null
+          registry_status?: string | null
+          source?: string | null
+          test_mode?: boolean | null
+          tld?: string | null
+          transfer_lock?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domains_nameserver_preset_id_fkey"
+            columns: ["nameserver_preset_id"]
+            isOneToOne: false
+            referencedRelation: "nameserver_presets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domains_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domains_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_email_outbox_v: {
         Row: {
@@ -2770,7 +2994,83 @@ export type Database = {
           test_mode: boolean | null
           user_id: string | null
         }
-        Relationships: []
+        Insert: {
+          attempts?: number | null
+          category?: string | null
+          complained_at?: string | null
+          created_at?: string | null
+          delivery_status?: string | null
+          domain_id?: string | null
+          id?: string | null
+          kind?: string | null
+          last_error_safe?: never
+          masked_to?: never
+          next_attempt_at?: string | null
+          order_id?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string | null
+          template_version?: string | null
+          test_mode?: boolean | null
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          category?: string | null
+          complained_at?: string | null
+          created_at?: string | null
+          delivery_status?: string | null
+          domain_id?: string | null
+          id?: string | null
+          kind?: string | null
+          last_error_safe?: never
+          masked_to?: never
+          next_attempt_at?: string | null
+          order_id?: string | null
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string | null
+          template_version?: string | null
+          test_mode?: boolean | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_outbox_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "admin_orders_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_outbox_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_orders_v: {
         Row: {
@@ -2795,7 +3095,73 @@ export type Database = {
           vat_kobo: number | null
           vat_pct: number | null
         }
-        Relationships: []
+        Insert: {
+          created_at?: string | null
+          float_check?: string | null
+          fx_rate_id?: string | null
+          id?: string | null
+          invoice_number?: string | null
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
+          order_number?: string | null
+          paid_at?: string | null
+          payment_checked_at?: string | null
+          payment_id?: string | null
+          status?: Database["public"]["Enums"]["order_status"] | null
+          subtotal_kobo?: number | null
+          test_mode?: boolean | null
+          total_kobo?: number | null
+          tx_ref?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          vat_kobo?: number | null
+          vat_pct?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          float_check?: string | null
+          fx_rate_id?: string | null
+          id?: string | null
+          invoice_number?: string | null
+          nameserver_preset_id?: string | null
+          nameservers?: string[] | null
+          order_number?: string | null
+          paid_at?: string | null
+          payment_checked_at?: string | null
+          payment_id?: string | null
+          status?: Database["public"]["Enums"]["order_status"] | null
+          subtotal_kobo?: number | null
+          test_mode?: boolean | null
+          total_kobo?: number | null
+          tx_ref?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          vat_kobo?: number | null
+          vat_pct?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_fx_rate_id_fkey"
+            columns: ["fx_rate_id"]
+            isOneToOne: false
+            referencedRelation: "fx_rates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_nameserver_preset_id_fkey"
+            columns: ["nameserver_preset_id"]
+            isOneToOne: false
+            referencedRelation: "nameserver_presets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_payments_v: {
         Row: {
@@ -2811,7 +3177,22 @@ export type Database = {
           status: string | null
           test_mode: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "admin_orders_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       admin_ssl_certificates_v: {
         Row: {
@@ -2846,7 +3227,93 @@ export type Database = {
           validation_method: string | null
           web_server: string | null
         }
-        Relationships: []
+        Insert: {
+          approver_masked?: never
+          ca_bundle_pem?: string | null
+          certificate_pem?: string | null
+          common_name?: string | null
+          configured_at?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          included_names?: number | null
+          is_wildcard?: boolean | null
+          issued_at?: string | null
+          last_checked_at?: string | null
+          last_error_code?: string | null
+          next_check_at?: string | null
+          order_item_id?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchased_at?: string | null
+          reissue_count?: number | null
+          san_names?: string[] | null
+          status?: string | null
+          status_unrecognised_since?: string | null
+          subscription_ends_at?: string | null
+          supplier_certificate_id?: string | null
+          supplier_status?: string | null
+          test_mode?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+          validation_method?: string | null
+          web_server?: string | null
+        }
+        Update: {
+          approver_masked?: never
+          ca_bundle_pem?: string | null
+          certificate_pem?: string | null
+          common_name?: string | null
+          configured_at?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          included_names?: number | null
+          is_wildcard?: boolean | null
+          issued_at?: string | null
+          last_checked_at?: string | null
+          last_error_code?: string | null
+          next_check_at?: string | null
+          order_item_id?: string | null
+          product_code?: string | null
+          product_name?: string | null
+          purchased_at?: string | null
+          reissue_count?: number | null
+          san_names?: string[] | null
+          status?: string | null
+          status_unrecognised_since?: string | null
+          subscription_ends_at?: string | null
+          supplier_certificate_id?: string | null
+          supplier_status?: string | null
+          test_mode?: boolean | null
+          updated_at?: string | null
+          user_id?: string | null
+          validation_method?: string | null
+          web_server?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ssl_certificates_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ssl_certificates_product_code_fkey"
+            columns: ["product_code"]
+            isOneToOne: false
+            referencedRelation: "ssl_products"
+            referencedColumns: ["product_code"]
+          },
+          {
+            foreignKeyName: "ssl_certificates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -3103,6 +3570,12 @@ export type Database = {
           test_only: boolean
           user_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "admins"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       admin_reason_problem: { Args: { p_reason: string }; Returns: string }
       admin_record: {
@@ -3256,6 +3729,12 @@ export type Database = {
           test_only: boolean
           user_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "admins"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       admin_set_preset_hidden: {
         Args: {
@@ -3291,11 +3770,7 @@ export type Database = {
       admin_status: { Args: never; Returns: string }
       admin_tier: {
         Args: { p_action: string }
-        Returns: {
-          min_role: string
-          money: boolean
-          test_rule: string
-        }
+        Returns: Record<string, unknown>
       }
       admin_tld_held_counts: {
         Args: { p_test_mode: boolean }
