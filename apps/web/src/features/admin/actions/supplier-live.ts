@@ -1,10 +1,8 @@
 'use server'
 
 import {
-  ADMIN_GATEWAY_ROUTES,
   ADMIN_PRICE_OPS,
   type AdminFlwRefundCheck,
-  type AdminGatewayRouteName,
   type AdminLedgerPage,
   type AdminPriceCheck,
   type AdminRegistrantVerification,
@@ -14,95 +12,28 @@ import {
   type AdminSslStatus,
   type AdminSupplierBalance,
   type AdminTransferState,
-  adminNoteTarget,
-  adminRouteSide,
   RENEW_CHECK_ENABLED,
 } from '@dr/shared/admin'
-import { GatewayError } from '@dr/shared/errors'
 import { z } from 'zod'
-import {
-  type AdminResult,
-  adminAccessError,
-  refusedResult,
-  toAdminResult,
-} from '@/features/admin/lib/errors'
-import type { AdminSide } from '@/features/admin/lib/side'
-import { adminGatewayConfigured, callAdminGateway } from '@/features/admin/queries/gateway'
-import { getAdminSide } from '@/features/admin/queries/session'
+import { liveRead } from '@/features/admin/actions/live-read'
+import { type AdminResult, refusedResult } from '@/features/admin/lib/errors'
 import {
   bigintIdSchema,
   hostnameSchema,
   optionalReasonSchema,
   uuidSchema,
 } from '@/features/admin/schemas/common'
-import { type AdminContext, adminAction } from '@/lib/safe-action'
+import { adminAction } from '@/lib/safe-action'
 
 /**
  * Live reads through the gateway (docs/ADMIN-SPEC.md §4.3, §5.1, D22). Each
- * one, after its input is validated: writes an intent note with
- * `admin_note`, stops if SQL refuses it, then asks the gateway with the
- * note's id — and the gateway claims the note before it calls anyone. Pages
+ * one, after its input is validated, goes through `liveRead`: an intent
+ * note with `admin_note`, a stop if SQL refuses it, then the gateway with
+ * the note's id — which the gateway claims before it calls anyone. Pages
  * never call these on render: a person presses a button.
  */
 
 type Read<T> = Promise<AdminResult<T>>
-
-type LiveRead = {
-  route: AdminGatewayRouteName
-  targetType: string
-  name?: string
-  tld?: string
-  flwRefundId?: string
-  params?: Record<string, string>
-  query?: Record<string, string | number | undefined>
-  reason?: string | undefined
-  detail?: Record<string, string | number | boolean>
-}
-
-async function liveRead<T>(ctx: AdminContext, read: LiveRead): Read<T> {
-  // No admin secret here: say live reads are off, before any note is written.
-  if (!adminGatewayConfigured()) return refusedResult('ADMIN_DISABLED')
-  const side: AdminSide = await getAdminSide(ctx.admin)
-  const noteSide = adminRouteSide(read.route, side)
-  const target = adminNoteTarget(read.route, {
-    side: noteSide,
-    ...(read.name ? { name: read.name } : {}),
-    ...(read.tld ? { tld: read.tld } : {}),
-    ...(read.flwRefundId ? { flwRefundId: read.flwRefundId } : {}),
-  })
-
-  const note = await ctx.db.rpc('admin_note', {
-    p_action: ADMIN_GATEWAY_ROUTES[read.route].action,
-    p_side: noteSide,
-    p_target_type: read.targetType,
-    p_target_id: target,
-    p_detail: read.detail ?? {},
-    ...(read.reason ? { p_reason: read.reason } : {}),
-  })
-  if (note.error) throw adminAccessError(note.error.message)
-  const noted = toAdminResult(note.data)
-  if (!noted.ok) return noted
-
-  try {
-    const data = await callAdminGateway<T>({
-      admin: ctx.admin,
-      auditId: noted.auditId,
-      route: ADMIN_GATEWAY_ROUTES[read.route].template,
-      ...(read.params ? { params: read.params } : {}),
-      query: { side, ...read.query },
-    })
-    return { ok: true, auditId: noted.auditId, data }
-  } catch (error) {
-    if (error instanceof GatewayError) {
-      const reason = (error as GatewayError & { reason?: string }).reason
-      return refusedResult(
-        error.code === 'ADMIN_NOTE_REFUSED' && reason ? reason : error.code,
-        noted.auditId,
-      )
-    }
-    throw error
-  }
-}
 
 const nameInput = z.object({ name: hostnameSchema, reason: optionalReasonSchema })
 
