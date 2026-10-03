@@ -160,4 +160,15 @@ describe('admin boundaries', () => {
       expect(file.text, file.rel).not.toMatch(/@\/lib\/supabase\/(service|admin)['"]/)
     }
   })
+
+  it('runs every admin e2e spec without screenshots, video or traces', () => {
+    const e2e = join(SRC, '../tests/e2e')
+    const specs = readdirSync(e2e).filter((name) => /^admin.*\.spec\.ts$/.test(name))
+    expect(specs.length).toBeGreaterThan(0)
+    for (const spec of specs) {
+      const text = readFileSync(join(e2e, spec), 'utf8')
+      expect(text, spec).toMatch(/import \{[^}]*\btest\b[^}]*\} from '\.\/support\/admin'/)
+      expect(text, spec).not.toMatch(/import \{[^}]*\btest\b[^}]*\} from '@playwright\/test'/)
+    }
+  })
 })

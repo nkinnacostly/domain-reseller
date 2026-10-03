@@ -8,6 +8,7 @@ import {
   adminDb,
   adminSessionStatus,
   adminWhoami,
+  findAdmin,
   getAdminSide,
   isAdminPrincipal,
   requireAdmin,
@@ -189,6 +190,46 @@ describe('adminDb', () => {
     expect(publicSafe.sort()).toEqual(
       ['fx_rates', 'nameserver_presets', 'pricing_settings', 'ssl_products', 'tlds'].sort(),
     )
+  })
+})
+
+describe('every mapped table', () => {
+  it('reads from the table of its own name, with a side applied or marked global', async () => {
+    const admin = await principal()
+    for (const [name, entry] of Object.entries(ADMIN_TABLES)) {
+      const calls = recordingService()
+      adminDb(admin, 'test')
+        .from(name as keyof typeof ADMIN_TABLES)
+        .select('id')
+      expect(calls[0], name).toEqual(['from', name])
+      if (entry.side.kind === 'global' || entry.side.kind === 'test_actor') continue
+      expect(calls.length, `${name} has a side filter`).toBeGreaterThan(2)
+    }
+  })
+
+  it('makes one service client per reader', async () => {
+    recordingService()
+    const db = adminDb(await principal(), 'live')
+    db.from('orders').select('id')
+    db.from('jobs').select('id')
+    expect(createServiceClient).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('findAdmin', () => {
+  it('is the admin, or null — never a 404 — for the sidebar', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_whoami: { data: whoami() } } }).client as never,
+    )
+    expect((await findAdmin())?.label).toBe('owner')
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_whoami: { error: { message: 'admin:weak_sign_in' } } } })
+        .client as never,
+    )
+    expect(await findAdmin()).toBeNull()
+    vi.mocked(createClient).mockResolvedValue(sessionClient({ user: null }).client as never)
+    expect(await findAdmin()).toBeNull()
+    expect(notFound).not.toHaveBeenCalled()
   })
 })
 
