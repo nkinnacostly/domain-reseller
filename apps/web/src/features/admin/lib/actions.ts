@@ -9,8 +9,8 @@ export type AdminRole = 'owner' | 'operator' | 'viewer'
 
 /**
  * - `test_target`: a test admin acts only on a test-mode target or the test side.
- * - `reserved_target`: only on a reserved-email profile, or a test-mode
- *   domain or email that belongs to one.
+ * - `reserved_target`: only on an e2e user's profile (`e2e-*@example.com`,
+ *   SQL `admin_e2e_email`), or a test-mode domain or email that belongs to one.
  * - `never`: a test admin is always refused.
  */
 export type TestRule = 'test_target' | 'reserved_target' | 'never'

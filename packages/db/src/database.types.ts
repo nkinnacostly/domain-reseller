@@ -2968,6 +2968,7 @@ export type Database = {
         Returns: Json
       }
       admin_domain_stats: { Args: { p_test_mode: boolean }; Returns: Json }
+      admin_e2e_email: { Args: { p_email: string }; Returns: boolean }
       admin_email_stats: {
         Args: { p_days: number; p_test_mode: boolean }
         Returns: Json

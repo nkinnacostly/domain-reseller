@@ -54,6 +54,19 @@ create table public.admin_changes (                              -- written only
 alter table public.admin_changes enable row level security;
 revoke all on public.admin_changes from public, anon, authenticated, service_role;
 
+-- An e2e test user's address: `e2e-*@example.com`, the one rule every test
+-- helper, the test-admin grant and a test admin's customer reads share (D15).
+-- Wider reserved addresses (any example.com, .test) are not enough: anyone
+-- can sign up with one and type their real name and phone beside it.
+create function public.admin_e2e_email(p_email text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(p_email ~ '^e2e-[^@]+@example\.com$' and public.is_reserved_email(p_email), false)
+$$;
+
 -- A pinned factor must be one of this user's verified authenticators (D7). A
 -- leaked secret key can enrol a factor through the Auth admin API; it cannot
 -- add it here. Checked only when the pins change, so a person whose device
@@ -104,8 +117,7 @@ begin
   if tg_op = 'DELETE' then v_row := old; else v_row := new; end if;
   -- After a cascade from auth.users the user is gone: false, which only
   -- matters for a test row being written, never for one deleted.
-  select coalesce(u.email ~ '^e2e-[^@]+@example\.com$' and public.is_reserved_email(u.email), false)
-    into v_e2e from auth.users u where u.id = v_row.user_id;
+  select public.admin_e2e_email(u.email) into v_e2e from auth.users u where u.id = v_row.user_id;
   insert into public.admin_changes (op, label, role, test_only, was_test_only, e2e_user, factor_count,
                                     revoked, db_user)
   values (tg_op, v_row.label, v_row.role, v_row.test_only,
@@ -244,8 +256,8 @@ $$;
 
 -- The only copy of the action map (§2.2). test_rule: `test_target` — a test
 -- admin may act only on a test-mode target or the test side;
--- `reserved_target` — only on a reserved-email profile, or a test-mode
--- domain or email that belongs to one; `never`.
+-- `reserved_target` — only on an e2e user's profile (admin_e2e_email), or
+-- a test-mode domain or email that belongs to one; `never`.
 create function public.admin_tier(p_action text, out min_role text, out money boolean, out test_rule text)
 language sql
 immutable
@@ -756,7 +768,7 @@ declare
   v_label   text := 'e2e-' || left(p_user_id::text, 8);
 begin
   select u.email into v_email from auth.users u where u.id = p_user_id;
-  if v_email is null or v_email !~ '^e2e-[^@]+@example\.com$' or not public.is_reserved_email(v_email) then
+  if not public.admin_e2e_email(v_email) then
     raise exception 'grant_test_admin: only an e2e-*@example.com user' using errcode = '42501';
   end if;
   select array_agg(f.id order by f.created_at) into v_factors
@@ -2185,12 +2197,12 @@ begin
   v_side := case when v_email.test_mode then 'test' else 'live' end;
   v_detail := jsonb_build_object('kind', v_email.kind, 'category', v_email.category,
                                  'before', jsonb_build_object('status', v_email.status));
-  -- reserved_target: a test admin sends again only a test email to a reserved
-  -- address, of a reserved account — never a real person's mail (D15).
+  -- reserved_target: a test admin sends again only a test email to an e2e
+  -- address, of an e2e account or none — never a real person's mail (D15).
   select p.email::text into v_owner from public.profiles p where p.id = v_email.user_id;
   v_code := public.admin_gate(v_admin, c_action,
-              v_email.test_mode and public.is_reserved_email(v_email.to_email)
-              and (v_email.user_id is null or (v_owner is not null and public.is_reserved_email(v_owner))));
+              v_email.test_mode and public.admin_e2e_email(v_email.to_email)
+              and (v_email.user_id is null or public.admin_e2e_email(v_owner)));
   if v_code is null and p_reason is not null and char_length(trim(p_reason)) > 500 then v_code := 'REASON'; end if;
   if v_code is null and v_email.status <> 'failed' then v_code := 'NOT_FAILED'; end if;
   if v_code is null and v_email.complained_at is not null then v_code := 'COMPLAINED'; end if;
@@ -2319,7 +2331,7 @@ begin
                                where o.user_id = p.id and o.paid_at is not null and o.test_mode = v_admin.test_only)) as r
         from public.profiles p
        where p.id = any (coalesce(v_ids, '{}'))
-         and (not v_admin.test_only or public.is_reserved_email(p.email::text))
+         and (not v_admin.test_only or public.admin_e2e_email(p.email::text))
        order by p.created_at desc
        limit 20
     ) s;
@@ -2353,7 +2365,8 @@ begin
     return public.admin_record(v_admin, c_action, null, 'customer', p_user_id::text, null, p_reason,
                                p_request_key, 'refused', 'NOT_FOUND', null, '{}');
   end if;
-  v_code := public.admin_gate(v_admin, c_action, public.is_reserved_email(v_profile.email::text));
+  -- reserved_target: a test admin sees an e2e user's details only (D15).
+  v_code := public.admin_gate(v_admin, c_action, public.admin_e2e_email(v_profile.email::text));
   if v_code is null and public.admin_lookup_rate_limited(v_admin.user_id) then v_code := 'RATE_LIMITED'; end if;
   if v_code is null and p_reason is not null and char_length(trim(p_reason)) > 500 then v_code := 'REASON'; end if;
   if v_code is not null then
@@ -2390,11 +2403,11 @@ begin
   end if;
   v_side := case when v_domain.test_mode then 'test' else 'live' end;
   -- reserved_target: a test admin sees the contacts of a test-mode domain
-  -- held by a reserved account only. A real customer's test order carries
-  -- their real details (D15, as customer.reveal).
+  -- held by an e2e user only. A real customer's test order carries their
+  -- real details (D15, as customer.reveal).
   select p.email::text into v_owner from public.profiles p where p.id = v_domain.user_id;
   v_code := public.admin_gate(v_admin, c_action,
-              v_domain.test_mode and v_owner is not null and public.is_reserved_email(v_owner));
+              v_domain.test_mode and public.admin_e2e_email(v_owner));
   if v_code is null and public.admin_lookup_rate_limited(v_admin.user_id) then v_code := 'RATE_LIMITED'; end if;
   if v_code is null and p_reason is not null and char_length(trim(p_reason)) > 500 then v_code := 'REASON'; end if;
   if v_code is not null then
@@ -2425,6 +2438,7 @@ revoke all on function public.admin_record(public.admins, text, text, text, text
   from public, anon, authenticated, service_role;
 revoke all on function public.admin_reason_problem(text) from public, anon, authenticated, service_role;
 revoke all on function public.admin_mask_email(text) from public, anon, authenticated, service_role;
+revoke all on function public.admin_e2e_email(text) from public, anon, authenticated, service_role;
 revoke all on function public.admin_note(text, text, text, text, jsonb, text, uuid) from public, anon, authenticated, service_role;
 revoke all on function public.admin_claim_note(bigint, text, text, text, text) from public, anon, authenticated, service_role;
 revoke all on function public.admin_note_result(bigint, text, text, jsonb) from public, anon, authenticated, service_role;

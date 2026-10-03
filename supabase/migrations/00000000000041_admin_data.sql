@@ -942,7 +942,7 @@ as $$
     from public.admins a
     left join auth.users u on u.id = a.user_id
    where not p_test_mode and a.test_only and a.revoked_at is null
-     and not coalesce(u.email ~ '^e2e-[^@]+@example\.com$' and public.is_reserved_email(u.email), false)
+     and not public.admin_e2e_email(u.email)
 
   union all
   select 'admin_factor_missing:' || a.label,
@@ -1870,7 +1870,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  -- A test admin reads the test side only (D15); reserved profiles only, below.
+  -- A test admin reads the test side only (D15); e2e users' profiles only, below.
   v_admin public.admins := public.admin_read_gate(p_test_mode);
   v_sort  text := case when p_sort in ('joined', 'domains', 'orders', 'paid', 'last_sign_in') then p_sort else 'joined' end;
   v_asc   boolean := lower(coalesce(p_dir, 'desc')) = 'asc';
@@ -1894,8 +1894,8 @@ begin
            exists (select 1 from public.admins a where a.user_id = p.id and a.revoked_at is null) as is_admin
       from public.profiles p
       left join auth.users u on u.id = p.id
-     -- D15: a test admin sees reserved-email profiles only.
-     where (not v_admin.test_only or public.is_reserved_email(p.email::text))
+     -- D15: a test admin sees e2e users' profiles only, as customer.reveal.
+     where (not v_admin.test_only or public.admin_e2e_email(p.email::text))
        and (v_f ->> 'accountType' is null or p.account_type::text = v_f ->> 'accountType')
   ), filtered as (
     select b.* from base b
@@ -1936,7 +1936,7 @@ begin
   if not found then
     return null;
   end if;
-  if v_admin.test_only and not public.is_reserved_email(v_profile.email::text) then
+  if v_admin.test_only and not public.admin_e2e_email(v_profile.email::text) then
     raise exception using errcode = '42501', message = 'admin:test_admin';
   end if;
   return jsonb_build_object(
@@ -2254,7 +2254,7 @@ declare
   v_id    uuid;
 begin
   select u.email into v_email from auth.users u where u.id = p_user_id;
-  if v_email is null or v_email !~ '^e2e-[^@]+@example\.com$' or not public.is_reserved_email(v_email) then
+  if not public.admin_e2e_email(v_email) then
     raise exception 'seed_test_failed_email: only for an e2e-*@example.com user' using errcode = '42501';
   end if;
   insert into public.email_outbox (kind, category, user_id, to_email, data, dedupe_key, test_mode, status,
@@ -2278,8 +2278,7 @@ declare
 begin
   select * into v_refund from public.refunds where id = p_refund_id for update;
   select u.email into v_email from auth.users u where u.id = v_refund.user_id;
-  if v_refund.id is null or not v_refund.test_mode
-     or coalesce(v_email, '') !~ '^e2e-[^@]+@example\.com$' then
+  if v_refund.id is null or not v_refund.test_mode or not public.admin_e2e_email(v_email) then
     raise exception 'hold_test_refund: only a test refund of an e2e user' using errcode = '42501';
   end if;
   if v_refund.status <> 'queued' then

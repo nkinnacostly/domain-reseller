@@ -104,6 +104,7 @@ declare
   u_none     uuid := gen_random_uuid();
   u_rev      uuid := gen_random_uuid();
   u_real     uuid := gen_random_uuid();
+  u_resv     uuid := gen_random_uuid();   -- a reserved address, but not an e2e user's
   u_nofactor uuid := gen_random_uuid();
   f_o1       uuid := gen_random_uuid();
   f_o2       uuid := gen_random_uuid();
@@ -159,7 +160,8 @@ declare
   v_passed   integer := 0;
 begin
   -- ── People: an owner with two pinned devices, an operator, a viewer, a test
-  -- admin, a revoked admin, a stranger, a real address, and one with no factor.
+  -- admin, a revoked admin, a stranger, a real address, a reserved address
+  -- that is not an e2e user's, and one with no factor.
   insert into auth.users (id, aud, role, email, created_at, updated_at) values
     (u_owner, 'authenticated', 'authenticated', 'e2e-admin-o-' || v_tag || '@example.com', now(), now()),
     (u_op, 'authenticated', 'authenticated', 'e2e-admin-p-' || v_tag || '@example.com', now(), now()),
@@ -168,6 +170,7 @@ begin
     (u_none, 'authenticated', 'authenticated', 'e2e-admin-n-' || v_tag || '@example.com', now(), now()),
     (u_rev, 'authenticated', 'authenticated', 'e2e-admin-r-' || v_tag || '@example.com', now(), now()),
     (u_real, 'authenticated', 'authenticated', 'm40-real-' || v_tag || '@mydomainshub.com', now(), now()),
+    (u_resv, 'authenticated', 'authenticated', 'm40-resv-' || v_tag || '@example.com', now(), now()),
     (u_nofactor, 'authenticated', 'authenticated', 'e2e-admin-x-' || v_tag || '@example.com', now(), now());
   insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret) values
     (f_o1, u_owner, 'm40 phone', 'totp', 'verified', now() - interval '2 days', now(), 'x'),
@@ -881,8 +884,8 @@ begin
 
   -- ── 29. A repeated reveal key shows nothing (D4): details come only through
   -- the gate, the limit and a new audit row, so a key kept from before a
-  -- demotion replays bare. Thirty lookups an hour; a test admin sees reserved
-  -- profiles only.
+  -- demotion replays bare. Thirty lookups an hour; a test admin sees e2e
+  -- users' profiles only.
   perform pg_temp.act(u_op, s_op);
   insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, registrant)
   values (u_none, 'm40-v-' || v_tag || '.com', 'com', 'registration', true, 'active',
@@ -931,7 +934,7 @@ begin
   end if;
   v_j := public.admin_reveal_customer(u_none, null, gen_random_uuid());
   if (v_j ->> 'ok')::boolean is not true or v_j #>> '{contact,email}' is distinct from 'e2e-admin-n-' || v_tag || '@example.com' then
-    raise exception 'FAILED 29: a test admin on a reserved profile %', v_j;
+    raise exception 'FAILED 29: a test admin on an e2e user''s profile %', v_j;
   end if;
   v_j := public.admin_find_customers('m40-real-' || v_tag || '@mydomainshub.com');
   if (v_j ->> 'ok')::boolean is not true or jsonb_array_length(v_j -> 'rows') is distinct from 0 then
@@ -950,7 +953,7 @@ begin
     "admin_audit_is_final":"none", "append_only_final":"none", "admin_tier":"none", "admin_session":"none",
     "admin_gate":"none", "admin_replay":"none", "admin_record":"none", "admin_reason_problem":"none",
     "purge_test_admin_audit":"none", "admin_flw_check_done":"none", "admin_json_number":"none",
-    "admin_url_host":"none", "admin_lookup_rate_limited":"none",
+    "admin_url_host":"none", "admin_lookup_rate_limited":"none", "admin_e2e_email":"none",
     "admin_status":"authenticated", "admin_whoami":"authenticated", "admin_note":"authenticated",
     "admin_redact_reason":"authenticated", "admin_approve_refund":"authenticated",
     "admin_retry_refund":"authenticated", "admin_cancel_refund":"authenticated",
@@ -1049,7 +1052,8 @@ begin
   v_passed := v_passed + 1;
 
   -- ── 31. A test admin reveals, and sends again, nothing of a real account's —
-  -- even on the test side (reserved_target, D15). Its refusals keep nothing.
+  -- even on the test side, and even at a reserved address that is not an e2e
+  -- user's (reserved_target, D15). Its refusals keep nothing.
   insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, registrant)
   values (u_real, 'm40-w-' || v_tag || '.com', 'com', 'registration', true, 'active',
           jsonb_build_object('name', 'Real Registrant', 'country', 'NG'))
@@ -1088,6 +1092,31 @@ begin
   if (select e.status from public.email_outbox e where e.id = v_email_id) is distinct from 'pending' then
     raise exception 'FAILED 31: the e2e email was not queued again';
   end if;
+  -- A reserved address is not an e2e user: anyone can sign up with one and
+  -- type their real name beside it. Profile, test domain, search and email.
+  update public.profiles set full_name = 'Resv Person', phone = '+2348030000000' where id = u_resv;
+  v_j := public.admin_reveal_customer(u_resv, null, gen_random_uuid());
+  if v_j ->> 'code' is distinct from 'TEST_ADMIN' or (v_j -> 'contact') is not null then
+    raise exception 'FAILED 31: a test admin revealed a reserved, non-e2e profile %', v_j;
+  end if;
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, registrant)
+  values (u_resv, 'm40-x-' || v_tag || '.com', 'com', 'registration', true, 'active',
+          jsonb_build_object('name', 'Resv Registrant', 'country', 'NG'))
+  returning id into v_domain;
+  v_j := public.admin_reveal_registrant(v_domain, null, gen_random_uuid());
+  if v_j ->> 'code' is distinct from 'TEST_ADMIN' or v_j ? 'registrant' or v_j ? 'contacts' then
+    raise exception 'FAILED 31: a test admin revealed a reserved, non-e2e user''s test domain %', v_j;
+  end if;
+  v_j := public.admin_find_customers('m40-resv-' || v_tag || '@example.com');
+  if (v_j ->> 'ok')::boolean is not true or jsonb_array_length(v_j -> 'rows') is distinct from 0 then
+    raise exception 'FAILED 31: a test admin found a reserved, non-e2e profile %', v_j;
+  end if;
+  insert into public.email_outbox (kind, category, user_id, to_email, dedupe_key, test_mode, status, attempts, last_error)
+  values ('order_receipt', 'transactional', u_resv, 'm40-resv-' || v_tag || '@example.com', 'm40-rq4:' || v_tag,
+          true, 'failed', 3, 'x')
+  returning id into v_email_id;
+  perform pg_temp.expect_code(public.admin_requeue_email(v_email_id, null, gen_random_uuid()), 'TEST_ADMIN',
+                              'FAILED 31: a test admin sent a reserved, non-e2e address''s test email again');
   if exists (select 1 from public.admin_audit_log a
               where a.admin_label = l_test and a.outcome = 'refused' and a.detail <> '{}'::jsonb) then
     raise exception 'FAILED 31: a test admin''s refusal kept the target''s facts';
@@ -1108,6 +1137,9 @@ begin
                    and l.objsubid = 1 and l.granted) then
     raise exception 'FAILED 32: a search did not take the lookup lock';
   end if;
+  -- The rule is a test admin's only: the owner reads the reserved user's test domain (31).
+  perform pg_temp.expect_ok(public.admin_reveal_registrant(v_domain, null, gen_random_uuid()),
+                            'FAILED 32: the owner on a reserved, non-e2e user''s test domain');
   v_passed := v_passed + 1;
 
   -- ── 33. Every change that could give someone access is alerted: a real

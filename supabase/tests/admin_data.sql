@@ -112,6 +112,7 @@ declare
   u_test    uuid := gen_random_uuid();
   u_none    uuid := gen_random_uuid();
   u_real    uuid := gen_random_uuid();
+  u_resv    uuid := gen_random_uuid();   -- a reserved address, but not an e2e user's
   f_owner   uuid := gen_random_uuid();
   f_test    uuid := gen_random_uuid();
   s_owner   uuid := gen_random_uuid();
@@ -146,7 +147,8 @@ begin
     (u_owner, 'authenticated', 'authenticated', 'e2e-admin41-o-' || v_tag || '@example.com', now(), now()),
     (u_test, 'authenticated', 'authenticated', 'e2e-admin41-t-' || v_tag || '@example.com', now(), now()),
     (u_none, 'authenticated', 'authenticated', 'e2e-admin41-n-' || v_tag || '@example.com', now(), now()),
-    (u_real, 'authenticated', 'authenticated', 'm41-real-' || v_tag || '@mydomainshub.com', now(), now());
+    (u_real, 'authenticated', 'authenticated', 'm41-real-' || v_tag || '@mydomainshub.com', now(), now()),
+    (u_resv, 'authenticated', 'authenticated', 'm41-resv-' || v_tag || '@example.com', now(), now());
   insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret) values
     (f_owner, u_owner, 'm41', 'totp', 'verified', now(), now(), 'x'),
     (f_test, u_test, 'm41', 'totp', 'verified', now(), now(), 'x');
@@ -471,8 +473,11 @@ begin
   if v_j #> '{health,cron}' is not null or v_j -> 'float' ->> 'side' is distinct from 'test' then
     raise exception 'FAILED 9: a test admin''s overview %', v_j -> 'health';
   end if;
+  -- e2e users only: a reserved address that is not one's (u_resv) is a person's (D15).
   if exists (select 1 from public.admin_customers(true, 'joined', 'desc', 0, 100, '{}') c
-              where not public.is_reserved_email(c.masked_email))
+               left join auth.users u on u.id = c.user_id
+              where not public.admin_e2e_email(u.email))
+     or exists (select 1 from public.admin_customers(true, 'joined', 'desc', 0, 100, '{}') c where c.user_id = u_resv)
      or not exists (select 1 from public.admin_customers(true, 'joined', 'desc', 0, 100, '{}') c where c.user_id = u_none) then
     raise exception 'FAILED 9: a test admin''s customer list';
   end if;
@@ -485,6 +490,14 @@ begin
     raise exception 'FAILED 9: a test admin read a real customer';
   exception when insufficient_privilege then null;
   end;
+  begin
+    perform public.admin_customer(u_resv, true);
+    raise exception 'FAILED 9: a test admin read a reserved, non-e2e customer';
+  exception when insufficient_privilege then null;
+  end;
+  if public.admin_customer(u_none, true) ->> 'userId' is distinct from u_none::text then
+    raise exception 'FAILED 9: a test admin could not read an e2e customer';
+  end if;
   perform pg_temp.act_data(u_owner, s_owner);
   if (public.admin_overview(false) #> '{health,cron}') is null
      or jsonb_typeof(public.admin_attention_counts(false)) is distinct from 'object'
@@ -672,7 +685,7 @@ begin
     "admin_audit_is_final":"none", "append_only_final":"none", "admin_tier":"none", "admin_session":"none",
     "admin_gate":"none", "admin_replay":"none", "admin_record":"none", "admin_reason_problem":"none",
     "purge_test_admin_audit":"none", "admin_flw_check_done":"none", "admin_json_number":"none",
-    "admin_url_host":"none", "admin_lookup_rate_limited":"none",
+    "admin_url_host":"none", "admin_lookup_rate_limited":"none", "admin_e2e_email":"none",
     "admin_status":"authenticated", "admin_whoami":"authenticated", "admin_note":"authenticated",
     "admin_redact_reason":"authenticated", "admin_approve_refund":"authenticated",
     "admin_retry_refund":"authenticated", "admin_cancel_refund":"authenticated",
@@ -768,6 +781,7 @@ begin
   -- §2.7): each refuses anything but an e2e user's test row, and each purge
   -- leaves every other row alone.
   perform pg_temp.expect_raise(format('select public.seed_test_failed_email(%L)', u_real), '%only for an e2e%');
+  perform pg_temp.expect_raise(format('select public.seed_test_failed_email(%L)', u_resv), '%only for an e2e%');
   if public.seed_test_failed_email(u_none) is null then raise exception 'FAILED 15: seeding an e2e user''s email'; end if;
   perform pg_temp.expect_raise(format('select public.hold_test_refund(%L)', gen_random_uuid()),
                                '%only a test refund of an e2e user%');
