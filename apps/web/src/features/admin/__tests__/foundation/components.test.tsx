@@ -122,6 +122,42 @@ describe('DataTable', () => {
   })
 })
 
+describe('chips and tabs change colour at once', () => {
+  // Only the press animates: a colour fading in after a click is read half-way (axe did).
+  const fades = (element: Element) =>
+    element.className.split(/\s+/).some((name) => /^transition(-colors|-all)?$/.test(name))
+
+  it('in FilterChips', () => {
+    render(
+      <FilterChips
+        label="Status"
+        chips={[{ value: 'held', label: 'Held' }]}
+        selected={['held']}
+        href={(value) => `/admin/refunds?status=${value}`}
+        allHref="/admin/refunds"
+      />,
+    )
+    for (const link of screen.getAllByRole('link')) {
+      expect(fades(link), link.textContent ?? '').toBe(false)
+      expect(link.className).toContain('transition-transform')
+    }
+  })
+
+  it('in RouteTabs', () => {
+    pathname = '/admin/emails'
+    render(
+      <RouteTabs
+        label="Email views"
+        tabs={[
+          { href: '/admin/emails', label: 'Outbox', current: true },
+          { href: '/admin/emails?tab=compliance', label: 'Compliance notices', current: false },
+        ]}
+      />,
+    )
+    for (const link of screen.getAllByRole('link')) expect(fades(link)).toBe(false)
+  })
+})
+
 describe('FilterChips', () => {
   it('links each chip, marks the chosen ones in words and with aria-current, and counts inside the name', () => {
     render(

@@ -167,7 +167,7 @@ export function DomainStatsPanel({ stats }: { stats: DomainStats }) {
                         : '/admin/domains'
                     }
                     className={cn(
-                      'inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.98]',
+                      'inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition-transform hover:bg-brand-subtle active:scale-[0.98]',
                       FOCUS,
                     )}
                   >

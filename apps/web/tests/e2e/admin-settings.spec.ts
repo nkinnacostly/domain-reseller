@@ -167,9 +167,7 @@ test.describe('the admin settings pages', () => {
       // The .com family's paused extensions, each saying so in words.
       await expect(list.getByText('.com.ng').filter({ visible: true }).first()).toBeVisible()
       await expect(list.getByText('.com', { exact: true })).toHaveCount(0)
-      // Loaded afresh, so axe reads the chosen chip's colours, not its transition from the press.
-      await page.goto(page.url())
-      await expect(list).toBeVisible()
+      // Straight after the click: a chosen chip's colours change at once, never fade in.
       await accessibleEverywhere(page)
     })
 

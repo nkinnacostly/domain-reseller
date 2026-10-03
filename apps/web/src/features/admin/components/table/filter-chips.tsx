@@ -8,7 +8,10 @@ export type Chip = { value: string; label: string; count?: number }
 /**
  * Status filters as links, so the URL holds the filter (ADMIN-SPEC §5.2). A
  * chosen chip says so with a tick and `aria-current`, not colour alone (S8);
- * counts sit inside each link's name.
+ * counts sit inside each link's name. Only the press animates
+ * (`transition-transform`): a chip keeps its element across a client
+ * navigation, and a colour fading in would be read half-way — by axe, which
+ * once failed on the contrast, and by a person.
  */
 export function FilterChips({
   label,
@@ -64,7 +67,7 @@ function ChipLink({
       aria-current={current ? 'true' : undefined}
       data-current={current ? 'true' : undefined}
       className={cn(
-        'group inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.98]',
+        'group inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition-transform hover:bg-brand-subtle active:scale-[0.98]',
         'data-[current=true]:border-brand data-[current=true]:bg-brand data-[current=true]:text-brand-foreground',
         FOCUS,
       )}

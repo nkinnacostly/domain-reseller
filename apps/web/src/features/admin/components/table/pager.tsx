@@ -5,7 +5,7 @@ import { formatCount } from '@/features/admin/lib/format'
 import { cn } from '@/lib/utils'
 
 const PAGE_LINK =
-  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.98]'
+  'inline-flex h-11 items-center gap-1.5 rounded-full border border-border bg-background px-4 text-sm text-foreground transition-transform hover:bg-brand-subtle active:scale-[0.98]'
 
 /** Previous and next, as links, with where you are in words. */
 export function Pager({
