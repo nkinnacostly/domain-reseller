@@ -1,13 +1,16 @@
-import { usdToCents } from '@dr/shared/admin'
 import { z } from 'zod'
 
 /**
  * The Pricing & FX pages' data, parsed (docs/ADMIN-SPEC.md §3.2h, §5.2 B12).
- * `admin_pricing_status` answers the settings, the catalogue's counts and
- * the review state of every rate; the rate rows add what that answer leaves
- * out (each rate's own buffer, why it was held); one catalogue row is the
- * worked example. Pure: no I/O, so every shape is unit-tested.
+ * `admin_pricing_status` answers the settings, the catalogue's counts, the
+ * review state of every rate and the worked example's catalogue row, its
+ * costs already in whole cents (migration 42, D24); the rate rows add what
+ * that answer leaves out (each rate's own buffer, why it was held). Pure: no
+ * I/O, so every shape is unit-tested.
  */
+
+/** The extension `admin_pricing_status` prices as its example (fixed in SQL). */
+export const SAMPLE_TLD = 'com'
 
 /** A numeric column as PostgREST sends it: a JSON number (or its text), never a guess. */
 const numeric = z
@@ -44,6 +47,60 @@ const pendingSchema = z.object({
   olderThanActive: z.boolean(),
 })
 
+/**
+ * The extension the pages price as their example (.com), its yearly costs in
+ * integer cents as SQL sends them (D24). `onSale` is what the storefront
+ * asks: sellable and not paused.
+ */
+export type SampleTld = {
+  name: string
+  registerCents: number
+  renewCents: number
+  isCountryCode: boolean
+  minPeriod: number
+  maxPeriod: number
+  registerPeriods: number[] | null
+  renewPeriods: number[] | null
+  onSale: boolean
+}
+
+const cents = z.number().int().nonnegative()
+const periods = z.array(z.number().int().positive()).nullable()
+
+/**
+ * `admin_pricing_status.example` (migration 42). SQL sends a cost that is not
+ * a whole number of cents as null — a cost rounded to the cent would build a
+ * price the site does not charge — and then there is no example (N5b).
+ */
+const exampleSchema = z
+  .object({
+    name: z.string().min(1),
+    registerCents: cents.nullable(),
+    renewCents: cents.nullable(),
+    isCountryCode: z.boolean(),
+    minPeriod: z.number().int().positive(),
+    maxPeriod: z.number().int().positive(),
+    registerPeriods: periods,
+    renewPeriods: periods,
+    isSellable: z.boolean(),
+    isPaused: z.boolean(),
+  })
+  .transform((row): SampleTld | null =>
+    row.registerCents === null || row.renewCents === null
+      ? null
+      : {
+          name: row.name,
+          registerCents: row.registerCents,
+          renewCents: row.renewCents,
+          isCountryCode: row.isCountryCode,
+          minPeriod: row.minPeriod,
+          maxPeriod: row.maxPeriod,
+          registerPeriods: row.registerPeriods,
+          renewPeriods: row.renewPeriods,
+          onSale: row.isSellable && !row.isPaused,
+        },
+  )
+
 const statusSchema = z.object({
   tlds: z.object({
     total: count,
@@ -55,6 +112,11 @@ const statusSchema = z.object({
   ssl: z.object({ total: count, sellable: count, priced: count }),
   fx: z.object({ active: activeSchema.nullable(), pending: z.array(pendingSchema) }),
   settings: settingsSchema.nullable(),
+  /** None without the row, or with a cost not cent-exact; one that is malformed is none too. */
+  example: exampleSchema
+    .nullish()
+    .transform((example) => example ?? null)
+    .catch(null),
 })
 
 export type PricingSettings = z.output<typeof settingsSchema>
@@ -103,74 +165,4 @@ export type RateRow = z.output<typeof rateRowSchema>
 export function parseRateRows(rows: unknown): RateRow[] | null {
   const parsed = z.array(rateRowSchema).safeParse(rows)
   return parsed.success ? parsed.data : null
-}
-
-/**
- * Whole cents, but only when that is exactly the amount: the catalogue holds
- * four decimal places, and a cost rounded to the cent would build a price
- * the site does not charge. Null then, and the example is left out — a wrong
- * number is worse than none (N5b).
- */
-export function exactCents(value: unknown): number | null {
-  if (typeof value !== 'number' && typeof value !== 'string') return null
-  let cents: number
-  try {
-    cents = usdToCents(value)
-  } catch {
-    return null
-  }
-  return cents >= 0 && cents / 100 === Number(value) ? cents : null
-}
-
-const periods = z.array(z.coerce.number().int()).nullable()
-
-const sampleRowSchema = z.object({
-  name: z.string().min(1),
-  register_usd: z.union([z.number(), z.string()]),
-  renew_usd: z.union([z.number(), z.string()]),
-  is_country_code: z.boolean(),
-  min_period: z.coerce.number().int(),
-  max_period: z.coerce.number().int(),
-  register_periods: periods.optional(),
-  renew_periods: periods.optional(),
-  is_sellable: z.boolean(),
-  is_paused: z.boolean(),
-})
-
-/**
- * The extension the pages price as their example (.com), in integer cents
- * from the catalogue's dollars at the edge (D24). `onSale` is what the
- * storefront asks: sellable and not paused.
- */
-export type SampleTld = {
-  name: string
-  registerCents: number
-  renewCents: number
-  isCountryCode: boolean
-  minPeriod: number
-  maxPeriod: number
-  registerPeriods: number[] | null
-  renewPeriods: number[] | null
-  onSale: boolean
-}
-
-/** A `tlds` row as the example, or null when it is missing, malformed or not cent-exact. */
-export function parseSampleTld(row: unknown): SampleTld | null {
-  const parsed = sampleRowSchema.safeParse(row)
-  if (!parsed.success) return null
-  const data = parsed.data
-  const registerCents = exactCents(data.register_usd)
-  const renewCents = exactCents(data.renew_usd)
-  if (registerCents === null || renewCents === null) return null
-  return {
-    name: data.name,
-    registerCents,
-    renewCents,
-    isCountryCode: data.is_country_code,
-    minPeriod: data.min_period,
-    maxPeriod: data.max_period,
-    registerPeriods: data.register_periods ?? null,
-    renewPeriods: data.renew_periods ?? null,
-    onSale: data.is_sellable && !data.is_paused,
-  }
 }

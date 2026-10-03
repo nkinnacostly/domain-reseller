@@ -143,8 +143,30 @@ export function status(overrides: Partial<PricingStatus> = {}): PricingStatus {
       pending: [pending(staleRow(), { tooOld: true, olderThanActive: true })],
     },
     settings: settings(),
+    example: comSample(),
     ...overrides,
   }
+}
+
+/** `admin_pricing_status()` as its jsonb arrives: the example as SQL builds it (migration 42). */
+export function statusJson(value: PricingStatus = status()): Record<string, unknown> {
+  const { example, ...rest } = value
+  const json = JSON.parse(JSON.stringify(rest)) as Record<string, unknown>
+  json.example = example
+    ? {
+        name: example.name,
+        registerCents: example.registerCents,
+        renewCents: example.renewCents,
+        isCountryCode: example.isCountryCode,
+        minPeriod: example.minPeriod,
+        maxPeriod: example.maxPeriod,
+        registerPeriods: example.registerPeriods,
+        renewPeriods: example.renewPeriods,
+        isSellable: example.onSale,
+        isPaused: false,
+      }
+    : null
+  return json
 }
 
 /** A `fx_rates` row as PostgREST sends it. */

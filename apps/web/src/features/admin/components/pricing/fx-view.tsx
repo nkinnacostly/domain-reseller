@@ -40,12 +40,7 @@ import {
   pricingInputs,
   rateOffers,
 } from '@/features/admin/lib/pricing-rules'
-import {
-  getCurrentRates,
-  getPricingStatus,
-  getRecentRates,
-  getSampleTld,
-} from '@/features/admin/queries/pricing'
+import { getCurrentRates, getPricingStatus, getRecentRates } from '@/features/admin/queries/pricing'
 import { type AdminPrincipal, requireAdmin } from '@/features/admin/queries/session'
 import { PricingHeader, PricingSectionsSkeleton } from './pricing-header'
 import { RateActions } from './rate-actions'
@@ -101,13 +96,13 @@ export function heldRates(
 }
 
 export async function FxSections({ admin, now }: { admin: AdminPrincipal; now?: Date }) {
-  const [status, rates, recent, sample] = await Promise.all([
+  const [status, rates, recent] = await Promise.all([
     getPricingStatus(),
     getCurrentRates(admin),
     getRecentRates(admin),
-    getSampleTld(admin),
   ])
   if (!status || !rates) return <ErrorState title={STATUS_ERROR.title} body={STATUS_ERROR.body} />
+  const sample = status.example
   // After the session's reads, so the clock is this request's (CLAUDE.md §15).
   const clock = now ?? new Date()
   const activeRow = rates.find((rate) => rate.status === 'active')

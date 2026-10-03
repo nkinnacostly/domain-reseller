@@ -21,14 +21,17 @@ import {
   STATUS_ERROR,
   settingNote,
 } from '@/features/admin/lib/pricing-copy'
-import type { PricingStatus, RateRow, SampleTld } from '@/features/admin/lib/pricing-data'
+import {
+  type PricingStatus,
+  type RateRow,
+  SAMPLE_TLD,
+  type SampleTld,
+} from '@/features/admin/lib/pricing-data'
 import { chargedRate, pricingInputs, termsAt } from '@/features/admin/lib/pricing-rules'
 import {
   getCurrentRates,
   getPricingStatus,
-  getSampleTld,
   getSettingsChangedAt,
-  SAMPLE_TLD,
 } from '@/features/admin/queries/pricing'
 import { type AdminPrincipal, requireAdmin } from '@/features/admin/queries/session'
 import { cn } from '@/lib/utils'
@@ -68,13 +71,13 @@ export function activeWithBuffer(
 }
 
 export async function PricingSections({ admin }: { admin: AdminPrincipal }) {
-  const [status, rates, sample, changedAt] = await Promise.all([
+  const [status, rates, changedAt] = await Promise.all([
     getPricingStatus(),
     getCurrentRates(admin),
-    getSampleTld(admin),
     getSettingsChangedAt(admin),
   ])
   if (!status || !rates) return <ErrorState title={STATUS_ERROR.title} body={STATUS_ERROR.body} />
+  const sample = status.example
   const settings = status.settings
   if (!settings) return <EmptyState title={NO_SETTINGS.title} body={NO_SETTINGS.body} />
   const active = activeWithBuffer(rates)
