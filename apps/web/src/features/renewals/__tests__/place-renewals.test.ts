@@ -87,7 +87,7 @@ let answers: {
   lineError: unknown
   defaultContact: unknown
 }
-let inserted: { orders: unknown[]; items: unknown[]; costs: unknown[] }
+let inserted: { orders: unknown[]; items: unknown[]; itemOptions: unknown[]; costs: unknown[] }
 let orderUpdates: unknown[]
 let rateLimited: { data: unknown; error: unknown }
 let costsAnswer: () => Promise<{ error: unknown }>
@@ -100,7 +100,7 @@ async function afterResponse() {
 beforeEach(() => {
   vi.clearAllMocks()
   guard.answer = null
-  inserted = { orders: [], items: [], costs: [] }
+  inserted = { orders: [], items: [], itemOptions: [], costs: [] }
   costsAnswer = async () => ({ error: null })
   vi.mocked(after).mockImplementation(() => undefined)
   orderUpdates = []
@@ -188,8 +188,9 @@ beforeEach(() => {
       }
       if (table === 'order_items') {
         return {
-          insert: async (rows: unknown) => {
+          insert: async (rows: unknown, options?: unknown) => {
             inserted.items.push(rows)
+            inserted.itemOptions.push(options)
             return { error: answers.lineError }
           },
         }
@@ -408,6 +409,8 @@ describe('placeRenewals — the order and the payment', () => {
         test_mode: true,
       }),
     ])
+    // A line that leaves out renewal_years (NOT NULL) takes its default, not NULL.
+    expect(inserted.itemOptions).toEqual([{ defaultToNull: false }])
     // By name, each with its own price and its renewal price (N8).
     expect(inserted.items).toEqual([
       [

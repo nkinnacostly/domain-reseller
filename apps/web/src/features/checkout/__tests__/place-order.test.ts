@@ -91,7 +91,7 @@ function chain(result: unknown) {
   return node
 }
 
-let inserted: { orders: unknown[]; items: unknown[]; costs: unknown[] }
+let inserted: { orders: unknown[]; items: unknown[]; itemOptions: unknown[]; costs: unknown[] }
 /** Every update made to an order row — a cancelled order shows up here. */
 let orderUpdates: unknown[]
 /** The `order_item_costs` insert's answer, or what it throws. */
@@ -174,7 +174,7 @@ let rpcAnswers: Record<string, RpcAnswer> = {}
 
 beforeEach(() => {
   vi.clearAllMocks()
-  inserted = { orders: [], items: [], costs: [] }
+  inserted = { orders: [], items: [], itemOptions: [], costs: [] }
   costsAnswer = async () => ({ error: null })
   vi.mocked(after).mockImplementation(() => undefined)
 
@@ -249,8 +249,9 @@ beforeEach(() => {
       }
       if (table === 'order_items') {
         return {
-          insert: async (rows: unknown) => {
+          insert: async (rows: unknown, options?: unknown) => {
             inserted.items.push(rows)
+            inserted.itemOptions.push(options)
             return { error: answers.itemsError }
           },
         }
@@ -1047,6 +1048,9 @@ describe('placeOrder — SSL certificates (FR-SSL-6)', () => {
       ['register', 'getpaid.com'],
       ['ssl', 'getpaid.com'],
     ])
+    // The domain row leaves out item_type (NOT NULL, default 'register'); sent
+    // as NULL, the whole insert fails and a mixed cart can never be bought.
+    expect(inserted.itemOptions[0]).toEqual({ defaultToNull: false })
   })
 
   it('counts the certificate’s cost in the float check, and refuses live orders the float cannot cover', async () => {

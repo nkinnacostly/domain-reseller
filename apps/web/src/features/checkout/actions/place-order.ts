@@ -343,38 +343,44 @@ export const placeOrder = authAction
     // Ids are chosen here so each line's cost row can name it (ADMIN-SPEC §6).
     const domainIds = lines.map(() => randomUUID())
     const certificateIds = certificates.map(() => randomUUID())
-    const { error: itemsError } = await service.from('order_items').insert([
-      ...lines.map((line, index) => ({
-        id: domainIds[index],
-        order_id: order.id,
-        domain: line.domain,
-        tld: line.tld,
-        period_years: line.periodYears,
-        privacy: line.privacyOffered ? line.privacy : false,
-        auto_renew: line.autoRenew,
-        price_kobo: line.payableKobo,
-        renewal_kobo: line.renewalKobo,
-        ...renewalTermColumn(line.renewYears),
-        // FR-C10 — a domain's own host wins over the order's (migration 29).
-        ...hosts.columnsFor(line.domain),
-      })),
-      // FR-SSL-6 (migration 39): one subscription term; its "renewal" is what a
-      // new certificate cost today (N8). Paid, it becomes a certificate and an
-      // order job in the payment's transaction.
-      ...certificates.map((line, index) => ({
-        id: certificateIds[index],
-        order_id: order.id,
-        item_type: 'ssl',
-        ssl_product_code: line.productCode,
-        domain: line.commonName,
-        tld: line.commonName.split('.').at(-1) ?? 'ssl',
-        period_years: 1,
-        privacy: false,
-        auto_renew: false,
-        price_kobo: line.payableKobo,
-        renewal_kobo: line.renewalKobo,
-      })),
-    ])
+    const { error: itemsError } = await service.from('order_items').insert(
+      [
+        ...lines.map((line, index) => ({
+          id: domainIds[index],
+          order_id: order.id,
+          domain: line.domain,
+          tld: line.tld,
+          period_years: line.periodYears,
+          privacy: line.privacyOffered ? line.privacy : false,
+          auto_renew: line.autoRenew,
+          price_kobo: line.payableKobo,
+          renewal_kobo: line.renewalKobo,
+          ...renewalTermColumn(line.renewYears),
+          // FR-C10 — a domain's own host wins over the order's (migration 29).
+          ...hosts.columnsFor(line.domain),
+        })),
+        // FR-SSL-6 (migration 39): one subscription term; its "renewal" is what a
+        // new certificate cost today (N8). Paid, it becomes a certificate and an
+        // order job in the payment's transaction.
+        ...certificates.map((line, index) => ({
+          id: certificateIds[index],
+          order_id: order.id,
+          item_type: 'ssl',
+          ssl_product_code: line.productCode,
+          domain: line.commonName,
+          tld: line.commonName.split('.').at(-1) ?? 'ssl',
+          period_years: 1,
+          privacy: false,
+          auto_renew: false,
+          price_kobo: line.payableKobo,
+          renewal_kobo: line.renewalKobo,
+        })),
+        // Rows differ in their keys (a certificate sets item_type, a block-sold
+        // extension sets renewal_years); a key one row leaves out must take the
+        // column's default, not NULL — both columns are NOT NULL.
+      ],
+      { defaultToNull: false },
+    )
     if (itemsError) {
       logger.error({ ...dbError(itemsError), orderId: order.id }, 'order items insert failed')
       await service.from('orders').update({ status: 'cancelled' }).eq('id', order.id)

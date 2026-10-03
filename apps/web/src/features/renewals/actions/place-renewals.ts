@@ -233,6 +233,9 @@ export const placeRenewals = authAction
         renewal_kobo: pricings[index]?.renewal.priceKobo ?? 0,
         ...renewalTermColumn(pricings[index]?.renewalTerm.years ?? 1),
       })),
+      // Only some lines set renewal_years (NOT NULL, default 1); a line that
+      // leaves it out must take the default, not NULL.
+      { defaultToNull: false },
     )
     if (lineError) {
       logger.error({ ...dbError(lineError), orderId: order.id }, 'bulk renewal lines insert failed')

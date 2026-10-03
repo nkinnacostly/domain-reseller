@@ -330,6 +330,67 @@ describe.skipIf(process.env.DB_TESTS !== '1')('line costs on the hosted test sid
     expectCost(result, { supplier: prices.sslCents, icann: 0 })
   }, 60_000)
 
+  it('takes a mixed cart — .com, a two-year .ai and a certificate — as one order', async () => {
+    // Only the .ai row sets renewal_years and only the certificate sets
+    // item_type; both are NOT NULL, so a key a row leaves out must take the
+    // column's default. Sent as NULL, the whole insert failed (23502).
+    const prices = await catalogue()
+    const result = await checkout({
+      payableKobo: 1_840_000 + 27_300_000 + 1_350_000,
+      lines: [
+        {
+          ...DOMAIN_LINE,
+          id: 'line-com',
+          domain: COM,
+          tld: 'com',
+          periodYears: 1,
+          privacyOffered: true,
+          payableKobo: 1_840_000,
+          renewalKobo: 1_870_000,
+          minPeriod: 1,
+          registerPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          renewYears: 1,
+        },
+        {
+          ...DOMAIN_LINE,
+          id: 'line-ai',
+          domain: AI,
+          tld: 'ai',
+          periodYears: 2,
+          privacyOffered: false,
+          payableKobo: 27_300_000,
+          renewalKobo: 13_650_000,
+          minPeriod: 2,
+          registerPeriods: [2, 4, 6, 8, 10],
+          renewYears: 2,
+        },
+      ],
+      certificates: [
+        {
+          id: 'ssl-1',
+          productCode: '351',
+          commonName: COM,
+          status: 'current',
+          payableKobo: 1_350_000,
+          renewalKobo: 1_350_000,
+        },
+      ],
+    })
+    expect(result.lines).toHaveLength(3)
+    expect(result.costs).toHaveLength(3)
+    const total = result.costs.reduce(
+      (sum, row) => sum + Number(row.supplier_cost_cents) + Number(row.icann_fee_cents),
+      0,
+    )
+    expect(total).toBe(result.checked)
+    expect(total).toBe(
+      usdToCents(String(prices.com.register_usd)) +
+        prices.icannCents +
+        2 * usdToCents(String(prices.ai.register_usd)) +
+        prices.sslCents,
+    )
+  }, 60_000)
+
   it('costs a transfer as its float was checked', async () => {
     const prices = await catalogue()
     m.getPricedCatalogue.mockResolvedValue({
