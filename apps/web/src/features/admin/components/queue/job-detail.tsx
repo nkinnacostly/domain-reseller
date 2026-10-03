@@ -16,6 +16,8 @@ import {
   failRequirement,
   type JobFacts,
   lastReadWords,
+  ledgerWords,
+  linePriceWords,
   type Offer,
   readVerdictWords,
   retryOffer,
@@ -30,17 +32,17 @@ import {
 } from '@/features/admin/lib/labels'
 import { playbookFor } from '@/features/admin/lib/playbook'
 import {
-  failRefundKobo,
   hasOpenJob,
+  type JobLedger,
   LINE_KIND_LABEL,
+  ledgerVerdict,
+  lineRefundFacts,
   lineRefundKobo,
-  openLineRefund,
   type ReadCall,
   readVerdict,
-  refundAtProvider,
 } from '@/features/admin/lib/queue-facts'
 import type { AdminSide } from '@/features/admin/lib/side'
-import type { JobDetail, SupplierCallRow } from '@/features/admin/queries/queue'
+import type { JobDetail, LineContext, SupplierCallRow } from '@/features/admin/queries/queue'
 import { cn } from '@/lib/utils'
 import { JobActions } from './job-actions'
 import { QUEUE_REFRESH_MS } from './jobs-list'
@@ -133,11 +135,15 @@ export function PlaybookCard({ code }: { code: string | null }) {
   )
 }
 
-/** The read Fail needs, its last result, and the button that makes a new one. */
+/**
+ * The read Fail needs, its last result, and the button that makes a new one;
+ * for a registration, the supplier ledger's word too (admin_job_ledger).
+ */
 function FailPrecondition({
   read,
   last,
   lastAttemptAt,
+  ledger,
   now,
   name,
   canRead,
@@ -146,6 +152,7 @@ function FailPrecondition({
   read: 'registry' | 'transfer'
   last: ReadCall | null
   lastAttemptAt: string | null
+  ledger: JobLedger | 'unreadable' | null
   now: Date
   name: string
   canRead: boolean
@@ -162,10 +169,9 @@ function FailPrecondition({
         {lastReadWords(read, last)}{' '}
         <span data-verdict={verdict}>{readVerdictWords(verdict, read)}</span>
       </p>
-      {read === 'registry' ? (
-        <p className="max-w-2xl text-sm/6 text-muted-foreground">
-          The database also refuses Fail when DomainNameAPI's ledger shows a charge for {name} since
-          this job started.
+      {ledger ? (
+        <p className="max-w-2xl text-sm/6 text-foreground" data-ledger={ledgerVerdict(ledger)}>
+          {ledgerWords(ledger, name)}
         </p>
       ) : null}
       {canRead ? (
@@ -179,23 +185,97 @@ function FailPrecondition({
   )
 }
 
-function jobFacts(detail: JobDetail): JobFacts {
-  const open = openLineRefund(detail.refunds)
+/** What a Fail or Retry would do with the line's money: its refunds and its share of the order. */
+export function refundFactsFor(context: LineContext) {
   const share =
-    detail.line && detail.order
-      ? lineRefundKobo(detail.orderLines, detail.order, detail.line.id)
+    context.line && context.order
+      ? lineRefundKobo(context.orderLines, context.order, context.line.id)
       : null
+  return lineRefundFacts(context.refunds, share)
+}
+
+function jobFacts(detail: JobDetail): JobFacts {
   return {
     kind: detail.job.kind,
     status: detail.job.status,
     lastErrorCode: detail.job.lastErrorCode,
     name: detail.domain?.name ?? null,
-    pendingRefundKobo: open && !refundAtProvider(open) ? open.amountKobo : null,
-    refundAtProvider: refundAtProvider(open),
-    failRefundKobo: failRefundKobo(detail.refunds, share),
+    ...refundFactsFor(detail),
     pendingTransferLock: detail.domain?.pendingTransferLock ?? null,
     sentAt: null,
   }
+}
+
+/** The job's order line, what it was sold at (N8), and its refunds. */
+export function LinePanel({
+  idPrefix,
+  context,
+  noLine,
+}: {
+  idPrefix: string
+  context: LineContext
+  noLine: string
+}) {
+  const { line, refunds } = context
+  return (
+    <Panel labelledBy={`${idPrefix}-line-heading`} className="space-y-4">
+      <h2 id={`${idPrefix}-line-heading`} className="font-medium text-foreground">
+        Order line and refund
+      </h2>
+      {line ? (
+        <DlGrid
+          items={[
+            {
+              label: 'Order',
+              value: (
+                <Link href={adminHref.order(line.orderId)} className={LINK}>
+                  {line.orderNumber ?? `Order ${shortId(line.orderId)}`}
+                </Link>
+              ),
+            },
+            { label: 'Line', value: labelFor(LINE_KIND_LABEL, line.itemType) },
+            { label: 'Price', value: linePriceWords(line) },
+            {
+              label: 'Line status',
+              value: <AdminStatusPill value={line.status} labels={LINE_STATUS_LABEL} />,
+            },
+            {
+              label: 'Failure code',
+              value: line.failureCode ? (
+                <code className="font-mono text-sm">{line.failureCode}</code>
+              ) : (
+                'None'
+              ),
+            },
+          ]}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">{noLine}</p>
+      )}
+      {line ? (
+        refunds.length > 0 ? (
+          <ul className="space-y-2">
+            {refunds.map((refund) => (
+              <li
+                key={refund.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-border p-3 text-sm"
+              >
+                <Link href={adminHref.refund(refund.id)} className={LINK}>
+                  Refund of {formatNaira(refund.amountKobo)}
+                </Link>
+                <AdminStatusPill value={refund.status} labels={REFUND_STATUS_LABEL} />
+                <span className="text-muted-foreground">
+                  {labelFor(REFUND_REASON_LABEL, refund.reason)} · {formatWat(refund.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">No refund for this line.</p>
+        )
+      ) : null}
+    </Panel>
+  )
 }
 
 /** The live reads that help with this job (§5.2 B4, DEPLOY §6). */
@@ -250,7 +330,7 @@ export function JobDetailBody({
   viewer: Viewer
   now: Date
 }) {
-  const { job, domain, line } = detail
+  const { job, domain } = detail
   const returnTo = adminHref.job(job.id)
   const kindLabel = labelFor(JOB_KIND_LABEL, job.kind)
   const facts = jobFacts(detail)
@@ -377,6 +457,7 @@ export function JobDetailBody({
           read={needsRead}
           last={needsRead === 'registry' ? detail.registryRead : detail.transferRead}
           lastAttemptAt={detail.lastAttemptAt}
+          ledger={needsRead === 'registry' ? detail.ledger : null}
           now={now}
           name={domain.name}
           canRead={mayRead}
@@ -391,72 +472,11 @@ export function JobDetailBody({
         <DlGrid items={summary} />
       </Panel>
 
-      <Panel labelledBy="job-line-heading" className="space-y-4">
-        <h2 id="job-line-heading" className="font-medium text-foreground">
-          Order line and refund
-        </h2>
-        {line ? (
-          <DlGrid
-            items={[
-              {
-                label: 'Order',
-                value: (
-                  <Link href={adminHref.order(line.orderId)} className={LINK}>
-                    {line.orderNumber ?? `Order ${shortId(line.orderId)}`}
-                  </Link>
-                ),
-              },
-              { label: 'Line', value: labelFor(LINE_KIND_LABEL, line.itemType) },
-              {
-                label: 'Price',
-                value: `${formatNaira(line.priceKobo)} for ${line.periodYears} ${
-                  line.periodYears === 1 ? 'year' : 'years'
-                }, then ${formatNaira(line.renewalKobo)} every ${
-                  line.renewalYears === 1 ? 'year' : `${line.renewalYears} years`
-                }`,
-              },
-              {
-                label: 'Line status',
-                value: <AdminStatusPill value={line.status} labels={LINE_STATUS_LABEL} />,
-              },
-              {
-                label: 'Failure code',
-                value: line.failureCode ? (
-                  <code className="font-mono text-sm">{line.failureCode}</code>
-                ) : (
-                  'None'
-                ),
-              },
-            ]}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No order line: a customer's settings change queues a job without one.
-          </p>
-        )}
-        {line ? (
-          detail.refunds.length > 0 ? (
-            <ul className="space-y-2">
-              {detail.refunds.map((refund) => (
-                <li
-                  key={refund.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-border p-3 text-sm"
-                >
-                  <Link href={adminHref.refund(refund.id)} className={LINK}>
-                    Refund of {formatNaira(refund.amountKobo)}
-                  </Link>
-                  <AdminStatusPill value={refund.status} labels={REFUND_STATUS_LABEL} />
-                  <span className="text-muted-foreground">
-                    {labelFor(REFUND_REASON_LABEL, refund.reason)} · {formatWat(refund.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No refund for this line.</p>
-          )
-        ) : null}
-      </Panel>
+      <LinePanel
+        idPrefix="job"
+        context={detail}
+        noLine="No order line: a customer's settings change queues a job without one."
+      />
 
       <Panel labelledBy="job-calls-heading" className="space-y-4">
         <h2 id="job-calls-heading" className="font-medium text-foreground">

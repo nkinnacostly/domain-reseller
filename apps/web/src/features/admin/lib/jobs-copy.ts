@@ -1,8 +1,14 @@
 import type { AdminRegistryDomain, AdminRenewCheck, AdminTransferState } from '@dr/shared/admin'
 import { formatNaira } from '@dr/shared/pricing'
+import { SSL_TERM } from '@dr/shared/ssl'
 import { ADMIN_ERROR_WORDS } from '@/features/admin/lib/errors'
 import { formatWat, formatWatDate, formatWatTime } from '@/features/admin/lib/format'
-import type { ReadCall, ReadVerdict } from '@/features/admin/lib/queue-facts'
+import {
+  type JobLedger,
+  ledgerVerdict,
+  type ReadCall,
+  type ReadVerdict,
+} from '@/features/admin/lib/queue-facts'
 
 /**
  * Every word the queue's buttons say (docs/ADMIN-SPEC.md §5.2 B4): the Retry
@@ -121,9 +127,11 @@ export function retryBody(facts: JobFacts): string {
       return RETRY_SETTINGS_BODY
     case 'ssl_initialize':
       return `If the order was already sent, the worker only reads its status — it never buys twice.${
-        facts.status === 'failed'
-          ? ' A refund still pending for it is cancelled first; this is refused if that refund has reached Flutterwave.'
-          : ''
+        facts.status !== 'failed'
+          ? ''
+          : facts.pendingRefundKobo === null
+            ? ' A refund still pending for it is cancelled first; this is refused if that refund has reached Flutterwave.'
+            : refundSentence(facts.pendingRefundKobo)
       }`
     case 'ssl_configure':
     case 'ssl_reissue':
@@ -214,7 +222,10 @@ export function failCopy(facts: JobFacts): FailCopy | null {
     case 'ssl_initialize':
       return {
         title: `Fail the certificate order for ${name}?`,
-        body: 'It was never sent to the supplier, so nothing was bought. The line fails, the customer is told, and its refund is queued to the card or account that paid.',
+        body:
+          facts.failRefundKobo === null
+            ? 'It was never sent to the supplier, so nothing was bought. The line fails, the customer is told, and its refund is queued to the card or account that paid.'
+            : `It was never sent to the supplier, so nothing was bought. The line fails, the customer is told, and a refund of ${refund} is queued to the card or account that paid.`,
         trigger: 'Fail',
         confirmLabel: 'Fail the order',
         needsRead: null,
@@ -286,6 +297,35 @@ export function readVerdictWords(verdict: ReadVerdict, read: 'registry' | 'trans
   }
 }
 
+const LEDGER_SYNC_FAILED = ' The latest ledger sync failed: this is the last good read.'
+
+/**
+ * The supplier ledger, as the Fail precondition panel says it (§5.2): "Ledger
+ * last read 14:15 WAT; no charge for example.com since this job started."
+ * Only what the mirror can show: a read made before the job started could
+ * not have seen its charge.
+ */
+export function ledgerWords(ledger: JobLedger | 'unreadable', name: string): string {
+  const verdict = ledgerVerdict(ledger)
+  if (ledger === 'unreadable' || verdict === 'unreadable') {
+    return "The supplier ledger couldn't be read just now. The database still checks it when you fail this job."
+  }
+  const failed = ledger.outcome === 'failed' ? LEDGER_SYNC_FAILED : ''
+  const read = `Ledger last read ${formatWat(ledger.readAt)}`
+  switch (verdict) {
+    case 'charge':
+      return `${ledger.readAt ? `${read}; it` : 'The supplier ledger'} shows ${
+        ledger.charges === 1 ? 'a charge' : `${ledger.charges} charges`
+      } for ${name} since this job started, so Fail is refused. Don't fail it: retry, or ask.${failed}`
+    case 'never_read':
+      return `The supplier ledger hasn't been read on this side yet, so it can't show whether ${name} was charged.${failed}`
+    case 'before_job':
+      return `${read}, before this job started: it can't show a charge for ${name} yet.${failed}`
+    default:
+      return `${read}; no charge for ${name} since this job started.${failed}`
+  }
+}
+
 /** The last read on record, as the precondition panel says it. */
 export function lastReadWords(read: 'registry' | 'transfer', last: ReadCall | null): string | null {
   if (!last) return null
@@ -300,6 +340,30 @@ export function lastReadWords(read: 'registry' | 'transfer', last: ReadCall | nu
           : answered
       : (last.state ?? answered)
   return `Last ${what} read: ${formatWat(last.createdAt)} (${found}).`
+}
+
+// ── The order line ─────────────────────────────────────────────────────────
+
+/**
+ * What the line was sold at, with its renewal beside it (N8): a domain's
+ * term and renewal term, or a certificate's subscription — which never
+ * renews by itself, so its "renewal" is a new one at today's price.
+ */
+export function linePriceWords(line: {
+  itemType: string
+  periodYears: number
+  renewalYears: number
+  priceKobo: number
+  renewalKobo: number
+}): string {
+  if (line.itemType === 'ssl') {
+    return `${naira(line.priceKobo)} for a ${SSL_TERM.short}; a new one is ${naira(line.renewalKobo)} at today's price`
+  }
+  return `${naira(line.priceKobo)} for ${line.periodYears} ${
+    line.periodYears === 1 ? 'year' : 'years'
+  }, then ${naira(line.renewalKobo)} every ${
+    line.renewalYears === 1 ? 'year' : `${line.renewalYears} years`
+  }`
 }
 
 // ── What a live read found ─────────────────────────────────────────────────

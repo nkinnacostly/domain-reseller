@@ -14,7 +14,7 @@ import type { AdminSide } from '@/features/admin/lib/side'
 import type { SslJobDetail } from '@/features/admin/queries/queue'
 import { cn } from '@/lib/utils'
 import { JobActions } from './job-actions'
-import { CallTrace, PlaybookCard, type Viewer } from './job-detail'
+import { CallTrace, LinePanel, PlaybookCard, refundFactsFor, type Viewer } from './job-detail'
 import { QUEUE_REFRESH_MS } from './jobs-list'
 
 const LINK = cn('rounded text-foreground underline-offset-4 hover:underline', FOCUS)
@@ -22,6 +22,10 @@ const LINK = cn('rounded text-foreground underline-offset-4 hover:underline', FO
 /**
  * One certificate job (§5.2 B4). Once an order is noted as sent it is only
  * read, never failed or sent again (N3): Fail is offered only before that.
+ * Its name and order line come from `admin_ssl_job_certificate` (migration
+ * 42), so the dialogs name the certificate and the refund an order's Fail
+ * queues. The line's refund matters to the order job only: fail_ssl_job
+ * refunds an order alone, and admin_retry_ssl_job checks it for an order.
  */
 export function SslJobDetailBody({
   detail,
@@ -35,14 +39,16 @@ export function SslJobDetailBody({
   const { job } = detail
   const returnTo = adminHref.sslJob(job.id)
   const kindLabel = labelFor(JOB_KIND_LABEL, job.kind)
+  const money =
+    job.kind === 'ssl_initialize'
+      ? refundFactsFor(detail)
+      : { pendingRefundKobo: null, refundAtProvider: false, failRefundKobo: null }
   const facts: JobFacts = {
     kind: job.kind,
     status: job.status,
     lastErrorCode: job.lastErrorCode,
     name: detail.name,
-    pendingRefundKobo: null,
-    refundAtProvider: false,
-    failRefundKobo: null,
+    ...money,
     pendingTransferLock: null,
     sentAt: job.sentAt,
   }
@@ -58,8 +64,8 @@ export function SslJobDetailBody({
     {
       label: 'Certificate',
       value: (
-        <Link href={adminHref.certificate(job.certificateId)} className={LINK}>
-          Certificate {shortId(job.certificateId)}
+        <Link href={adminHref.certificate(job.certificateId)} className={cn(LINK, 'break-all')}>
+          {detail.name ?? `Certificate ${shortId(job.certificateId)}`}
         </Link>
       ),
     },
@@ -151,6 +157,12 @@ export function SslJobDetailBody({
         </h2>
         <DlGrid items={summary} />
       </Panel>
+
+      <LinePanel
+        idPrefix="ssl-job"
+        context={detail}
+        noLine="The certificate's order line couldn't be read. Its certificate page shows the order."
+      />
 
       <Panel labelledBy="ssl-job-others-heading" className="space-y-3">
         <h2 id="ssl-job-others-heading" className="font-medium text-foreground">
