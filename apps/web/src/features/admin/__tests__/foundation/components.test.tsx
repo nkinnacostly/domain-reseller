@@ -74,6 +74,10 @@ describe('DataTable', () => {
         .map((th) => th.textContent),
     ).toEqual(['MDH-1', 'MDH-2'])
     expect(table.parentElement).toHaveClass('relative', 'overflow-x-auto')
+    // A scroll box a keyboard reaches and a screen reader names (axe scrollable-region-focusable).
+    const box = screen.getByRole('region', { name: 'Refunds' })
+    expect(box).toBe(table.parentElement)
+    expect(box).toHaveAttribute('tabindex', '0')
     const cards = screen.getByRole('list', { name: 'Refunds' })
     expect(within(cards).getAllByRole('listitem')).toHaveLength(2)
     expect(within(cards).getAllByText('Held for approval')).toHaveLength(1)
