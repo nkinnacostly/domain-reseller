@@ -68,6 +68,18 @@ const MIGRATIONS = join(ROOT, 'supabase/migrations')
 const ADMIN_SQL = readFileSync(join(MIGRATIONS, '00000000000040_admin.sql'), 'utf8')
 const DATA_SQL = readFileSync(join(MIGRATIONS, '00000000000041_admin_data.sql'), 'utf8')
 
+/** The rows between admin.sql's mask-email markers: `('input', 'expected')`, SQL-quoted. */
+const MASK_TABLE: [string, string][] = (() => {
+  const checks = readFileSync(join(ROOT, 'supabase/tests/admin.sql'), 'utf8')
+  const start = checks.indexOf('-- mask-email table: begin')
+  const end = checks.indexOf('-- mask-email table: end')
+  if (start < 0 || end < start) return []
+  const unquote = (text: string) => text.replace(/''/g, "'")
+  return [...checks.slice(start, end).matchAll(/\('((?:[^']|'')*)', '((?:[^']|'')*)'\)/g)].map(
+    (row) => [unquote(row[1] ?? ''), unquote(row[2] ?? '')],
+  )
+})()
+
 describe('ADMIN_ACTIONS mirrors admin_tier (migration 40)', () => {
   const rows = [
     ...ADMIN_SQL.matchAll(
@@ -261,20 +273,22 @@ describe('format', () => {
     expect(formatUsd(null)).toBe('—')
   })
 
-  it('masks an email exactly as SQL admin_mask_email does', () => {
-    // The SQL: left(local, 1) || '•••@' || domain; no @ → '•••'.
-    expect(ADMIN_SQL).toContain(
-      "left(split_part(p_email, '@', 1), 1) || '•••@' || split_part(p_email, '@', 2)",
-    )
-    expect(maskEmail('ayang@gmail.com')).toBe('a•••@gmail.com')
-    expect(maskEmail('é@example.ng')).toBe('é•••@example.ng')
-    expect(maskEmail('😀x@example.com')).toBe('😀•••@example.com')
-    expect(maskEmail('no-at-sign')).toBe('•••')
+  // One table for both: admin.sql check 35 runs these rows through
+  // admin_mask_email(), and this test runs the same rows through maskEmail().
+  it('reads the shared mask table from admin.sql check 35', () => {
+    expect(MASK_TABLE.length).toBeGreaterThanOrEqual(10)
+    expect(MASK_TABLE).toContainEqual(['a@b@c', 'a•••@b'])
+    expect(MASK_TABLE).toContainEqual(['@x.com', '•••@x.com'])
+  })
+
+  it.each(MASK_TABLE)('masks %j as SQL admin_mask_email does: %j', (input, expected) => {
+    expect(maskEmail(input)).toBe(expected)
+  })
+
+  it('shows no address as a dash, where SQL answers null', () => {
+    expect(ADMIN_SQL).toContain('when p_email is null then null')
     expect(maskEmail(null)).toBe('—')
-    // split_part's edges: the domain stops at a second @, and the first
-    // character comes from the local part only.
-    expect(maskEmail('a@b@c')).toBe('a•••@b')
-    expect(maskEmail('@x.com')).toBe('•••@x.com')
+    expect(maskEmail(undefined)).toBe('—')
   })
 
   it('masks a phone to its last three digits', () => {

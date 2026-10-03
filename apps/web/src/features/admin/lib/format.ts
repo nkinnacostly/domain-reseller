@@ -78,10 +78,12 @@ export function formatUsd(cents: number | null | undefined): string {
 
 /**
  * `a•••@gmail.com` — the same mask as SQL `admin_mask_email()`, so a masked
- * address reads the same from a view, a function or the browser.
+ * address reads the same from a view, a function or the browser. Both run
+ * one table of cases (`supabase/tests/admin.sql` check 35). No address at
+ * all — SQL's null — is shown as a dash; an empty one masks as SQL masks it.
  */
 export function maskEmail(email: string | null | undefined): string {
-  if (!email) return '—'
+  if (email === null || email === undefined) return '—'
   if (!email.includes('@')) return '•••'
   // split_part(p_email, '@', n): the local part before the first @, the
   // domain between the first and the second. One character of the local

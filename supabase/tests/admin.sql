@@ -1270,6 +1270,36 @@ begin
   end if;
   v_passed := v_passed + 1;
 
+  -- ── 35. admin_mask_email and the web's maskEmail() mask alike (§2.5): the
+  -- web's lib.test.ts reads the rows between these markers and runs each one
+  -- through maskEmail(), so the two tables are one table.
+  for v_row in
+    select t.input, t.expected, public.admin_mask_email(t.input) as got from (values
+      -- mask-email table: begin
+      ('ayang@gmail.com', 'a•••@gmail.com'),
+      ('Ada.Obi@Example.COM', 'A•••@Example.COM'),
+      ('é@example.ng', 'é•••@example.ng'),
+      ('😀x@example.com', '😀•••@example.com'),
+      ('no-at-sign', '•••'),
+      ('', '•••'),
+      ('a@b@c', 'a•••@b'),
+      ('@x.com', '•••@x.com'),
+      ('a@', 'a•••@'),
+      ('@', '•••@'),
+      ('a@@b', 'a•••@'),
+      (' a@x.com', ' •••@x.com')
+      -- mask-email table: end
+    ) as t(input, expected)
+  loop
+    if v_row.got is distinct from v_row.expected then
+      raise exception 'FAILED 35: admin_mask_email(%) is %, not %', v_row.input, v_row.got, v_row.expected;
+    end if;
+  end loop;
+  if public.admin_mask_email(null) is not null then
+    raise exception 'FAILED 35: no address masks to something';
+  end if;
+  v_passed := v_passed + 1;
+
   raise notice 'migration 40: % checks passed', v_passed;
 end;
 $$;
