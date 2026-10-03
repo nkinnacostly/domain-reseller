@@ -25,6 +25,10 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
 
+  // Failure artifacts — except in the admin suites, whose `test` from
+  // tests/e2e/support/admin.ts turns all three off: an admin page can show a
+  // customer's details, and CI uploads artifacts (ADMIN-SPEC §8.1). A unit
+  // test holds every tests/e2e/admin*.spec.ts to that import.
   use: {
     baseURL,
     trace: 'on-first-retry',

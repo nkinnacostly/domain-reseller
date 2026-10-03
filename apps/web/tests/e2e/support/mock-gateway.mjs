@@ -48,6 +48,11 @@
  * addresses for a name, the CA's reading of a CSR, and a generated key and
  * CSR. A test CSR carries its name readably (`mockCsr`), as the real one
  * carries it in ASN.1: check-csr reads it back; anything else is CSR_INVALID.
+ *
+ * And the admin dashboard's live reads (/v1/admin, ADMIN-SPEC §4.3): a $43.38
+ * balance, empty ledger and registry pages, a domain not in the account, a
+ * transfer the registry refused, a renewable domain, a matching price and a
+ * completed Flutterwave refund — with no personal data in any of them.
  */
 import { createServer } from 'node:http'
 import { mockCsrName as csrName, mockCsr } from './ssl.mjs'
@@ -236,10 +241,175 @@ function rdap(req, res) {
   })
 }
 
+const ADMIN_READ_AT = '2026-10-03T11:05:00.000Z'
+
+/** Each admin route: its method, its path under /v1/admin/, and its answer. */
+const ADMIN_ROUTES = [
+  [
+    'GET',
+    /^supplier\/balance$/,
+    (_, { side }) => ({ side, balanceCents: 4338, priceGroup: null, readAt: ADMIN_READ_AT }),
+  ],
+  [
+    'GET',
+    /^supplier\/(transactions|domains)$/,
+    (_, { side }) => ({ side, total: 0, items: [], readAt: ADMIN_READ_AT }),
+  ],
+  [
+    'GET',
+    /^supplier\/domains\/([^/]+)$/,
+    ([, name]) => ({
+      name: decodeURIComponent(name),
+      outcome: 'not_found',
+      status: null,
+      statusCode: null,
+      expiresAt: null,
+      rgpExpiresAt: null,
+      transferLock: null,
+      privacy: null,
+      nameservers: [],
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'GET',
+    /^supplier\/domains\/([^/]+)\/verification$/,
+    ([, name]) => ({
+      name: decodeURIComponent(name),
+      isVerified: true,
+      operationStatus: null,
+      verifiedAt: null,
+      fieldType: 'Email',
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'GET',
+    /^supplier\/domains\/([^/]+)\/transfer$/,
+    ([, name]) => ({
+      name: decodeURIComponent(name),
+      state: 'rejected',
+      supplierStatus: 'rejected',
+      requestedAt: '2026-09-20T09:00:00.000Z',
+      finalAt: '2026-09-30T09:00:00.000Z',
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'GET',
+    /^supplier\/domains\/([^/]+)\/renewable$/,
+    ([, name]) => ({
+      name: decodeURIComponent(name),
+      renewable: true,
+      renewalLock: false,
+      reasonKey: null,
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'GET',
+    /^supplier\/prices\/([^/]+)$/,
+    ([, tld], { url }) => ({
+      tld,
+      op: url.searchParams.get('op') ?? 'register',
+      years: Number(url.searchParams.get('years') ?? 1),
+      supplierCents: 1131,
+      ourCents: 1131,
+      matches: true,
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'GET',
+    /^supplier\/(catalogue|ssl-catalogue)\/preview$/,
+    ([, kind]) => ({
+      kind: kind === 'ssl-catalogue' ? 'ssl' : 'tlds',
+      outcome: 'ok',
+      reason: null,
+      listed: 0,
+      sellable: 0,
+      changes: 0,
+      report: [],
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'GET',
+    /^supplier\/ssl\/([^/]+)$/,
+    ([, name]) => ({
+      name: decodeURIComponent(name),
+      outcome: 'not_found',
+      status: null,
+      isConfigured: null,
+      isIssued: null,
+      certificateExpiresAt: null,
+      subscriptionEndsAt: null,
+      validUntil: null,
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'GET',
+    /^flutterwave\/refunds\/([^/]+)$/,
+    ([, flwRefundId]) => ({
+      checkId: 1,
+      flwRefundId,
+      transactionId: '456',
+      amountKobo: 1967250,
+      status: 'completed',
+      state: 'done',
+      readAt: ADMIN_READ_AT,
+    }),
+  ],
+  [
+    'POST',
+    /^presets\/drafts\/[^/]+\/check$/,
+    () => ({ ok: true, hosts: [], checkedAt: ADMIN_READ_AT }),
+  ],
+]
+
+/**
+ * The gateway's admin routes (ADMIN-SPEC §4.3, §8.1): fixed, PII-free
+ * answers — ids, names, states, cents. The real gateway claims the audit
+ * note in SQL first; that is covered by the gateway's own tests, so here
+ * only the headers are required, as the gateway requires them. Applying a
+ * price list is refused as the sandbox gateway refuses it.
+ */
+function adminRoute(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`)
+  if (
+    !req.headers.authorization?.startsWith('Bearer ') ||
+    !req.headers['x-admin-secret'] ||
+    !/^\d+$/.test(String(req.headers['x-admin-audit-id'] ?? '')) ||
+    !req.headers['x-admin-label']
+  ) {
+    return send(res, 400, {
+      ok: false,
+      code: 'VALIDATION_FAILED',
+      message: 'An audit note and an admin are required',
+    })
+  }
+  const side = url.searchParams.get('side') === 'live' ? 'live' : 'test'
+  const path = url.pathname.replace(/^\/v1\/admin\//, '')
+  if (req.method === 'POST' && /^supplier\/(catalogue|ssl-catalogue)\/apply$/.test(path)) {
+    return send(res, 409, {
+      ok: false,
+      code: 'NOT_PRODUCTION',
+      message: 'Only the production gateway applies the price list',
+    })
+  }
+  for (const [method, pattern, answer] of ADMIN_ROUTES) {
+    const match = req.method === method ? path.match(pattern) : null
+    if (match) return send(res, 200, { ok: true, data: answer(match, { side, url }) })
+  }
+  return send(res, 404, { ok: false, code: 'NOT_FOUND', message: 'No such admin route' })
+}
+
 createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     return send(res, 200, { ok: true, data: { status: 'healthy' } })
   }
+  if (req.url?.startsWith('/v1/admin/')) return adminRoute(req, res)
   if (req.url?.startsWith('/flw/')) return void flutterwave(req, res)
   if (req.method === 'GET' && req.url?.startsWith('/rdap/')) return rdap(req, res)
   if (req.method === 'GET' && req.url === '/v1/account/balance') {
