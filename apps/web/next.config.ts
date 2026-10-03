@@ -28,6 +28,20 @@ const csp = siteCsp({
 /** Every path except `/admin` and below (path-to-regexp group for `source`). */
 export const NOT_ADMIN = '(?!admin(?:/|$)).*'
 
+/**
+ * `/admin` and below. Unnamed groups capture nothing, so the rewritten 404's
+ * payload holds no query a random path's lacks (`/admin/:path*` put
+ * `?path=refunds` in it).
+ */
+export const ADMIN_SOURCES = ['/admin', '/admin/(.*)']
+
+/**
+ * Any path, for the fallback rewrite, which Next tries only once no file,
+ * page or route has answered. `_next/` is left out: Next answers a missing
+ * chunk there with its own plain-text 404.
+ */
+export const UNANSWERED = '/((?!_next/).*)'
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -56,31 +70,22 @@ const nextConfig: NextConfig = {
   // D9: a stranger at /admin — the proxy marks the request after asking SQL
   // (features/admin/lib/door.ts) — sees Next's own 404, through a rewrite of
   // the config's, which unlike the proxy's sends back no header naming it.
+  // Every other path no page answers takes the same rewrite as a fallback, so
+  // an RSC request's `x-nextjs-rewritten-path` is any 404's, not /admin's.
   async rewrites() {
     return {
-      beforeFiles: ['/admin', '/admin/:path*'].map((source) => ({
+      beforeFiles: ADMIN_SOURCES.map((source) => ({
         source,
-        // A value, so the match captures nothing: a bare `has` would add the
-        // header to the page's query, and the 404's payload would name it.
         has: [{ type: 'header' as const, key: STRANGER_HEADER, value: '1' }],
         destination: ADMIN_NOT_FOUND_PATH,
       })),
       afterFiles: [],
-      fallback: [],
+      fallback: [{ source: UNANSWERED, destination: ADMIN_NOT_FOUND_PATH }],
     }
   },
 
   async headers() {
     return [
-      {
-        // Everywhere but /admin, which the proxy gives its own nonce policy
-        // (ADMIN-SPEC §2.3): no 'unsafe-inline' for scripts there. A
-        // stranger's 404 at /admin gets this one from the proxy (D9), which
-        // writes names lower-case, as every Headers object does — so this
-        // name is lower-case too, and the two 404s match even on HTTP/1.1.
-        source: `/:path(${NOT_ADMIN})`,
-        headers: [{ key: 'content-security-policy', value: csp }],
-      },
       {
         source: '/:path*',
         headers: [
@@ -93,6 +98,16 @@ const nextConfig: NextConfig = {
             value: 'max-age=63072000; includeSubDomains; preload',
           },
         ],
+      },
+      {
+        // Everywhere but /admin, which the proxy gives its own nonce policy
+        // (ADMIN-SPEC §2.3): no 'unsafe-inline' for scripts there. A
+        // stranger's 404 at /admin gets this one from the proxy (D9), whose
+        // headers Next sends after these rules' — so this rule comes last,
+        // and its name is lower-case, as every Headers object writes it: the
+        // two 404s then match name for name, in order, even on HTTP/1.1.
+        source: `/:path(${NOT_ADMIN})`,
+        headers: [{ key: 'content-security-policy', value: csp }],
       },
     ]
   },

@@ -43,6 +43,8 @@ const supabaseHost = supabaseHostOf(env.NEXT_PUBLIC_SUPABASE_URL)
  * What next.config.ts puts on every page but /admin. A stranger's 404 at
  * /admin gets it from here — config headers follow the path asked for, which
  * NOT_ADMIN leaves out — so that 404 carries exactly what any other 404 does.
+ * Next writes the proxy's headers after the config's, and the config's CSP
+ * rule comes last, so this one lands where any other 404's does (D9).
  */
 const SITE_HEADERS = {
   'Content-Security-Policy': siteCsp({
@@ -146,10 +148,11 @@ export async function proxy(request: NextRequest) {
   if (admin) {
     // D1/D2: the admins table, checked in SQL on every request. A stranger,
     // a signed-out visitor or an error all look like a page that is not there
-    // — headers included (D9). The request is marked, and next.config.ts's
-    // rewrite renders Next's own 404 (features/admin/lib/door.ts); it carries
-    // no nonce, so Next stamps none, and the answer gets the site's CSP and
-    // none of the admin headers.
+    // — headers included, however the browser asks (D9). The request is
+    // marked, and next.config.ts's rewrite renders Next's own 404 by the same
+    // road as any path no page answers (features/admin/lib/door.ts); it
+    // carries no nonce, so Next stamps none, and the answer gets the site's
+    // CSP and none of the admin headers.
     let status = toAdminStatus(null)
     if (user) {
       const { data, error } = await supabase.rpc('admin_status')

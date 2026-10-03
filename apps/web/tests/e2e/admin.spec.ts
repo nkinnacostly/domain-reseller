@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import type { Page } from '@playwright/test'
+import type { APIResponse, Page } from '@playwright/test'
 import {
   createAdminTestUser,
   createTestUser,
@@ -43,11 +43,31 @@ async function expectNotFound(page: Page, path: string) {
   for (const words of ADMIN_HTML) expect(html, `${path} holds "${words}"`).not.toContain(words)
 }
 
-/** A response's headers less the ones that differ between any two answers. */
-const comparable = (headers: Record<string, string>) => {
-  const { date: _date, 'set-cookie': _cookies, ...rest } = headers
-  return rest
-}
+/**
+ * The headers as sent — name as written, value, in order — less the two that
+ * differ between any two answers. The order counts: a header added late, by
+ * another hand, says which code wrote the answer (D9).
+ */
+const sent = (response: APIResponse) =>
+  response
+    .headersArray()
+    .filter(({ name }) => !['date', 'set-cookie'].includes(name.toLowerCase()))
+    .map(({ name, value }) => `${name}: ${value}`)
+
+/**
+ * The ways a browser asks for a page: a document, and the requests Next's
+ * client router sends — a navigation (`rsc: 1`), a prefetch, and a prefetch
+ * of one segment of the route tree.
+ */
+const ASKED_AS: ReadonlyArray<readonly [string, Record<string, string>]> = [
+  ['a document', {}],
+  ['a client navigation', { rsc: '1' }],
+  ['a prefetch', { rsc: '1', 'next-router-prefetch': '1' }],
+  [
+    'a segment prefetch',
+    { rsc: '1', 'next-router-prefetch': '1', 'next-router-segment-prefetch': '/_tree' },
+  ],
+]
 
 /** The script-src directive of a CSP. */
 const scriptSrc = (csp: string) =>
@@ -93,21 +113,31 @@ test.describe('the admin area to anyone who is not an admin', () => {
   test("a stranger's 404 at /admin carries exactly the headers of any other 404 (D9)", async ({
     request,
   }) => {
-    // Compared with a path nobody has: nothing in the answer may say /admin is
-    // special — no X-Robots-Tag, no admin Cache-Control, no nonce, no rewrite.
-    const elsewhere = await request.get(`/no-such-page-${Date.now().toString(36)}`, {
-      maxRedirects: 0,
-    })
-    expect(elsewhere.status()).toBe(404)
-    const expected = comparable(elsewhere.headers())
-    for (const path of ['/admin', '/admin/refunds', '/admin/orders/x.png']) {
-      const response = await request.get(path, { maxRedirects: 0 })
-      expect(response.status(), path).toBe(404)
-      const headers = response.headers()
-      expect(comparable(headers), path).toEqual(expected)
-      expect(headers['x-robots-tag'], path).toBeUndefined()
-      expect(headers['x-middleware-rewrite'], path).toBeUndefined()
-      expect(scriptSrc(headers['content-security-policy'] ?? ''), path).not.toMatch(/'nonce-/)
+    // Compared with a path nobody has, asked for each way a browser asks:
+    // nothing in the answer may say /admin is special — no X-Robots-Tag, no
+    // admin Cache-Control, no nonce, no rewrite header of its own — and the
+    // headers come in the same order, the same names, the same values.
+    for (const [way, headers] of ASKED_AS) {
+      const elsewhere = await request.get(`/no-such-page-${Date.now().toString(36)}`, {
+        headers,
+        maxRedirects: 0,
+      })
+      expect(elsewhere.status(), way).toBe(404)
+      const expected = sent(elsewhere)
+      for (const path of ['/admin', '/admin/refunds', '/admin/orders/x.png']) {
+        const response = await request.get(path, { headers, maxRedirects: 0 })
+        const label = `${path} as ${way}`
+        expect(response.status(), label).toBe(404)
+        expect(sent(response), label).toEqual(expected)
+        const named = response.headers()
+        expect(named['x-robots-tag'], label).toBeUndefined()
+        expect(named['x-middleware-rewrite'], label).toBeUndefined()
+        expect(scriptSrc(named['content-security-policy'] ?? ''), label).not.toMatch(/'nonce-/)
+        // The rewrite captures nothing: no query in the 404's payload that a random path's lacks.
+        const body = await response.text()
+        expect(body, label).not.toContain('?path=')
+        expect(body, label).not.toContain('__PAGE__?')
+      }
     }
   })
 
@@ -163,11 +193,15 @@ test.describe('the admin area to anyone who is not an admin', () => {
       await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0)
       await expectNotFound(page, '/admin')
       await expectNotFound(page, '/admin/refunds')
-      // Signed in, the headers too are any other 404's (D9).
-      const elsewhere = await page.request.get(`/no-such-page-${Date.now().toString(36)}`)
-      const atAdmin = await page.request.get('/admin/refunds')
-      expect(atAdmin.status()).toBe(404)
-      expect(comparable(atAdmin.headers())).toEqual(comparable(elsewhere.headers()))
+      // Signed in, the headers too are any other 404's, in order, however asked (D9).
+      for (const [way, headers] of ASKED_AS) {
+        const elsewhere = await page.request.get(`/no-such-page-${Date.now().toString(36)}`, {
+          headers,
+        })
+        const atAdmin = await page.request.get('/admin/refunds', { headers })
+        expect(atAdmin.status(), way).toBe(404)
+        expect(sent(atAdmin), way).toEqual(sent(elsewhere))
+      }
 
       // Signed in, /sign-in?next=/admin goes to /admin — which is still a 404.
       await page.goto('/sign-in?next=/admin')

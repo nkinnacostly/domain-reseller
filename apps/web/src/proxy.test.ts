@@ -1,8 +1,11 @@
+import type { IncomingMessage } from 'node:http'
+import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match'
+import { matchHas } from 'next/dist/shared/lib/router/utils/prepare-destination'
 import { NextRequest, type NextResponse } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ADMIN_NOT_FOUND_PATH, STRANGER_HEADER } from '@/features/admin/lib/gate'
 import { SIGNED_IN_HINT } from '@/features/auth/lib/signed-in-hint'
-import nextConfig from '../next.config'
+import nextConfig, { ADMIN_SOURCES, UNANSWERED } from '../next.config'
 import { config, proxy } from './proxy'
 
 /**
@@ -91,6 +94,70 @@ async function expectStranger(response: NextResponse) {
   expect(response.headers.get('x-middleware-request-content-security-policy')).toBeNull()
 }
 
+/** Next's own matcher for a config `source`, as its router builds it. */
+const sourceMatch = (source: string, path: string) =>
+  getPathMatch(source, { strict: true, removeUnnamedParams: true })(path)
+
+/**
+ * The headers Next's router sends for `path`, name and value in order, put
+ * together as resolve-routes does: the config's header rules in order, then
+ * the proxy's own headers (a name the config already set keeps its place),
+ * then a rewrite — beforeFiles, judged on the request headers the proxy
+ * passed on, or the fallback when no page answers — which tells an RSC
+ * request its rewritten path before anything else. `date` and `set-cookie`
+ * are left out, as they differ between any two answers.
+ */
+async function routed(
+  path: string,
+  asked: Record<string, string>,
+  { pageAnswers }: { pageAnswers: boolean },
+): Promise<string[]> {
+  const headers: Record<string, string> = {}
+  for (const rule of (await nextConfig.headers?.()) ?? []) {
+    if (!sourceMatch(rule.source, path)) continue
+    for (const { key, value } of rule.headers) headers[key] = value
+  }
+
+  const response = await proxy(new NextRequest(`${SITE}${path}`, { headers: asked }))
+  const overridden = response.headers.get('x-middleware-override-headers')
+  const passedOn: Record<string, string> = overridden
+    ? Object.fromEntries(
+        overridden
+          .split(',')
+          .map((name) => [name, response.headers.get(`x-middleware-request-${name}`) ?? '']),
+      )
+    : { ...asked }
+  for (const [name, value] of response.headers) {
+    if (name.startsWith('x-middleware-') || name === 'set-cookie') continue
+    headers[name] = value
+  }
+
+  const rewrites = await nextConfig.rewrites?.()
+  const { beforeFiles = [], fallback = [] } = rewrites && !Array.isArray(rewrites) ? rewrites : {}
+  const request = { headers: passedOn } as unknown as IncomingMessage
+  const before = beforeFiles.find(
+    (rule) => sourceMatch(rule.source, path) && matchHas(request, {}, rule.has, rule.missing),
+  )
+  const after = pageAnswers ? undefined : fallback.find((rule) => sourceMatch(rule.source, path))
+  const destination = (before ?? after)?.destination
+  const first =
+    asked.rsc === '1' && destination && destination !== path
+      ? [`x-nextjs-rewritten-path: ${destination}`]
+      : []
+  return [...first, ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`)]
+}
+
+/** A document, and the requests Next's client router sends for a page. */
+const ASKED_AS: ReadonlyArray<readonly [string, Record<string, string>]> = [
+  ['a document', {}],
+  ['a client navigation (rsc: 1)', { rsc: '1' }],
+  ['a prefetch', { rsc: '1', 'next-router-prefetch': '1' }],
+  [
+    'a segment prefetch',
+    { rsc: '1', 'next-router-prefetch': '1', 'next-router-segment-prefetch': '/_tree' },
+  ],
+]
+
 const rewrittenTo = (response: NextResponse) => {
   const target = response.headers.get('x-middleware-rewrite')
   return target ? new URL(target).pathname : null
@@ -114,22 +181,36 @@ describe('the proxy at /admin', () => {
     expect(auth.rpc).not.toHaveBeenCalled()
   })
 
-  it('sends a marked /admin request to a path no page answers, from next.config.ts', async () => {
+  it('sends a marked /admin request, and any path no page answers, to a path no page answers', async () => {
     const rewrites = await nextConfig.rewrites?.()
-    const before = rewrites && !Array.isArray(rewrites) ? rewrites.beforeFiles : []
-    expect(before).toEqual([
+    const { beforeFiles, fallback } =
+      rewrites && !Array.isArray(rewrites) ? rewrites : { beforeFiles: [], fallback: [] }
+    expect(beforeFiles).toEqual([
       {
         source: '/admin',
         has: [{ type: 'header', key: STRANGER_HEADER, value: '1' }],
         destination: ADMIN_NOT_FOUND_PATH,
       },
       {
-        source: '/admin/:path*',
+        source: '/admin/(.*)',
         has: [{ type: 'header', key: STRANGER_HEADER, value: '1' }],
         destination: ADMIN_NOT_FOUND_PATH,
       },
     ])
+    expect(fallback).toEqual([{ source: UNANSWERED, destination: ADMIN_NOT_FOUND_PATH }])
     expect(ADMIN_NOT_FOUND_PATH).not.toMatch(/admin/)
+  })
+
+  it("captures nothing into the 404's query, at /admin or anywhere else", () => {
+    // `/admin/:path*` put `?path=refunds` in the payload, which a random path's lacks.
+    for (const path of ['/admin', '/admin/refunds', '/admin/orders/x.png']) {
+      const matched = ADMIN_SOURCES.map((source) => sourceMatch(source, path)).find(Boolean)
+      expect(matched, path).toEqual({})
+    }
+    for (const path of ['/no-such-page', '/a/b/c', '/admin']) {
+      expect(sourceMatch(UNANSWERED, path), path).toEqual({})
+    }
+    expect(sourceMatch(UNANSWERED, '/_next/static/chunks/gone.js')).toBe(false)
   })
 
   it.each([
@@ -217,6 +298,45 @@ describe('the proxy at /admin', () => {
     expect(kept).toContain('content-security-policy')
     expect(kept).not.toContain(STRANGER_HEADER)
     expect(response.headers.get(`x-middleware-request-${STRANGER_HEADER}`)).toBeNull()
+  })
+})
+
+describe("a stranger's 404 at /admin beside any other 404, as Next sends them (D9)", () => {
+  it.each(ASKED_AS)(
+    'carries the same headers, named and valued alike, in the same order, asked as %s',
+    async (_, asked) => {
+      for (const user of [null, { id: 'u1' }]) {
+        auth.user = user
+        const elsewhere = await routed('/no-such-page', asked, { pageAnswers: false })
+        for (const path of ['/admin', '/admin/refunds', '/admin/orders/x.png']) {
+          expect(await routed(path, asked, { pageAnswers: true }), path).toEqual(elsewhere)
+        }
+      }
+    },
+  )
+
+  it("tells an RSC request any 404's rewritten path, and a document nothing", async () => {
+    const rsc = await routed('/no-such-page', { rsc: '1' }, { pageAnswers: false })
+    expect(rsc[0]).toBe(`x-nextjs-rewritten-path: ${ADMIN_NOT_FOUND_PATH}`)
+    const doc = await routed('/no-such-page', {}, { pageAnswers: false })
+    expect(doc.some((line) => line.startsWith('x-nextjs-rewritten-path'))).toBe(false)
+  })
+
+  it('puts the CSP after the security headers on both, as Next writes them', async () => {
+    for (const [path, pageAnswers] of [
+      ['/admin', true],
+      ['/no-such-page', false],
+    ] as const) {
+      const names = (await routed(path, {}, { pageAnswers })).map((line) => line.split(':')[0])
+      expect(names, path).toEqual([
+        'X-Content-Type-Options',
+        'X-Frame-Options',
+        'Referrer-Policy',
+        'Permissions-Policy',
+        'Strict-Transport-Security',
+        'content-security-policy',
+      ])
+    }
   })
 })
 

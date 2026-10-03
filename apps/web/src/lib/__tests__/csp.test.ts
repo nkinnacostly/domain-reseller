@@ -4,9 +4,9 @@ import { siteCsp, supabaseHostOf } from '../csp'
 
 async function policy(): Promise<Map<string, string>> {
   const rules = (await nextConfig.headers?.()) ?? []
-  const csp = rules[0]?.headers.find(
-    (header) => header.key.toLowerCase() === 'content-security-policy',
-  )?.value
+  const csp = rules
+    .flatMap((rule) => rule.headers)
+    .find((header) => header.key.toLowerCase() === 'content-security-policy')?.value
   return new Map(
     (csp ?? '').split('; ').map((directive) => {
       const [name = '', ...sources] = directive.split(' ')
