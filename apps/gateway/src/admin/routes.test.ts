@@ -429,6 +429,37 @@ describe('the registry', () => {
     expect(calls).toHaveLength(2)
   })
 
+  it('finds this domain among near matches, case-blind, and reads only its handle', async () => {
+    const { request, calls } = setup(
+      {},
+      {
+        '/domains': {
+          status: 200,
+          body: {
+            totalCount: 3,
+            items: [
+              { domainName: 'notmydomainshubtest1.com', contacts: { Registrant: 'D-OTHER' } },
+              { domainName: 'MyDomainsHubTest1.com', contacts: { Registrant: 'D-OURS' } },
+              { domainName: 'mydomainshubtest1.com.ng', contacts: { Registrant: 'D-LONGER' } },
+            ],
+          },
+        },
+      },
+    )
+    const body = await read(
+      await request('/supplier/domains/mydomainshubtest1.com/verification?side=test'),
+    )
+    expect(body.data).toMatchObject({ name: 'mydomainshubtest1.com', isVerified: true })
+    expect(calls.map((call: SupplierCall) => call.path)).toEqual([
+      '/domains',
+      '/contacts/verification/check',
+    ])
+    // Enough of the listing to find it when near matches come first.
+    expect(calls[0]?.params).toMatchObject({ DomainName: 'mydomainshubtest1.com' })
+    expect(Number(calls[0]?.params?.MaxResultCount)).toBeGreaterThan(1)
+    expect(calls[1]?.params).toEqual({ HandleCode: 'D-OURS' })
+  })
+
   it('takes the handle only from the listing item that is this domain, never a near match', async () => {
     const { request, calls } = setup(
       {},

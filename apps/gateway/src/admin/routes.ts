@@ -136,6 +136,12 @@ export type AdminRouterDeps = {
 const SIDE_OF: Record<WriteTarget, AdminSide> = { ote: 'test', production: 'live' }
 const ORDER_TYPE: Record<AdminPriceOp, number> = { register: 1, renew: 2, transfer: 3, restore: 4 }
 const DAY_MS = 86_400_000
+/**
+ * How many listing items a verification reads to find its own domain: the
+ * supplier's DomainName filter also returns names that contain it, so the
+ * exact one need not be first (§4.3).
+ */
+const VERIFICATION_LISTING_SIZE = 25
 const LANES = {
   normal10: { priority: 'normal', waitMs: 10_000 },
   normal12: { priority: 'normal', waitMs: 12_000 },
@@ -600,23 +606,24 @@ export function createAdminRouter(deps: AdminRouterDeps) {
       if (!supplier) return refused(503, 'WRITES_OFF', 'No supplier key for this side')
       const listing = await supplier.get(
         '/domains',
-        { DomainName: name, MaxResultCount: 1 },
+        { DomainName: name, MaxResultCount: VERIFICATION_LISTING_SIZE },
         LANES.low15,
       )
       if (!ok(listing)) return supplierFailure(listing)
       const items = ((listing.body ?? {}) as { items?: unknown }).items
-      const first = Array.isArray(items)
-        ? (items[0] as { domainName?: unknown; contacts?: unknown } | undefined)
+      // DomainName matches by containing the name (`shop.com` lists
+      // `myshop.com`), in no promised order: only the item that is this
+      // domain, compared whole and case-blind, may give the handle. Anything
+      // else would show — and cache for an hour — another domain's
+      // verification; no exact item is "not found".
+      const own = Array.isArray(items)
+        ? (items as { domainName?: unknown; contacts?: unknown }[]).find(
+            (item) =>
+              typeof item?.domainName === 'string' && item.domainName.trim().toLowerCase() === name,
+          )
         : undefined
-      // DomainName may match by containing the name, so the first item is ours
-      // only when it is this domain; otherwise another domain's verification
-      // would be shown, and cached for an hour.
-      const same =
-        typeof first?.domainName === 'string' && first.domainName.trim().toLowerCase() === name
       // The registrant's handle is used for the next call and nothing else (N13).
-      const handle = same
-        ? (first?.contacts as Record<string, unknown> | undefined)?.Registrant
-        : undefined
+      const handle = (own?.contacts as Record<string, unknown> | undefined)?.Registrant
       if (typeof handle !== 'string' || handle === '') {
         caches.verification.set(key, null)
         return { status: 'ok', data: null, detail: { found: false } }
