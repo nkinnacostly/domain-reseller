@@ -271,6 +271,10 @@ describe('format', () => {
     expect(maskEmail('😀x@example.com')).toBe('😀•••@example.com')
     expect(maskEmail('no-at-sign')).toBe('•••')
     expect(maskEmail(null)).toBe('—')
+    // split_part's edges: the domain stops at a second @, and the first
+    // character comes from the local part only.
+    expect(maskEmail('a@b@c')).toBe('a•••@b')
+    expect(maskEmail('@x.com')).toBe('•••@x.com')
   })
 
   it('masks a phone to its last three digits', () => {

@@ -82,10 +82,12 @@ export function formatUsd(cents: number | null | undefined): string {
  */
 export function maskEmail(email: string | null | undefined): string {
   if (!email) return '—'
-  const at = email.indexOf('@')
-  if (at < 0) return '•••'
-  // One character, not one UTF-16 unit — as SQL's left(local, 1).
-  return `${Array.from(email)[0] ?? ''}•••@${email.slice(at + 1)}`
+  if (!email.includes('@')) return '•••'
+  // split_part(p_email, '@', n): the local part before the first @, the
+  // domain between the first and the second. One character of the local
+  // part, not one UTF-16 unit — as SQL's left(local, 1).
+  const [local = '', domain = ''] = email.split('@')
+  return `${Array.from(local)[0] ?? ''}•••@${domain}`
 }
 
 /** The last three digits only: "•••• 123". */
