@@ -1,4 +1,5 @@
 import { type LocalStatus, renewalTotalKobo, vatKobo } from '@dr/shared'
+import { type LineCost, lineCostUsd, type UsdAmount } from '@/features/checkout/lib/cost'
 import { periodsText } from '@/features/pricing/lib/terms'
 import { BUSINESS } from '@/lib/business'
 
@@ -120,17 +121,17 @@ export function renewalYearsRefusal(
 }
 
 /**
- * What a renewal costs us at the supplier, in USD — for the float pre-flight
- * (FR-C8): the renewal price each year, plus the ICANN fee on generic
- * extensions.
+ * What a renewal costs us at the supplier, in integer cents — for the float
+ * pre-flight (FR-C8) and the line's `order_item_costs` row (ADMIN-SPEC §6):
+ * the renewal price each year, plus the ICANN fee each year on generic
+ * extensions, split out.
  */
 export function renewalCostUsd(
-  cost: { renewUsd: number; isCountryCode: boolean },
+  cost: { renewUsd: UsdAmount; isCountryCode: boolean },
   years: number,
-  icannFeeUsd: number,
-): number {
-  const perYear = cost.renewUsd + (cost.isCountryCode ? 0 : icannFeeUsd)
-  return Math.round(perYear * years * 100) / 100
+  icannFeeUsd: UsdAmount,
+): LineCost {
+  return lineCostUsd({ kind: 'renew', years, ...cost }, icannFeeUsd)
 }
 
 /**

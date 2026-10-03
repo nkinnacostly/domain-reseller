@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getCartView } from '@/features/cart/queries/cart'
 import { deleteLine, findCartId } from '@/features/cart/queries/store'
@@ -5,10 +6,17 @@ import { checkAvailability } from '@/features/search/queries/availability'
 import { env, requirePaymentEnv } from '@/lib/env'
 import { createPaymentLink } from '@/lib/flutterwave'
 import { callGateway } from '@/lib/gateway'
+import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 
 vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
+// Work after the response (the line costs, ADMIN-SPEC §6) is queued here and
+// run by afterResponse(), as Next runs it once the response has gone.
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: vi.fn(),
+}))
 vi.mock('@/features/cart/queries/cart', () => ({ getCartView: vi.fn() }))
 vi.mock('@/features/cart/queries/store', () => ({
   findCartId: vi.fn(),
@@ -83,9 +91,16 @@ function chain(result: unknown) {
   return node
 }
 
-let inserted: { orders: unknown[]; items: unknown[] }
+let inserted: { orders: unknown[]; items: unknown[]; costs: unknown[] }
 /** Every update made to an order row — a cancelled order shows up here. */
 let orderUpdates: unknown[]
+/** The `order_item_costs` insert's answer, or what it throws. */
+let costsAnswer: () => Promise<{ error: unknown }>
+
+/** What `after` was handed, run as Next would once the response has gone. */
+async function afterResponse() {
+  for (const [task] of vi.mocked(after).mock.calls) await (task as () => Promise<void>)()
+}
 /** Per-test answers for the tables the action reads and writes. */
 let answers: {
   tlds: unknown
@@ -159,7 +174,9 @@ let rpcAnswers: Record<string, RpcAnswer> = {}
 
 beforeEach(() => {
   vi.clearAllMocks()
-  inserted = { orders: [], items: [] }
+  inserted = { orders: [], items: [], costs: [] }
+  costsAnswer = async () => ({ error: null })
+  vi.mocked(after).mockImplementation(() => undefined)
 
   vi.mocked(requirePaymentEnv).mockReturnValue({
     secretKey: 'FLWSECK_TEST-x-X',
@@ -235,6 +252,14 @@ beforeEach(() => {
           insert: async (rows: unknown) => {
             inserted.items.push(rows)
             return { error: answers.itemsError }
+          },
+        }
+      }
+      if (table === 'order_item_costs') {
+        return {
+          insert: async (rows: unknown) => {
+            inserted.costs.push(rows)
+            return costsAnswer()
           },
         }
       }
@@ -995,6 +1020,7 @@ describe('placeOrder — SSL certificates (FR-SSL-6)', () => {
     expect(checkAvailability).not.toHaveBeenCalled()
     expect(inserted.items[0]).toEqual([
       {
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/),
         order_id: 'order-1',
         item_type: 'ssl',
         ssl_product_code: '351',
@@ -1068,5 +1094,143 @@ describe('placeOrder — SSL certificates (FR-SSL-6)', () => {
       error: expect.stringContaining("couldn't check your certificates"),
     })
     expect(inserted.orders).toHaveLength(0)
+  })
+})
+
+describe('placeOrder — what each line cost us (ADMIN-SPEC §6, D13)', () => {
+  // A .com for a year, an .ai for its two-year first term, and a certificate.
+  const AI_LINE = {
+    ...LINE,
+    id: 'line-ai',
+    domain: 'getpaid.ai',
+    tld: 'ai',
+    periodYears: 2,
+    privacyOffered: false,
+    payableKobo: 27_300_000,
+    renewalKobo: 13_650_000,
+    minPeriod: 2,
+    registerPeriods: [2, 4, 6, 8, 10],
+    renewYears: 2,
+  }
+  const CERT = {
+    id: 'ssl-1',
+    productCode: '351',
+    commonName: 'getpaid.com',
+    quotedTotalKobo: 1_350_000,
+    status: 'current',
+    payableKobo: 1_350_000,
+    renewalKobo: 1_350_000,
+  }
+  const MIXED_TOTAL = 32_752_500
+
+  beforeEach(() => {
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      lines: [LINE, AI_LINE],
+      certificates: [CERT],
+      totals: { ...TOTALS, totalKobo: MIXED_TOTAL },
+      vatPct: 7.5,
+      lockMinutes: 30,
+    } as never)
+    vi.mocked(checkAvailability).mockImplementation(async (stems, [tld]) => ({
+      ok: true,
+      results: stems.map((name) => ({
+        name,
+        tld: tld ?? '',
+        domain: `${name}.${tld}`,
+        status: 'available' as const,
+      })),
+    }))
+    // As PostgREST answers `::text`: the database's own decimal digits.
+    answers.tlds = [
+      { name: 'com', register_usd: '11.3100', renew_usd: '11.5100', is_country_code: false },
+      { name: 'ai', register_usd: '99.9000', renew_usd: '109.9000', is_country_code: true },
+    ]
+    answers.settings = { icann_fee_usd: '0.2000' }
+    answers.ssl = [{ product_code: '351', create_usd: '6.99' }]
+  })
+
+  const place = () => placeOrder({ ...INPUT, expectedTotalKobo: MIXED_TOTAL })
+
+  it('records each line in integer cents that add up, to the cent, to what the float was checked against', async () => {
+    // $11.31 + $0.20 ICANN, .ai's two years at $99.90, the certificate's $6.99: $218.30.
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 218.3 })
+    expect((await place())?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 218.29 })
+    await place()
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({ float_check: 'covered' }),
+      expect.objectContaining({ float_check: 'shortfall_test_mode' }),
+    ])
+
+    await afterResponse()
+    const ids = (inserted.items[0] as { id: string }[]).map((row) => row.id)
+    expect(new Set(ids).size).toBe(3)
+    expect(inserted.costs[0]).toEqual([
+      { order_item_id: ids[0], supplier_cost_cents: 1131, icann_fee_cents: 20 },
+      { order_item_id: ids[1], supplier_cost_cents: 19_980, icann_fee_cents: 0 },
+      { order_item_id: ids[2], supplier_cost_cents: 699, icann_fee_cents: 0 },
+    ])
+    const recorded = (inserted.costs[0] as Record<string, number>[]).reduce(
+      (sum, row) => sum + (row.supplier_cost_cents ?? 0) + (row.icann_fee_cents ?? 0),
+      0,
+    )
+    expect(recorded).toBe(21_830)
+  })
+
+  it('writes the costs only once the response has gone — the customer never waits on them', async () => {
+    const result = await place()
+    expect(result?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(after).toHaveBeenCalledTimes(1)
+    expect(inserted.costs).toEqual([])
+    await afterResponse()
+    expect(inserted.costs).toHaveLength(1)
+  })
+
+  it('keeps the order as it was when the costs cannot be recorded, and logs the order id only (N13)', async () => {
+    const error = vi.spyOn(logger, 'error')
+    costsAnswer = async () => ({
+      error: { code: '42501', message: 'permission denied for table order_item_costs' },
+    })
+    expect((await place())?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    await afterResponse()
+    expect(error).toHaveBeenCalledWith(
+      { orderId: 'order-1', code: '42501' },
+      'line costs not recorded',
+    )
+
+    costsAnswer = () => Promise.reject(new Error('fetch failed'))
+    vi.mocked(after).mockClear()
+    expect((await place())?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    await expect(afterResponse()).resolves.toBeUndefined()
+    expect(error).toHaveBeenLastCalledWith(
+      { orderId: 'order-1', code: undefined },
+      'line costs not recorded',
+    )
+    // Nothing was cancelled or rewritten.
+    expect(orderUpdates).toEqual([])
+    error.mockRestore()
+  })
+
+  it('places the order even when work after the response cannot be scheduled', async () => {
+    vi.mocked(after).mockImplementation(() => {
+      throw new Error('`after` was called outside a request scope')
+    })
+    expect((await place())?.data).toEqual({ redirectTo: 'https://checkout.test/pay/1' })
+    expect(orderUpdates).toEqual([])
+    expect(inserted.costs).toEqual([])
+  })
+
+  it('records nothing for lines that were never written', async () => {
+    answers.itemsError = { message: 'insert failed' }
+    expect((await place())?.data).toEqual({ error: expect.stringMatching(/couldn't create/) })
+    expect(after).not.toHaveBeenCalled()
+  })
+
+  it('puts no cost on the order lines, which the customer can read', async () => {
+    await place()
+    for (const row of inserted.items[0] as Record<string, unknown>[]) {
+      expect(Object.keys(row).filter((key) => /cost|cents|usd|margin/i.test(key))).toEqual([])
+    }
   })
 })

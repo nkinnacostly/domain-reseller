@@ -160,12 +160,26 @@ describe('addYears', () => {
 })
 
 describe('renewalCostUsd (FR-C8)', () => {
-  it('adds the ICANN fee each year on generic extensions', () => {
-    expect(renewalCostUsd({ renewUsd: 11.51, isCountryCode: false }, 2, 0.2)).toBe(23.42)
+  it('adds the ICANN fee each year on generic extensions, split out', () => {
+    // $11.51 a year for two years, and $0.20 a year for ICANN: $23.42.
+    expect(renewalCostUsd({ renewUsd: 11.51, isCountryCode: false }, 2, 0.2)).toEqual({
+      supplierCents: 2302,
+      icannCents: 40,
+    })
   })
 
   it('leaves the ICANN fee off country-code extensions', () => {
-    expect(renewalCostUsd({ renewUsd: 30, isCountryCode: true }, 3, 0.2)).toBe(90)
+    expect(renewalCostUsd({ renewUsd: 30, isCountryCode: true }, 3, 0.2)).toEqual({
+      supplierCents: 9000,
+      icannCents: 0,
+    })
+  })
+
+  it('reads the catalogue’s decimal text exactly (.ai renews two years at a time)', () => {
+    expect(renewalCostUsd({ renewUsd: '99.9000', isCountryCode: true }, 2, '0.2000')).toEqual({
+      supplierCents: 19_980,
+      icannCents: 0,
+    })
   })
 })
 

@@ -1,13 +1,20 @@
 import { userMessageFor } from '@dr/shared'
+import { after } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { env, requirePaymentEnv } from '@/lib/env'
 import { createPaymentLink } from '@/lib/flutterwave'
 import { callGateway } from '@/lib/gateway'
+import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 
 vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
+// The lines' costs (ADMIN-SPEC §6) are written after the response: queued here.
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: vi.fn(),
+}))
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
 vi.mock('@/lib/flutterwave', () => ({ createPaymentLink: vi.fn() }))
 vi.mock('@/lib/gateway', () => ({ callGateway: vi.fn() }))
@@ -80,14 +87,22 @@ let answers: {
   lineError: unknown
   defaultContact: unknown
 }
-let inserted: { orders: unknown[]; items: unknown[] }
+let inserted: { orders: unknown[]; items: unknown[]; costs: unknown[] }
 let orderUpdates: unknown[]
 let rateLimited: { data: unknown; error: unknown }
+let costsAnswer: () => Promise<{ error: unknown }>
+
+/** What `after` was handed, run as Next would once the response has gone. */
+async function afterResponse() {
+  for (const [task] of vi.mocked(after).mock.calls) await (task as () => Promise<void>)()
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
   guard.answer = null
-  inserted = { orders: [], items: [] }
+  inserted = { orders: [], items: [], costs: [] }
+  costsAnswer = async () => ({ error: null })
+  vi.mocked(after).mockImplementation(() => undefined)
   orderUpdates = []
   rateLimited = { data: true, error: null }
   answers = {
@@ -176,6 +191,14 @@ beforeEach(() => {
           insert: async (rows: unknown) => {
             inserted.items.push(rows)
             return { error: answers.lineError }
+          },
+        }
+      }
+      if (table === 'order_item_costs') {
+        return {
+          insert: async (rows: unknown) => {
+            inserted.costs.push(rows)
+            return costsAnswer()
           },
         }
       }
@@ -389,6 +412,7 @@ describe('placeRenewals — the order and the payment', () => {
     expect(inserted.items).toEqual([
       [
         {
+          id: expect.stringMatching(/^[0-9a-f-]{36}$/),
           order_id: 'order-1',
           item_type: 'renew',
           domain_id: COM_ID,
@@ -401,6 +425,7 @@ describe('placeRenewals — the order and the payment', () => {
           renewal_kobo: COM_KOBO,
         },
         {
+          id: expect.stringMatching(/^[0-9a-f-]{36}$/),
           order_id: 'order-1',
           item_type: 'renew',
           domain_id: NG_ID,
@@ -475,5 +500,56 @@ describe('placeRenewals — the order and the payment', () => {
       error: expect.stringMatching(/couldn't reach our payment provider/),
     })
     expect(orderUpdates).toEqual([{ status: 'cancelled' }])
+  })
+})
+
+describe('placeRenewals — what each line cost us (ADMIN-SPEC §6, D13)', () => {
+  beforeEach(() => {
+    // As PostgREST answers `::text`: the database's own decimal digits.
+    answers.costs = [
+      { name: 'com', renew_usd: '11.5100', is_country_code: false },
+      { name: 'ng', renew_usd: '6.5000', is_country_code: true },
+    ]
+    answers.settings = { icann_fee_usd: '0.2000' }
+  })
+
+  it('records each line, ICANN apart, adding up to the float check to the cent', async () => {
+    // .com: two years at $11.51 and $0.20 ICANN a year; .ng: two at $6.50. $36.42.
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 36.42 })
+    await placeRenewals(INPUT)
+    vi.mocked(callGateway).mockResolvedValue({ balanceUsd: 36.41 })
+    await placeRenewals(INPUT)
+    expect(inserted.orders).toEqual([
+      expect.objectContaining({ float_check: 'covered' }),
+      expect.objectContaining({ float_check: 'shortfall_test_mode' }),
+    ])
+    expect(inserted.costs).toEqual([])
+    await afterResponse()
+    const ids = (inserted.items[0] as { id: string; domain: string }[]).map((row) => row.id)
+    expect(inserted.costs[0]).toEqual([
+      { order_item_id: ids[0], supplier_cost_cents: 2302, icann_fee_cents: 40 },
+      { order_item_id: ids[1], supplier_cost_cents: 1300, icann_fee_cents: 0 },
+    ])
+  })
+
+  it('keeps the order as it was when the costs cannot be recorded, logging the order id only', async () => {
+    const error = vi.spyOn(logger, 'error')
+    costsAnswer = () => Promise.reject(new Error('fetch failed'))
+    expect((await placeRenewals(INPUT))?.data).toEqual({
+      redirectTo: 'https://checkout.test/pay/1',
+    })
+    await expect(afterResponse()).resolves.toBeUndefined()
+    expect(error).toHaveBeenCalledWith(
+      { orderId: 'order-1', code: undefined },
+      'line costs not recorded',
+    )
+    expect(orderUpdates).toEqual([])
+    error.mockRestore()
+  })
+
+  it('records nothing when the lines were never written', async () => {
+    answers.lineError = { code: '23514', message: 'order_items_renewal_names_domain' }
+    await placeRenewals(INPUT)
+    expect(after).not.toHaveBeenCalled()
   })
 })
