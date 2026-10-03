@@ -444,9 +444,17 @@ const PLAIN_METHODS: ReadonlySet<string> = new Set([
   'then',
 ])
 
-/** `admin_side.orders.test_mode` or `detail->>kind` → each name in the path. */
+/**
+ * Every name in a column string: `admin_side.orders.test_mode`,
+ * `detail->>'kind'`, and PostgREST's related order `admin_side(registrant)`,
+ * which sorts by a parent's column. Anything not a letter, digit or `_` ends a
+ * name — dots, arrows, brackets, quotes, casts — so no separator hides one.
+ */
 function pathNames(column: string): string[] {
-  return column.split(/->>?|\./).map((part) => part.trim().replace(/^["']|["']$/g, ''))
+  return column
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/)
+    .filter((name) => name !== '')
 }
 
 /**

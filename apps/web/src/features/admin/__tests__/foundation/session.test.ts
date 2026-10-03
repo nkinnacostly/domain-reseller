@@ -271,6 +271,11 @@ describe('adminDb', () => {
       ['a private column', 'order', ['email']],
       ['a quoted JSON key', 'eq', ["detail->>'phone'", '1']],
       ['a negated private column', 'not', ['full_name', 'is', null]],
+      // PostgREST's related order sorts by the embedded parent's column.
+      ["the parent's private column, as a related order", 'order', ['admin_side(registrant)']],
+      ["a JSON path in the parent's private column", 'order', ['admin_side(registrant->>email)']],
+      ['a private column behind a cast', 'eq', ['registrant::text', 'x']],
+      ['a private column in capitals', 'order', ['REGISTRANT']],
     ])('refuses a filter or an order on %s', async (_, method, args) => {
       const { query, calls } = await read()
       const sent = calls.length
