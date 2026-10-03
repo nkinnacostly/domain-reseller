@@ -25,7 +25,21 @@ export type Reply = {
 
 export type Handler = (read: Read) => Reply | undefined
 
-const CHAIN = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'like', 'not', 'is', 'order', 'range']
+const CHAIN = [
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'in',
+  'like',
+  'not',
+  'is',
+  'order',
+  'range',
+  'limit',
+]
 
 /** Fakes the service client adminDb builds; returns every read it was asked for. */
 export function fakeService(handler: Handler): Read[] {

@@ -211,7 +211,9 @@ describe('the sections', () => {
     service({ data: [] })
     render(await ListsSection({ admin: await principal(), side: 'live' }))
     expect(screen.getByText('No paid orders on this side yet.')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Audit log' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Audit log' })).toHaveTextContent(
+      'Nothing has been recorded yet.',
+    )
   })
 })
 
