@@ -179,7 +179,7 @@ function RevenueBody({
 
 const naira = (kobo: number) => formatNaira(kobo)
 
-/** The orders paid in a bucket, over the days it covers inside the dates. */
+/** The orders list over the days a bucket covers inside the dates. */
 function periodOrdersHref(bucket: string, params: Pick<MoneyParams, 'from' | 'to' | 'grain'>) {
   const span = bucketSpan(bucket, params.grain, params)
   return ordersHref({ from: span.start, to: span.end })
@@ -187,8 +187,9 @@ function periodOrdersHref(bucket: string, params: Pick<MoneyParams, 'from' | 'to
 
 /**
  * The table's columns, each saying whether VAT is in it. A period links to
- * the orders paid in it (§9's link contract), which also gives the table's
- * scroll box something to focus when it is wider than the screen.
+ * the orders list over its days (§9's link contract; that list goes by when
+ * an order was placed), which also gives the table's scroll box something
+ * to focus when it is wider than the screen.
  */
 export function revenueColumns(
   params: Pick<MoneyParams, 'from' | 'to' | 'grain'>,

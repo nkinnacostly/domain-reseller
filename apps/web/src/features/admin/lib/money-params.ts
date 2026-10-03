@@ -113,7 +113,7 @@ export function grainHref(params: Pick<MoneyParams, 'from' | 'to'>, grain: Grain
 const ORDER_KINDS = ['register', 'renew', 'transfer', 'ssl']
 
 /**
- * The orders behind a figure, by §9's link contract: `/admin/orders` with
+ * The orders list over a figure's days, by §9's link contract: `/admin/orders` with
  * `?from=&to=`, and `?kind=` for a known line type.
  */
 export function ordersHref(range: { from: string; to: string }, kind?: string | null): string {

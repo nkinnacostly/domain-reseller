@@ -175,7 +175,7 @@ describe('sales, cash and refunds', () => {
       '3 Oct 2026',
     ])
     expect(rows[1]?.textContent).toContain('₦10,750')
-    // Each period opens the orders paid in it (§9's link contract).
+    // Each period opens the orders list over its days (§9's link contract).
     expect(within(table).getByRole('link', { name: '3 Oct 2026' })).toHaveAttribute(
       'href',
       '/admin/orders?from=2026-10-03&to=2026-10-03',
