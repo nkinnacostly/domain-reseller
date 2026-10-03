@@ -11,6 +11,7 @@ import {
 } from './support/accounts.mjs'
 import {
   type AdminUser,
+  animationsDone,
   codeAfter,
   expect,
   SIGN_IN_PROJECTS,
@@ -159,6 +160,8 @@ test.describe('refunds, as a test administrator', () => {
     await expect(dialog).toBeVisible()
     await expect(dialog.getByText(seeded.orderNumber, { exact: true })).toBeVisible()
     await expect(dialog.getByText('Over the', { exact: false })).toBeVisible()
+    // Read once the dialog has finished opening: half-way through its fade, colours are not yet its own.
+    await animationsDone(page)
     expect((await axe(page)).violations).toEqual([])
 
     // Refused first: a wrong code reaches no wrapper — nothing changes, nothing is written.
@@ -185,8 +188,13 @@ test.describe('refunds, as a test administrator', () => {
     ])
     expect(rows).toHaveLength(1)
 
-    // The page is read again: the new status and its event are shown.
-    await dialog.getByRole('button', { name: 'Close' }).click()
+    // The page is read again: the new status and its event are shown. An approved refund
+    // offers no Approve, so the re-read may have closed the dialog before Close is pressed.
+    await dialog
+      .getByRole('button', { name: 'Close' })
+      .click({ timeout: 5_000 })
+      .catch(() => undefined)
+    await expect(dialog).toBeHidden()
     await expect(page.getByText('Queued', { exact: true }).first()).toBeVisible()
     await expect(page.getByText(`Approved · ${admin.label}`)).toBeVisible()
     await expect(page.getByRole('button', { name: 'Approve refund' })).toHaveCount(0)

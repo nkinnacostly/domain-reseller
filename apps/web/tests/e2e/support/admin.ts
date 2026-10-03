@@ -28,7 +28,10 @@ export const test = base.extend<{ noErrorContext: undefined }>({
           : outputPath(...segments)
       await use(undefined)
     },
-    { auto: true },
+    // Set up for beforeAll hooks too, as Playwright's own artifact fixture is:
+    // a spec that signs in in beforeAll fails there, before any test fixture.
+    // Playwright reads this value at run time; its types only say `boolean`.
+    { auto: 'all-hooks-included' as unknown as boolean },
   ],
 })
 
@@ -63,6 +66,22 @@ export async function signInAsAdmin(page: Page, admin: AdminUser, next = '/admin
   await verify.getByRole('button', { name: 'Continue' }).click()
   // The landing address as itself: a `?` in `next` is a query, not a pattern.
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(next)}$`))
+}
+
+/**
+ * Waits for every animation on the page that ends — a dialog's fade and zoom
+ * in, say — to end, so axe reads the colours a person sees once it has
+ * opened, not a frame half-way. Endless ones (a skeleton's pulse) are left.
+ */
+export async function animationsDone(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  )
 }
 
 /** The 30-second window a time falls in. */
