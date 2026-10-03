@@ -39,6 +39,10 @@ export function TableToolbar({
               maxLength={120}
               defaultValue={defaultValue}
               placeholder={placeholder}
+              // N13: the browser refuses an email here, so it never reaches the URL.
+              pattern="[^@]*"
+              title="Search by reference, not an email address."
+              autoComplete="off"
               className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-sm"
             />
           </label>

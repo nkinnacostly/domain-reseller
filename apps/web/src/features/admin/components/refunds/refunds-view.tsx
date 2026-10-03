@@ -102,7 +102,9 @@ export async function RefundsView({ searchParams }: { searchParams: Promise<Sear
     return listHref(BASE, params, REFUND_LIST, {
       ...rest,
       ...(changes.reasons ? { page: 1 } : {}),
-      extra: { reason: nextReasons.join(',') || null, q: q || null },
+      // Only the normalised order number travels on; a query that is not one
+      // (an email pasted by mistake) is never copied into another link (N13).
+      extra: { reason: nextReasons.join(',') || null, q: orderNumber },
     })
   }
   const filtered =
@@ -265,7 +267,7 @@ export async function RefundsView({ searchParams }: { searchParams: Promise<Sear
           {reasons.length > 0 ? (
             <input type="hidden" name="reason" value={reasons.join(',')} />
           ) : null}
-          {q ? <input type="hidden" name="q" value={q} /> : null}
+          {orderNumber ? <input type="hidden" name="q" value={orderNumber} /> : null}
           <div>
             <label htmlFor="refunds-from" className="text-sm font-medium text-foreground">
               Created from

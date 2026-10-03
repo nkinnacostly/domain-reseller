@@ -203,6 +203,17 @@ describe('/admin/refunds', () => {
     render(await RefundsView({ searchParams: Promise.resolve({ q: 'someone@example.com' }) }))
     expect(screen.getByRole('status')).toHaveTextContent('Search by order number only')
     expect(listRefunds).not.toHaveBeenCalled()
+    // N13: the email is never copied into a filter, pager or form (ADMIN-SPEC §5.2).
+    for (const link of document.querySelectorAll('a[href]')) {
+      expect(link.getAttribute('href')).not.toMatch(/@|%40/)
+    }
+    for (const field of document.querySelectorAll('input[type="hidden"]')) {
+      expect((field as HTMLInputElement).value).not.toContain('@')
+    }
+    expect(screen.getByRole('searchbox', { name: 'Order number' })).toHaveAttribute(
+      'pattern',
+      '[^@]*',
+    )
 
     vi.mocked(listRefunds).mockResolvedValue({ ok: true, rows: [], total: 0 })
     render(await RefundsView({ searchParams: Promise.resolve({ q: '1234' }) }))
