@@ -32,6 +32,13 @@ keys; writes are only `rpc('admin_*')`; the service client is imported only by
   another embed (the service key would follow `user_id` to `profiles`), an alias, a cast, a JSON
   path, `*`, a name in `PRIVATE_COLUMNS` — throws. Select once: the builder refuses a second
   `select()`. Orders are read through `admin_orders_v`, which has no registrant or contacts.
+- **The builder `select()` hands back is read-only.** Filter, order and page it (`eq`, `ilike`,
+  `in`, `not`, `or`, `match`, `order`, `range`, `limit`, `single`, …) and await it; every other
+  method throws, its `url`, `method` and `headers` read as undefined, and nothing on it can be
+  set. A filter or order column — an embedded path, a JSON path, a `match()` key or an `or()`
+  condition included — is held to `PRIVATE_COLUMNS` like the select.
+- **Test admins** see a domain's contacts, or send an email again, only for a test-mode row that
+  belongs to an e2e account (`reserved_target`); live targets refuse them as `TEST_ADMIN`.
 - **Wrapper errors.** Call `adminAccessError(error.message)` on an RPC error and throw what it
   returns. A recognised admin code (`admin:role`, `NOT_HELD`, …) becomes an `AdminRefusal`: the
   call was refused, nothing changed, and `ConfirmAction` takes a new request key. Anything else
