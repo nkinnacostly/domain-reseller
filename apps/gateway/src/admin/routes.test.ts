@@ -479,6 +479,85 @@ describe('the registry', () => {
       await read(await request('/supplier/domains/mydomainshubtest1.com/verification?side=test')),
     ).toEqual({ ok: true, data: null })
     expect(calls.map((call: SupplierCall) => call.path)).toEqual(['/domains'])
+    // The whole listing was read, so "not found" is settled, and kept for the hour.
+    await request('/supplier/domains/mydomainshubtest1.com/verification?side=test')
+    expect(calls).toHaveLength(1)
+  })
+
+  /** A listing page of near matches for mydomainshubtest1.com, the exact item placed if asked. */
+  const nearMatches = (count: number, from: number) =>
+    Array.from({ length: count }, (_, at) => ({
+      domainName: `near${from + at}mydomainshubtest1.com`,
+      contacts: { Registrant: `D-NEAR${from + at}` },
+    }))
+
+  it('reads on to the page that holds this domain, through the same low lane', async () => {
+    const { request, calls } = setup(
+      {},
+      {
+        '/domains': (call: SupplierCall) => {
+          const skip = Number(call.params?.SkipCount)
+          const items =
+            skip === 0
+              ? nearMatches(25, 0)
+              : [
+                  ...nearMatches(3, 25),
+                  { domainName: 'mydomainshubtest1.com', contacts: { Registrant: 'D-PAGE2' } },
+                ]
+          return { status: 200, body: { totalCount: 29, items } }
+        },
+      },
+    )
+    const body = await read(
+      await request('/supplier/domains/mydomainshubtest1.com/verification?side=test'),
+    )
+    expect(body.data).toMatchObject({ name: 'mydomainshubtest1.com', isVerified: true })
+    expect(calls.map((call: SupplierCall) => [call.path, call.params?.SkipCount])).toEqual([
+      ['/domains', 0],
+      ['/domains', 25],
+      ['/contacts/verification/check', undefined],
+    ])
+    for (const call of calls) expect(call.lane).toEqual({ priority: 'low', waitMs: 15_000 })
+    expect(calls[2]?.params).toEqual({ HandleCode: 'D-PAGE2' })
+  })
+
+  it('never keeps "not found" from a listing it did not read to the end', async () => {
+    const { request, calls, results } = setup(
+      {},
+      {
+        '/domains': (call: SupplierCall) => ({
+          status: 200,
+          body: { totalCount: 500, items: nearMatches(25, Number(call.params?.SkipCount)) },
+        }),
+      },
+    )
+    const path = '/supplier/domains/mydomainshubtest1.com/verification?side=test'
+    expect(await read(await request(path))).toEqual({ ok: true, data: null })
+    // A few pages, then it stops: four calls through the slots, never the whole account.
+    expect(calls.map((call: SupplierCall) => call.params?.SkipCount)).toEqual([0, 25, 50, 75])
+    expect(results.at(-1)?.[3]).toEqual({ found: false, settled: false })
+    await request(path)
+    expect(calls).toHaveLength(8)
+  })
+
+  it('stops at a short page short of the count, and keeps nothing', async () => {
+    const { request, calls } = setup(
+      {},
+      {
+        '/domains': (call: SupplierCall) => ({
+          status: 200,
+          body: {
+            totalCount: 60,
+            items: nearMatches(Number(call.params?.SkipCount) === 0 ? 25 : 10, 0),
+          },
+        }),
+      },
+    )
+    const path = '/supplier/domains/mydomainshubtest1.com/verification?side=test'
+    expect(await read(await request(path))).toEqual({ ok: true, data: null })
+    expect(calls).toHaveLength(2)
+    await request(path)
+    expect(calls).toHaveLength(4)
   })
 
   it('has no verification for a name not in our account', async () => {

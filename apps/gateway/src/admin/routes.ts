@@ -137,11 +137,14 @@ const SIDE_OF: Record<WriteTarget, AdminSide> = { ote: 'test', production: 'live
 const ORDER_TYPE: Record<AdminPriceOp, number> = { register: 1, renew: 2, transfer: 3, restore: 4 }
 const DAY_MS = 86_400_000
 /**
- * How many listing items a verification reads to find its own domain: the
- * supplier's DomainName filter also returns names that contain it, so the
- * exact one need not be first (§4.3).
+ * How many listing items a verification reads a page to find its own domain:
+ * the supplier's DomainName filter also returns names that contain it, so the
+ * exact one need not be first (§4.3). It reads on, page by page through the
+ * slots like any call, up to VERIFICATION_LISTING_PAGES; a listing longer
+ * than that answers null uncached, since "not found" was never established.
  */
 const VERIFICATION_LISTING_SIZE = 25
+const VERIFICATION_LISTING_PAGES = 4
 const LANES = {
   normal10: { priority: 'normal', waitMs: 10_000 },
   normal12: { priority: 'normal', waitMs: 12_000 },
@@ -604,29 +607,49 @@ export function createAdminRouter(deps: AdminRouterDeps) {
       if (cached !== undefined) return { status: 'ok', data: cached, detail: { cached: true } }
       const supplier = deps.targetSupplier()
       if (!supplier) return refused(503, 'WRITES_OFF', 'No supplier key for this side')
-      const listing = await supplier.get(
-        '/domains',
-        { DomainName: name, MaxResultCount: VERIFICATION_LISTING_SIZE },
-        LANES.low15,
-      )
-      if (!ok(listing)) return supplierFailure(listing)
-      const items = ((listing.body ?? {}) as { items?: unknown }).items
       // DomainName matches by containing the name (`shop.com` lists
       // `myshop.com`), in no promised order: only the item that is this
       // domain, compared whole and case-blind, may give the handle. Anything
       // else would show — and cache for an hour — another domain's
-      // verification; no exact item is "not found".
-      const own = Array.isArray(items)
-        ? (items as { domainName?: unknown; contacts?: unknown }[]).find(
-            (item) =>
-              typeof item?.domainName === 'string' && item.domainName.trim().toLowerCase() === name,
-          )
-        : undefined
+      // verification. No exact item is "not found" only once the whole
+      // listing was read.
+      let own: { domainName?: unknown; contacts?: unknown } | undefined
+      let seen = 0
+      let complete = false
+      for (let page = 0; page < VERIFICATION_LISTING_PAGES && !own && !complete; page++) {
+        const listing = await supplier.get(
+          '/domains',
+          {
+            DomainName: name,
+            SkipCount: page * VERIFICATION_LISTING_SIZE,
+            MaxResultCount: VERIFICATION_LISTING_SIZE,
+          },
+          LANES.low15,
+        )
+        if (!ok(listing)) return supplierFailure(listing)
+        const body = (listing.body ?? {}) as { items?: unknown; totalCount?: unknown }
+        const items = Array.isArray(body.items)
+          ? (body.items as { domainName?: unknown; contacts?: unknown }[])
+          : []
+        own = items.find(
+          (item) =>
+            typeof item?.domainName === 'string' && item.domainName.trim().toLowerCase() === name,
+        )
+        seen += items.length
+        const short = items.length < VERIFICATION_LISTING_SIZE
+        // Read to the end: every item the count promised, or, with no count,
+        // a page shorter than asked. A short page short of the count ends
+        // the read too, incomplete.
+        complete = typeof body.totalCount === 'number' ? seen >= body.totalCount : short
+        if (short) break
+      }
       // The registrant's handle is used for the next call and nothing else (N13).
       const handle = (own?.contacts as Record<string, unknown> | undefined)?.Registrant
       if (typeof handle !== 'string' || handle === '') {
-        caches.verification.set(key, null)
-        return { status: 'ok', data: null, detail: { found: false } }
+        // An item with no handle is settled; a listing not read to its end is not.
+        const settled = own !== undefined || complete
+        if (settled) caches.verification.set(key, null)
+        return { status: 'ok', data: null, detail: { found: false, settled } }
       }
       const reply = await supplier.get(
         '/contacts/verification/check',
