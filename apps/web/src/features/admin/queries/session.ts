@@ -369,8 +369,11 @@ export const ADMIN_TABLES = {
   tlds: { side: PUBLIC, from: (db: Service) => db.from('tlds') },
   ssl_products: { side: PUBLIC, from: (db: Service) => db.from('ssl_products') },
   nameserver_presets: { side: PUBLIC, from: (db: Service) => db.from('nameserver_presets') },
+  // Drafts hold only a host's nameservers, source and check result — no
+  // customer data — so a test admin may read them (ADMIN-SPEC §9 B13: the
+  // Settings e2e runs as one; owner decision, 3 Oct 2026).
   nameserver_preset_drafts: {
-    side: GLOBAL,
+    side: PUBLIC,
     from: (db: Service) => db.from('nameserver_preset_drafts'),
   },
   fx_rates: { side: PUBLIC, from: (db: Service) => db.from('fx_rates') },

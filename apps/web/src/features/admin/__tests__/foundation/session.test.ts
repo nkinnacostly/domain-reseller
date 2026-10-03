@@ -344,7 +344,7 @@ describe('adminDb', () => {
       expect(calls).toContainEqual(['eq', 'test_actor', true])
     })
 
-    it.each(['ops_settings', 'service_heartbeats', 'nameserver_preset_drafts'] as const)(
+    it.each(['ops_settings', 'service_heartbeats'] as const)(
       'refuses %s, which has no side and is not public',
       async (table) => {
         recordingService()
@@ -357,9 +357,10 @@ describe('adminDb', () => {
       'tlds',
       'ssl_products',
       'nameserver_presets',
+      'nameserver_preset_drafts',
       'fx_rates',
       'pricing_settings',
-    ] as const)('reads %s, which the storefront already shows', async (table) => {
+    ] as const)('reads %s, which holds no customer data', async (table) => {
       recordingService()
       const db = adminDb(await principal({ testOnly: true }), 'test')
       expect(() => db.from(table).select('id')).not.toThrow()
@@ -385,7 +386,14 @@ describe('adminDb', () => {
       .filter(([, entry]) => entry.side.kind === 'global' && entry.side.publicSafe)
       .map(([name]) => name)
     expect(publicSafe.sort()).toEqual(
-      ['fx_rates', 'nameserver_presets', 'pricing_settings', 'ssl_products', 'tlds'].sort(),
+      [
+        'fx_rates',
+        'nameserver_preset_drafts',
+        'nameserver_presets',
+        'pricing_settings',
+        'ssl_products',
+        'tlds',
+      ].sort(),
     )
   })
 })
