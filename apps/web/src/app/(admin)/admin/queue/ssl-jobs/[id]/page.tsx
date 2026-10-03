@@ -1,19 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { SslJobView } from '@/features/admin/components/queue/views'
 import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
 
 export const metadata: Metadata = { title: 'Certificate job' }
 
-/** Package B4 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminQueueSslJobsDetailPage() {
+/** One certificate job and what the supplier said (§5.2 B4). */
+export default function AdminQueueSslJobPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Certificate job"
-        description="One certificate job and what the supplier said."
-        parent={{ label: 'Queue', href: '/admin/queue' }}
-      />
+      <SslJobView params={params} />
     </Suspense>
   )
 }

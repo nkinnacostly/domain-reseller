@@ -1,18 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { JobsView, type Search } from '@/features/admin/components/queue/views'
 import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
 
 export const metadata: Metadata = { title: 'Queue' }
 
-/** Package B4 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminQueuePage() {
+/** Registration, renewal, transfer and settings jobs (docs/ADMIN-SPEC.md §5.2 B4). */
+export default function AdminQueuePage({ searchParams }: { searchParams: Promise<Search> }) {
   return (
     <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Queue"
-        description="Registration, renewal, transfer, settings and certificate jobs."
-      />
+      <JobsView searchParams={searchParams} />
     </Suspense>
   )
 }
