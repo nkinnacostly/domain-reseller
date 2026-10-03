@@ -731,6 +731,15 @@ begin
   end loop;
   v_passed := v_passed + 1;
 
+  -- ── 15. The test-only helpers are service-role writers to hosted data (N12,
+  -- §2.7): each refuses anything but an e2e user's test row, and each purge
+  -- leaves every other row alone.
+  perform pg_temp.expect_raise(format('select public.seed_test_failed_email(%L)', u_real), '%only for an e2e%');
+  if public.seed_test_failed_email(u_none) is null then raise exception 'FAILED 15: seeding an e2e user''s email'; end if;
+  perform pg_temp.expect_raise(format('select public.hold_test_refund(%L)', gen_random_uuid()),
+                               '%only a test refund of an e2e user%');
+  select * into v_ord from pg_temp.paid_line(u_none, false, 'm41-h1-' || v_tag || '.com', 'failed', 'h1' || v_tag);
+  insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status)
   raise notice 'migration 41: % checks passed', v_passed;
 end;
 $$;

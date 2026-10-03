@@ -153,6 +153,7 @@ declare
   v_row      record;
   v_want     text;
   v_n        integer := 0;
+  v_rank     integer;
   v_email_id uuid;
   v_passed   integer := 0;
 begin
@@ -1033,6 +1034,129 @@ begin
      or has_function_privilege('authenticated', 'public.activate_fx_rate(uuid, uuid)', 'execute')
      or not has_function_privilege('service_role', 'public.activate_fx_rate(uuid, uuid)', 'execute') then
     raise exception 'FAILED 30: activate_fx_rate grants';
+  end if;
+  -- The identity sequences too: Supabase's default privileges would give them to the API roles.
+  foreach v_text in array array['admin_changes', 'admin_audit_log', 'flw_refund_checks', 'float_topups',
+                                'supplier_ledger_revisions'] loop
+    v_sql := pg_get_serial_sequence('public.' || v_text, 'id');
+    if v_sql is null
+       or has_sequence_privilege('anon', v_sql, 'usage, select, update')
+       or has_sequence_privilege('authenticated', v_sql, 'usage, select, update') then
+      raise exception 'FAILED 30: the sequence of % is open to the API roles', v_text;
+    end if;
+  end loop;
+  v_passed := v_passed + 1;
+
+  -- ── 31. A test admin reveals, and sends again, nothing of a real account's —
+  -- even on the test side (reserved_target, D15). Its refusals keep nothing.
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, registrant)
+  values (u_real, 'm40-w-' || v_tag || '.com', 'com', 'registration', true, 'active',
+          jsonb_build_object('name', 'Real Registrant', 'country', 'NG'))
+  returning id into v_domain;
+  perform pg_temp.act(u_test, s_test);
+  v_j := public.admin_reveal_registrant(v_domain, null, gen_random_uuid());
+  if v_j ->> 'code' is distinct from 'TEST_ADMIN' or v_j ? 'registrant' or v_j ? 'contacts' then
+    raise exception 'FAILED 31: a test admin revealed a real account''s test domain %', v_j;
+  end if;
+  v_j := public.admin_reveal_registrant((select d.id from public.domains d where d.domain_name = 'm40-v-' || v_tag || '.com'),
+                                        null, gen_random_uuid());
+  if (v_j ->> 'ok')::boolean is not true or v_j #>> '{registrant,name}' is distinct from 'E2E Registrant' then
+    raise exception 'FAILED 31: a test admin on an e2e user''s test domain %', v_j;
+  end if;
+  insert into public.email_outbox (kind, category, user_id, to_email, dedupe_key, test_mode, status, attempts, last_error)
+  values ('order_receipt', 'transactional', u_real, 'm40-real-' || v_tag || '@mydomainshub.com', 'm40-rq1:' || v_tag,
+          true, 'failed', 3, 'x')
+  returning id into v_email_id;
+  perform pg_temp.expect_code(public.admin_requeue_email(v_email_id, null, gen_random_uuid()), 'TEST_ADMIN',
+                              'FAILED 31: a test admin sent a real address''s test email again');
+  insert into public.email_outbox (kind, category, user_id, to_email, dedupe_key, test_mode, status, attempts, last_error)
+  values ('order_receipt', 'transactional', u_real, 'e2e-elsewhere-' || v_tag || '@example.com', 'm40-rq2:' || v_tag,
+          true, 'failed', 3, 'x')
+  returning id into v_email_id;
+  perform pg_temp.expect_code(public.admin_requeue_email(v_email_id, null, gen_random_uuid()), 'TEST_ADMIN',
+                              'FAILED 31: a test admin sent a real account''s test email again');
+  if (select e.status from public.email_outbox e where e.id = v_email_id) is distinct from 'failed' then
+    raise exception 'FAILED 31: a refused requeue moved the email';
+  end if;
+  insert into public.email_outbox (kind, category, user_id, to_email, dedupe_key, test_mode, status, attempts, last_error)
+  values ('order_receipt', 'transactional', u_none, 'e2e-admin-n-' || v_tag || '@example.com', 'm40-rq3:' || v_tag,
+          true, 'failed', 3, 'x')
+  returning id into v_email_id;
+  perform pg_temp.expect_ok(public.admin_requeue_email(v_email_id, null, gen_random_uuid()),
+                            'FAILED 31: a test admin on an e2e user''s test email');
+  if (select e.status from public.email_outbox e where e.id = v_email_id) is distinct from 'pending' then
+    raise exception 'FAILED 31: the e2e email was not queued again';
+  end if;
+  if exists (select 1 from public.admin_audit_log a
+              where a.admin_label = l_test and a.outcome = 'refused' and a.detail <> '{}'::jsonb) then
+    raise exception 'FAILED 31: a test admin''s refusal kept the target''s facts';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 32. The lookup limit counts under a lock per admin, held to the end of
+  -- the transaction, so parallel calls cannot all read the same total (D4).
+  v_lock := hashtextextended('admin_lookup:' || u_owner::text, 0);
+  if exists (select 1 from pg_locks l where l.locktype = 'advisory' and l.pid = pg_backend_pid()
+               and l.classid::bigint = ((v_lock >> 32) & 4294967295) and l.objid::bigint = (v_lock & 4294967295)) then
+    raise exception 'FAILED 32: the owner''s lookup lock was held before any lookup';
+  end if;
+  perform pg_temp.act(u_owner, s_owner);
+  perform pg_temp.expect_ok(public.admin_find_customers('nobody-' || v_tag || '@example.com'), 'FAILED 32: a search');
+  if not exists (select 1 from pg_locks l where l.locktype = 'advisory' and l.pid = pg_backend_pid()
+                   and l.classid::bigint = ((v_lock >> 32) & 4294967295) and l.objid::bigint = (v_lock & 4294967295)
+                   and l.objsubid = 1 and l.granted) then
+    raise exception 'FAILED 32: a search did not take the lookup lock';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 33. Every change that could give someone access is alerted: a real
+  -- operator added, made test-only, then re-pinned is three alerts; a test
+  -- admin for a real address alerts while it stands. An e2e user's test
+  -- admin never alerts.
+  insert into public.admins (user_id, label, role, mfa_factor_ids, added_by)
+  values (u_real, 'm40-real-' || v_tag, 'operator', array[f_real], 'm40-check');
+  update public.admins set test_only = true where user_id = u_real;
+  update public.admins set mfa_factor_ids = array[f_real] where user_id = u_real;
+  if (select count(*) from public.admin_alert_conditions(false) c
+       where c.kind = 'admin_changed' and c.summary like '%m40-real-' || v_tag || ' (%') is distinct from 3 then
+    raise exception 'FAILED 33: % of 3 changes alerted', (select count(*) from public.admin_alert_conditions(false) c
+       where c.kind = 'admin_changed' and c.summary like '%m40-real-' || v_tag || ' (%');
+  end if;
+  if not exists (select 1 from public.admin_alert_conditions(false) c
+                  where c.key = 'admin_test_not_e2e:m40-real-' || v_tag and c.severity = 'critical') then
+    raise exception 'FAILED 33: a test admin for a real address stood unalerted';
+  end if;
+  if (select c.was_test_only from public.admin_changes c where c.label = 'm40-real-' || v_tag and c.op = 'INSERT') is not null
+     or not exists (select 1 from public.admin_changes c
+                     where c.label = 'm40-real-' || v_tag and c.test_only and c.was_test_only is false) then
+    raise exception 'FAILED 33: the change log does not hold the flag before the change';
+  end if;
+  update public.admins set revoked_at = now() where user_id = u_test;
+  if exists (select 1 from public.admin_alert_conditions(false) c where c.summary like '%' || l_test || '%') then
+    raise exception 'FAILED 33: an e2e user''s test admin alerted';
+  end if;
+  update public.admins set revoked_at = null where user_id = u_test;
+  v_passed := v_passed + 1;
+
+  -- ── 34. Extension flags: a null pause keeps the pause; rank and tagline are
+  -- set as sent, so a pause sent without them un-features (§3.1.2).
+  select min(r) into v_rank from generate_series(1, 50) r
+   where not exists (select 1 from public.tlds t where t.featured_rank = r);
+  select t.name into v_text from public.tlds t where not t.is_paused and t.featured_rank is null order by t.name limit 1;
+  perform pg_temp.act(u_owner, s_owner);
+  perform pg_temp.expect_ok(public.admin_set_tld_flags(v_text, null, null, v_rank, 'Fast and local',
+                                                       'feature it on the home page', gen_random_uuid()),
+                            'FAILED 34: feature an extension');
+  if (select row(t.is_paused, t.featured_rank::integer, t.featured_tagline)::text from public.tlds t where t.name = v_text)
+     is distinct from row(false, v_rank, 'Fast and local')::text then
+    raise exception 'FAILED 34: a null pause did not keep the pause';
+  end if;
+  perform pg_temp.expect_ok(public.admin_set_tld_flags(v_text, true, 'registry maintenance', null, null,
+                                                       'pause it for the night', gen_random_uuid()),
+                            'FAILED 34: pause an extension');
+  if (select row(t.is_paused, t.featured_rank, t.featured_tagline)::text from public.tlds t where t.name = v_text)
+     is distinct from row(true, null::integer, null::text)::text then
+    raise exception 'FAILED 34: a pause without rank and tagline left them set';
   end if;
   v_passed := v_passed + 1;
 
