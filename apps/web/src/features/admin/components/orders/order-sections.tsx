@@ -106,7 +106,12 @@ const LINE_COLUMNS: Column<OrderLine>[] = [
     key: 'domain',
     header: 'Domain',
     cell: (line) =>
-      line.domainId ? (
+      line.itemType === 'ssl' ? (
+        // A certificate's line opens its certificate, found by the line (§9: ?line=).
+        <Link href={adminHref.certificateForLine(line.id)} className={cn(LINK, 'break-all')}>
+          {line.domain}
+        </Link>
+      ) : line.domainId ? (
         <Link href={adminHref.domain(line.domainId)} className={cn(LINK, 'break-all')}>
           {line.domain}
         </Link>
@@ -154,7 +159,9 @@ const LINE_COLUMNS: Column<OrderLine>[] = [
     header: 'Job',
     cell: (line) =>
       line.itemType === 'ssl' ? (
-        <span className="text-muted-foreground">On the certificate’s page</span>
+        <Link href={adminHref.certificateForLine(line.id)} className={LINK}>
+          On the certificate’s page
+        </Link>
       ) : line.jobIds.length === 0 ? (
         <span className="text-muted-foreground">No job</span>
       ) : (

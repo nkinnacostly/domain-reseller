@@ -493,7 +493,15 @@ describe('one order', () => {
       `/admin/queue/jobs/${ids.job}`,
     )
     expect(within(table).getByText('A new one is ₦25,000 at today’s price')).toBeInTheDocument()
-    expect(within(table).getByText('On the certificate’s page')).toBeInTheDocument()
+    // A certificate's line opens its certificate by the line (§9: /admin/ssl?line=).
+    expect(within(table).getByRole('link', { name: 'On the certificate’s page' })).toHaveAttribute(
+      'href',
+      `/admin/ssl?line=${ids.sslLine}`,
+    )
+    expect(within(table).getByRole('link', { name: sslLine.domain })).toHaveAttribute(
+      'href',
+      `/admin/ssl?line=${ids.sslLine}`,
+    )
     expect(within(table).getByText('1-year subscription')).toBeInTheDocument()
   })
 
