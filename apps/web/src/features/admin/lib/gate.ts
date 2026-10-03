@@ -5,9 +5,9 @@ import { safeNext } from '@/features/auth/lib/redirect'
  * decisions are tested without a request.
  *
  * - A stranger, a signed-out visitor, or a database that cannot say gets a
- *   404: the plain not-found page, with no admin words. Its headers are every
- *   /admin answer's (noindex, no-store, a nonce CSP) — a 404 there must never
- *   be cached — so they do show the path is special (D9, accepted).
+ *   404: the plain not-found page, with no admin words, under exactly the
+ *   headers any other 404 on the site gets — the site's CSP, no nonce, no
+ *   X-Robots-Tag — so nothing about it says /admin exists (D9).
  * - An admin whose code is missing or too old enters one first.
  * - An admin signed in the wrong way, or on an unlinked device, reaches the
  *   layout, which says what to do — never the pages.
@@ -42,8 +42,7 @@ export function adminDecision(status: AdminStatus): AdminDecision {
   return { kind: 'continue' }
 }
 
-/** Where the proxy rewrites strangers: a path no page answers, so Next renders its 404. */
-export const ADMIN_NOT_FOUND_PATH = '/__admin-not-found'
+export { ADMIN_NOT_FOUND_PATH, STRANGER_HEADER } from './door'
 
 /**
  * D9: someone already signed in who opens `/sign-in?next=/admin…` is sent
@@ -88,7 +87,11 @@ export function adminCsp(
   ].join('; ')
 }
 
-/** Every `/admin` response: never indexed, never cached, never framed (§2.3). */
+/**
+ * Every `/admin` answer to someone SQL knows as an admin — the pages, and the
+ * way to /verify: never indexed, never cached, never framed (§2.3). A
+ * stranger's 404 gets the site's headers instead (D9).
+ */
 export function adminHeaders(csp: string): Record<string, string> {
   return {
     'Content-Security-Policy': csp,

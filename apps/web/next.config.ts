@@ -1,5 +1,7 @@
 import type { NextConfig } from 'next'
 import { HTML_LIMITED_BOT_UA_RE } from 'next/dist/shared/lib/router/utils/html-bots'
+import { ADMIN_NOT_FOUND_PATH, STRANGER_HEADER } from './src/features/admin/lib/door'
+import { siteCsp, supabaseHostOf } from './src/lib/csp'
 
 /**
  * Crawlers that read the HTML without running it get every page's metadata
@@ -17,51 +19,14 @@ export const HTML_LIMITED_BOTS = new RegExp(
   'i',
 )
 
-/**
- * Content Security Policy (PRD SEC-15). Scripts, styles and fonts come only
- * from this site; the browser talks only to this site and our Supabase
- * project. So an injected script could neither load code from elsewhere nor
- * send anything it read to another host. Payment happens on Flutterwave's own
- * page, reached by navigation, so none of its code runs here.
- *
- * `'unsafe-inline'` stays for scripts because Next's bootstrap is inline and
- * this site has no nonce plumbing; the other directives still hold. Dev adds
- * `'unsafe-eval'` for React's tooling.
- *
- * The one outside origin is Cloudflare Turnstile (SEC-9): its script and the
- * challenge frame it draws, on the forms that send email and when a search
- * asks for a check (components/common/turnstile.tsx). It talks to Cloudflare
- * from inside its own frame, so connect-src does not change.
- */
-const supabase = (() => {
-  try {
-    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').host
-  } catch {
-    return '*.supabase.co'
-  }
-})()
-
-const TURNSTILE = 'https://challenges.cloudflare.com'
+/** The site's policy (src/lib/csp.ts), which the proxy also gives a stranger's 404 at /admin. */
+const csp = siteCsp({
+  supabaseHost: supabaseHostOf(process.env.NEXT_PUBLIC_SUPABASE_URL),
+  development: process.env.NODE_ENV !== 'production',
+})
 
 /** Every path except `/admin` and below (path-to-regexp group for `source`). */
 export const NOT_ADMIN = '(?!admin(?:/|$)).*'
-
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${TURNSTILE}${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  `connect-src 'self' https://${supabase} wss://${supabase}`,
-  `frame-src ${TURNSTILE}`,
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  // FR-A1: "Continue with Google" is a form whose answer sends the browser to
-  // Supabase Auth, which sends it on to Google — without these, a browser
-  // enforcing form-action on redirects stops it.
-  `form-action 'self' https://${supabase} https://accounts.google.com`,
-].join('; ')
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -88,13 +53,33 @@ const nextConfig: NextConfig = {
     remotePatterns: [],
   },
 
+  // D9: a stranger at /admin — the proxy marks the request after asking SQL
+  // (features/admin/lib/door.ts) — sees Next's own 404, through a rewrite of
+  // the config's, which unlike the proxy's sends back no header naming it.
+  async rewrites() {
+    return {
+      beforeFiles: ['/admin', '/admin/:path*'].map((source) => ({
+        source,
+        // A value, so the match captures nothing: a bare `has` would add the
+        // header to the page's query, and the 404's payload would name it.
+        has: [{ type: 'header' as const, key: STRANGER_HEADER, value: '1' }],
+        destination: ADMIN_NOT_FOUND_PATH,
+      })),
+      afterFiles: [],
+      fallback: [],
+    }
+  },
+
   async headers() {
     return [
       {
         // Everywhere but /admin, which the proxy gives its own nonce policy
-        // (ADMIN-SPEC §2.3): no 'unsafe-inline' for scripts there.
+        // (ADMIN-SPEC §2.3): no 'unsafe-inline' for scripts there. A
+        // stranger's 404 at /admin gets this one from the proxy (D9), which
+        // writes names lower-case, as every Headers object does — so this
+        // name is lower-case too, and the two 404s match even on HTTP/1.1.
         source: `/:path(${NOT_ADMIN})`,
-        headers: [{ key: 'Content-Security-Policy', value: csp }],
+        headers: [{ key: 'content-security-policy', value: csp }],
       },
       {
         source: '/:path*',

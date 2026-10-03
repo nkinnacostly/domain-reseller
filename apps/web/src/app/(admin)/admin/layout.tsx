@@ -8,9 +8,9 @@ import { adminSessionStatus, assertAdminArea } from '@/features/admin/queries/se
 import { PRIVATE } from '@/features/seo/lib/metadata'
 
 /**
- * Never indexed or followed; the proxy also sends X-Robots-Tag and a 404 to
- * everyone else. A stranger's title names no admin area either, should the
- * proxy ever not run for a path (§2.3).
+ * Never indexed or followed; the proxy also sends an admin X-Robots-Tag, and
+ * everyone else the site's plain 404 (D9). A stranger's title names no admin
+ * area either, should the proxy ever not run for a path (§2.3).
  */
 export async function generateMetadata(): Promise<Metadata> {
   if ((await adminSessionStatus()) === 'not_admin') return { robots: PRIVATE }

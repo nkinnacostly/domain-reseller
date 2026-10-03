@@ -43,7 +43,7 @@ describe('the admin gate', () => {
     expect(adminDecision('ok')).toEqual({ kind: 'continue' })
     expect(adminDecision('factor_mismatch')).toEqual({ kind: 'continue' })
     expect(adminDecision('weak_sign_in')).toEqual({ kind: 'continue' })
-    expect(ADMIN_NOT_FOUND_PATH).toBe('/__admin-not-found')
+    expect(ADMIN_NOT_FOUND_PATH).toBe('/__not-found')
   })
 
   it('sends a signed-in admin from /sign-in?next=/admin to /admin, everyone else to the panel', () => {

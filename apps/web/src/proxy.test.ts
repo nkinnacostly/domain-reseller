@@ -1,7 +1,8 @@
 import { NextRequest, type NextResponse } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ADMIN_NOT_FOUND_PATH } from '@/features/admin/lib/gate'
+import { ADMIN_NOT_FOUND_PATH, STRANGER_HEADER } from '@/features/admin/lib/gate'
 import { SIGNED_IN_HINT } from '@/features/auth/lib/signed-in-hint'
+import nextConfig from '../next.config'
 import { config, proxy } from './proxy'
 
 /**
@@ -65,6 +66,31 @@ function expectAdminHeaders(response: NextResponse) {
   expect(script).not.toContain("'unsafe-inline'")
 }
 
+/** The site-wide CSP next.config.ts gives every page but /admin. */
+async function siteCspFromConfig(): Promise<string | undefined> {
+  const rules = (await nextConfig.headers?.()) ?? []
+  return rules
+    .flatMap((rule) => rule.headers)
+    .find((header) => header.key === 'content-security-policy')?.value
+}
+
+/**
+ * A stranger at /admin (D9): passed on marked, for next.config.ts's rewrite
+ * to Next's own 404 — never the proxy's rewrite, whose x-middleware-rewrite
+ * header no other 404 carries — with what any other 404 carries: the site's
+ * CSP, no nonce, nothing from the admin headers, and no nonce sent on to Next.
+ */
+async function expectStranger(response: NextResponse) {
+  expect(response.headers.get('x-middleware-next')).toBe('1')
+  expect(response.headers.get('x-middleware-rewrite')).toBeNull()
+  expect(response.headers.get(`x-middleware-request-${STRANGER_HEADER}`)).toBe('1')
+  expect(response.headers.get('content-security-policy')).toBe(await siteCspFromConfig())
+  expect(scriptSrc(response.headers.get('content-security-policy'))).not.toMatch(/'nonce-/)
+  expect(response.headers.get('x-robots-tag')).toBeNull()
+  expect(response.headers.get('cache-control')).toBeNull()
+  expect(response.headers.get('x-middleware-request-content-security-policy')).toBeNull()
+}
+
 const rewrittenTo = (response: NextResponse) => {
   const target = response.headers.get('x-middleware-rewrite')
   return target ? new URL(target).pathname : null
@@ -82,26 +108,40 @@ beforeEach(() => {
 })
 
 describe('the proxy at /admin', () => {
-  it('rewrites a signed-out visitor to a 404 under the admin headers, without asking SQL', async () => {
+  it("marks a signed-out visitor for the 404, under the site's own headers, without asking SQL", async () => {
     const response = await proxy(request('/admin/refunds'))
-    expect(response.status).toBe(404)
-    expect(rewrittenTo(response)).toBe(ADMIN_NOT_FOUND_PATH)
-    expectAdminHeaders(response)
+    await expectStranger(response)
     expect(auth.rpc).not.toHaveBeenCalled()
+  })
+
+  it('sends a marked /admin request to a path no page answers, from next.config.ts', async () => {
+    const rewrites = await nextConfig.rewrites?.()
+    const before = rewrites && !Array.isArray(rewrites) ? rewrites.beforeFiles : []
+    expect(before).toEqual([
+      {
+        source: '/admin',
+        has: [{ type: 'header', key: STRANGER_HEADER, value: '1' }],
+        destination: ADMIN_NOT_FOUND_PATH,
+      },
+      {
+        source: '/admin/:path*',
+        has: [{ type: 'header', key: STRANGER_HEADER, value: '1' }],
+        destination: ADMIN_NOT_FOUND_PATH,
+      },
+    ])
+    expect(ADMIN_NOT_FOUND_PATH).not.toMatch(/admin/)
   })
 
   it.each([
     ['not_admin', { data: 'not_admin', error: null }],
     ['an error', { data: null, error: { message: 'function admin_status does not exist' } }],
     ['a word it does not know', { data: 'owner', error: null }],
-  ])('rewrites a signed-in person SQL answers with %s to the same 404', async (_, status) => {
+  ])('marks a signed-in person SQL answers with %s for the same 404', async (_, status) => {
     auth.user = { id: 'u1' }
     auth.status = status
     const response = await proxy(request('/admin'))
     expect(auth.rpc).toHaveBeenCalledWith('admin_status')
-    expect(response.status).toBe(404)
-    expect(rewrittenTo(response)).toBe(ADMIN_NOT_FOUND_PATH)
-    expectAdminHeaders(response)
+    await expectStranger(response)
   })
 
   it('sends an admin whose code is missing or stale to /verify, with the path and query as next', async () => {
@@ -123,6 +163,7 @@ describe('the proxy at /admin', () => {
       const response = await proxy(request('/admin'))
       expect(response.headers.get('x-middleware-next')).toBe('1')
       expect(rewrittenTo(response)).toBeNull()
+      expect(response.headers.get(`x-middleware-request-${STRANGER_HEADER}`)).toBeNull()
       expectAdminHeaders(response)
       expect(response.headers.get('x-middleware-request-content-security-policy')).toBe(
         response.headers.get('content-security-policy'),
@@ -130,7 +171,9 @@ describe('the proxy at /admin', () => {
     },
   )
 
-  it('gives every answer a fresh nonce', async () => {
+  it("gives every admin's answer a fresh nonce", async () => {
+    auth.user = { id: 'u1' }
+    auth.status = { data: 'ok', error: null }
     const first = await proxy(request('/admin'))
     const second = await proxy(request('/admin'))
     expect(nonceOf(first)).toBeDefined()
@@ -160,9 +203,20 @@ describe('the proxy at /admin', () => {
 
   it('matches every /admin path on its own, image-named ones included', async () => {
     expect(config.matcher).toEqual(expect.arrayContaining(['/admin', '/admin/:path*']))
-    const response = await proxy(request('/admin/orders/x.png'))
-    expect(response.status).toBe(404)
-    expectAdminHeaders(response)
+    await expectStranger(await proxy(request('/admin/orders/x.png')))
+  })
+
+  it("drops a mark the browser sent itself, so an admin's pages still render", async () => {
+    auth.user = { id: 'u1' }
+    auth.status = { data: 'ok', error: null }
+    const forged = new NextRequest(`${SITE}/admin`, { headers: { [STRANGER_HEADER]: '1' } })
+    const response = await proxy(forged)
+    expect(response.headers.get('x-middleware-next')).toBe('1')
+    // Listed for the request without the mark: Next deletes it before the rewrite is judged.
+    const kept = (response.headers.get('x-middleware-override-headers') ?? '').split(',')
+    expect(kept).toContain('content-security-policy')
+    expect(kept).not.toContain(STRANGER_HEADER)
+    expect(response.headers.get(`x-middleware-request-${STRANGER_HEADER}`)).toBeNull()
   })
 })
 

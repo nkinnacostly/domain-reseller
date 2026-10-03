@@ -1,17 +1,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 import {
-  ADMIN_NOT_FOUND_PATH,
   adminCsp,
   adminDecision,
   adminHeaders,
   adminNonce,
   isAdminPath,
+  STRANGER_HEADER,
   signedInDestination,
   toAdminStatus,
 } from '@/features/admin/lib/gate'
 import { SIGNED_IN_HINT } from '@/features/auth/lib/signed-in-hint'
 import { canonicalExtensionPath } from '@/features/extensions/lib/extension'
+import { siteCsp, supabaseHostOf } from '@/lib/csp'
 import { env } from '@/lib/env'
 import { SESSION_COOKIE_OPTIONS } from '@/lib/supabase/cookies'
 import { forwardedAuthHeaders } from '@/lib/supabase/forwarded'
@@ -36,13 +37,19 @@ const SESSION_REQUIRED = ['/verify', '/reset-password']
 const matches = (pathname: string, prefixes: string[]) =>
   prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 
-const supabaseHost = (() => {
-  try {
-    return new URL(env.NEXT_PUBLIC_SUPABASE_URL).host
-  } catch {
-    return '*.supabase.co'
-  }
-})()
+const supabaseHost = supabaseHostOf(env.NEXT_PUBLIC_SUPABASE_URL)
+
+/**
+ * What next.config.ts puts on every page but /admin. A stranger's 404 at
+ * /admin gets it from here — config headers follow the path asked for, which
+ * NOT_ADMIN leaves out — so that 404 carries exactly what any other 404 does.
+ */
+const SITE_HEADERS = {
+  'Content-Security-Policy': siteCsp({
+    supabaseHost,
+    development: env.NODE_ENV !== 'production',
+  }),
+}
 
 /** 400 days, the longest a browser keeps a cookie: the hint lives as long as a session can. */
 const HINT_MAX_AGE = 400 * 24 * 60 * 60
@@ -70,6 +77,8 @@ export async function proxy(request: NextRequest) {
 
   const requestHeaders = () => {
     const headers = new Headers(request.headers)
+    // Only the proxy marks a stranger (below): a mark sent by the browser goes.
+    if (admin) headers.delete(STRANGER_HEADER)
     if (csp) headers.set('content-security-policy', csp)
     return headers
   }
@@ -103,8 +112,14 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  /** Every answer carries the signed-in hint, and an admin answer its headers. */
-  const finish = (answer: NextResponse) => {
+  /**
+   * Every answer carries the signed-in hint, and an admin answer its headers
+   * — or, for a stranger's 404 at /admin, the site's own instead.
+   */
+  const finish = (
+    answer: NextResponse,
+    headers: Record<string, string> | null = csp ? adminHeaders(csp) : null,
+  ) => {
     for (const cookie of response.cookies.getAll()) {
       if (answer !== response) answer.cookies.set(cookie)
     }
@@ -115,9 +130,7 @@ export async function proxy(request: NextRequest) {
     } else if (!user && hinted) {
       answer.cookies.delete(SIGNED_IN_HINT)
     }
-    if (csp) {
-      for (const [name, value] of Object.entries(adminHeaders(csp))) answer.headers.set(name, value)
-    }
+    for (const [name, value] of Object.entries(headers ?? {})) answer.headers.set(name, value)
     return answer
   }
 
@@ -132,7 +145,11 @@ export async function proxy(request: NextRequest) {
 
   if (admin) {
     // D1/D2: the admins table, checked in SQL on every request. A stranger,
-    // a signed-out visitor or an error all look like a page that is not there.
+    // a signed-out visitor or an error all look like a page that is not there
+    // — headers included (D9). The request is marked, and next.config.ts's
+    // rewrite renders Next's own 404 (features/admin/lib/door.ts); it carries
+    // no nonce, so Next stamps none, and the answer gets the site's CSP and
+    // none of the admin headers.
     let status = toAdminStatus(null)
     if (user) {
       const { data, error } = await supabase.rpc('admin_status')
@@ -140,12 +157,9 @@ export async function proxy(request: NextRequest) {
     }
     const decision = adminDecision(status)
     if (decision.kind === 'not_found') {
-      return finish(
-        NextResponse.rewrite(new URL(ADMIN_NOT_FOUND_PATH, request.url), {
-          status: 404,
-          request: { headers: requestHeaders() },
-        }),
-      )
+      const headers = new Headers(request.headers)
+      headers.set(STRANGER_HEADER, '1')
+      return finish(NextResponse.next({ request: { headers } }), SITE_HEADERS)
     }
     if (decision.kind === 'verify') return redirectTo('/verify', { next: `${pathname}${search}` })
     return finish(response)

@@ -43,6 +43,12 @@ async function expectNotFound(page: Page, path: string) {
   for (const words of ADMIN_HTML) expect(html, `${path} holds "${words}"`).not.toContain(words)
 }
 
+/** A response's headers less the ones that differ between any two answers. */
+const comparable = (headers: Record<string, string>) => {
+  const { date: _date, 'set-cookie': _cookies, ...rest } = headers
+  return rest
+}
+
 /** The script-src directive of a CSP. */
 const scriptSrc = (csp: string) =>
   csp
@@ -70,7 +76,7 @@ test.describe('the admin area to anyone who is not an admin', () => {
     await expectNotFound(page, '/admin/refunds')
   })
 
-  test('a page under /admin named like an image is gated too: a 404 under the admin headers', async ({
+  test('a page under /admin named like an image is gated too: the same plain 404', async ({
     page,
     request,
   }) => {
@@ -78,38 +84,31 @@ test.describe('the admin area to anyone who is not an admin', () => {
     for (const path of ['/admin/orders/x.png', '/admin/orders/x.svg', '/admin/domains/a.webp']) {
       const response = await request.get(path, { maxRedirects: 0 })
       expect(response.status(), path).toBe(404)
-      const headers = response.headers()
-      expect(headers['x-robots-tag'], path).toBe('noindex, nofollow')
-      expect(headers['cache-control'], path).toContain('no-store')
-      expect(scriptSrc(headers['content-security-policy'] ?? ''), path).toMatch(/'nonce-/)
       const html = await response.text()
       for (const words of ADMIN_HTML) expect(html, `${path} holds "${words}"`).not.toContain(words)
     }
     await expectNotFound(page, '/admin/orders/x.png')
   })
 
-  test('every /admin answer is unindexed, uncached, and under a nonce CSP with no unsafe-inline', async ({
+  test("a stranger's 404 at /admin carries exactly the headers of any other 404 (D9)", async ({
     request,
   }) => {
-    const first = await request.get('/admin', { maxRedirects: 0 })
-    const second = await request.get('/admin/refunds', { maxRedirects: 0 })
-    for (const response of [first, second]) {
+    // Compared with a path nobody has: nothing in the answer may say /admin is
+    // special — no X-Robots-Tag, no admin Cache-Control, no nonce, no rewrite.
+    const elsewhere = await request.get(`/no-such-page-${Date.now().toString(36)}`, {
+      maxRedirects: 0,
+    })
+    expect(elsewhere.status()).toBe(404)
+    const expected = comparable(elsewhere.headers())
+    for (const path of ['/admin', '/admin/refunds', '/admin/orders/x.png']) {
+      const response = await request.get(path, { maxRedirects: 0 })
+      expect(response.status(), path).toBe(404)
       const headers = response.headers()
-      expect(headers['x-robots-tag']).toBe('noindex, nofollow')
-      expect(headers['cache-control']).toContain('no-store')
-      const csp = headers['content-security-policy'] ?? ''
-      expect(scriptSrc(csp)).toMatch(/'nonce-[A-Za-z0-9+/=_-]{16,}'/)
-      expect(scriptSrc(csp)).toContain("'strict-dynamic'")
-      expect(scriptSrc(csp)).not.toContain("'unsafe-inline'")
-      expect(csp).toContain("object-src 'none'")
-      expect(csp).toContain("base-uri 'none'")
-      expect(csp).toContain("frame-ancestors 'none'")
+      expect(comparable(headers), path).toEqual(expected)
+      expect(headers['x-robots-tag'], path).toBeUndefined()
+      expect(headers['x-middleware-rewrite'], path).toBeUndefined()
+      expect(scriptSrc(headers['content-security-policy'] ?? ''), path).not.toMatch(/'nonce-/)
     }
-    // A fresh nonce for every answer.
-    const nonce = (csp: string | undefined) => scriptSrc(csp ?? '').match(/'nonce-([^']+)'/)?.[1]
-    expect(nonce(first.headers()['content-security-policy'])).not.toBe(
-      nonce(second.headers()['content-security-policy']),
-    )
   })
 
   test('the rest of the site keeps its own CSP', async ({ request }) => {
@@ -117,11 +116,21 @@ test.describe('the admin area to anyone who is not an admin', () => {
     // stopped matching would leave these pages with no policy at all.
     for (const path of ['/', '/legal/privacy']) {
       const csp = (await request.get(path)).headers()['content-security-policy'] ?? ''
+      const directives = new Map(
+        csp.split(';').map((part) => {
+          const [name = '', ...sources] = part.trim().split(/\s+/)
+          return [name, sources.join(' ')] as const
+        }),
+      )
       expect(csp, path).not.toBe('')
+      expect(directives.get('default-src'), path).toBe("'self'")
+      // Cloudflare Turnstile (SEC-9): its script, and the frame it draws.
+      expect(directives.get('frame-src'), path).toBe('https://challenges.cloudflare.com')
       expect(scriptSrc(csp), path).not.toMatch(/'nonce-/)
       expect(scriptSrc(csp), path).toContain("'unsafe-inline'")
       expect(scriptSrc(csp), path).toContain('https://challenges.cloudflare.com')
-      expect(csp, path).toContain("frame-ancestors 'none'")
+      expect(directives.get('frame-ancestors'), path).toBe("'none'")
+      expect(directives.get('object-src'), path).toBe("'none'")
     }
   })
 
@@ -154,6 +163,11 @@ test.describe('the admin area to anyone who is not an admin', () => {
       await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0)
       await expectNotFound(page, '/admin')
       await expectNotFound(page, '/admin/refunds')
+      // Signed in, the headers too are any other 404's (D9).
+      const elsewhere = await page.request.get(`/no-such-page-${Date.now().toString(36)}`)
+      const atAdmin = await page.request.get('/admin/refunds')
+      expect(atAdmin.status()).toBe(404)
+      expect(comparable(atAdmin.headers())).toEqual(comparable(elsewhere.headers()))
 
       // Signed in, /sign-in?next=/admin goes to /admin — which is still a 404.
       await page.goto('/sign-in?next=/admin')
@@ -184,6 +198,23 @@ test.describe('an enrolled admin', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'Operations' })).toBeVisible()
     await expect(page.getByRole('note').filter({ hasText: TEST_ADMIN_BANNER })).toBeVisible()
+
+    // An admin's answers are unindexed, uncached, under a fresh nonce CSP with no unsafe-inline (§2.3).
+    const nonces = new Set<string>()
+    for (const path of ['/admin', '/admin/refunds']) {
+      const headers = (await page.request.get(path, { maxRedirects: 0 })).headers()
+      expect(headers['x-robots-tag'], path).toBe('noindex, nofollow')
+      expect(headers['cache-control'], path).toContain('no-store')
+      const csp = headers['content-security-policy'] ?? ''
+      expect(scriptSrc(csp), path).toMatch(/'nonce-[A-Za-z0-9+/=_-]{16,}'/)
+      expect(scriptSrc(csp), path).toContain("'strict-dynamic'")
+      expect(scriptSrc(csp), path).not.toContain("'unsafe-inline'")
+      expect(csp, path).toContain("object-src 'none'")
+      expect(csp, path).toContain("base-uri 'none'")
+      expect(csp, path).toContain("frame-ancestors 'none'")
+      nonces.add(scriptSrc(csp).match(/'nonce-([^']+)'/)?.[1] ?? '')
+    }
+    expect(nonces.size).toBe(2)
     const nav = page.getByRole('navigation', { name: 'Admin' }).first()
     // On a phone the sidebar is a drawer.
     if (!(await nav.isVisible())) await page.getByRole('button', { name: 'Open menu' }).click()
