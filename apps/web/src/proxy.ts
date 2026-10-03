@@ -164,9 +164,9 @@ export async function proxy(request: NextRequest) {
 
   if (matches(pathname, SIGNED_OUT_ONLY) && user) {
     // D9: the owner's bookmark to /sign-in?next=/admin works signed in too.
-    return redirectTo(
-      signedInDestination(request.nextUrl.searchParams.get('next'), request.nextUrl.origin),
-    )
+    // Only /sign-in: sign-up and password reset send everyone to their panel.
+    const next = matches(pathname, ['/sign-in']) ? request.nextUrl.searchParams.get('next') : null
+    return redirectTo(signedInDestination(next, request.nextUrl.origin))
   }
 
   if (matches(pathname, SESSION_REQUIRED) && !user) {
