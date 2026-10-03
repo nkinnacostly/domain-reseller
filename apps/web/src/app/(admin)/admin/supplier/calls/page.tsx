@@ -1,19 +1,19 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { type CallsPageSearch, CallsView } from '@/features/admin/components/supplier/calls-view'
+import { SupplierPageSkeleton } from '@/features/admin/components/supplier/supplier-header'
 
 export const metadata: Metadata = { title: 'Supplier calls' }
 
-/** Package B6 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminSupplierCallsPage() {
+/** Every provisioning call the gateway recorded (docs/ADMIN-SPEC.md §5.2 B6). Routing only. */
+export default function AdminSupplierCallsPage({
+  searchParams,
+}: {
+  searchParams: Promise<CallsPageSearch>
+}) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Supplier calls"
-        description="Every provisioning call the gateway made, and its outcome."
-        parent={{ label: 'Supplier', href: '/admin/supplier' }}
-      />
+    <Suspense fallback={<SupplierPageSkeleton cards={2} />}>
+      <CallsView searchParams={searchParams} />
     </Suspense>
   )
 }
