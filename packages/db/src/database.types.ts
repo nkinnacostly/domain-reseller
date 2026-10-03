@@ -3468,6 +3468,10 @@ export type Database = {
         }
         Returns: string
       }
+      admin_job_ledger: {
+        Args: { p_job_id: string; p_test_mode: boolean }
+        Returns: Json
+      }
       admin_json_number: {
         Args: { p_scale: number; p_value: Json }
         Returns: number
@@ -3766,8 +3770,13 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_ssl_job_certificate: {
+        Args: { p_job_id: string; p_test_mode: boolean }
+        Returns: Json
+      }
       admin_ssl_stats: { Args: { p_test_mode: boolean }; Returns: Json }
       admin_status: { Args: never; Returns: string }
+      admin_stuck_order_minutes: { Args: never; Returns: number }
       admin_tier: {
         Args: { p_action: string }
         Returns: Record<string, unknown>
