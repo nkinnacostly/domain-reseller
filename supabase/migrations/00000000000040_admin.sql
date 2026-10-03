@@ -2303,7 +2303,9 @@ end;
 $$;
 
 -- customer.search: an exact email, order number or domain; masked rows only.
--- The query itself is never stored (N13).
+-- The query itself is never stored (N13). A test admin's order numbers are
+-- looked for among e2e users' test orders only (D15): the audit row's kind,
+-- which they can read, would otherwise say a live order has that number.
 create function public.admin_find_customers(p_query text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -2326,9 +2328,17 @@ begin
   if position('@' in v_query) > 0 then
     v_kind := 'email';
     select array_agg(p.id) into v_ids from public.profiles p where lower(p.email::text) = v_query;
-  elsif v_query ~ '^[a-z]{2,4}-[0-9a-z-]+$' and exists (select 1 from public.orders o where lower(o.order_number) = v_query) then
+  elsif v_query ~ '^[a-z]{2,4}-[0-9a-z-]+$' and exists (
+          select 1 from public.orders o
+           where lower(o.order_number) = v_query
+             and (not v_admin.test_only
+                  or o.test_mode and exists (select 1 from public.profiles p
+                                              where p.id = o.user_id and public.admin_e2e_email(p.email::text)))) then
     v_kind := 'order';
-    select array_agg(distinct o.user_id) into v_ids from public.orders o where lower(o.order_number) = v_query;
+    select array_agg(distinct o.user_id) into v_ids
+      from public.orders o
+     where lower(o.order_number) = v_query
+       and (not v_admin.test_only or o.test_mode);
   else
     v_kind := 'domain';
     select array_agg(distinct d.user_id) into v_ids from public.domains d where d.domain_name = v_query;

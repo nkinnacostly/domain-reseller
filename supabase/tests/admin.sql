@@ -157,6 +157,7 @@ declare
   v_rank     integer;
   v_email_id uuid;
   v_lock     bigint;
+  v_detail   jsonb;
   v_passed   integer := 0;
 begin
   -- ── People: an owner with two pinned devices, an operator, a viewer, a test
@@ -1297,6 +1298,37 @@ begin
   end loop;
   if public.admin_mask_email(null) is not null then
     raise exception 'FAILED 35: no address masks to something';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 36. A test admin's search says nothing of live order numbers (D15):
+  -- a live-only order's number is recorded as one no order has, while an e2e
+  -- user's test order is still found by its number, and an owner finds both.
+  select * into v_ord from pg_temp.paid_order(u_real, false, 'm40-ln-' || v_tag || '.com', 'failed', 'ln' || v_tag);
+  v_text := (select o.order_number from public.orders o where o.id = v_ord.o_order);
+  perform pg_temp.act(u_test, s_test);
+  v_j := public.admin_find_customers(v_text);
+  if (v_j ->> 'ok')::boolean is not true or jsonb_array_length(v_j -> 'rows') is distinct from 0 then
+    raise exception 'FAILED 36: a test admin''s search for a live order number %', v_j;
+  end if;
+  v_detail := (select a.detail from public.admin_audit_log a where a.id = (v_j ->> 'auditId')::bigint);
+  v_j := public.admin_find_customers('nd-m40-none-' || v_tag);
+  if (select a.detail from public.admin_audit_log a where a.id = (v_j ->> 'auditId')::bigint)
+       is distinct from v_detail or v_detail is null then
+    raise exception 'FAILED 36: a live order number reads apart from a missing one: % and %', v_detail,
+      (select a.detail from public.admin_audit_log a where a.id = (v_j ->> 'auditId')::bigint);
+  end if;
+  select * into v_ord2 from pg_temp.paid_order(u_none, true, 'm40-tn-' || v_tag || '.com', 'failed', 'tn' || v_tag);
+  v_j := public.admin_find_customers((select o.order_number from public.orders o where o.id = v_ord2.o_order));
+  if jsonb_array_length(v_j -> 'rows') is distinct from 1
+     or (select a.detail ->> 'kind' from public.admin_audit_log a where a.id = (v_j ->> 'auditId')::bigint) is distinct from 'order' then
+    raise exception 'FAILED 36: a test admin did not find an e2e user''s test order by its number %', v_j;
+  end if;
+  perform pg_temp.act(u_owner, s_owner);
+  v_j := public.admin_find_customers(v_text);
+  if jsonb_array_length(v_j -> 'rows') is distinct from 1 or v_j #>> '{rows,0,userId}' is distinct from u_real::text
+     or (select a.detail ->> 'kind' from public.admin_audit_log a where a.id = (v_j ->> 'auditId')::bigint) is distinct from 'order' then
+    raise exception 'FAILED 36: the owner did not find a live order by its number %', v_j;
   end if;
   v_passed := v_passed + 1;
 
