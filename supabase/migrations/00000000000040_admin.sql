@@ -621,7 +621,10 @@ begin
   if not found then
     return jsonb_build_object('ok', false, 'code', 'USED');
   end if;
-  return jsonb_build_object('ok', true, 'auditId', v_row.id, 'testActor', v_row.test_actor);
+  -- The note's detail goes back with the claim: a route acts on what the
+  -- admin noted, never on its own query string (D23).
+  return jsonb_build_object('ok', true, 'auditId', v_row.id, 'testActor', v_row.test_actor,
+                            'detail', v_row.detail);
 end;
 $$;
 
@@ -784,7 +787,13 @@ create trigger flw_refund_checks_no_truncate
   before truncate on public.flw_refund_checks
   for each statement execute function public.append_only_final();
 
--- Written only for a claimed refund.flw_check note on the same side.
+-- One check per note: a second read under the same note is refused.
+create unique index flw_refund_checks_one_per_note on public.flw_refund_checks (audit_id)
+  where audit_id is not null;
+
+-- Written only for a refund.flw_check note claimed in the last two minutes on
+-- the same side, for the Flutterwave refund the note names (its target) and the
+-- refund or incident it was written for (its detail), once per note (D23).
 create function public.record_flw_refund_check(p_audit_id bigint, p_test_mode boolean, p_target_type text,
                                                p_target_id text, p_flw_refund_id text, p_tx_id text,
                                                p_amount_kobo bigint, p_currency text, p_status text,
@@ -795,15 +804,28 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_note public.admin_audit_log;
-  v_id   bigint;
+  v_note    public.admin_audit_log;
+  v_claimed timestamptz;
+  v_id      bigint;
 begin
-  select a.* into v_note from public.admin_audit_log a
-    join public.admin_note_claims c on c.audit_id = a.id
-   where a.id = p_audit_id;
-  if not found or v_note.action <> 'refund.flw_check'
-     or v_note.side is distinct from (case when p_test_mode then 'test' else 'live' end) then
+  select c.claimed_at into v_claimed from public.admin_note_claims c where c.audit_id = p_audit_id;
+  select a.* into v_note from public.admin_audit_log a where a.id = p_audit_id;
+  if v_claimed is null or v_note.id is null or v_note.action <> 'refund.flw_check'
+     or v_note.side is distinct from (case when p_test_mode then 'test' else 'live' end)
+     or v_claimed <= now() - interval '2 minutes' then
     raise exception using errcode = '22023', message = 'admin:not_claimed';
+  end if;
+  -- The note's target is the Flutterwave refund read; its detail names the one
+  -- refund or incident the read is evidence for. Nothing comes from the caller alone.
+  if v_note.target_id is distinct from p_flw_refund_id
+     or coalesce(p_target_type, '') not in ('refund', 'incident')
+     or (v_note.detail ->> case p_target_type when 'refund' then 'refund_id' else 'incident_id' end)
+        is distinct from p_target_id
+     or (v_note.detail ? 'refund_id') = (v_note.detail ? 'incident_id') then
+    raise exception using errcode = '22023', message = 'admin:target_mismatch';
+  end if;
+  if exists (select 1 from public.flw_refund_checks f where f.audit_id = p_audit_id) then
+    raise exception using errcode = '22023', message = 'admin:check_recorded';
   end if;
   insert into public.flw_refund_checks (test_mode, target_type, target_id, flw_refund_id, tx_id,
                                         amount_kobo, currency, status, disburse_status, state, audit_id)
@@ -2279,13 +2301,16 @@ declare
   v_code    text;
   v_contact jsonb;
 begin
+  -- D4: a repeated key answers with the recorded result only. Details are
+  -- shown only after the gate, the rate limit and a new audit row, so a key
+  -- kept from before a demotion or the limit shows nothing; take a new one.
+  v_prior := public.admin_replay(p_request_key, v_admin.user_id, c_action, p_user_id::text);
+  if v_prior is not null then return v_prior; end if;
   select * into v_profile from public.profiles where id = p_user_id;
   if found then
     v_contact := jsonb_build_object('email', v_profile.email, 'fullName', v_profile.full_name,
                                     'phone', v_profile.phone, 'businessName', v_profile.business_name);
   end if;
-  v_prior := public.admin_replay(p_request_key, v_admin.user_id, c_action, p_user_id::text);
-  if v_prior is not null then return v_prior || jsonb_build_object('contact', v_contact); end if;
   if v_profile.id is null then
     return public.admin_record(v_admin, c_action, null, 'customer', p_user_id::text, null, p_reason,
                                p_request_key, 'refused', 'NOT_FOUND', null, '{}');
@@ -2313,12 +2338,13 @@ declare
   v_side   text;
   v_out    jsonb;
 begin
+  -- As admin_reveal_customer: a replay carries no contact details.
+  v_prior := public.admin_replay(p_request_key, v_admin.user_id, c_action, p_domain_id::text);
+  if v_prior is not null then return v_prior; end if;
   select * into v_domain from public.domains where id = p_domain_id;
   if found then
     v_out := jsonb_build_object('registrant', v_domain.registrant, 'contacts', v_domain.contacts);
   end if;
-  v_prior := public.admin_replay(p_request_key, v_admin.user_id, c_action, p_domain_id::text);
-  if v_prior is not null then return v_prior || coalesce(v_out, '{}'::jsonb); end if;
   if v_domain.id is null then
     return public.admin_record(v_admin, c_action, null, 'domain', p_domain_id::text, null, p_reason,
                                p_request_key, 'refused', 'NOT_FOUND', null, '{}');
