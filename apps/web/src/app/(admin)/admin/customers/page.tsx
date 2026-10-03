@@ -1,18 +1,17 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { CustomersSkeleton } from '@/features/admin/components/customers/customers-skeleton'
+import { CustomersView } from '@/features/admin/components/customers/customers-view'
 
 export const metadata: Metadata = { title: 'Customers' }
 
-/** Package B8 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminCustomersPage() {
+type Search = Promise<Record<string, string | string[] | undefined>>
+
+/** Every account, masked; found by email only through a POST (docs/ADMIN-SPEC.md §5.2, B8). */
+export default function AdminCustomersPage({ searchParams }: { searchParams: Search }) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Customers"
-        description="Accounts, masked; a search by exact email is a POST."
-      />
+    <Suspense fallback={<CustomersSkeleton />}>
+      <CustomersView searchParams={searchParams} />
     </Suspense>
   )
 }

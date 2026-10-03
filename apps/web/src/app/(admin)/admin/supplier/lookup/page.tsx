@@ -1,19 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { LookupView } from '@/features/admin/components/supplier/lookup-view'
+import { SupplierPageSkeleton } from '@/features/admin/components/supplier/supplier-header'
 
 export const metadata: Metadata = { title: 'Registry lookup' }
 
-/** Package B6 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
+/** Live, audited reads of one domain, certificate or price (docs/ADMIN-SPEC.md §5.2 B6). Routing only. */
 export default function AdminSupplierLookupPage() {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Registry lookup"
-        description="Read one domain, a transfer or a certificate from the supplier, audited."
-        parent={{ label: 'Supplier', href: '/admin/supplier' }}
-      />
+    <Suspense fallback={<SupplierPageSkeleton cards={4} />}>
+      <LookupView />
     </Suspense>
   )
 }
