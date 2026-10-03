@@ -363,6 +363,18 @@ describe('admin boundaries', () => {
     }
   })
 
+  it('names every admin page in its title (the layout adds " · Admin")', () => {
+    // Axe once found an admin page with no <title>: each page says what it is.
+    const pages = ALL.filter((file) => /^app\/\(admin\)\/admin\/(.+\/)?page\.tsx$/.test(file.rel))
+    expect(pages.length).toBeGreaterThan(30)
+    for (const page of pages) {
+      const named =
+        /export const metadata: Metadata = \{[^}]*\btitle: '[^']+'/.test(page.text) ||
+        /export async function generateMetadata\b[\s\S]*\btitle:/.test(page.text)
+      expect(named, `${page.rel} sets no title`).toBe(true)
+    }
+  })
+
   it('runs every admin e2e spec without screenshots, video or traces', () => {
     const e2e = join(SRC, '../tests/e2e')
     const specs = readdirSync(e2e).filter((name) => /^admin.*\.spec\.ts$/.test(name))
@@ -372,5 +384,8 @@ describe('admin boundaries', () => {
       expect(text, spec).toMatch(/import \{[^}]*\btest\b[^}]*\} from '\.\/support\/admin'/)
       expect(text, spec).not.toMatch(/import \{[^}]*\btest\b[^}]*\} from '@playwright\/test'/)
     }
+    // Nor the error-context.md a failure writes, which holds the page's text.
+    const support = readFileSync(join(e2e, 'support/admin.ts'), 'utf8')
+    expect(support).toMatch(/'error-context\.md'[\s\S]*devNull/)
   })
 })

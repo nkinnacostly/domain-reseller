@@ -285,6 +285,44 @@ test.describe('an enrolled admin', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Operations' })).toBeVisible()
   })
 
+  test('every admin page names itself in the title', async ({ page }) => {
+    test.setTimeout(180_000)
+    if (!admin) throw new Error('no admin')
+    await signInAsAdmin(page, admin, '/admin')
+    // A page without a <title> fails axe's document-title rule (S8).
+    for (const [path, title] of [
+      ['/admin', 'Overview'],
+      ['/admin/orders', 'Orders'],
+      ['/admin/refunds', 'Refunds'],
+      ['/admin/refunds/incidents', 'Payment incidents'],
+      ['/admin/queue', 'Queue'],
+      ['/admin/queue/pending', 'Paid, no job'],
+      ['/admin/queue/ssl-jobs', 'Certificate jobs'],
+      ['/admin/alerts', 'Alerts'],
+      ['/admin/supplier', 'Supplier'],
+      ['/admin/supplier/ledger', 'Supplier ledger'],
+      ['/admin/supplier/calls', 'Supplier calls'],
+      ['/admin/supplier/lookup', 'Registry lookup'],
+      ['/admin/supplier/catalogue', 'Price list'],
+      ['/admin/money', 'Money'],
+      ['/admin/customers', 'Customers'],
+      ['/admin/domains', 'Domains'],
+      ['/admin/ssl', 'Certificates'],
+      ['/admin/emails', 'Emails'],
+      ['/admin/pricing', 'Pricing'],
+      ['/admin/pricing/fx', 'Exchange rates'],
+      ['/admin/settings', 'Settings'],
+      ['/admin/settings/extensions', 'Extensions'],
+      ['/admin/settings/ssl-products', 'SSL products'],
+      ['/admin/settings/presets', 'Nameserver presets'],
+      ['/admin/settings/admins', 'Admins'],
+      ['/admin/audit', 'Audit log'],
+    ] as const) {
+      await page.goto(path)
+      await expect(page, path).toHaveTitle(`${title} · Admin`)
+    }
+  })
+
   test('a session without the code is sent to enter it', async ({ page }) => {
     if (!admin) throw new Error('no admin')
     await page.goto('/sign-in')
