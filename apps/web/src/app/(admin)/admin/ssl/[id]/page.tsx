@@ -1,19 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { CertificateView } from '@/features/admin/components/ssl/certificate-view'
+import { CertificateSkeleton } from '@/features/admin/components/ssl/ssl-skeleton'
 
 export const metadata: Metadata = { title: 'Certificate' }
 
-/** Package B10 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminSslDetailPage() {
+/** One certificate, read only, with a status read on a click (docs/ADMIN-SPEC.md §5.2, B10). */
+export default function AdminSslDetailPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Certificate"
-        description="One certificate: its status, set-up and jobs."
-        parent={{ label: 'Certificates', href: '/admin/ssl' }}
-      />
+    <Suspense fallback={<CertificateSkeleton />}>
+      <CertificateView params={params} />
     </Suspense>
   )
 }
