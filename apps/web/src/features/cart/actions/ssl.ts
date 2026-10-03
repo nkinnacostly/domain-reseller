@@ -1,12 +1,15 @@
 'use server'
 
 import { sslHostnameSchema, supplierName } from '@dr/shared'
+import { after } from 'next/server'
 import { z } from 'zod'
 import { getSslCatalogue } from '@/features/ssl/queries/catalogue'
 import { sslNameInUse } from '@/features/ssl/queries/names'
+import { requirePaymentEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
+import { createServiceClient } from '@/lib/supabase/service'
 import { MAX_CART_ITEMS } from '../lib/lines'
 import { existingCartId, ownerForWrite, setCountCookie } from '../queries/owner'
 import { countLines, deleteSslLine, findOrCreateCartId, insertSslLine } from '../queries/store'
@@ -69,6 +72,7 @@ export const addSslToCart = actionClient
         quotedTotalKobo: product.price.priceKobo,
         quotedFxRateId: catalogue.rateId,
       })
+      countCartAdd()
       const count = await countLines(cartId)
       await setCountCookie(count)
       return { count, name }
@@ -93,3 +97,28 @@ export const removeSslCartLine = actionClient
       return { error: FAILED }
     }
   })
+
+/**
+ * ADMIN-SPEC §6: one `cart_add` in the funnel, on the side checkout would be
+ * paid on. Counted once the response has gone (`after`), and a count that
+ * fails never fails the add.
+ */
+function countCartAdd() {
+  const failed = (code?: string) => logger.warn({ code }, 'cart add not counted')
+  try {
+    after(async () => {
+      try {
+        const { testMode } = requirePaymentEnv()
+        const { error } = await createServiceClient().rpc('bump_funnel', {
+          p_event: 'cart_add',
+          p_test_mode: testMode,
+        })
+        if (error) failed(error.code)
+      } catch {
+        failed()
+      }
+    })
+  } catch {
+    failed()
+  }
+}

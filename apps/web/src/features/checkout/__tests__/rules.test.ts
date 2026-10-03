@@ -88,11 +88,16 @@ describe('wholesaleCostUsd (FR-C8)', () => {
   ])
 
   it('adds registration, renewals and the ICANN fee per year on generic extensions', () => {
-    expect(wholesaleCostUsd([{ tld: 'com', periodYears: 2 }], costs, 0.2)).toBe(23.22)
+    // $11.31 + $11.51, and $0.20 a year for ICANN: $23.22.
+    expect(wholesaleCostUsd([{ tld: 'com', periodYears: 2 }], costs, 0.2)).toEqual([
+      { supplierCents: 2282, icannCents: 40 },
+    ])
   })
 
   it('adds no ICANN fee on country extensions', () => {
-    expect(wholesaleCostUsd([{ tld: 'co', periodYears: 1 }], costs, 0.2)).toBe(19.49)
+    expect(wholesaleCostUsd([{ tld: 'co', periodYears: 1 }], costs, 0.2)).toEqual([
+      { supplierCents: 1949, icannCents: 0 },
+    ])
   })
 
   it('refuses to guess the cost of an extension it has no price for', () => {
@@ -101,8 +106,19 @@ describe('wholesaleCostUsd (FR-C8)', () => {
 
   it('costs a block-sold extension at what the supplier lists for the period (.ai)', () => {
     // The supplier's listed .ai prices on 29 Sept 2026: 2 years $199.80, 4 years $399.60.
-    expect(wholesaleCostUsd([{ tld: 'ai', periodYears: 2 }], costs, 0.2)).toBe(199.8)
-    expect(wholesaleCostUsd([{ tld: 'ai', periodYears: 4 }], costs, 0.2)).toBe(399.6)
+    expect(
+      wholesaleCostUsd(
+        [
+          { tld: 'ai', periodYears: 2 },
+          { tld: 'ai', periodYears: 4 },
+        ],
+        costs,
+        0.2,
+      ),
+    ).toEqual([
+      { supplierCents: 19_980, icannCents: 0 },
+      { supplierCents: 39_960, icannCents: 0 },
+    ])
   })
 
   it('refuses to cost a period shorter than the first term the registry sells', () => {

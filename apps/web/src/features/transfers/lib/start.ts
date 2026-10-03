@@ -1,4 +1,5 @@
 import { TRANSFER_LOCK_DAYS, type TransferRefusal } from '@dr/shared'
+import { type LineCost, lineCostUsd, type UsdAmount } from '@/features/checkout/lib/cost'
 import type { TransferVerdict } from './eligibility'
 
 /**
@@ -46,15 +47,16 @@ export const TRANSFER_REFUSAL_MESSAGE: Record<TransferRefusal, string> = {
 }
 
 /**
- * What the transfer costs us at the supplier, in USD — for the float
- * pre-flight (FR-C8): the transfer price, plus the ICANN fee on generic
- * extensions, which a transfer pays like a renewal (PRD §7.6).
+ * What the transfer costs us at the supplier, in integer cents — for the
+ * float pre-flight (FR-C8) and the line's `order_item_costs` row (ADMIN-SPEC
+ * §6): the transfer price, plus the ICANN fee on generic extensions, which a
+ * transfer pays once, like a year's renewal (PRD §7.6), split out.
  */
 export function transferCostUsd(
-  cost: { transferUsd: number; isCountryCode: boolean },
-  icannFeeUsd: number,
-): number {
-  return Math.round((cost.transferUsd + (cost.isCountryCode ? 0 : icannFeeUsd)) * 100) / 100
+  cost: { transferUsd: UsdAmount; isCountryCode: boolean },
+  icannFeeUsd: UsdAmount,
+): LineCost {
+  return lineCostUsd({ kind: 'transfer', ...cost }, icannFeeUsd)
 }
 
 /**
