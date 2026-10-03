@@ -167,7 +167,7 @@ export async function IncidentsView({ searchParams }: { searchParams: Promise<Se
     getRefundStats(side),
   ])
   const sideWord = side === 'test' ? 'Test' : 'Live'
-  const filtered = params.state !== 'open' || params.kinds.length > 0
+  const filtered = params.state !== 'open' || params.kinds.length > 0 || params.id !== null
 
   return (
     <PanelPage>
@@ -207,6 +207,20 @@ export async function IncidentsView({ searchParams }: { searchParams: Promise<Se
           href={(value) => incidentsHref(params, { kinds: toggled(params.kinds, value) })}
           allHref={incidentsHref(params, { kinds: [] })}
         />
+        {params.id !== null ? (
+          <p
+            data-testid="incident-id-filter"
+            className="flex flex-wrap items-center gap-x-3 text-sm text-foreground"
+          >
+            <span>Incident #{params.id} only, resolved or not.</span>
+            <Link
+              href={incidentsHref(params, { id: null })}
+              className={cn(LINK, 'inline-flex min-h-11 items-center hover:no-underline')}
+            >
+              Show every incident
+            </Link>
+          </p>
+        ) : null}
       </Panel>
 
       {list.ok ? (

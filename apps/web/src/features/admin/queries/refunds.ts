@@ -466,8 +466,10 @@ export async function listIncidents(
       'id, created_at, kind, order_id, provider_reference, detail, resolved_at, resolved_by, test_mode',
       { count: 'exact' },
     )
-  if (params.state === 'open') query = query.is('resolved_at', null)
-  if (params.state === 'resolved') query = query.not('resolved_at', 'is', null)
+  // One incident by its number is shown whether or not it is resolved.
+  if (params.id !== null) query = query.eq('id', params.id)
+  else if (params.state === 'open') query = query.is('resolved_at', null)
+  else if (params.state === 'resolved') query = query.not('resolved_at', 'is', null)
   if (params.kinds.length > 0) query = query.in('kind', params.kinds)
   const { from, to } = pageRange(params)
   const { data, error, count } = await query

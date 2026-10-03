@@ -412,6 +412,24 @@ describe('listIncidents', () => {
     expect(callsOf(calls, 'refunds.')).toEqual([])
   })
 
+  it('shows one incident by its number, resolved or not', async () => {
+    const calls = service({
+      payment_incidents: [{ data: [{ ...incident, resolved_at: '2026-10-03T09:00:00Z' }] }],
+      admin_orders_v: [{ data: [] }],
+      refunds: [{ data: [] }],
+    })
+    const result = await listIncidents(await principal(), 'live', parseIncidentParams({ id: '42' }))
+    if (!result.ok) throw new Error('failed')
+    expect(result.rows.map((row) => row.id)).toEqual([42])
+    expect(callsOf(calls, 'payment_incidents.eq')).toContainEqual([
+      'payment_incidents.eq',
+      'id',
+      42,
+    ])
+    expect(callsOf(calls, 'payment_incidents.is')).toEqual([])
+    expect(callsOf(calls, 'payment_incidents.not')).toEqual([])
+  })
+
   it('fails when the list or its refunds cannot be read', async () => {
     service({ payment_incidents: [{ error: { code: '500' } }] })
     expect(await listIncidents(await principal(), 'live', parseIncidentParams({}))).toEqual({

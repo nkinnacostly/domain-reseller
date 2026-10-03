@@ -237,6 +237,7 @@ describe('incidents', () => {
   it('reads the list URL strictly: open, newest first, by default', () => {
     expect(parseIncidentParams({})).toEqual({
       state: 'open',
+      id: null,
       kinds: [],
       dir: 'desc',
       page: 1,
@@ -252,6 +253,7 @@ describe('incidents', () => {
       }),
     ).toEqual({
       state: 'resolved',
+      id: null,
       kinds: ['mode_mismatch', 'underpayment'],
       dir: 'asc',
       page: 3,
@@ -274,6 +276,21 @@ describe('incidents', () => {
     expect(incidentsHref(parseIncidentParams({}), { dir: 'asc', per: 100 })).toBe(
       '/admin/refunds/incidents?dir=asc&per=100',
     )
+  })
+})
+
+describe('one incident by its number (§9: ?id=)', () => {
+  it('takes a number only, keeps it in links, and a chip lists incidents again', () => {
+    const params = parseIncidentParams({ id: '42' })
+    expect(params.id).toBe(42)
+    expect(incidentsHref(params)).toBe('/admin/refunds/incidents?id=42')
+    expect(incidentsHref(params, { state: 'resolved' })).toBe(
+      '/admin/refunds/incidents?state=resolved',
+    )
+    expect(incidentsHref(params, { id: null })).toBe('/admin/refunds/incidents')
+    for (const bad of ['0', '-1', 'x', '1e3', '12345678901234567']) {
+      expect(parseIncidentParams({ id: bad }).id, bad).toBeNull()
+    }
   })
 })
 

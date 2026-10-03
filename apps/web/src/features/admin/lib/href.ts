@@ -20,9 +20,10 @@ export const adminHref = {
   overview: () => '/admin',
   order: (id: string | null | undefined) => byUuid('/admin/orders', id),
   refund: (id: string | null | undefined) => byUuid('/admin/refunds', id),
+  /** One incident, resolved or not, scrolled to its card (§9: `?id=`). */
   incident: (id: number | string | null | undefined) =>
     id !== null && id !== undefined && DIGITS.test(String(id))
-      ? `/admin/refunds/incidents#incident-${id}`
+      ? `/admin/refunds/incidents?id=${id}#incident-${id}`
       : '/admin/refunds/incidents',
   job: (id: string | null | undefined) => byUuid('/admin/queue/jobs', id),
   sslJob: (id: string | null | undefined) => byUuid('/admin/queue/ssl-jobs', id),

@@ -536,7 +536,7 @@ describe('href', () => {
     expect(adminHref.customer(id)).toMatch(/^\/admin\/customers\//)
     expect(adminHref.certificate(id)).toMatch(/^\/admin\/ssl\//)
     expect(adminHref.preset(id)).toMatch(/^\/admin\/settings\/presets\//)
-    expect(adminHref.incident(12)).toBe('/admin/refunds/incidents#incident-12')
+    expect(adminHref.incident(12)).toBe('/admin/refunds/incidents?id=12#incident-12')
     expect(adminHref.incident('x')).toBe('/admin/refunds/incidents')
     expect(adminHref.audit('42')).toBe('/admin/audit?id=42')
     expect(adminHref.audit(undefined)).toBe('/admin/audit')

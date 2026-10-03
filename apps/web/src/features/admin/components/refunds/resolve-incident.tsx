@@ -7,6 +7,7 @@ import { resolveIncident, resolveMoneyIncident } from '@/features/admin/actions/
 import { ConfirmAction, type ConfirmRow } from '@/features/admin/components/confirm-action'
 import { adminOutcome } from '@/features/admin/lib/errors'
 import { formatWat } from '@/features/admin/lib/format'
+import { adminHref } from '@/features/admin/lib/href'
 import {
   CHECK_STEP,
   HANDLED_OUTSIDE_CHECK,
@@ -54,7 +55,7 @@ export function ResolveIncident({
   const [refundId, setRefundId] = useState<string | null>(incident.completedRefunds[0]?.id ?? null)
   const [check, setCheck] = useState<AdminFlwRefundCheck | null>(null)
   const now = useNow(check !== null)
-  const returnTo = `/admin/refunds/incidents#incident-${incident.id}`
+  const returnTo = adminHref.incident(incident.id)
   const kind = INCIDENT_KIND_LABEL[incident.kind] ?? incident.kind.replace(/_/g, ' ')
   const rows: ConfirmRow[] = [
     { label: 'Incident', value: kind },

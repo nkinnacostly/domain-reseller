@@ -535,7 +535,7 @@ describe('one order', () => {
     ).getByRole('table')
     expect(within(incidents).getByRole('link', { name: 'Incident 42' })).toHaveAttribute(
       'href',
-      '/admin/refunds/incidents#incident-42',
+      '/admin/refunds/incidents?id=42#incident-42',
     )
     expect(within(incidents).getByText('Resolved')).toBeInTheDocument()
     expect(within(incidents).getByText(/by owner$/)).toBeInTheDocument()
