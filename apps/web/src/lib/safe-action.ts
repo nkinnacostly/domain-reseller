@@ -13,7 +13,7 @@ import {
   type AdminActionId,
   rank,
 } from '@/features/admin/lib/actions'
-import { AdminRefusal, SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
+import { AdminRefusal, adminAccessError, SERVER_CRASH_WORDS } from '@/features/admin/lib/errors'
 import { type AdminPrincipal, adminWhoami } from '@/features/admin/queries/session'
 import {
   describeHold,
@@ -185,6 +185,12 @@ export function adminAction<S extends z.ZodType>(
     }) as unknown as AdminActionClient<S>
 }
 
+/** challengeAndVerify's answers that mean the typed code itself was wrong or stale. */
+const WRONG_CODE_ERRORS: ReadonlySet<string> = new Set([
+  'mfa_verification_failed',
+  'mfa_challenge_expired',
+])
+
 /**
  * A money action (D6): the input carries the six-digit code from the dialog.
  * After validation the code is verified against this session's own factor —
@@ -195,6 +201,9 @@ export function adminMoneyAction<S extends z.ZodType<{ code: string }>>(
   action: AdminActionId,
   schema: S,
 ): AdminActionClient<S> {
+  // adminAction's mirror: a standard action built here would demand a code
+  // it does not need. A programming error, caught here first.
+  if (!ADMIN_ACTIONS[action].money) throw new Error(`standard action ${action} on adminMoneyAction`)
   return adminBase
     .metadata({ action })
     .inputSchema(schema as z.ZodType)
@@ -207,7 +216,13 @@ export function adminMoneyAction<S extends z.ZodType<{ code: string }>>(
         factorId: first.admin.factorId,
         code,
       })
-      if (error) throw new AdminRefusal('WRONG_CODE')
+      if (error) {
+        // Only a wrong or expired code is the person's to fix. A rate limit or
+        // a failed request is not their code: adminAccessError makes it an
+        // unknown outcome, so the dialog keeps its key and a retry is safe.
+        if (WRONG_CODE_ERRORS.has(error.code ?? '')) throw new AdminRefusal('WRONG_CODE')
+        throw adminAccessError(error.code)
+      }
       const admin = await adminWhoami(first.db, 5)
       return next({ ctx: { user: first.user, db: first.db, admin, action: metadata.action } })
     }) as unknown as AdminActionClient<S>

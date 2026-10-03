@@ -146,19 +146,42 @@ describe('adminMoneyAction (D6)', () => {
     expect(body).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses a wrong code in words, and nothing reaches a wrapper', async () => {
-    const session = use(
-      sessionClient({
-        rpc: { admin_whoami: { data: whoami() } },
-        verify: { error: { message: 'Invalid TOTP code entered' } },
-      }),
-    )
-    const result = await approve({ refundId: REQUEST_ID, code: '000000' })
+  it.each(['mfa_verification_failed', 'mfa_challenge_expired'])(
+    'refuses a wrong code (%s) in words, and nothing reaches a wrapper',
+    async (code) => {
+      const session = use(
+        sessionClient({
+          rpc: { admin_whoami: { data: whoami() } },
+          verify: { error: { message: 'Invalid TOTP code entered', code } },
+        }),
+      )
+      const result = await approve({ refundId: REQUEST_ID, code: '000000' })
 
-    expect(result).toEqual({ serverError: WRONG_CODE_WORDS })
-    expect(session.rpc).toHaveBeenCalledTimes(1)
-    expect(session.rpc).toHaveBeenCalledWith('admin_whoami', {})
+      expect(result).toEqual({ serverError: WRONG_CODE_WORDS })
+      expect(adminOutcome({ serverError: result.serverError })).toMatchObject({ code: 'REFUSED' })
+      expect(session.rpc).toHaveBeenCalledTimes(1)
+      expect(session.rpc).toHaveBeenCalledWith('admin_whoami', {})
+      expect(body).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([
+    ['a rate limit', { message: 'Too many requests', code: 'over_request_rate_limit' }],
+    ['a failed request', { message: 'TypeError: fetch failed' }],
+  ])("calls %s while verifying an unknown outcome, never the person's code", async (_, error) => {
+    use(sessionClient({ rpc: { admin_whoami: { data: whoami() } }, verify: { error } }))
+    const result = await approve({ refundId: REQUEST_ID, code: '123456' })
+
+    expect(result).toEqual({ serverError: SERVER_CRASH_WORDS })
+    expect(adminOutcome({ serverError: result.serverError })).toMatchObject({
+      ok: false,
+      code: UNKNOWN_OUTCOME,
+    })
     expect(body).not.toHaveBeenCalled()
+  })
+
+  it('will not build a standard action, which would demand a code it does not need', () => {
+    expect(() => adminMoneyAction('email.requeue', schema)).toThrow(/standard action/)
   })
 
   it('refuses a code that is not six digits before any call', async () => {

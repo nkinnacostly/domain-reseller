@@ -370,7 +370,7 @@ export const adminMoneyAction = adminBase.useValidated(/* as above, plus the cod
   - `TEST_ADMIN`: "Test administrators can't do this on live records."
   - `RATE_LIMITED`: "You've looked up a lot of customers this hour. Wait, or ask the owner."
   - `not_admin`: "This needs an administrator."
-  - A wrong dialog code: "That code didn't work. Check your authenticator app and try again."
+  - A wrong dialog code: "That code didn't work. Check your authenticator app and try again." Only `mfa_verification_failed` and `mfa_challenge_expired` from `challengeAndVerify` are a wrong code; any other error there (a rate limit, a failed request) goes through `adminAccessError` as an unknown outcome, so the dialog keeps its key. `adminMoneyAction` throws when built for an action whose tier is not money, as `adminAction` does for one that is. *(Package A review, 3 Oct 2026.)*
 - **The result contract for every admin action:** `{ ok: true; auditId: number; after?: Record<string, unknown>; replayed?: true } | { ok: false; code: string; message: string; auditId?: number }`. `message` comes from `features/admin/lib/errors.ts`. A raw `sqlerrm` is never shown.
 - **Gateway-backed actions** call `rpc('admin_note', …)` in the action body after validation. They refuse when the note is refused, then call the gateway with the note's id.
 
