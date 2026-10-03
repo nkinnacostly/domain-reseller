@@ -73,7 +73,10 @@ const stampOf = () => `${Date.now().toString(36)}${Math.random().toString(36).sl
  * registers nowhere but the sandbox, and only `settleTestJob` moves its job.
  *
  * @param {string} userId
- * @param {{ kind?: 'register' | 'transfer', tag?: string, priceKobo?: number }} [options]
+ * A certificate line (`kind: 'ssl'`) needs the `productCode` of a product on
+ * sale; paying for it creates its certificate and order job (migration 39).
+ *
+ * @param {{ kind?: 'register' | 'transfer' | 'ssl', tag?: string, priceKobo?: number, productCode?: string }} [options]
  * @returns {Promise<{ orderId: string, orderNumber: string, lineId: string, domain: string, providerReference: string, totalKobo: number }>}
  */
 export async function seedPaidTestOrder(userId, options = {}) {
@@ -118,6 +121,7 @@ export async function seedPaidTestOrder(userId, options = {}) {
       auto_renew: false,
       price_kobo: priceKobo,
       renewal_kobo: priceKobo,
+      ...(options.productCode ? { ssl_product_code: options.productCode } : {}),
     })
     .select('id')
     .single()
@@ -164,6 +168,41 @@ export async function settleTestJob(orderId, outcome) {
   const claim = await db.rpc('claim_job', { p_worker: 'e2e', p_test_mode: true, p_job_id: job.id })
   if (claim.error) throw claim.error
   const failed = await db.rpc('fail_job', {
+    p_job_id: job.id,
+    p_code: outcome.code,
+    p_message: 'e2e',
+    p_needs_attention: outcome.needsAttention,
+  })
+  if (failed.error) throw failed.error
+  return job.id
+}
+
+/**
+ * The certificate-order twin of `settleTestJob`: the seeded certificate's
+ * job, claimed by name and failed with `code` (`claim_ssl_job`,
+ * `fail_ssl_job`). With `needsAttention` it waits for a person and, never
+ * sent, offers Fail.
+ *
+ * @param {string} orderId
+ * @param {{ code: string, needsAttention: boolean }} outcome
+ * @returns {Promise<string>} the certificate job's id
+ */
+export async function settleTestSslJob(orderId, outcome) {
+  const db = service()
+  const { data: job, error } = await db
+    .from('ssl_jobs')
+    .select('id, test_mode, ssl_certificates!inner(order_items!inner(order_id))')
+    .eq('ssl_certificates.order_items.order_id', orderId)
+    .single()
+  if (error) throw error
+  if (!job.test_mode) throw new Error('admin-seed: only a test-mode certificate job is settled')
+  const claim = await db.rpc('claim_ssl_job', {
+    p_worker: 'e2e',
+    p_test_mode: true,
+    p_job_id: job.id,
+  })
+  if (claim.error) throw claim.error
+  const failed = await db.rpc('fail_ssl_job', {
     p_job_id: job.id,
     p_code: outcome.code,
     p_message: 'e2e',
