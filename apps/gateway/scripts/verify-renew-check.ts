@@ -4,8 +4,8 @@
  * as Renew, so before the dashboard may call it we show, in the sandbox, that
  * it changes neither the balance, nor the domain's expiry, nor the ledger.
  *
- *   pnpm --filter @dr/gateway prove:renew-check                 # report
- *   pnpm --filter @dr/gateway prove:renew-check -- --record     # and write the fixture
+ *   pnpm --filter @dr/gateway verify:renew-check                 # report
+ *   pnpm --filter @dr/gateway verify:renew-check -- --record     # and write the fixture
  *
  * OTE only, with DNA_API_TEST_KEY: there is no flag for production. Each call
  * goes through createAdminSupplier's allowlist — reads, and the renew check —

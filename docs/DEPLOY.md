@@ -560,6 +560,21 @@ git, or from the dashboard.
 6. **`SUPABASE_ACCESS_TOKEN` and the database password are never set in CI or
    on Vercel.** The dashboard needs neither; with either, a leaked build log
    could add an admin.
+7. **The "Would the registry renew it?" check.** `domains/renew/check` takes
+   the same input as Renew, so the dashboard calls it only because a sandbox
+   run showed it changes nothing: the OTE balance, the domain's expiry and the
+   ledger's entry count, read before and after (`RENEW_CHECK_ENABLED` in
+   `packages/shared/src/admin/supplier.ts`). To see it again, from a machine
+   the OTE sandbox accepts, with `DNA_API_TEST_KEY` and `DNA_RESELLER_ID` in
+   `.env` — it has no production setting:
+   ```bash
+   pnpm --filter @dr/gateway verify:renew-check               # exit 0: nothing changed
+   pnpm --filter @dr/gateway verify:renew-check -- --record   # and update the recorded run
+   ```
+   The script is `apps/gateway/scripts/verify-renew-check.ts`; its last run is
+   `apps/gateway/scripts/fixtures/renew-check-ote.json`, which a gateway test
+   holds the flag to. Exit 2 means something changed: set the flag to `false`
+   and deploy before anyone presses the button.
 
 Deploy order for the dashboard: migrations 40 and 41, then the gateway with
 `GATEWAY_ADMIN_SECRET`, then the web, then step 2 above (§5b).

@@ -172,7 +172,7 @@ describe('the admin module’s source', () => {
 
 describe('the renew check', () => {
   // v2 review point 8, §9 A acceptance: on only while the recorded OTE proof
-  // (scripts/prove-renew-check.ts) shows it changed nothing.
+  // (scripts/verify-renew-check.ts) shows it changed nothing.
   it('is on only with a recorded sandbox run that changed nothing', () => {
     const fixture = fileURLToPath(
       new URL('../../scripts/fixtures/renew-check-ote.json', import.meta.url),
