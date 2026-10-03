@@ -1,19 +1,19 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { IncidentsView } from '@/features/admin/components/refunds/incidents-view'
 import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
 
 export const metadata: Metadata = { title: 'Payment incidents' }
 
-/** Package B3 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminRefundsIncidentsPage() {
+/** Charges that could not be applied, until someone resolves them (docs/ADMIN-SPEC.md §5.2 B3). */
+export default function AdminRefundsIncidentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   return (
     <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Payment incidents"
-        description="Charges that did not match an order, until someone resolves them."
-        parent={{ label: 'Refunds', href: '/admin/refunds' }}
-      />
+      <IncidentsView searchParams={searchParams} />
     </Suspense>
   )
 }

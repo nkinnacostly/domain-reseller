@@ -1,19 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { RefundView } from '@/features/admin/components/refunds/refund-view'
 import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
 
 export const metadata: Metadata = { title: 'Refund' }
 
-/** Package B3 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminRefundsDetailPage() {
+/** One refund: why it waits, its limits, its timeline and its buttons (docs/ADMIN-SPEC.md §5.2 B3). */
+export default function AdminRefundPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Refund"
-        description="One refund: why it waits, its limits and its timeline."
-        parent={{ label: 'Refunds', href: '/admin/refunds' }}
-      />
+      <RefundView params={params} />
     </Suspense>
   )
 }
