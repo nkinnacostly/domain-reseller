@@ -36,8 +36,9 @@ export function adminHrefForAlertKey(key: string): string {
     case 'refund_slow':
       return byUuid('/admin/refunds', id)
     case 'incident':
+      // By its number, so the incident shows whether or not it is resolved.
       return DIGITS.test(id)
-        ? `/admin/refunds/incidents#incident-${id}`
+        ? `/admin/refunds/incidents?id=${id}#incident-${id}`
         : '/admin/refunds/incidents'
     case 'drift':
       return '/admin/alerts?tab=drift'
@@ -71,8 +72,8 @@ export function adminHrefForAlertKey(key: string): string {
     case 'admin_test_not_e2e':
       return '/admin/settings/admins'
     case 'admin_burst':
-      // Keyed by the admin's label, not an audit row.
-      return LABEL.test(id) ? `/admin/audit?label=${id}` : '/admin/audit'
+      // Keyed by the admin's label, not an audit row: the log filtered to that admin.
+      return LABEL.test(id) ? `/admin/audit?admin=${id}` : '/admin/audit'
     case 'admin_limit_raised':
     case 'admin_preset_changed':
       return DIGITS.test(id) ? `/admin/audit?id=${id}` : '/admin/audit'

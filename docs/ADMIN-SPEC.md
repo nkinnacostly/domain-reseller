@@ -1117,7 +1117,7 @@ The periodic preset checker also checks open drafts (`preset_drafts_for_check()`
 | `ssl_status:` | `/admin/ssl/<id>` |
 | `order_stuck:` | `/admin/orders/<id>` |
 | `refund:`, `refund_overdue:`, `refund_slow:` | `/admin/refunds/<id>` |
-| `incident:` | `/admin/refunds/incidents#incident-<id>` |
+| `incident:` | `/admin/refunds/incidents?id=<id>#incident-<id>` (that incident, resolved or not) |
 | `drift:` | `/admin/alerts?tab=drift` |
 | `reconcile_stale:`, `cron_stale:`, `cron_failed:` | `/admin/alerts?tab=health` |
 | `float_low:`, `float_cover:` | `/admin/supplier` |
@@ -1129,7 +1129,8 @@ The periodic preset checker also checks open drafts (`preset_drafts_for_check()`
 | `ledger_missing:` | `/admin/orders?line=<id>` |
 | `ledger_*:` (others) | `/admin/supplier/ledger?trace=<id>` |
 | `admin_changed:`, `admin_factor_missing:`, `admin_test_not_e2e:` | `/admin/settings/admins` |
-| `admin_burst:`, `admin_limit_raised:`, `admin_preset_changed:` | `/admin/audit?id=<id>` |
+| `admin_burst:` | `/admin/audit?admin=<label>` (the key holds the admin's label, not an entry) |
+| `admin_limit_raised:`, `admin_preset_changed:` | `/admin/audit?id=<id>` |
 | anything else | `/admin/alerts` |
 
 - **Alert keys.** `sync_alerts()` is unchanged and returns no `key`. **`alerts/store.ts` then selects `id, key` from `ops_alerts` for the returned ids** (`service_role` has SELECT) and adds `key` to `DueAlert`.

@@ -550,6 +550,6 @@ describe('href', () => {
       '/admin/ssl?line=0f0e0d0c-0b0a-4908-8706-050403020100',
     )
     expect(adminHref.certificateForLine('shop.ng')).toBe('/admin/ssl')
-    expect(adminHref.alert('admin_burst:ops')).toBe('/admin/audit?label=ops')
+    expect(adminHref.alert('admin_burst:ops')).toBe('/admin/audit?admin=ops')
   })
 })

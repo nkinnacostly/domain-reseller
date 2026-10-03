@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseAlertsParams } from '@/features/admin/lib/alerts-params'
 import {
   DEFAULT_PERIOD,
   kpis,
@@ -12,6 +13,7 @@ import {
   attentionTiles,
   nothingNeedsAPerson,
 } from '@/features/admin/lib/overview-links'
+import { parseIncidentParams } from '@/features/admin/lib/refunds-rules'
 import type { AttentionCounts } from '@/features/admin/queries/attention'
 import { NOW, overview } from './fixtures'
 
@@ -126,13 +128,29 @@ describe('the "needs a person" tiles', () => {
       jobs: '/admin/queue?status=needs_attention',
       alertsCritical: '/admin/alerts?severity=critical',
       drift: '/admin/alerts?tab=drift',
-      incidents: '/admin/refunds/incidents?status=unresolved',
+      incidents: '/admin/refunds/incidents',
       stuckOrders: '/admin/orders?stuck=1',
-      pendingWithoutJob: '/admin/queue?tab=pending-without-job',
+      pendingWithoutJob: '/admin/queue/pending',
       emailsFailed: '/admin/emails?status=failed',
       ledgerUnexplained: '/admin/supplier/ledger?status=unexplained',
       presetDrafts: '/admin/settings/presets?status=draft',
     })
+  })
+
+  it('land where the page reads them: each filter is one the page parses (§9)', () => {
+    const at = (key: string) => {
+      const href = attentionTiles(zero).find((tile) => tile.key === key)?.href ?? ''
+      return new URL(href, 'https://www.mydomainshub.com')
+    }
+    const alerts = parseAlertsParams(at('alertsCritical').searchParams)
+    expect(alerts).toMatchObject({ tab: 'open', severity: 'critical' })
+    expect(parseIncidentParams(Object.fromEntries(at('incidents').searchParams))).toMatchObject({
+      state: 'open',
+      id: null,
+    })
+    expect(at('pendingWithoutJob').pathname).toBe('/admin/queue/pending')
+    const drift = parseAlertsParams(at('drift').searchParams)
+    expect(drift.tab).toBe('drift')
   })
 
   it('covers the ten queues §5.2 names, each once', () => {
