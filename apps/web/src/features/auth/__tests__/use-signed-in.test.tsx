@@ -1,76 +1,63 @@
-import { createBrowserClient } from '@supabase/ssr'
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { hasSignedInHint, SIGNED_IN_HINT } from '../lib/signed-in-hint'
 import { useSignedIn } from '../lib/use-signed-in'
 
-vi.mock('@supabase/ssr', () => ({ createBrowserClient: vi.fn() }))
+const navigation = vi.hoisted(() => ({ pathname: '/' }))
+vi.mock('next/navigation', () => ({ usePathname: () => navigation.pathname }))
 
-type Listener = (event: string, session: unknown) => void
+/** The session cookies are httpOnly (ADMIN-SPEC §5.1): the header reads the proxy's hint. */
 
-/** A browser Supabase client whose session and auth events the test controls. */
-function browserClient(session: unknown) {
-  const auth = {
-    listener: undefined as Listener | undefined,
-    unsubscribe: vi.fn(),
-  }
-  vi.mocked(createBrowserClient).mockReturnValue({
-    auth: {
-      getSession: vi.fn(async () => ({ data: { session } })),
-      onAuthStateChange: vi.fn((listener: Listener) => {
-        auth.listener = listener
-        return { data: { subscription: { unsubscribe: auth.unsubscribe } } }
-      }),
-    },
-  } as never)
-  return auth
+function setCookie(value: string | null) {
+  // biome-ignore lint/suspicious/noDocumentCookie: jsdom has no Cookie Store API; the proxy sets this one
+  document.cookie =
+    value === null ? `${SIGNED_IN_HINT}=; max-age=0; path=/` : `${SIGNED_IN_HINT}=${value}; path=/`
 }
 
-beforeEach(() => vi.clearAllMocks())
+afterEach(() => {
+  setCookie(null)
+  navigation.pathname = '/'
+})
+
+describe('the signed-in hint', () => {
+  it('is exactly dr_signed_in=1', () => {
+    expect(hasSignedInHint('a=b; dr_signed_in=1')).toBe(true)
+    expect(hasSignedInHint('dr_signed_in=0')).toBe(false)
+    expect(hasSignedInHint('xdr_signed_in=1')).toBe(false)
+    expect(hasSignedInHint('')).toBe(false)
+  })
+})
 
 describe('useSignedIn', () => {
-  it('assumes signed out until the browser has been checked', () => {
-    vi.mocked(createBrowserClient).mockReturnValue({
-      auth: {
-        getSession: () => new Promise(() => {}),
-        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
-      },
-    } as never)
+  it('is signed out without the hint', () => {
     const { result } = renderHook(() => useSignedIn())
     expect(result.current).toBe(false)
   })
 
-  it('reports signed in when this browser holds a session', async () => {
-    browserClient({ access_token: 'token' })
+  it('is signed in with the hint', () => {
+    setCookie('1')
     const { result } = renderHook(() => useSignedIn())
-    await waitFor(() => expect(result.current).toBe(true))
-  })
-
-  it('stays signed out without a session', async () => {
-    const auth = browserClient(null)
-    const { result } = renderHook(() => useSignedIn())
-    await waitFor(() => expect(auth.listener).toBeDefined())
-    expect(result.current).toBe(false)
-  })
-
-  it('follows sign-in and sign-out in another tab', async () => {
-    const auth = browserClient(null)
-    const { result } = renderHook(() => useSignedIn())
-    await waitFor(() => expect(auth.listener).toBeDefined())
-
-    act(() => auth.listener?.('SIGNED_IN', { access_token: 'token' }))
     expect(result.current).toBe(true)
+  })
 
-    act(() => auth.listener?.('SIGNED_OUT', null))
+  it('reads again when the tab comes back into view, and after a navigation', () => {
+    const { result, rerender } = renderHook(() => useSignedIn())
+    expect(result.current).toBe(false)
+    setCookie('1')
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(result.current).toBe(true)
+    setCookie(null)
+    navigation.pathname = '/pricing'
+    rerender()
     expect(result.current).toBe(false)
   })
 
-  it('stops listening once the header unmounts', async () => {
-    const auth = browserClient(null)
+  it('stops listening when it unmounts', () => {
+    const remove = vi.spyOn(document, 'removeEventListener')
     const { unmount } = renderHook(() => useSignedIn())
-    await waitFor(() => expect(auth.listener).toBeDefined())
-
     unmount()
-
-    expect(auth.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(remove).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
   })
 })

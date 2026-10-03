@@ -39,6 +39,168 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_id: string
+          admin_label: string
+          admin_role: string
+          created_at: string
+          detail: Json
+          error: string | null
+          error_code: string | null
+          id: number
+          outcome: string
+          parent_id: number | null
+          reason: string | null
+          redacted_at: string | null
+          request_id: string | null
+          request_key: string | null
+          session_hash: string | null
+          side: string | null
+          target_id: string | null
+          target_test_mode: boolean | null
+          target_type: string | null
+          test_actor: boolean
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          admin_label: string
+          admin_role: string
+          created_at?: string
+          detail?: Json
+          error?: string | null
+          error_code?: string | null
+          id?: never
+          outcome: string
+          parent_id?: number | null
+          reason?: string | null
+          redacted_at?: string | null
+          request_id?: string | null
+          request_key?: string | null
+          session_hash?: string | null
+          side?: string | null
+          target_id?: string | null
+          target_test_mode?: boolean | null
+          target_type?: string | null
+          test_actor: boolean
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          admin_label?: string
+          admin_role?: string
+          created_at?: string
+          detail?: Json
+          error?: string | null
+          error_code?: string | null
+          id?: never
+          outcome?: string
+          parent_id?: number | null
+          reason?: string | null
+          redacted_at?: string | null
+          request_id?: string | null
+          request_key?: string | null
+          session_hash?: string | null
+          side?: string | null
+          target_id?: string | null
+          target_test_mode?: boolean | null
+          target_type?: string | null
+          test_actor?: boolean
+        }
+        Relationships: []
+      }
+      admin_changes: {
+        Row: {
+          at: string
+          db_user: string
+          e2e_user: boolean
+          factor_count: number | null
+          id: number
+          label: string
+          op: string
+          revoked: boolean
+          role: string | null
+          test_only: boolean
+          was_test_only: boolean | null
+        }
+        Insert: {
+          at?: string
+          db_user?: string
+          e2e_user: boolean
+          factor_count?: number | null
+          id?: never
+          label: string
+          op: string
+          revoked: boolean
+          role?: string | null
+          test_only: boolean
+          was_test_only?: boolean | null
+        }
+        Update: {
+          at?: string
+          db_user?: string
+          e2e_user?: boolean
+          factor_count?: number | null
+          id?: never
+          label?: string
+          op?: string
+          revoked?: boolean
+          role?: string | null
+          test_only?: boolean
+          was_test_only?: boolean | null
+        }
+        Relationships: []
+      }
+      admin_note_claims: {
+        Row: {
+          audit_id: number
+          claimed_at: string
+        }
+        Insert: {
+          audit_id: number
+          claimed_at?: string
+        }
+        Update: {
+          audit_id?: number
+          claimed_at?: string
+        }
+        Relationships: []
+      }
+      admins: {
+        Row: {
+          added_at: string
+          added_by: string
+          label: string
+          mfa_factor_ids: string[]
+          revoked_at: string | null
+          role: string
+          test_only: boolean
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by: string
+          label: string
+          mfa_factor_ids: string[]
+          revoked_at?: string | null
+          role: string
+          test_only?: boolean
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string
+          label?: string
+          mfa_factor_ids?: string[]
+          revoked_at?: string | null
+          role?: string
+          test_only?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       bulk_operation_items: {
         Row: {
           domain_id: string
@@ -791,6 +953,108 @@ export type Database = {
           },
         ]
       }
+      float_topups: {
+        Row: {
+          id: number
+          ngn_paid_kobo: number
+          recorded_at: string
+          recorded_by: string
+          reference: string
+          supersedes_id: number | null
+          trace_id: string
+          usd_cents: number
+        }
+        Insert: {
+          id?: never
+          ngn_paid_kobo: number
+          recorded_at?: string
+          recorded_by: string
+          reference: string
+          supersedes_id?: number | null
+          trace_id: string
+          usd_cents: number
+        }
+        Update: {
+          id?: never
+          ngn_paid_kobo?: number
+          recorded_at?: string
+          recorded_by?: string
+          reference?: string
+          supersedes_id?: number | null
+          trace_id?: string
+          usd_cents?: number
+        }
+        Relationships: []
+      }
+      flw_refund_checks: {
+        Row: {
+          amount_kobo: number | null
+          audit_id: number | null
+          created_at: string
+          currency: string | null
+          disburse_status: string | null
+          flw_refund_id: string
+          id: number
+          state: string
+          status: string | null
+          target_id: string
+          target_type: string
+          test_mode: boolean
+          tx_id: string | null
+        }
+        Insert: {
+          amount_kobo?: number | null
+          audit_id?: number | null
+          created_at?: string
+          currency?: string | null
+          disburse_status?: string | null
+          flw_refund_id: string
+          id?: never
+          state: string
+          status?: string | null
+          target_id: string
+          target_type: string
+          test_mode: boolean
+          tx_id?: string | null
+        }
+        Update: {
+          amount_kobo?: number | null
+          audit_id?: number | null
+          created_at?: string
+          currency?: string | null
+          disburse_status?: string | null
+          flw_refund_id?: string
+          id?: never
+          state?: string
+          status?: string | null
+          target_id?: string
+          target_type?: string
+          test_mode?: boolean
+          tx_id?: string | null
+        }
+        Relationships: []
+      }
+      funnel_daily: {
+        Row: {
+          count: number
+          day: string
+          event: string
+          test_mode: boolean
+        }
+        Insert: {
+          count?: number
+          day: string
+          event: string
+          test_mode: boolean
+        }
+        Update: {
+          count?: number
+          day?: string
+          event?: string
+          test_mode?: boolean
+        }
+        Relationships: []
+      }
       fx_rates: {
         Row: {
           base: string
@@ -993,6 +1257,101 @@ export type Database = {
           },
         ]
       }
+      metrics_daily: {
+        Row: {
+          day: string
+          metric: string
+          test_mode: boolean
+          value: number
+        }
+        Insert: {
+          day: string
+          metric: string
+          test_mode: boolean
+          value: number
+        }
+        Update: {
+          day?: string
+          metric?: string
+          test_mode?: boolean
+          value?: number
+        }
+        Relationships: []
+      }
+      nameserver_preset_drafts: {
+        Row: {
+          assigns_per_zone: boolean
+          check_detail: Json | null
+          check_ok: boolean | null
+          checked_at: string | null
+          discarded_at: string | null
+          id: string
+          nameservers: string[]
+          notes: string | null
+          preset_id: string | null
+          provider: string
+          published_at: string | null
+          saved_at: string
+          saved_by: string
+          source_url: string
+        }
+        Insert: {
+          assigns_per_zone?: boolean
+          check_detail?: Json | null
+          check_ok?: boolean | null
+          checked_at?: string | null
+          discarded_at?: string | null
+          id?: string
+          nameservers?: string[]
+          notes?: string | null
+          preset_id?: string | null
+          provider: string
+          published_at?: string | null
+          saved_at?: string
+          saved_by: string
+          source_url: string
+        }
+        Update: {
+          assigns_per_zone?: boolean
+          check_detail?: Json | null
+          check_ok?: boolean | null
+          checked_at?: string | null
+          discarded_at?: string | null
+          id?: string
+          nameservers?: string[]
+          notes?: string | null
+          preset_id?: string | null
+          provider?: string
+          published_at?: string | null
+          saved_at?: string
+          saved_by?: string
+          source_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nameserver_preset_drafts_preset_id_fkey"
+            columns: ["preset_id"]
+            isOneToOne: false
+            referencedRelation: "nameserver_presets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nameserver_preset_sources: {
+        Row: {
+          host: string
+          provider: string
+        }
+        Insert: {
+          host: string
+          provider: string
+        }
+        Update: {
+          host?: string
+          provider?: string
+        }
+        Relationships: []
+      }
       nameserver_presets: {
         Row: {
           assigns_per_zone: boolean
@@ -1139,6 +1498,35 @@ export type Database = {
           velocity_trusted_max?: number
         }
         Relationships: []
+      }
+      order_item_costs: {
+        Row: {
+          icann_fee_cents: number
+          order_item_id: string
+          recorded_at: string
+          supplier_cost_cents: number
+        }
+        Insert: {
+          icann_fee_cents: number
+          order_item_id: string
+          recorded_at?: string
+          supplier_cost_cents: number
+        }
+        Update: {
+          icann_fee_cents?: number
+          order_item_id?: string
+          recorded_at?: string
+          supplier_cost_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_item_costs_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       order_items: {
         Row: {
@@ -2115,6 +2503,99 @@ export type Database = {
           },
         ]
       }
+      supplier_ledger_entries: {
+        Row: {
+          balance_cents: number
+          charge_type: number
+          delta_cents: number | null
+          description: string
+          match_call_id: number | null
+          match_operation: string | null
+          match_order_item_id: string | null
+          match_state: string
+          matched_at: string | null
+          occurred_at: string
+          old_balance_cents: number
+          period: number | null
+          product_id: string | null
+          product_type: number
+          recorded_at: string
+          status: number
+          test_mode: boolean
+          trace_id: string
+          type: number
+        }
+        Insert: {
+          balance_cents: number
+          charge_type: number
+          delta_cents?: never
+          description?: string
+          match_call_id?: number | null
+          match_operation?: string | null
+          match_order_item_id?: string | null
+          match_state?: string
+          matched_at?: string | null
+          occurred_at: string
+          old_balance_cents: number
+          period?: number | null
+          product_id?: string | null
+          product_type: number
+          recorded_at?: string
+          status: number
+          test_mode: boolean
+          trace_id: string
+          type: number
+        }
+        Update: {
+          balance_cents?: number
+          charge_type?: number
+          delta_cents?: never
+          description?: string
+          match_call_id?: number | null
+          match_operation?: string | null
+          match_order_item_id?: string | null
+          match_state?: string
+          matched_at?: string | null
+          occurred_at?: string
+          old_balance_cents?: number
+          period?: number | null
+          product_id?: string | null
+          product_type?: number
+          recorded_at?: string
+          status?: number
+          test_mode?: boolean
+          trace_id?: string
+          type?: number
+        }
+        Relationships: []
+      }
+      supplier_ledger_revisions: {
+        Row: {
+          applied: boolean
+          changes: Json
+          id: number
+          seen_at: string
+          test_mode: boolean
+          trace_id: string
+        }
+        Insert: {
+          applied: boolean
+          changes: Json
+          id?: never
+          seen_at?: string
+          test_mode: boolean
+          trace_id: string
+        }
+        Update: {
+          applied?: boolean
+          changes?: Json
+          id?: never
+          seen_at?: string
+          test_mode?: boolean
+          trace_id?: string
+        }
+        Relationships: []
+      }
       tlds: {
         Row: {
           featured_rank: number | null
@@ -2215,7 +2696,158 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      admin_compliance_notices_v: {
+        Row: {
+          channel: string | null
+          checked_at: string | null
+          delivery_status: string | null
+          domain_id: string | null
+          domain_name: string | null
+          expires_at: string | null
+          id: string | null
+          masked_recipient: string | null
+          notice_type: string | null
+          sent_at: string | null
+          template_version: string | null
+          test_mode: boolean | null
+          user_id: string | null
+          window: string | null
+        }
+        Relationships: []
+      }
+      admin_domains_v: {
+        Row: {
+          auto_renew: boolean | null
+          created_at: string | null
+          deep_checked_at: string | null
+          delegation_checked_at: string | null
+          delegation_status: Database["public"]["Enums"]["delegation_status"] | null
+          domain_name: string | null
+          expires_at: string | null
+          id: string | null
+          local_status: Database["public"]["Enums"]["domain_status"] | null
+          nameserver_preset_id: string | null
+          nameservers: string[] | null
+          order_item_id: string | null
+          pending_nameservers: string[] | null
+          pending_privacy: boolean | null
+          pending_transfer_lock: boolean | null
+          previous_nameservers: string[] | null
+          privacy_enabled: boolean | null
+          registered_at: string | null
+          registrant_country: string | null
+          registrant_type: string | null
+          registry_checked_at: string | null
+          registry_renewal_mode: string | null
+          registry_status: string | null
+          source: string | null
+          test_mode: boolean | null
+          tld: string | null
+          transfer_lock: boolean | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      admin_email_outbox_v: {
+        Row: {
+          attempts: number | null
+          category: string | null
+          complained_at: string | null
+          created_at: string | null
+          delivery_status: string | null
+          domain_id: string | null
+          id: string | null
+          kind: string | null
+          last_error_safe: string | null
+          masked_to: string | null
+          next_attempt_at: string | null
+          order_id: string | null
+          sent_at: string | null
+          skip_reason: string | null
+          status: string | null
+          template_version: string | null
+          test_mode: boolean | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      admin_orders_v: {
+        Row: {
+          created_at: string | null
+          float_check: string | null
+          fx_rate_id: string | null
+          id: string | null
+          invoice_number: string | null
+          nameserver_preset_id: string | null
+          nameservers: string[] | null
+          order_number: string | null
+          paid_at: string | null
+          payment_checked_at: string | null
+          payment_id: string | null
+          status: Database["public"]["Enums"]["order_status"] | null
+          subtotal_kobo: number | null
+          test_mode: boolean | null
+          total_kobo: number | null
+          tx_ref: string | null
+          updated_at: string | null
+          user_id: string | null
+          vat_kobo: number | null
+          vat_pct: number | null
+        }
+        Relationships: []
+      }
+      admin_payments_v: {
+        Row: {
+          absorbed: boolean | null
+          amount_kobo: number | null
+          charged_kobo: number | null
+          created_at: string | null
+          fee_kobo: number | null
+          id: string | null
+          method: string | null
+          order_id: string | null
+          provider_reference: string | null
+          status: string | null
+          test_mode: boolean | null
+        }
+        Relationships: []
+      }
+      admin_ssl_certificates_v: {
+        Row: {
+          approver_masked: string | null
+          ca_bundle_pem: string | null
+          certificate_pem: string | null
+          common_name: string | null
+          configured_at: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string | null
+          included_names: number | null
+          is_wildcard: boolean | null
+          issued_at: string | null
+          last_checked_at: string | null
+          last_error_code: string | null
+          next_check_at: string | null
+          order_item_id: string | null
+          product_code: string | null
+          product_name: string | null
+          purchased_at: string | null
+          reissue_count: number | null
+          san_names: string[] | null
+          status: string | null
+          status_unrecognised_since: string | null
+          subscription_ends_at: string | null
+          supplier_certificate_id: string | null
+          supplier_status: string | null
+          test_mode: boolean | null
+          updated_at: string | null
+          user_id: string | null
+          validation_method: string | null
+          web_server: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       account_domain_allowance: {
@@ -2250,6 +2882,438 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_activate_fx_rate: {
+        Args: { p_rate_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_alert_conditions: {
+        Args: { p_test_mode: boolean }
+        Returns: {
+          key: string
+          kind: string
+          severity: string
+          summary: string
+        }[]
+      }
+      admin_alert_stats: {
+        Args: { p_days: number; p_test_mode: boolean }
+        Returns: Json
+      }
+      admin_approve_refund: {
+        Args: { p_reason: string; p_refund_id: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_attention_counts: { Args: { p_test_mode: boolean }; Returns: Json }
+      admin_cancel_refund: {
+        Args: {
+          p_checked_provider: boolean
+          p_no_money_moved: boolean
+          p_note: string
+          p_refund_id: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_claim_note: {
+        Args: {
+          p_action: string
+          p_audit_id: number
+          p_label: string
+          p_side: string
+          p_target_id: string
+        }
+        Returns: Json
+      }
+      admin_correct_float_topup: {
+        Args: {
+          p_ngn_paid_kobo: number
+          p_reason: string
+          p_reference: string
+          p_request_key: string
+          p_topup_id: number
+        }
+        Returns: Json
+      }
+      admin_customer: {
+        Args: { p_test_mode: boolean; p_user_id: string }
+        Returns: Json
+      }
+      admin_customer_stats: { Args: never; Returns: Json }
+      admin_customers: {
+        Args: {
+          p_dir: string
+          p_filter: Json
+          p_limit: number
+          p_offset: number
+          p_sort: string
+          p_test_mode: boolean
+        }
+        Returns: {
+          account_type: string
+          domains_held: number
+          email_confirmed: boolean
+          has_totp: boolean
+          is_admin: boolean
+          joined_at: string
+          last_sign_in_at: string
+          masked_email: string
+          orders_paid: number
+          total_count: number
+          total_paid_kobo: number
+          user_id: string
+        }[]
+      }
+      admin_discard_preset_draft: {
+        Args: { p_draft_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_domain_stats: { Args: { p_test_mode: boolean }; Returns: Json }
+      admin_e2e_email: { Args: { p_email: string }; Returns: boolean }
+      admin_email_stats: {
+        Args: { p_days: number; p_test_mode: boolean }
+        Returns: Json
+      }
+      admin_fail_job: {
+        Args: { p_job_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_fail_ssl_job: {
+        Args: { p_job_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_find_customers: { Args: { p_query: string }; Returns: Json }
+      admin_float: { Args: { p_test_mode: boolean }; Returns: Json }
+      admin_flw_check_done: {
+        Args: {
+          p_check: Database["public"]["Tables"]["flw_refund_checks"]["Row"]
+        }
+        Returns: boolean
+      }
+      admin_funnel: {
+        Args: { p_from: string; p_test_mode: boolean; p_to: string }
+        Returns: Json
+      }
+      admin_gate: {
+        Args: {
+          p_action: string
+          p_admin: Database["public"]["Tables"]["admins"]["Row"]
+          p_target_ok_for_test: boolean
+        }
+        Returns: string
+      }
+      admin_json_number: {
+        Args: { p_scale: number; p_value: Json }
+        Returns: number
+      }
+      admin_ledger_daily: {
+        Args: { p_from: string; p_test_mode: boolean; p_to: string }
+        Returns: {
+          close_cents: number
+          credit_cents: number
+          day: string
+          debit_cents: number
+        }[]
+      }
+      admin_list_admins: {
+        Args: never
+        Returns: {
+          added_at: string
+          label: string
+          last_change_at: string
+          pinned_factors: number
+          revoked_at: string
+          role: string
+          test_only: boolean
+          verified_pinned_factors: number
+        }[]
+      }
+      admin_lookup_rate_limited: {
+        Args: { p_admin_id: string }
+        Returns: boolean
+      }
+      admin_margin: {
+        Args: { p_from: string; p_test_mode: boolean; p_to: string }
+        Returns: {
+          cost_kobo: number
+          cost_source: string
+          cost_topup_kobo: number
+          costed_lines: number
+          item_type: string
+          lines: number
+          margin_kobo: number
+          month: string
+          revenue_kobo: number
+          row_kind: string
+        }[]
+      }
+      admin_mask_email: { Args: { p_email: string }; Returns: string }
+      admin_note: {
+        Args: {
+          p_action: string
+          p_detail?: Json
+          p_reason?: string
+          p_request_key?: string
+          p_side: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: Json
+      }
+      admin_note_result: {
+        Args: {
+          p_audit_id: number
+          p_code: string
+          p_detail: Json
+          p_outcome: string
+        }
+        Returns: number
+      }
+      admin_overview: { Args: { p_test_mode: boolean }; Returns: Json }
+      admin_preset_usage: {
+        Args: { p_test_mode: boolean }
+        Returns: {
+          domains: number
+          lines: number
+          orders: number
+          preset_id: string
+        }[]
+      }
+      admin_pricing_status: { Args: never; Returns: Json }
+      admin_provisioning: {
+        Args: { p_from: string; p_test_mode: boolean; p_to: string }
+        Returns: Json
+      }
+      admin_publish_preset_draft: {
+        Args: { p_draft_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_queue_deep_sync: {
+        Args: { p_domain_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_read_gate: {
+        Args: { p_test_mode: boolean }
+        Returns: {
+          added_at: string
+          added_by: string
+          label: string
+          mfa_factor_ids: string[]
+          revoked_at: string | null
+          role: string
+          test_only: boolean
+          user_id: string
+        }
+      }
+      admin_reason_problem: { Args: { p_reason: string }; Returns: string }
+      admin_record: {
+        Args: {
+          p_action: string
+          p_admin: Database["public"]["Tables"]["admins"]["Row"]
+          p_code: string
+          p_detail: Json
+          p_error: string
+          p_outcome: string
+          p_parent_id?: number
+          p_reason: string
+          p_request_key: string
+          p_side: string
+          p_target_id: string
+          p_target_test_mode: boolean
+          p_target_type: string
+        }
+        Returns: Json
+      }
+      admin_record_float_topup: {
+        Args: {
+          p_ngn_paid_kobo: number
+          p_reason: string
+          p_reference: string
+          p_request_key: string
+          p_trace_id: string
+        }
+        Returns: Json
+      }
+      admin_record_manual_refund: {
+        Args: {
+          p_check_id: number
+          p_checked_provider: boolean
+          p_provider_refund_id: string
+          p_reason: string
+          p_refund_id: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_redact_reason: {
+        Args: { p_audit_id: number; p_request_key: string; p_why: string }
+        Returns: Json
+      }
+      admin_refund_stats: { Args: { p_test_mode: boolean }; Returns: Json }
+      admin_reject_fx_rate: {
+        Args: { p_rate_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_replay: {
+        Args: {
+          p_action: string
+          p_admin_id: string
+          p_request_key: string
+          p_target_id: string
+        }
+        Returns: Json
+      }
+      admin_requeue_email: {
+        Args: { p_email_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_resolve_payment_incident: {
+        Args: {
+          p_check_id: number
+          p_confirmed: boolean
+          p_incident_id: number
+          p_outcome: string
+          p_reason: string
+          p_refund_id: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_retry_job: {
+        Args: { p_job_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_retry_refund: {
+        Args: {
+          p_checked_provider: boolean
+          p_reason: string
+          p_refund_id: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_retry_ssl_job: {
+        Args: { p_job_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_reveal_customer: {
+        Args: { p_reason: string; p_request_key: string; p_user_id: string }
+        Returns: Json
+      }
+      admin_reveal_registrant: {
+        Args: { p_domain_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_revenue: {
+        Args: {
+          p_from: string
+          p_grain: string
+          p_test_mode: boolean
+          p_to: string
+        }
+        Returns: {
+          bucket: string
+          cash_kobo: number
+          charge_refunded_kobo: number
+          fee_absorbed_kobo: number
+          fee_kobo: number
+          line_refunded_kobo: number
+          line_refunded_vat_kobo: number
+          net_kobo: number
+          orders: number
+          vat_kobo: number
+        }[]
+      }
+      admin_sales_since: {
+        Args: { p_since: string; p_test_mode: boolean }
+        Returns: Json
+      }
+      admin_save_preset_draft: {
+        Args: {
+          p_assigns_per_zone: boolean
+          p_nameservers: string[]
+          p_notes: string
+          p_preset_id: string
+          p_provider: string
+          p_reason: string
+          p_request_key: string
+          p_source_url: string
+        }
+        Returns: Json
+      }
+      admin_session: {
+        Args: {
+          p_check_hold?: boolean
+          p_fresh_minutes?: number
+          p_min_role?: string
+        }
+        Returns: {
+          added_at: string
+          added_by: string
+          label: string
+          mfa_factor_ids: string[]
+          revoked_at: string | null
+          role: string
+          test_only: boolean
+          user_id: string
+        }
+      }
+      admin_set_preset_hidden: {
+        Args: {
+          p_hidden: boolean
+          p_id: string
+          p_reason: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_set_ssl_sellable: {
+        Args: {
+          p_product_code: string
+          p_reason: string
+          p_request_key: string
+          p_sellable: boolean
+        }
+        Returns: Json
+      }
+      admin_set_tld_flags: {
+        Args: {
+          p_featured_rank: number
+          p_featured_tagline: string
+          p_is_paused: boolean
+          p_name: string
+          p_paused_reason: string
+          p_reason: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_ssl_stats: { Args: { p_test_mode: boolean }; Returns: Json }
+      admin_status: { Args: never; Returns: string }
+      admin_tier: {
+        Args: { p_action: string }
+        Returns: {
+          min_role: string
+          money: boolean
+          test_rule: string
+        }
+      }
+      admin_tld_held_counts: {
+        Args: { p_test_mode: boolean }
+        Returns: {
+          held: number
+          tld: string
+        }[]
+      }
+      admin_update_ops_settings: {
+        Args: { p_changes: Json; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_update_pricing_settings: {
+        Args: { p_changes: Json; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_url_host: { Args: { p_url: string }; Returns: string }
+      admin_whoami: { Args: { p_fresh_minutes?: number }; Returns: Json }
       approve_refund: {
         Args: { p_by: string; p_refund_id: string }
         Returns: undefined
@@ -2259,6 +3323,10 @@ export type Database = {
       begin_reconcile: {
         Args: { p_min_interval_seconds: number; p_test_mode: boolean }
         Returns: string
+      }
+      bump_funnel: {
+        Args: { p_event: string; p_test_mode: boolean }
+        Returns: undefined
       }
       cancel_refund: {
         Args: { p_by: string; p_note: string; p_refund_id: string }
@@ -2391,6 +3459,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      cron_alert_conditions: {
+        Args: { p_test_mode: boolean }
+        Returns: {
+          key: string
+          kind: string
+          severity: string
+          summary: string
+        }[]
+      }
       current_alert_conditions: {
         Args: { p_test_mode: boolean }
         Returns: {
@@ -2502,7 +3579,33 @@ export type Database = {
         }
         Returns: undefined
       }
+      float_runway: { Args: { p_test_mode: boolean }; Returns: Json }
+      grant_test_admin: { Args: { p_user_id: string }; Returns: string }
+      hold_test_refund: { Args: { p_refund_id: string }; Returns: undefined }
       is_reserved_email: { Args: { p_email: string }; Returns: boolean }
+      ledger_alert_conditions: {
+        Args: { p_test_mode: boolean }
+        Returns: {
+          key: string
+          kind: string
+          severity: string
+          summary: string
+        }[]
+      }
+      ledger_guid: {
+        Args: { p_nullable: boolean; p_value: string }
+        Returns: string
+      }
+      ledger_int: {
+        Args: {
+          p_key: string
+          p_max: number
+          p_min: number
+          p_nullable: boolean
+          p_row: Json
+        }
+        Returns: number
+      }
       mark_alerts_notified: {
         Args: { p_alert_ids: number[]; p_resolved_ids: number[] }
         Returns: undefined
@@ -2533,6 +3636,7 @@ export type Database = {
         Args: { p_job_id: string; p_poll_after_seconds?: number }
         Returns: undefined
       }
+      match_supplier_ledger: { Args: { p_test_mode: boolean }; Returns: number }
       merge_anonymous_cart: {
         Args: { p_token_hash: string; p_user_id: string }
         Returns: number
@@ -2597,6 +3701,14 @@ export type Database = {
         }[]
       }
       payment_record: { Args: { p_raw: Json }; Returns: Json }
+      preset_drafts_for_check: {
+        Args: never
+        Returns: {
+          draft_id: string
+          nameservers: string[]
+          provider: string
+        }[]
+      }
       presets_for_check: {
         Args: never
         Returns: {
@@ -2609,6 +3721,8 @@ export type Database = {
       purge_email_records: { Args: never; Returns: number }
       purge_stale_carts: { Args: { p_older_than?: string }; Returns: number }
       purge_supplier_calls: { Args: never; Returns: number }
+      purge_test_admin_audit: { Args: never; Returns: number }
+      purge_test_ledger_entries: { Args: never; Returns: number }
       purge_test_orders: { Args: { p_user_id: string }; Returns: undefined }
       queue_account_email: {
         Args: { p_kind: string; p_user_id: string }
@@ -2658,6 +3772,22 @@ export type Database = {
         Args: { p_detail?: Json; p_event: string; p_message_id: string }
         Returns: boolean
       }
+      record_flw_refund_check: {
+        Args: {
+          p_amount_kobo: number
+          p_audit_id: number
+          p_currency: string
+          p_disburse_status: string
+          p_flw_refund_id: string
+          p_state: string
+          p_status: string
+          p_target_id: string
+          p_target_type: string
+          p_test_mode: boolean
+          p_tx_id: string
+        }
+        Returns: number
+      }
       record_heartbeat: {
         Args: { p_detail: Json; p_name: string; p_test_mode: boolean }
         Returns: undefined
@@ -2670,6 +3800,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      record_metrics_daily: { Args: { p_day: string }; Returns: undefined }
       record_nameserver_change: {
         Args: {
           p_applied: string[]
@@ -2701,6 +3832,10 @@ export type Database = {
       }
       record_preset_check: {
         Args: { p_detail?: Json; p_ok: boolean; p_preset_id: string }
+        Returns: string
+      }
+      record_preset_draft_check: {
+        Args: { p_detail: Json; p_draft_id: string; p_ok: boolean }
         Returns: string
       }
       record_reconciliation: {
@@ -2756,6 +3891,10 @@ export type Database = {
       record_supplier_balance: {
         Args: { p_balance_usd: number; p_test_mode: boolean }
         Returns: undefined
+      }
+      record_supplier_ledger: {
+        Args: { p_rows: Json; p_test_mode: boolean }
+        Returns: Json
       }
       record_underpayment: {
         Args: {
@@ -2840,6 +3979,7 @@ export type Database = {
         Args: { p_a: string[]; p_b: string[] }
         Returns: boolean
       }
+      seed_test_failed_email: { Args: { p_user_id: string }; Returns: string }
       settle_order: { Args: { p_order_id: string }; Returns: undefined }
       ssl_certificates_to_check: {
         Args: { p_limit?: number; p_test_mode: boolean }
@@ -2866,6 +4006,7 @@ export type Database = {
         Returns: string
       }
       sync_alerts: { Args: { p_test_mode: boolean }; Returns: Json }
+      try_timestamptz: { Args: { p_value: string }; Returns: string }
     }
     Enums: {
       account_type: "individual" | "business"

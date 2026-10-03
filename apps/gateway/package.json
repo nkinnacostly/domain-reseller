@@ -17,6 +17,7 @@
     "sync:ssl": "tsx scripts/sync-ssl.ts",
     "fx:update": "tsx scripts/update-fx-rate.ts",
     "check:competitiveness": "tsx scripts/check-competitiveness.ts",
+    "verify:renew-check": "tsx scripts/verify-renew-check.ts",
     "reconcile": "tsx --env-file-if-exists=../../.env scripts/reconcile.ts"
   },
   "dependencies": {

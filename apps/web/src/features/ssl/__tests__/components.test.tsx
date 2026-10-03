@@ -88,7 +88,9 @@ describe('setting a certificate up (FR-SSL-4)', () => {
 
     const approvers = await screen.findByRole('radiogroup', { name: 'Approval address' })
     expect(within(approvers).getAllByRole('radio')).toHaveLength(2)
-    await user.type(screen.getByLabelText('Paste the CSR'), CSR)
+    // Pasted, as people do: typing a whole CSR key by key timed out under load.
+    await user.click(screen.getByLabelText('Paste the CSR'))
+    await user.paste(CSR)
     await user.click(screen.getByRole('button', { name: 'Check it' }))
     expect(await screen.findByRole('status')).toHaveTextContent(
       'The CA reads this request as being for example.com, Example Ltd.',
@@ -108,7 +110,7 @@ describe('setting a certificate up (FR-SSL-4)', () => {
         contact: expect.objectContaining({ firstName: 'Ada', city: 'Lagos' }),
       }),
     )
-  })
+  }, 15_000)
 
   it('shows a generated key once, and sends nothing until it is saved', async () => {
     const user = userEvent.setup()

@@ -24,11 +24,22 @@ export type PresetOutcome = 'ok' | 'failing' | 'hidden' | 'restored'
 
 const OUTCOMES = new Set<string>(['ok', 'failing', 'hidden', 'restored'])
 
+export type DraftOutcome = 'ok' | 'failing' | 'closed'
+
 export interface PresetStore {
   /** Presets with nameservers of their own: shown ones, and ones the check hid. */
   due(): Promise<DuePreset[]>
   record(presetId: string, ok: boolean, detail: PresetCheckDetail): Promise<PresetOutcome>
+  /**
+   * Open drafts of a preset change (migration 40, D21): checked the same way,
+   * and only recorded on the draft — a draft is never hidden or shown, and an
+   * owner publishes it only after a passing check.
+   */
+  dueDrafts?(): Promise<DuePreset[]>
+  recordDraft?(draftId: string, ok: boolean, detail: PresetCheckDetail): Promise<DraftOutcome>
 }
+
+const DRAFT_OUTCOMES = new Set<string>(['ok', 'failing', 'closed'])
 
 export function createPresetStore(client: SupabaseClient<Database>): PresetStore {
   return {
@@ -53,6 +64,29 @@ export function createPresetStore(client: SupabaseClient<Database>): PresetStore
         throw new Error(`record_preset_check answered ${JSON.stringify(data)}`)
       }
       return data as PresetOutcome
+    },
+
+    async dueDrafts() {
+      const { data, error } = await client.rpc('preset_drafts_for_check')
+      if (error) throw new Error(error.message)
+      return (Array.isArray(data) ? data : []).map((row) => ({
+        id: row.draft_id,
+        provider: row.provider,
+        nameservers: row.nameservers ?? [],
+      }))
+    },
+
+    async recordDraft(draftId, ok, detail) {
+      const { data, error } = await client.rpc('record_preset_draft_check', {
+        p_draft_id: draftId,
+        p_ok: ok,
+        p_detail: detail as unknown as Json,
+      })
+      if (error) throw new Error(error.message)
+      if (typeof data !== 'string' || !DRAFT_OUTCOMES.has(data)) {
+        throw new Error(`record_preset_draft_check answered ${JSON.stringify(data)}`)
+      }
+      return data as DraftOutcome
     },
   }
 }

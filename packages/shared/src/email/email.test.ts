@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EMAIL_BRAND, escapeHtml, isReservedAddress, renderEmail } from './layout'
 import {
+  certificateFailureReason,
   daysUntil,
   failureReason,
   isNoticeKind,
@@ -404,5 +405,20 @@ describe('formatting', () => {
   it('falls back to a plain sentence for a failure code it does not know', () => {
     expect(failureReason('DOMAIN_TAKEN')).toBe('Someone else registered this name before we could.')
     expect(failureReason(null)).toBe('The registry could not complete it.')
+  })
+
+  it('words an administrator’s fail without blaming the customer (ADMIN-SPEC §3.1.2)', () => {
+    expect(failureReason('NOT_AT_REGISTRY')).toBe(
+      'The registry did not register it, so nothing was bought.',
+    )
+    expect(failureReason('TRANSFER_REFUSED')).toBe(
+      'The registry refused the transfer, so the domain did not move to us.',
+    )
+    expect(failureReason('STOPPED_BY_ADMIN')).toBe(
+      'We stopped this change. Your domain keeps the settings the registry shows.',
+    )
+    expect(certificateFailureReason('FAILED_BY_ADMIN')).toBe(
+      'The certificate was not ordered, so nothing was bought.',
+    )
   })
 })

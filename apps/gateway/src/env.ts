@@ -6,6 +6,13 @@ const schema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().default(8787),
     GATEWAY_SHARED_SECRET: z.string().min(16),
+    /**
+     * The admin routes' own secret (docs/ADMIN-SPEC.md §4.1): unset, every
+     * `/v1/admin/*` route answers 503. `openssl rand -hex 32`, on Fly and
+     * Vercel, never in chat. Even with it, each call must claim an audited
+     * note the web wrote for a signed-in admin.
+     */
+    GATEWAY_ADMIN_SECRET: z.string().min(32).optional(),
 
     // DomainNameAPI — these live HERE and nowhere else (PRD SEC-5).
     DNA_RESELLER_ID: z.string().min(1),
@@ -46,6 +53,16 @@ const schema = z
      * (`POST /api/pricing/refresh`); unset, they reach the site within the hour.
      */
     APP_URL: z.url().optional(),
+    /**
+     * How often the supplier's statement is mirrored into
+     * supplier_ledger_entries, on the side this gateway writes to (§4.4).
+     */
+    LEDGER_SYNC_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(15)
+      .max(24 * 60)
+      .default(60),
     /** How often live domains' nameservers are checked against public resolvers (FR-D5). */
     DELEGATION_CHECK_MINUTES: z.coerce
       .number()

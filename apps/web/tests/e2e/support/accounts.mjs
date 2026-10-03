@@ -733,3 +733,33 @@ export async function issueSslCertificate(certificateId, certificate, chain) {
   })
   if (error) throw error
 }
+
+// The admin dashboard (ADR-006, ADMIN-SPEC §2.7): e2e admins are test-only
+// operators made by grant_test_admin, which refuses anyone but an
+// e2e-*@example.com user with a verified authenticator.
+
+/** Whether migration 40 is applied: without it the enrolled-admin journeys skip. */
+export async function hasAdminSchema() {
+  const { error } = await admin().from('admin_audit_log').select('id').limit(1)
+  return !error
+}
+
+/**
+ * A test user with TOTP on, made a test administrator (ADMIN-SPEC §2.7).
+ * Returns `{ user, totpSecret, label }`: the user, the authenticator's secret
+ * and the admin label SQL gave it.
+ */
+export async function createAdminTestUser(label = 'admin') {
+  const user = await createTestUser(label, { fullName: 'Test Admin' })
+  const totpSecret = await enableTotp(user)
+  const { data, error } = await admin().rpc('grant_test_admin', { p_user_id: user.id })
+  if (error) throw error
+  return { user, totpSecret, label: data }
+}
+
+/** Removes the test supplier-ledger rows e2e seeded (`e2e-` descriptions, test side only). */
+export async function purgeTestLedgerEntries() {
+  const { error } = await admin().rpc('purge_test_ledger_entries')
+  // Before migration 41 is applied there is nothing to purge.
+  if (error && error.code !== 'PGRST202') throw error
+}

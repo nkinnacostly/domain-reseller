@@ -75,3 +75,45 @@ describe('preset store', () => {
     await expect(store.record('p1', true, DETAIL)).rejects.toThrow('permission denied')
   })
 })
+
+describe('preset drafts (ADMIN-SPEC D21)', () => {
+  it('reads the open drafts due a check, and nothing from an odd answer', async () => {
+    const { client, rpc } = fakeRpcClient({
+      preset_drafts_for_check: {
+        data: [
+          { draft_id: 'd1', provider: 'Vercel', nameservers: ['ns1.vercel-dns.com'] },
+          { draft_id: 'd2', provider: 'Odd', nameservers: null },
+        ],
+      },
+    })
+    expect(await createPresetStore(client).dueDrafts?.()).toEqual([
+      { id: 'd1', provider: 'Vercel', nameservers: ['ns1.vercel-dns.com'] },
+      { id: 'd2', provider: 'Odd', nameservers: [] },
+    ])
+    expect(rpc.mock.calls[0]?.[0]).toBe('preset_drafts_for_check')
+    const odd = fakeRpcClient({ preset_drafts_for_check: { data: 'ok' } })
+    expect(await createPresetStore(odd.client).dueDrafts?.()).toEqual([])
+  })
+
+  it('records a draft’s verdict on the draft, and refuses an answer it does not know', async () => {
+    const { client, rpc } = fakeRpcClient({ record_preset_draft_check: { data: 'failing' } })
+    expect(await createPresetStore(client).recordDraft?.('d1', false, DETAIL)).toBe('failing')
+    expect(rpc).toHaveBeenCalledWith('record_preset_draft_check', {
+      p_draft_id: 'd1',
+      p_ok: false,
+      p_detail: DETAIL,
+    })
+    const odd = fakeRpcClient({ record_preset_draft_check: { data: 'hidden' } })
+    await expect(createPresetStore(odd.client).recordDraft?.('d1', true, DETAIL)).rejects.toThrow(
+      'answered "hidden"',
+    )
+    const refused = fakeRpcClient({
+      preset_drafts_for_check: { error: { message: 'denied' } },
+      record_preset_draft_check: { error: { message: 'denied' } },
+    })
+    await expect(createPresetStore(refused.client).dueDrafts?.()).rejects.toThrow('denied')
+    await expect(
+      createPresetStore(refused.client).recordDraft?.('d1', true, DETAIL),
+    ).rejects.toThrow('denied')
+  })
+})

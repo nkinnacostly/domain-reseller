@@ -4,6 +4,7 @@ import { Plus, Tags } from 'lucide-react'
 import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useRef, useState } from 'react'
+import { QUIET_BUTTON } from '@/components/common/action-parts'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { FOCUS } from '@/components/layout/panel'
 import { cn } from '@/lib/utils'
@@ -12,7 +13,6 @@ import { type DomainLabel, LABEL_LIMIT, sortLabels } from '../lib/labels'
 import { LabelChip, LabelChips } from './label-chip'
 import { colorFromForm, LabelFields } from './label-fields'
 import { problemOf } from './label-manager'
-import { QUIET_BUTTON } from './settings-parts'
 
 /**
  * FR-P3 — the labels on one domain. Each tick saves at once and shows at

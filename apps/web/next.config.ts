@@ -1,5 +1,7 @@
 import type { NextConfig } from 'next'
 import { HTML_LIMITED_BOT_UA_RE } from 'next/dist/shared/lib/router/utils/html-bots'
+import { ADMIN_NOT_FOUND_PATH, STRANGER_HEADER } from './src/features/admin/lib/door'
+import { siteCsp, supabaseHostOf } from './src/lib/csp'
 
 /**
  * Crawlers that read the HTML without running it get every page's metadata
@@ -17,48 +19,28 @@ export const HTML_LIMITED_BOTS = new RegExp(
   'i',
 )
 
+/** The site's policy (src/lib/csp.ts), which the proxy also gives a stranger's 404 at /admin. */
+const csp = siteCsp({
+  supabaseHost: supabaseHostOf(process.env.NEXT_PUBLIC_SUPABASE_URL),
+  development: process.env.NODE_ENV !== 'production',
+})
+
+/** Every path except `/admin` and below (path-to-regexp group for `source`). */
+export const NOT_ADMIN = '(?!admin(?:/|$)).*'
+
 /**
- * Content Security Policy (PRD SEC-15). Scripts, styles and fonts come only
- * from this site; the browser talks only to this site and our Supabase
- * project. So an injected script could neither load code from elsewhere nor
- * send anything it read to another host. Payment happens on Flutterwave's own
- * page, reached by navigation, so none of its code runs here.
- *
- * `'unsafe-inline'` stays for scripts because Next's bootstrap is inline and
- * this site has no nonce plumbing; the other directives still hold. Dev adds
- * `'unsafe-eval'` for React's tooling.
- *
- * The one outside origin is Cloudflare Turnstile (SEC-9): its script and the
- * challenge frame it draws, on the forms that send email and when a search
- * asks for a check (components/common/turnstile.tsx). It talks to Cloudflare
- * from inside its own frame, so connect-src does not change.
+ * `/admin` and below. Unnamed groups capture nothing, so the rewritten 404's
+ * payload holds no query a random path's lacks (`/admin/:path*` put
+ * `?path=refunds` in it).
  */
-const supabase = (() => {
-  try {
-    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').host
-  } catch {
-    return '*.supabase.co'
-  }
-})()
+export const ADMIN_SOURCES = ['/admin', '/admin/(.*)']
 
-const TURNSTILE = 'https://challenges.cloudflare.com'
-
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${TURNSTILE}${process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  `connect-src 'self' https://${supabase} wss://${supabase}`,
-  `frame-src ${TURNSTILE}`,
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  // FR-A1: "Continue with Google" is a form whose answer sends the browser to
-  // Supabase Auth, which sends it on to Google — without these, a browser
-  // enforcing form-action on redirects stops it.
-  `form-action 'self' https://${supabase} https://accounts.google.com`,
-].join('; ')
+/**
+ * Any path, for the fallback rewrite, which Next tries only once no file,
+ * page or route has answered. `_next/` is left out: Next answers a missing
+ * chunk there with its own plain-text 404.
+ */
+export const UNANSWERED = '/((?!_next/).*)'
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -85,12 +67,28 @@ const nextConfig: NextConfig = {
     remotePatterns: [],
   },
 
+  // D9: a stranger at /admin — the proxy marks the request after asking SQL
+  // (features/admin/lib/door.ts) — sees Next's own 404, through a rewrite of
+  // the config's, which unlike the proxy's sends back no header naming it.
+  // Every other path no page answers takes the same rewrite as a fallback, so
+  // an RSC request's `x-nextjs-rewritten-path` is any 404's, not /admin's.
+  async rewrites() {
+    return {
+      beforeFiles: ADMIN_SOURCES.map((source) => ({
+        source,
+        has: [{ type: 'header' as const, key: STRANGER_HEADER, value: '1' }],
+        destination: ADMIN_NOT_FOUND_PATH,
+      })),
+      afterFiles: [],
+      fallback: [{ source: UNANSWERED, destination: ADMIN_NOT_FOUND_PATH }],
+    }
+  },
+
   async headers() {
     return [
       {
         source: '/:path*',
         headers: [
-          { key: 'Content-Security-Policy', value: csp },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
@@ -100,6 +98,16 @@ const nextConfig: NextConfig = {
             value: 'max-age=63072000; includeSubDomains; preload',
           },
         ],
+      },
+      {
+        // Everywhere but /admin, which the proxy gives its own nonce policy
+        // (ADMIN-SPEC §2.3): no 'unsafe-inline' for scripts there. A
+        // stranger's 404 at /admin gets this one from the proxy (D9), whose
+        // headers Next sends after these rules' — so this rule comes last,
+        // and its name is lower-case, as every Headers object writes it: the
+        // two 404s then match name for name, in order, even on HTTP/1.1.
+        source: `/:path(${NOT_ADMIN})`,
+        headers: [{ key: 'content-security-policy', value: csp }],
       },
     ]
   },

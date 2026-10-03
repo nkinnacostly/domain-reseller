@@ -113,6 +113,7 @@ describe('the preset checker', () => {
     await expect(instance.runOnce()).resolves.toEqual({
       checked: 1,
       inconclusive: 0,
+      drafts: 0,
       ok: 1,
       failing: 0,
       hidden: 0,
@@ -327,7 +328,71 @@ describe('where the preset check runs', () => {
     })
     await expect(created?.runOnce()).resolves.toMatchObject({ checked: 1, ok: 1 })
     expect(fetchImpl).toHaveBeenCalledTimes(4)
-    expect(rpcs.map((call) => call.fn)).toEqual(['presets_for_check', 'record_preset_check'])
+    expect(rpcs.map((call) => call.fn)).toEqual([
+      'presets_for_check',
+      'record_preset_check',
+      'preset_drafts_for_check',
+    ])
     expect(rpcs[1]?.args).toMatchObject({ p_preset_id: 'p1', p_ok: true })
+  })
+})
+
+describe('preset drafts (ADMIN-SPEC D21)', () => {
+  function draftStore(drafts: DuePreset[]) {
+    const recorded: { id: string; ok: boolean }[] = []
+    const { store } = fakeStore([])
+    return {
+      store: {
+        ...store,
+        dueDrafts: vi.fn(async () => drafts),
+        recordDraft: vi.fn(async (id: string, ok: boolean) => {
+          recorded.push({ id, ok })
+          return ok ? ('ok' as const) : ('failing' as const)
+        }),
+      },
+      recorded,
+    }
+  }
+
+  it('checks open drafts on the periodic pass, recording only on the draft', async () => {
+    const { store, recorded } = draftStore([preset('draft-ok'), preset('draft-gone')])
+    const { instance, logger } = checker(
+      store,
+      seeing({ 'ns1.draft-gone.test': GONE, 'ns2.draft-gone.test': GONE }),
+    )
+    await expect(instance.runOnce()).resolves.toMatchObject({ checked: 0, drafts: 2 })
+    expect(recorded).toEqual([
+      { id: 'draft-ok', ok: true },
+      { id: 'draft-gone', ok: false },
+    ])
+    expect(store.record).not.toHaveBeenCalled()
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ drafts: 2 }),
+      'preset check finished',
+    )
+  })
+
+  it('checks a draft on demand, and records nothing when the resolvers were silent', async () => {
+    const { store, recorded } = draftStore([])
+    const { instance } = checker(
+      store,
+      seeing({ 'ns1.quiet.test': SILENT, 'ns2.quiet.test': SILENT }),
+    )
+    const quiet = await instance.checkDraft(preset('quiet'))
+    expect(quiet.verdict).toBe('inconclusive')
+    expect(recorded).toEqual([])
+    const fine = await instance.checkDraft(preset('fine'))
+    expect(fine.verdict).toBe('pass')
+    expect(fine.hosts.map((host) => host.host)).toEqual(['ns1.fine.test', 'ns2.fine.test'])
+    expect(recorded).toEqual([{ id: 'fine', ok: true }])
+  })
+
+  it('counts a silent draft on the periodic pass as inconclusive', async () => {
+    const { store } = draftStore([preset('quiet')])
+    const { instance } = checker(
+      store,
+      seeing({ 'ns1.quiet.test': SILENT, 'ns2.quiet.test': SILENT }),
+    )
+    await expect(instance.runOnce()).resolves.toMatchObject({ drafts: 0, inconclusive: 1 })
   })
 })

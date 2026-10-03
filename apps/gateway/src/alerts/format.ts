@@ -1,3 +1,5 @@
+import { adminHrefForAlertKey } from '@dr/shared/admin'
+import { env } from '../env'
 import type { DueAlert } from './store'
 import { TELEGRAM_MAX_CHARS } from './telegram'
 
@@ -20,14 +22,20 @@ const lagosTime = new Intl.DateTimeFormat('en-GB', {
   minute: '2-digit',
 })
 
-function line(alert: DueAlert): string {
+/** Where to work an alert in the admin dashboard (ADMIN-SPEC §4.5), when the site is known. */
+function link(alert: DueAlert, appUrl: string | undefined): string {
+  if (!appUrl || !alert.key) return ''
+  return ` — ${appUrl.replace(/\/+$/, '')}${adminHrefForAlertKey(alert.key)}`
+}
+
+function line(alert: DueAlert, appUrl: string | undefined): string {
   if (alert.type === 'resolved') return `✅ ${alert.summary}`
   const mark = alert.severity === 'critical' ? '🔴' : '🟠'
   const since =
     alert.type === 'reminder'
       ? ` (open since ${lagosTime.format(new Date(alert.firstSeenAt))})`
       : ''
-  return `${mark} ${alert.summary}${since}`
+  return `${mark} ${alert.summary}${since}${link(alert, appUrl)}`
 }
 
 const SECTIONS: { type: DueAlert['type']; title: string }[] = [
@@ -40,6 +48,7 @@ export function formatAlerts(
   alerts: DueAlert[],
   side: 'live' | 'test',
   appName: string,
+  appUrl: string | undefined = env.APP_URL,
 ): AlertMessage[] {
   const ordered = SECTIONS.flatMap(({ type, title }) =>
     alerts
@@ -72,7 +81,7 @@ export function formatAlerts(
   }
 
   for (const { alert, title } of ordered) {
-    const text = line(alert).slice(0, BUDGET - 50)
+    const text = line(alert, appUrl).slice(0, BUDGET - 50)
     const heading = `\n${title}:`
     const added = text.length + 1 + (title === section ? 0 : heading.length + 1)
     if (size + added > BUDGET) flush()

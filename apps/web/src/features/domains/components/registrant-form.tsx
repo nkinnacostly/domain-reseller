@@ -3,13 +3,13 @@
 import { TriangleAlert } from 'lucide-react'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useState } from 'react'
+import { ActionError, useOutcome } from '@/components/common/action-parts'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { RegistrantFields } from '@/features/checkout/components/registrant-fields'
 import type { RegistrantForm as RegistrantValues } from '@/features/checkout/lib/contact'
 import { registrantFromForm } from '@/features/checkout/lib/contact'
 import { changeRegistrant } from '../actions/settings'
 import { isMaterialChange } from '../lib/settings'
-import { ActionError, useOutcome } from './settings-parts'
 
 /** next-safe-action's formatted errors for one registrant field. */
 function registrantError(errors: unknown, field: string): string | undefined {

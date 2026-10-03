@@ -12,6 +12,7 @@
         "SUPABASE_SECRET_KEY",
         "GATEWAY_URL",
         "GATEWAY_SHARED_SECRET",
+        "GATEWAY_ADMIN_SECRET",
         "FLUTTERWAVE_*",
         "CHECKOUT_ALLOWLIST",
         "RDAP_BOOTSTRAP_URL",

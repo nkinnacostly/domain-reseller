@@ -1,6 +1,152 @@
 import { HttpResponse, http } from 'msw'
 import { SNS_HOST, snsPublicKeyPem } from './sns'
 
+const READ_AT = '2026-10-03T11:05:00.000Z'
+
+/**
+ * The gateway's `/v1/admin/*` routes (ADMIN-SPEC §4.3, §8.1), answering as
+ * the gateway does after it claims the note — with no personal data: ids,
+ * names, states, amounts in cents or kobo. A request without the admin
+ * headers is refused, as the gateway refuses it.
+ */
+function adminHandlers() {
+  const admin = (
+    method: 'get' | 'post',
+    path: string,
+    data: (params: Record<string, string>, url: URL) => unknown,
+  ) =>
+    http[method](`*/v1/admin/${path}`, ({ request, params }) => {
+      if (
+        !request.headers.get('x-admin-secret') ||
+        !/^\d+$/.test(request.headers.get('x-admin-audit-id') ?? '') ||
+        !request.headers.get('x-admin-label')
+      ) {
+        return HttpResponse.json(
+          {
+            ok: false,
+            code: 'VALIDATION_FAILED',
+            message: 'An audit note and an admin are required',
+          },
+          { status: 400 },
+        )
+      }
+      const url = new URL(request.url)
+      return HttpResponse.json({
+        ok: true,
+        data: data(params as Record<string, string>, url),
+      })
+    })
+  const side = (url: URL) => (url.searchParams.get('side') === 'live' ? 'live' : 'test')
+
+  return [
+    admin('get', 'supplier/balance', (_, url) => ({
+      side: side(url),
+      balanceCents: 4338,
+      priceGroup: null,
+      readAt: READ_AT,
+    })),
+    admin('get', 'supplier/transactions', (_, url) => ({
+      side: side(url),
+      total: 0,
+      items: [],
+      readAt: READ_AT,
+    })),
+    admin('get', 'supplier/domains', (_, url) => ({
+      side: side(url),
+      total: 0,
+      items: [],
+      readAt: READ_AT,
+    })),
+    admin('get', 'supplier/domains/:name', ({ name = '' }) => ({
+      name,
+      outcome: 'not_found',
+      status: null,
+      statusCode: null,
+      expiresAt: null,
+      rgpExpiresAt: null,
+      transferLock: null,
+      privacy: null,
+      nameservers: [],
+      readAt: READ_AT,
+    })),
+    admin('get', 'supplier/domains/:name/verification', ({ name = '' }) => ({
+      name,
+      isVerified: true,
+      operationStatus: null,
+      verifiedAt: null,
+      fieldType: 'Email',
+      readAt: READ_AT,
+    })),
+    admin('get', 'supplier/domains/:name/transfer', ({ name = '' }) => ({
+      name,
+      state: 'pending',
+      supplierStatus: 'pending',
+      requestedAt: null,
+      finalAt: null,
+      readAt: READ_AT,
+    })),
+    admin('get', 'supplier/domains/:name/renewable', ({ name = '' }) => ({
+      name,
+      renewable: true,
+      renewalLock: false,
+      reasonKey: null,
+      readAt: READ_AT,
+    })),
+    admin('get', 'supplier/prices/:tld', ({ tld = '' }, url) => ({
+      tld,
+      op: url.searchParams.get('op') ?? 'register',
+      years: Number(url.searchParams.get('years') ?? 1),
+      supplierCents: 1131,
+      ourCents: 1131,
+      matches: true,
+      readAt: READ_AT,
+    })),
+    ...(['catalogue', 'ssl-catalogue'] as const).flatMap((kind) => [
+      admin('get', `supplier/${kind}/preview`, () => ({
+        kind: kind === 'ssl-catalogue' ? 'ssl' : 'tlds',
+        outcome: 'ok',
+        reason: null,
+        listed: 0,
+        sellable: 0,
+        changes: 0,
+        report: [],
+        readAt: READ_AT,
+      })),
+      admin('post', `supplier/${kind}/apply`, () => ({
+        outcome: 'refused',
+        reason: 'NOT_PRODUCTION',
+        changes: 0,
+        readAt: READ_AT,
+      })),
+    ]),
+    admin('get', 'supplier/ssl/:name', ({ name = '' }) => ({
+      name,
+      outcome: 'not_found',
+      status: null,
+      isConfigured: null,
+      isIssued: null,
+      certificateExpiresAt: null,
+      subscriptionEndsAt: null,
+      validUntil: null,
+      readAt: READ_AT,
+    })),
+    admin('get', 'flutterwave/refunds/:flwRefundId', ({ flwRefundId = '' }) => ({
+      checkId: 1,
+      flwRefundId,
+      transactionId: '456',
+      amountKobo: 1967250,
+      status: 'completed',
+      state: 'done',
+      readAt: READ_AT,
+    })),
+    admin('post', 'presets/drafts/:id/check', () => ({
+      ok: true,
+      hosts: [],
+      checkedAt: READ_AT,
+    })),
+  ]
+}
+
 /**
  * Default network doubles. Tests override per-case with `server.use(...)`.
  * Every outbound call the app can make should have a handler here so an
@@ -136,6 +282,8 @@ export const handlers = [
 
   // Gateway health
   http.get('*/health', () => HttpResponse.json({ ok: true, data: { status: 'healthy' } })),
+
+  ...adminHandlers(),
 
   // Cloudflare Turnstile siteverify (SEC-9): a person, as Cloudflare answers a
   // good token. Tests override per case for refusals and outages.

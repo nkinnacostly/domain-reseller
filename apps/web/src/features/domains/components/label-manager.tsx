@@ -4,6 +4,7 @@ import { Pencil, Tags, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useRef, useState } from 'react'
+import { QUIET_BUTTON } from '@/components/common/action-parts'
 import { FormMessage, onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { FOCUS, PANEL, PANEL_HEADING } from '@/components/layout/panel'
 import { cn } from '@/lib/utils'
@@ -13,7 +14,6 @@ import { portfolioHref } from '../lib/portfolio'
 import type { LabelWithCount } from '../queries/labels'
 import { LabelChip } from './label-chip'
 import { colorFromForm, LabelFields } from './label-fields'
-import { QUIET_BUTTON } from './settings-parts'
 
 type Answer = {
   data?: { ok: true } | { error: string } | undefined

@@ -179,3 +179,19 @@ describe('email provider settings', () => {
     expect(parseEnv({ ...BASE, AWS_SES_REGION: 'eu-west-2' }).AWS_SES_REGION).toBe('eu-west-2')
   })
 })
+
+describe('admin settings (ADMIN-SPEC §4.1, §4.4)', () => {
+  it('leaves the admin routes off without their secret, and wants a long one', () => {
+    expect(parseEnv(BASE).GATEWAY_ADMIN_SECRET).toBeUndefined()
+    expect(() => parseEnv({ ...BASE, GATEWAY_ADMIN_SECRET: 'short' })).toThrow()
+    expect(
+      parseEnv({ ...BASE, GATEWAY_ADMIN_SECRET: 'f'.repeat(64) }).GATEWAY_ADMIN_SECRET,
+    ).toHaveLength(64)
+  })
+
+  it('mirrors the supplier ledger hourly by default, never more than every 15 minutes', () => {
+    expect(parseEnv(BASE).LEDGER_SYNC_MINUTES).toBe(60)
+    expect(parseEnv({ ...BASE, LEDGER_SYNC_MINUTES: '30' }).LEDGER_SYNC_MINUTES).toBe(30)
+    expect(() => parseEnv({ ...BASE, LEDGER_SYNC_MINUTES: '5' })).toThrow()
+  })
+})

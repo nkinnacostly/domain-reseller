@@ -3,10 +3,11 @@
 import { Check, Copy, KeyRound } from 'lucide-react'
 import { useAction } from 'next-safe-action/hooks'
 import { useEffect, useState } from 'react'
+import { ActionError, QUIET_BUTTON, useOutcome } from '@/components/common/action-parts'
 import { onSubmitWith, SubmitButton } from '@/components/common/form-parts'
 import { revealTransferCode } from '../actions/settings'
 import { PanelNote } from './domain-badges'
-import { ActionError, NeedsTwoFactor, QUIET_BUTTON, useOutcome } from './settings-parts'
+import { NeedsTwoFactor } from './settings-parts'
 
 /**
  * FR-DS5, FR-T5: the transfer code, fetched from the registry when asked

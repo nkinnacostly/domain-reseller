@@ -2,11 +2,12 @@
 
 import { Undo2 } from 'lucide-react'
 import { useAction } from 'next-safe-action/hooks'
+import { ActionError, QUIET_BUTTON } from '@/components/common/action-parts'
 import { FormMessage } from '@/components/common/form-parts'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { type NameserverDelivery, requestNameservers } from '../actions/domains'
-import { ActionError, NeedsTwoFactor, QUIET_BUTTON } from './settings-parts'
+import { NeedsTwoFactor } from './settings-parts'
 
 const DELIVERY_MESSAGE: Record<NameserverDelivery, string> = {
   queued: 'Sent to the registry. The history shows it once it is applied.',

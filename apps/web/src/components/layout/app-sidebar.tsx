@@ -16,6 +16,7 @@ import {
 import Link from 'next/link'
 import { BRAND_NAME, Brand } from '@/components/layout/brand'
 import { NavLink } from '@/components/layout/nav-link'
+import { adminSessionStatus } from '@/features/admin/queries/session'
 import { getAccount } from '@/features/auth/queries/account'
 import { CartLink } from '@/features/cart/components/cart-link'
 import { initials, relativeDays, summarize } from '@/features/domains/lib/dashboard'
@@ -82,11 +83,13 @@ function SidebarContent({
   email,
   soonest,
   now,
+  isAdmin,
 }: {
   name: string
   email: string
   soonest: PortfolioDomain[]
   now: Date
+  isAdmin: boolean
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-5 p-4">
@@ -187,7 +190,12 @@ function SidebarContent({
       </div>
 
       <div className="flex items-center gap-2">
-        <AccountMenu name={name} email={email} initials={initials(name, email)} />
+        <AccountMenu
+          name={name}
+          email={email}
+          initials={initials(name, email)}
+          showAdmin={isAdmin}
+        />
         <CartLink tone="default" className="rounded-2xl" />
       </div>
     </div>
@@ -195,7 +203,11 @@ function SidebarContent({
 }
 
 export async function AppSidebar() {
-  const [account, domains] = await Promise.all([getAccount(), getPortfolio()])
+  const [account, domains, adminStatus] = await Promise.all([
+    getAccount(),
+    getPortfolio(),
+    adminSessionStatus(),
+  ])
   const now = new Date()
   const content = (
     <SidebarContent
@@ -203,6 +215,7 @@ export async function AppSidebar() {
       email={account?.email ?? ''}
       soonest={summarize(domains, [], now).upcoming.slice(0, 4)}
       now={now}
+      isAdmin={adminStatus !== 'not_admin'}
     />
   )
 

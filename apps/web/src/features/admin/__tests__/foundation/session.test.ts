@@ -1,0 +1,548 @@
+import { cookies } from 'next/headers'
+import { notFound, redirect } from 'next/navigation'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AdminRefusal } from '@/features/admin/lib/errors'
+import {
+  ADMIN_TABLES,
+  type AdminPrincipal,
+  adminDb,
+  adminSessionStatus,
+  adminWhoami,
+  assertAdminArea,
+  findAdmin,
+  getAdminSide,
+  isAdminPrincipal,
+  PRIVATE_COLUMNS,
+  requireAdmin,
+  selectedColumns,
+} from '@/features/admin/queries/session'
+import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { sessionClient, whoami } from './fixtures'
+
+vi.mock('next/headers', () => ({ headers: vi.fn(), cookies: vi.fn() }))
+vi.mock('next/navigation', () => ({
+  notFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND')
+  }),
+  redirect: vi.fn((to: string) => {
+    throw new Error(`NEXT_REDIRECT ${to}`)
+  }),
+}))
+vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
+vi.mock('@/lib/supabase/service', () => ({ createServiceClient: vi.fn() }))
+// requireAdmin is React's cache(): outside a render it would remember one answer.
+vi.mock('react', async (original) => ({
+  ...(await original<typeof import('react')>()),
+  cache: <T>(fn: T) => fn,
+}))
+
+type Call = [method: string, ...args: unknown[]]
+
+/** A service client that records the query each read builds. */
+function recordingService() {
+  const calls: Call[] = []
+  // Shaped like PostgREST's builder: methods that return it, and the request
+  // it will send as plain properties.
+  const builder: Record<string, unknown> = {
+    url: new URL('https://db.test/rest/v1/refunds?test_mode=eq.false'),
+    method: 'GET',
+    headers: new Headers(),
+  }
+  for (const method of [
+    'select',
+    'eq',
+    'in',
+    'order',
+    'range',
+    'limit',
+    'ilike',
+    'match',
+    'or',
+    'not',
+    'csv',
+    'setHeader',
+  ]) {
+    builder[method] = (...args: unknown[]) => {
+      calls.push([method, ...args])
+      return builder
+    }
+  }
+  const service = {
+    from: (name: string) => {
+      calls.push(['from', name])
+      return builder
+    },
+  }
+  vi.mocked(createServiceClient).mockReturnValue(service as never)
+  return calls
+}
+
+async function principal(overrides: Record<string, unknown> = {}): Promise<AdminPrincipal> {
+  const session = sessionClient({ rpc: { admin_whoami: { data: whoami(overrides) } } })
+  return adminWhoami(session.client as never, null)
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('adminDb', () => {
+  it('refuses an object it did not issue, however it is shaped', async () => {
+    const forged = { ...whoami() } as unknown as AdminPrincipal
+    expect(isAdminPrincipal(forged)).toBe(false)
+    expect(() => adminDb(forged, 'live')).toThrow(AdminRefusal)
+  })
+
+  it('has a select and nothing else: no insert, update, delete, upsert or rpc', async () => {
+    recordingService()
+    const db = adminDb(await principal(), 'live')
+    const table = db.from('admin_orders_v') as unknown as Record<string, unknown>
+    expect(Object.keys(table)).toEqual(['select'])
+    expect('rpc' in db).toBe(false)
+  })
+
+  it('reads only tables in its map', async () => {
+    recordingService()
+    const db = adminDb(await principal(), 'live')
+    expect(() => db.from('profiles' as never)).toThrow('not an admin table')
+    expect(() => db.from('toString' as never)).toThrow('not an admin table')
+  })
+
+  it.each([
+    ['admin_orders_v', 'live', [['eq', 'test_mode', false]]],
+    ['admin_orders_v', 'test', [['eq', 'test_mode', true]]],
+    ['supplier_calls', 'live', [['eq', 'environment', 'production']]],
+    ['supplier_calls', 'test', [['eq', 'environment', 'ote']]],
+    ['order_items', 'test', [['eq', 'admin_side.test_mode', true]]],
+    ['refund_events', 'live', [['eq', 'admin_side.test_mode', false]]],
+    ['domain_events', 'test', [['eq', 'admin_side.test_mode', true]]],
+    ['domain_nameserver_history', 'live', [['eq', 'admin_side.test_mode', false]]],
+    ['order_item_costs', 'test', [['eq', 'admin_side.orders.test_mode', true]]],
+    ['float_topups', 'live', []],
+    ['float_topups', 'test', [['in', 'id', []]]],
+    ['admin_audit_log', 'test', []],
+    ['tlds', 'test', []],
+    ['ops_settings', 'live', []],
+  ] as const)('applies the side to %s on the %s side', async (table, side, filters) => {
+    const calls = recordingService()
+    await adminDb(await principal(), side)
+      .from(table)
+      .select('id')
+    expect(calls.slice(2)).toEqual(filters)
+  })
+
+  it('embeds the parent under its own name, so a page can still embed the parent itself', async () => {
+    const calls = recordingService()
+    adminDb(await principal(), 'live')
+      .from('order_items')
+      .select('id, orders(order_number)')
+    expect(calls[1]).toEqual([
+      'select',
+      'id, orders(order_number), admin_side:orders!inner(test_mode)',
+      undefined,
+    ])
+  })
+
+  describe('reads named columns only (D4)', () => {
+    it.each([
+      ['refunds', 'id, profiles(email)'],
+      ['admin_orders_v', 'id, profiles(full_name, phone)'],
+      ['admin_orders_v', 'id, contact_profiles(id)'],
+      ['order_items', 'id, orders(id, profiles(email))'],
+      ['order_items', 'id, payments(raw)'],
+      ['refunds', 'who:profiles(email)'],
+      ['refunds', '...profiles(email)'],
+      ['refunds', 'id::text'],
+      ['jobs', 'last_error->>x'],
+      ['jobs', '*'],
+      ['jobs', 'id, *'],
+      ['jobs', ''],
+      ['jobs', 'id,'],
+      ['jobs', 'id, (status)'],
+      ['order_items', 'id, orders!inner(order_number)'],
+    ] as const)('refuses %s with %j', async (table, columns) => {
+      const calls = recordingService()
+      const db = adminDb(await principal(), 'live')
+      expect(() => db.from(table).select(columns)).toThrow('adminDb reads named columns only')
+      expect(calls).toEqual([])
+    })
+
+    it.each([
+      ['admin_orders_v', 'id, user_id, contact_profile_id'],
+      ['order_items', 'id, orders(order_number, registrant)'],
+      ['order_items', 'id, orders(contacts)'],
+      ['refund_events', 'id, refunds(id), detail, data'],
+      ['domain_events', 'id, domains(domain_name, pending_registrant)'],
+      ['jobs', 'id, key'],
+    ] as const)('refuses a private column in %s: %j', async (table, columns) => {
+      const calls = recordingService()
+      const db = adminDb(await principal(), 'live')
+      expect(() => db.from(table).select(columns)).toThrow('adminDb never reads')
+      expect(calls).toEqual([])
+    })
+
+    it("reads an alert's key on ops_alerts, and nowhere else", async () => {
+      recordingService()
+      const db = adminDb(await principal(), 'live')
+      expect(() => db.from('ops_alerts').select('id, key, summary')).not.toThrow()
+      expect(() => db.from('registry_drift').select('id, key')).toThrow('adminDb never reads key')
+    })
+
+    it('reads plain names and the side parent by plain names', () => {
+      expect(selectedColumns(' id , status ', null)).toEqual(['id', 'status'])
+      expect(selectedColumns('id, orders(order_number, paid_at)', 'orders')).toEqual([
+        'id',
+        'order_number',
+        'paid_at',
+      ])
+      expect(selectedColumns('id, orders(order_number)', null)).toBeNull()
+      expect(selectedColumns(undefined, null)).toBeNull()
+      expect(selectedColumns('id)', null)).toBeNull()
+      expect(selectedColumns('orders(id', 'orders')).toBeNull()
+    })
+
+    it('holds the names the spec bans, and personal data', () => {
+      for (const name of ['registrant', 'contacts', 'raw', 'email', 'phone', 'full_name']) {
+        expect(PRIVATE_COLUMNS.has(name), name).toBe(true)
+      }
+      expect(PRIVATE_COLUMNS.has('idempotency_key')).toBe(false)
+    })
+
+    it('selects once: the builder refuses a second select, even after a filter', async () => {
+      recordingService()
+      const query = adminDb(await principal(), 'live')
+        .from('refunds')
+        .select('id') as unknown as Record<string, (...args: unknown[]) => unknown>
+      expect(() => query.select?.('id, profiles(email)')).toThrow('adminDb selects once')
+      const filtered = query.eq?.('status', 'held') as Record<
+        string,
+        (...args: unknown[]) => unknown
+      >
+      expect(() => filtered.select?.('*')).toThrow('adminDb selects once')
+      expect(filtered.limit?.(5)).toBe(filtered)
+    })
+  })
+
+  describe('the builder it hands back (D4)', () => {
+    type Loose = Record<string, (...args: unknown[]) => unknown> & Record<string, unknown>
+    async function read(table: Parameters<ReturnType<typeof adminDb>['from']>[0] = 'refunds') {
+      const calls = recordingService()
+      const query = adminDb(await principal(), 'live')
+        .from(table)
+        .select('id') as unknown as Loose
+      return { calls, query }
+    }
+
+    it('cannot be rewritten into another request: nothing is set, defined or deleted', async () => {
+      const { query } = await read()
+      const plain = query as Record<string, unknown>
+      expect(() => {
+        plain.method = 'DELETE'
+      }).toThrow('adminDb builders are read-only')
+      expect(() =>
+        Object.defineProperty(query, 'url', { value: new URL('https://db.test/') }),
+      ).toThrow('adminDb builders are read-only')
+      expect(() => {
+        delete query.url
+      }).toThrow('adminDb builders are read-only')
+      expect(() => Object.setPrototypeOf(query, {})).toThrow('adminDb builders are read-only')
+    })
+
+    it('hides the request it will send: no url, method or headers, and no setHeader', async () => {
+      const { query, calls } = await read()
+      expect(query.url).toBeUndefined()
+      expect(query.method).toBeUndefined()
+      expect(query.headers).toBeUndefined()
+      expect('url' in query).toBe(false)
+      expect(Object.keys(query)).toEqual([])
+      expect(Object.getOwnPropertyDescriptor(query, 'url')).toBeUndefined()
+      expect(Object.getPrototypeOf(query)).toBeNull()
+      expect(() => query.setHeader?.('Accept-Profile', 'auth')).toThrow(
+        'adminDb does not allow .setHeader()',
+      )
+      expect(() => query.csv?.()).toThrow('adminDb does not allow .csv()')
+      expect(calls.map(([method]) => method)).not.toContain('setHeader')
+    })
+
+    it.each([
+      ['an embedded parent column', 'ilike', ['admin_side.registrant->>email', '%@gmail.com']],
+      ['a JSON path into a private field', 'eq', ['detail->>email', 'someone@example.com']],
+      ['a private column', 'order', ['email']],
+      ['a quoted JSON key', 'eq', ["detail->>'phone'", '1']],
+      ['a negated private column', 'not', ['full_name', 'is', null]],
+      // PostgREST's related order sorts by the embedded parent's column.
+      ["the parent's private column, as a related order", 'order', ['admin_side(registrant)']],
+      ["a JSON path in the parent's private column", 'order', ['admin_side(registrant->>email)']],
+      ['a private column behind a cast', 'eq', ['registrant::text', 'x']],
+      ['a private column in capitals', 'order', ['REGISTRANT']],
+    ])('refuses a filter or an order on %s', async (_, method, args) => {
+      const { query, calls } = await read()
+      const sent = calls.length
+      expect(() => query[method]?.(...args)).toThrow('adminDb never filters or orders by')
+      expect(calls).toHaveLength(sent)
+    })
+
+    it('refuses a private column inside match() and or()', async () => {
+      const { query } = await read()
+      expect(() => query.match?.({ status: 'held', phone: '0803' })).toThrow(
+        'adminDb never filters or orders by phone',
+      )
+      expect(() => query.or?.('status.eq.held,and(kind.eq.x,email.ilike.%a%)')).toThrow(
+        'adminDb never filters or orders by email',
+      )
+      expect(() => query.eq?.('', 1)).toThrow('adminDb filters and orders by named columns only')
+    })
+
+    it('passes ordinary filters, orders and pages, and keeps them guarded', async () => {
+      const { query, calls } = await read()
+      const next = query.eq?.('status', 'held') as Loose
+      expect(next).toBe(query)
+      expect(next.or?.('status.eq.held,not.and(kind.eq.x,reason.is.null)')).toBe(query)
+      expect(next.match?.({ status: 'held' })).toBe(query)
+      expect(next.order?.('created_at', { ascending: false })).toBe(query)
+      expect(next.range?.(0, 49)).toBe(query)
+      expect(calls.slice(-5).map(([method]) => method)).toEqual([
+        'eq',
+        'or',
+        'match',
+        'order',
+        'range',
+      ])
+    })
+
+    it("filters by an alert's key on ops_alerts, and nowhere else", async () => {
+      const alerts = await read('ops_alerts')
+      expect(() => alerts.query.eq?.('key', 'ledger_gap:live')).not.toThrow()
+      const drift = await read('registry_drift')
+      expect(() => drift.query.eq?.('key', 'x')).toThrow('adminDb never filters or orders by key')
+    })
+  })
+
+  it('passes count options through', async () => {
+    const calls = recordingService()
+    adminDb(await principal(), 'live')
+      .from('jobs')
+      .select('id', { count: 'exact', head: true })
+    expect(calls[1]).toEqual(['select', 'id', { count: 'exact', head: true }])
+  })
+
+  describe('for a test administrator', () => {
+    it('forces the test side whatever the page asks', async () => {
+      const calls = recordingService()
+      adminDb(await principal({ testOnly: true }), 'live')
+        .from('refunds')
+        .select('id')
+      expect(calls).toContainEqual(['eq', 'test_mode', true])
+    })
+
+    it("shows only test administrators' own kind of audit rows", async () => {
+      const calls = recordingService()
+      adminDb(await principal({ testOnly: true }), 'test')
+        .from('admin_audit_log')
+        .select('id')
+      expect(calls).toContainEqual(['eq', 'test_actor', true])
+    })
+
+    it.each(['ops_settings', 'service_heartbeats', 'nameserver_preset_drafts'] as const)(
+      'refuses %s, which has no side and is not public',
+      async (table) => {
+        recordingService()
+        const db = adminDb(await principal({ testOnly: true }), 'test')
+        expect(() => db.from(table)).toThrow("Test administrators can't do this on live records.")
+      },
+    )
+
+    it.each([
+      'tlds',
+      'ssl_products',
+      'nameserver_presets',
+      'fx_rates',
+      'pricing_settings',
+    ] as const)('reads %s, which the storefront already shows', async (table) => {
+      recordingService()
+      const db = adminDb(await principal({ testOnly: true }), 'test')
+      expect(() => db.from(table).select('id')).not.toThrow()
+    })
+  })
+
+  it('maps exactly the tables and views §2.3 allows, and none of the banned ones', () => {
+    const names = Object.keys(ADMIN_TABLES)
+    for (const banned of [
+      'profiles',
+      'payments',
+      'email_outbox',
+      'compliance_notices',
+      'ssl_certificates',
+      'domains',
+      'transfer_secrets',
+      'admins',
+      'admin_changes',
+    ]) {
+      expect(names).not.toContain(banned)
+    }
+    const publicSafe = Object.entries(ADMIN_TABLES)
+      .filter(([, entry]) => entry.side.kind === 'global' && entry.side.publicSafe)
+      .map(([name]) => name)
+    expect(publicSafe.sort()).toEqual(
+      ['fx_rates', 'nameserver_presets', 'pricing_settings', 'ssl_products', 'tlds'].sort(),
+    )
+  })
+})
+
+describe('every mapped table', () => {
+  it('reads from the table of its own name, with a side applied or marked global', async () => {
+    const admin = await principal()
+    for (const [name, entry] of Object.entries(ADMIN_TABLES)) {
+      const calls = recordingService()
+      adminDb(admin, 'test')
+        .from(name as keyof typeof ADMIN_TABLES)
+        .select('id')
+      expect(calls[0], name).toEqual(['from', name])
+      if (entry.side.kind === 'global' || entry.side.kind === 'test_actor') continue
+      expect(calls.length, `${name} has a side filter`).toBeGreaterThan(2)
+    }
+  })
+
+  it('makes one service client per reader', async () => {
+    recordingService()
+    const db = adminDb(await principal(), 'live')
+    db.from('admin_orders_v').select('id')
+    db.from('jobs').select('id')
+    expect(createServiceClient).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('findAdmin', () => {
+  it('is the admin, or null — never a 404 — for the sidebar', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_whoami: { data: whoami() } } }).client as never,
+    )
+    expect((await findAdmin())?.label).toBe('owner')
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_whoami: { error: { message: 'admin:weak_sign_in' } } } })
+        .client as never,
+    )
+    expect(await findAdmin()).toBeNull()
+    vi.mocked(createClient).mockResolvedValue(sessionClient({ user: null }).client as never)
+    expect(await findAdmin()).toBeNull()
+    expect(notFound).not.toHaveBeenCalled()
+  })
+})
+
+describe('adminWhoami', () => {
+  it('issues a frozen principal from the answer', async () => {
+    const admin = await principal({ label: 'ops', role: 'operator' })
+    expect(admin.label).toBe('ops')
+    expect(Object.isFrozen(admin)).toBe(true)
+    expect(isAdminPrincipal(admin)).toBe(true)
+  })
+
+  it('asks for a fresh code by minutes when told to', async () => {
+    const session = sessionClient({ rpc: { admin_whoami: { data: whoami() } } })
+    await adminWhoami(session.client as never, 5)
+    expect(session.rpc).toHaveBeenCalledWith('admin_whoami', { p_fresh_minutes: 5 })
+  })
+})
+
+describe('requireAdmin', () => {
+  it('is a 404 for a visitor who is not signed in', async () => {
+    vi.mocked(createClient).mockResolvedValue(sessionClient({ user: null }).client as never)
+    await expect(requireAdmin()).rejects.toThrow('NEXT_NOT_FOUND')
+  })
+
+  it('is a 404 for a signed-in person who is not an admin', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_whoami: { error: { message: 'admin:not_admin' } } } })
+        .client as never,
+    )
+    await expect(requireAdmin()).rejects.toThrow('NEXT_NOT_FOUND')
+    expect(notFound).toHaveBeenCalled()
+  })
+
+  it('sends an admin whose code is stale to enter one', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_whoami: { error: { message: 'admin:needs_code' } } } })
+        .client as never,
+    )
+    await expect(requireAdmin()).rejects.toThrow('NEXT_REDIRECT /verify?next=/admin')
+    expect(redirect).toHaveBeenCalledWith('/verify?next=/admin')
+  })
+
+  it('returns the admin', async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_whoami: { data: whoami() } } }).client as never,
+    )
+    expect((await requireAdmin()).role).toBe('owner')
+  })
+})
+
+describe('adminSessionStatus', () => {
+  it.each(['ok', 'needs_code', 'factor_mismatch', 'weak_sign_in', 'not_admin'])(
+    'passes on %s',
+    async (status) => {
+      vi.mocked(createClient).mockResolvedValue(
+        sessionClient({ rpc: { admin_status: { data: status } } }).client as never,
+      )
+      expect(await adminSessionStatus()).toBe(status)
+    },
+  )
+
+  it('is not_admin when signed out, on an error, or on a word it does not know', async () => {
+    vi.mocked(createClient).mockResolvedValue(sessionClient({ user: null }).client as never)
+    expect(await adminSessionStatus()).toBe('not_admin')
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_status: { error: { message: 'boom' } } } }).client as never,
+    )
+    expect(await adminSessionStatus()).toBe('not_admin')
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_status: { data: 'superuser' } } }).client as never,
+    )
+    expect(await adminSessionStatus()).toBe('not_admin')
+  })
+})
+
+describe('assertAdminArea', () => {
+  it('is a 404 for a stranger before any admin chrome renders', async () => {
+    vi.mocked(createClient).mockResolvedValue(sessionClient({ user: null }).client as never)
+    await expect(assertAdminArea()).rejects.toThrow('NEXT_NOT_FOUND')
+    vi.mocked(createClient).mockResolvedValue(
+      sessionClient({ rpc: { admin_status: { data: 'not_admin' } } }).client as never,
+    )
+    await expect(assertAdminArea()).rejects.toThrow('NEXT_NOT_FOUND')
+  })
+
+  it.each(['ok', 'needs_code', 'factor_mismatch', 'weak_sign_in'])(
+    'lets %s through to AdminGate, which explains it',
+    async (status) => {
+      vi.mocked(createClient).mockResolvedValue(
+        sessionClient({ rpc: { admin_status: { data: status } } }).client as never,
+      )
+      expect(await assertAdminArea()).toBe(status)
+      expect(notFound).not.toHaveBeenCalled()
+    },
+  )
+})
+
+describe('getAdminSide', () => {
+  function cookie(value: string | undefined) {
+    vi.mocked(cookies).mockResolvedValue({
+      get: () => (value === undefined ? undefined : { value }),
+    } as never)
+  }
+
+  it('reads the cookie, live by default', async () => {
+    const admin = await principal()
+    cookie('test')
+    expect(await getAdminSide(admin)).toBe('test')
+    cookie(undefined)
+    expect(await getAdminSide(admin)).toBe('live')
+    cookie('production')
+    expect(await getAdminSide(admin)).toBe('live')
+  })
+
+  it('keeps a test administrator on the test side', async () => {
+    cookie('live')
+    expect(await getAdminSide(await principal({ testOnly: true }))).toBe('test')
+  })
+})
