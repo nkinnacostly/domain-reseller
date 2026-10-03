@@ -24,7 +24,14 @@ export type ClaimRefusal =
   | 'TEST_ADMIN'
   | 'REVOKED'
 
-export type Claim = { ok: true } | { ok: false; code: ClaimRefusal | string }
+/**
+ * A claimed note comes back with its detail: what the admin noted (the
+ * refund or incident a Flutterwave read is for), so a route acts on the
+ * note, never on its own query string (D23).
+ */
+export type Claim =
+  | { ok: true; detail: Readonly<Record<string, unknown>> }
+  | { ok: false; code: ClaimRefusal | string }
 
 export type NoteOutcome = 'ok' | 'refused' | 'failed'
 
@@ -91,8 +98,17 @@ export function createNoteStore(client: SupabaseClient<Database>): NoteStore {
         p_target_id: targetId,
       })
       fail(error)
-      const answer = (data ?? {}) as { ok?: unknown; code?: unknown }
-      if (answer.ok === true) return { ok: true }
+      const answer = (data ?? {}) as { ok?: unknown; code?: unknown; detail?: unknown }
+      if (answer.ok === true) {
+        const detail = answer.detail
+        return {
+          ok: true,
+          detail:
+            typeof detail === 'object' && detail !== null && !Array.isArray(detail)
+              ? (detail as Record<string, unknown>)
+              : {},
+        }
+      }
       return { ok: false, code: typeof answer.code === 'string' ? answer.code : 'NOT_FOUND' }
     },
     async result(auditId, outcome, code, detail) {

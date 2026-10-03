@@ -188,6 +188,23 @@ function supplierFailure(answer: JsonResponse): Failure {
 
 const ok = (answer: JsonResponse) => answer.status >= 200 && answer.status < 300
 
+/** The one refund or incident a refund.flw_check note was written for, from its detail. */
+export function flwTarget(
+  detail: Readonly<Record<string, unknown>>,
+): { type: 'refund' | 'incident'; id: string } | null {
+  const refund = detail.refund_id
+  const incident = detail.incident_id
+  if (typeof refund === 'string' && incident === undefined) {
+    const id = validId(refund, 'uuid')
+    return id ? { type: 'refund', id } : null
+  }
+  if (typeof incident === 'string' && refund === undefined) {
+    const id = validId(incident, 'bigint')
+    return id ? { type: 'incident', id } : null
+  }
+  return null
+}
+
 /** What `tlds` says the supplier charges for this op and term, in cents (N5b). */
 export function ourCostCents(cost: TldCost, op: AdminPriceOp, years: number): number | null {
   const first = Math.max(1, cost.firstTermYears)
@@ -294,7 +311,7 @@ export function createAdminRouter(deps: AdminRouterDeps) {
     route: AdminGatewayRouteName,
     noteSide: AdminNoteSide,
     target: string,
-    work: () => Promise<Outcome<T>>,
+    work: (note: { detail: Readonly<Record<string, unknown>> }) => Promise<Outcome<T>>,
     bucket: TokenBucket = deps.bucket,
   ) {
     const caller = c.get('adminCaller')
@@ -317,7 +334,7 @@ export function createAdminRouter(deps: AdminRouterDeps) {
 
     let outcome: Outcome<T>
     try {
-      outcome = await work()
+      outcome = await work({ detail: claim.detail })
     } catch (error) {
       if (error instanceof QueueTimeout) {
         outcome = refused(503, 'SUPPLIER_BUSY', 'The supplier is busy. Try again shortly.')
@@ -900,7 +917,13 @@ export function createAdminRouter(deps: AdminRouterDeps) {
       'flwRefundCheck',
       at.side,
       flwRefundId,
-      async () => {
+      async (note) => {
+        // D23: the check is evidence for the refund or incident the admin
+        // noted. The query string only says which one the web expects.
+        const noted = flwTarget(note.detail)
+        if (!noted || noted.type !== targetType || noted.id !== targetId) {
+          return refused(403, 'TARGET_MISMATCH', 'The audit note names another refund or incident')
+        }
         const flutterwave = deps.flutterwave()
         if (!flutterwave) return refused(503, 'WRITES_OFF', 'No Flutterwave key on this gateway')
         const read = await flutterwave.getRefund(flwRefundId)
@@ -922,8 +945,8 @@ export function createAdminRouter(deps: AdminRouterDeps) {
         const checkId = await deps.store.recordFlwCheck({
           auditId: c.get('adminCaller').auditId,
           testMode: at.side === 'test',
-          targetType,
-          targetId,
+          targetType: noted.type,
+          targetId: noted.id,
           flwRefundId,
           transactionId: refund.transactionId,
           amountKobo: refund.amountKobo,

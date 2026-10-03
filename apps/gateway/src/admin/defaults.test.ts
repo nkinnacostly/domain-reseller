@@ -76,6 +76,7 @@ describe('admin wiring', () => {
     const deps = adminDepsFor(parseEnv(BASE), { client })
     expect(await deps.notes.claim(1, 'supplier.balance', 'owner', 'test', 'test')).toEqual({
       ok: true,
+      detail: {},
     })
     await deps.notes.result(1, 'ok', null, {})
     await deps.store.recordCall('ote', {

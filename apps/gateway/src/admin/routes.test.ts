@@ -721,7 +721,8 @@ describe('a Flutterwave refund check', () => {
 
   it('reads the refund with this side’s key, records the facts, and judges it done', async () => {
     const getRefund = vi.fn(async () => refund)
-    const { request, flwChecks, claims } = setup({ flutterwave: () => ({ getRefund }) })
+    const { request, flwChecks, claims, noteDetail } = setup({ flutterwave: () => ({ getRefund }) })
+    noteDetail.refund_id = '8dbd7ea2-c535-4a4a-a091-e202d9185a20'
     const body = await read(
       await request(
         '/flutterwave/refunds/123?side=test&refund=8dbd7ea2-c535-4a4a-a091-e202d9185a20',
@@ -751,18 +752,51 @@ describe('a Flutterwave refund check', () => {
       kind: 'ok' as const,
       data: { ...refund.data, status: 'completed' },
     }))
-    const { request, flwChecks } = setup({ flutterwave: () => ({ getRefund }) })
+    const { request, flwChecks, noteDetail } = setup({ flutterwave: () => ({ getRefund }) })
+    noteDetail.incident_id = '42'
     const body = await read(await request('/flutterwave/refunds/123?side=test&incident=42'))
     expect(body.data.state).toBe('pending')
     expect(flwChecks).toEqual([expect.objectContaining({ targetType: 'incident', targetId: '42' })])
   })
 
+  it('records only what the note names: another refund or incident in the query is refused', async () => {
+    const getRefund = vi.fn(async () => refund)
+    const { request, flwChecks, noteDetail, results } = setup({
+      flutterwave: () => ({ getRefund }),
+    })
+    noteDetail.refund_id = '8dbd7ea2-c535-4a4a-a091-e202d9185a20'
+    const other = await request(
+      '/flutterwave/refunds/123?side=test&refund=11111111-2222-4333-8444-555555555555',
+    )
+    expect(other.status).toBe(403)
+    expect(await read(other)).toMatchObject({ code: 'TARGET_MISMATCH' })
+    expect(
+      await read(await request('/flutterwave/refunds/123?side=test&incident=7')),
+    ).toMatchObject({ code: 'TARGET_MISMATCH' })
+    // A note naming both, or neither, names nothing.
+    noteDetail.incident_id = '7'
+    expect((await request('/flutterwave/refunds/123?side=test&incident=7')).status).toBe(403)
+    delete noteDetail.refund_id
+    delete noteDetail.incident_id
+    expect(
+      (
+        await request(
+          '/flutterwave/refunds/123?side=test&refund=8dbd7ea2-c535-4a4a-a091-e202d9185a20',
+        )
+      ).status,
+    ).toBe(403)
+    expect(getRefund).not.toHaveBeenCalled()
+    expect(flwChecks).toEqual([])
+    expect(results.at(-1)).toEqual([41, 'refused', 'TARGET_MISMATCH', {}])
+  })
+
   it('refuses bad input, and says when Flutterwave has none or did not answer', async () => {
-    const { request } = setup({
+    const { request, noteDetail } = setup({
       flutterwave: () => ({
         getRefund: vi.fn(async () => ({ kind: 'rejected' as const, code: 'x', message: 'x' })),
       }),
     })
+    noteDetail.incident_id = '2'
     expect((await request('/flutterwave/refunds/123?side=test')).status).toBe(400)
     expect((await request('/flutterwave/refunds/123?side=test&refund=1&incident=2')).status).toBe(
       400,
@@ -774,8 +808,10 @@ describe('a Flutterwave refund check', () => {
         getRefund: vi.fn(async () => ({ kind: 'unknown' as const, code: 'x', message: 'x' })),
       }),
     })
+    silent.noteDetail.incident_id = '2'
     expect((await silent.request('/flutterwave/refunds/123?side=test&incident=2')).status).toBe(503)
     const none = setup()
+    none.noteDetail.incident_id = '2'
     expect((await none.request('/flutterwave/refunds/123?side=test&incident=2')).status).toBe(503)
   })
 })

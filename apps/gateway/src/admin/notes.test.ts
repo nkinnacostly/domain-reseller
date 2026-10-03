@@ -18,7 +18,10 @@ describe('the note store', () => {
   it('claims a note and says why one was refused', async () => {
     const { client, rpc } = fakeRpcClient({ admin_claim_note: { data: { ok: true } } })
     const notes = createNoteStore(client)
-    expect(await notes.claim(41, 'supplier.balance', 'owner', 'test', 'test')).toEqual({ ok: true })
+    expect(await notes.claim(41, 'supplier.balance', 'owner', 'test', 'test')).toEqual({
+      ok: true,
+      detail: {},
+    })
     expect(rpc).toHaveBeenCalledWith('admin_claim_note', {
       p_audit_id: 41,
       p_action: 'supplier.balance',
@@ -32,6 +35,23 @@ describe('the note store', () => {
     expect(await refused.claim(41, 'supplier.balance', 'owner', 'test', 'test')).toEqual({
       ok: false,
       code: 'USED',
+    })
+    // The note's detail comes back with the claim (D23); anything else is none.
+    const noted = createNoteStore(
+      fakeRpcClient({
+        admin_claim_note: { data: { ok: true, detail: { refund_id: 'abc' } } },
+      }).client,
+    )
+    expect(await noted.claim(41, 'refund.flw_check', 'owner', 'test', '123')).toEqual({
+      ok: true,
+      detail: { refund_id: 'abc' },
+    })
+    const listed = createNoteStore(
+      fakeRpcClient({ admin_claim_note: { data: { ok: true, detail: ['x'] } } }).client,
+    )
+    expect(await listed.claim(41, 'supplier.balance', 'owner', 'test', 'test')).toEqual({
+      ok: true,
+      detail: {},
     })
     const blank = createNoteStore(fakeRpcClient({}).client)
     expect(await blank.claim(41, 'supplier.balance', 'owner', 'test', 'test')).toEqual({

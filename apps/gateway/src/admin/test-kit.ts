@@ -54,6 +54,8 @@ export function fakeDeps(overrides: Partial<AdminRouterDeps> = {}) {
   const results: unknown[][] = []
   const recordedCalls: unknown[] = []
   const flwChecks: unknown[] = []
+  /** What the claimed note's detail holds; a test fills it for a route that reads it. */
+  const noteDetail: Record<string, unknown> = {}
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
   const deps: AdminRouterDeps = {
     secret: ADMIN_SECRET,
@@ -61,7 +63,7 @@ export function fakeDeps(overrides: Partial<AdminRouterDeps> = {}) {
     notes: {
       claim: vi.fn(async (...args: unknown[]) => {
         claims.push(args)
-        return { ok: true as const }
+        return { ok: true as const, detail: { ...noteDetail } }
       }),
       result: vi.fn(async (...args: unknown[]) => {
         results.push(args)
@@ -98,7 +100,7 @@ export function fakeDeps(overrides: Partial<AdminRouterDeps> = {}) {
     log,
     ...overrides,
   }
-  return { deps, claims, results, recordedCalls, flwChecks, log }
+  return { deps, claims, results, recordedCalls, flwChecks, noteDetail, log }
 }
 
 export const adminHeaders = (auditId = '41', label = 'owner') => ({
