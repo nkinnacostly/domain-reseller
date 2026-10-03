@@ -1,19 +1,15 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { OrderView } from '@/features/admin/components/orders/order-view'
+import { OrderSkeleton } from '@/features/admin/components/orders/orders-skeleton'
 
 export const metadata: Metadata = { title: 'Order' }
 
-/** Package B2 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminOrdersDetailPage() {
+/** One order, read only (docs/ADMIN-SPEC.md §5.2, B2). */
+export default function AdminOrderPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Order"
-        description="One order: lines, payments, refunds and its trace."
-        parent={{ label: 'Orders', href: '/admin/orders' }}
-      />
+    <Suspense fallback={<OrderSkeleton />}>
+      <OrderView params={params} />
     </Suspense>
   )
 }
