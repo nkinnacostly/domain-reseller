@@ -123,10 +123,10 @@ test.describe('the customers pages, as a test administrator', () => {
     await page.goto('/admin/customers')
 
     // Every row is an e2e account, masked; no customer's full address is on the page.
-    const masked = await page
-      .locator('main [data-masked-email]')
-      .filter({ visible: true })
-      .allTextContents()
+    // The list streams in, and allTextContents does not wait: wait for a row first.
+    const rows = page.locator('main [data-masked-email]').filter({ visible: true })
+    await expect(rows.first()).toBeVisible()
+    const masked = await rows.allTextContents()
     expect(masked.length).toBeGreaterThan(0)
     for (const value of masked) expect(value.trim()).toMatch(MASKED)
     expect(await page.content()).not.toContain(customer.email)
