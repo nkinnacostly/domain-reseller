@@ -155,6 +155,7 @@ declare
   v_n        integer := 0;
   v_rank     integer;
   v_email_id uuid;
+  v_lock     bigint;
   v_passed   integer := 0;
 begin
   -- ── People: an owner with two pinned devices, an operator, a viewer, a test

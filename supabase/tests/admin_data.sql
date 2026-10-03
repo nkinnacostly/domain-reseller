@@ -66,6 +66,20 @@ begin
   end if;
 end $f$;
 
+-- Runs a statement that must raise; its message must match.
+create or replace function pg_temp.expect_raise(p_sql text, p_like text) returns void language plpgsql as $f$
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    if sqlerrm not like p_like then
+      raise exception 'expected "%" from %, got "%"', p_like, p_sql, sqlerrm;
+    end if;
+    return;
+  end;
+  raise exception 'expected "%" from %, but it ran', p_like, p_sql;
+end $f$;
+
 create function pg_temp.paid_line(p_user uuid, p_test boolean, p_domain text, p_status text, p_ref text,
                                   p_paid timestamptz default now())
 returns table (o_order uuid, o_payment uuid, o_item uuid) language plpgsql as $f$
@@ -124,6 +138,7 @@ declare
   v_expected jsonb;
   v_want    text;
   v_n       integer := 0;
+  v_refund  uuid;
   v_seq     text;
   v_passed  integer := 0;
 begin
@@ -476,6 +491,24 @@ begin
      or (select count(*) from public.admin_list_admins()) < 2 then
     raise exception 'FAILED 9: the owner''s reads';
   end if;
+  -- A code older than the admin session, or a revoked admin: each read's own
+  -- gate refuses, not only admin_session's callers in migration 40.
+  perform pg_temp.act_data(u_owner, s_owner, interval '13 hours');
+  begin
+    perform public.admin_overview(false);
+    raise exception 'FAILED 9: a 13-hour-old code read the overview';
+  exception when insufficient_privilege then
+    if sqlerrm is distinct from 'admin:needs_code' then raise exception 'FAILED 9: a stale code said %', sqlerrm; end if;
+  end;
+  perform pg_temp.act_data(u_owner, s_owner);
+  update public.admins set revoked_at = now() where user_id = u_owner;
+  begin
+    perform public.admin_attention_counts(false);
+    raise exception 'FAILED 9: a revoked admin read the attention counts';
+  exception when insufficient_privilege then
+    if sqlerrm is distinct from 'admin:not_admin' then raise exception 'FAILED 9: a revoked admin said %', sqlerrm; end if;
+  end;
+  update public.admins set revoked_at = null where user_id = u_owner;
   v_passed := v_passed + 1;
 
   -- ── 10. Margin from real costs only, at the rate charged.
@@ -740,6 +773,41 @@ begin
                                '%only a test refund of an e2e user%');
   select * into v_ord from pg_temp.paid_line(u_none, false, 'm41-h1-' || v_tag || '.com', 'failed', 'h1' || v_tag);
   insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status)
+  values (v_ord.o_order, v_ord.o_payment, v_ord.o_item, u_none, 'registration_failed', 107500, false, 'queued')
+  returning id into v_refund;
+  perform pg_temp.expect_raise(format('select public.hold_test_refund(%L)', v_refund), '%only a test refund of an e2e user%');
+  select * into v_ord from pg_temp.paid_line(u_real, true, 'm41-h2-' || v_tag || '.com', 'failed', 'h2' || v_tag);
+  insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status)
+  values (v_ord.o_order, v_ord.o_payment, v_ord.o_item, u_real, 'registration_failed', 107500, true, 'queued')
+  returning id into v_refund;
+  perform pg_temp.expect_raise(format('select public.hold_test_refund(%L)', v_refund), '%only a test refund of an e2e user%');
+  if (select r.status::text from public.refunds r where r.id = v_refund) is distinct from 'queued' then
+    raise exception 'FAILED 15: a refused hold moved a real user''s refund';
+  end if;
+  select * into v_ord from pg_temp.paid_line(u_none, true, 'm41-h3-' || v_tag || '.com', 'failed', 'h3' || v_tag);
+  insert into public.refunds (order_id, payment_id, order_item_id, user_id, reason, amount_kobo, test_mode, status)
+  values (v_ord.o_order, v_ord.o_payment, v_ord.o_item, u_none, 'registration_failed', 107500, true, 'failed')
+  returning id into v_refund;
+  perform pg_temp.expect_raise(format('select public.hold_test_refund(%L)', v_refund), '%not queued%');
+  update public.refunds set status = 'queued' where id = v_refund;
+  perform public.hold_test_refund(v_refund);
+  if (select r.status::text from public.refunds r where r.id = v_refund) is distinct from 'held' then
+    raise exception 'FAILED 15: an e2e user''s queued test refund was not held';
+  end if;
+  insert into public.supplier_ledger_entries (test_mode, trace_id, occurred_at, type, status, charge_type, product_type,
+                                              description, old_balance_cents, balance_cents)
+  values (true, gen_random_uuid(), now() - interval '1 day', 1, 1, 1, 1, 'e2e-m41-purge-' || v_tag, 100, 90),
+         (true, gen_random_uuid(), now() - interval '1 day', 1, 1, 1, 1, 'm41-keep-' || v_tag || '.com', 90, 80),
+         (false, gen_random_uuid(), now() - interval '1 day', 1, 1, 1, 1, 'e2e-m41-live-' || v_tag, 100, 90);
+  v_count := public.purge_test_ledger_entries();
+  if v_count < 1
+     or exists (select 1 from public.supplier_ledger_entries e where e.description = 'e2e-m41-purge-' || v_tag)
+     or not exists (select 1 from public.supplier_ledger_entries e where e.test_mode and e.description = 'm41-keep-' || v_tag || '.com')
+     or not exists (select 1 from public.supplier_ledger_entries e where not e.test_mode and e.description = 'e2e-m41-live-' || v_tag) then
+    raise exception 'FAILED 15: the ledger purge (% rows)', v_count;
+  end if;
+  v_passed := v_passed + 1;
+
   raise notice 'migration 41: % checks passed', v_passed;
 end;
 $$;
