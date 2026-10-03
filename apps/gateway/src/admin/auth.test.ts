@@ -38,8 +38,11 @@ describe('the admin door', () => {
     expect(alone.status).toBe(401)
     const wrong = await get(a, { ...adminHeaders(), 'x-admin-secret': 'b'.repeat(40) })
     expect(wrong.status).toBe(401)
+    // Not SUPPLIER_AUTH: a secret mismatch between Vercel and Fly is ours, not DomainNameAPI's.
+    expect(await read(wrong)).toMatchObject({ ok: false, code: 'ADMIN_AUTH' })
     const short = await get(a, { ...adminHeaders(), 'x-admin-secret': 'short' })
     expect(short.status).toBe(401)
+    expect(await read(short)).toMatchObject({ ok: false, code: 'ADMIN_AUTH' })
     expect(calls).toHaveLength(0)
     expect(claims).toHaveLength(0)
   })

@@ -33,7 +33,9 @@ export function requireAdminCaller(
       )
     }
     if (!sameSecret(c.req.header('x-admin-secret') ?? '', secret)) {
-      return c.json({ ok: false, code: 'SUPPLIER_AUTH', message: 'Unauthorised' }, 401)
+      // Its own code: the likeliest cause is the dashboard's and the gateway's
+      // admin secrets differing (DEPLOY §6b), never DomainNameAPI's credentials.
+      return c.json({ ok: false, code: 'ADMIN_AUTH', message: 'Unauthorised' }, 401)
     }
     const auditId = c.req.header('x-admin-audit-id') ?? ''
     const label = c.req.header('x-admin-label') ?? ''

@@ -1001,7 +1001,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 - `apps/gateway/src/app.ts`: `v1.route('/admin', routes.admin ?? createAdminRouter())`, behind `requireGatewaySecret`. **The global error handler logs `c.req.routePath` (the matched template), never `c.req.path`**, so no domain name reaches a log on any route.
 - **`apps/gateway/src/admin/auth.ts`, `requireAdminCaller`:**
   - `GATEWAY_ADMIN_SECRET` unset: `503 ADMIN_DISABLED`.
-  - `x-admin-secret` checked with `timingSafeEqual`, else `401`.
+  - `x-admin-secret` checked with `timingSafeEqual`, else `401 ADMIN_AUTH` — its own code, worded as the dashboard's and the gateway's secrets differing, never as `SUPPLIER_AUTH` (DomainNameAPI's credentials). *(Package A review, 3 Oct 2026.)* The web checks its own copy before it writes a note: unset, a live read answers `ADMIN_DISABLED` with no note.
   - `x-admin-audit-id` matching `^\d{1,19}$` and `x-admin-label` matching `^[a-z][a-z0-9_-]{1,30}$`, else `400 VALIDATION_FAILED`.
 - **The claim, before any supplier, Flutterwave or DNS call:**
   1. The route calls `admin_claim_note(auditId, <the route's action>, label, side, <normalised target>)` with the gateway's service client (`admin/notes.ts`).

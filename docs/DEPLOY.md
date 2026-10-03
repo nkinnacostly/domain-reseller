@@ -553,6 +553,8 @@ git, or from the dashboard.
    vercel env add GATEWAY_ADMIN_SECRET production                # paste when asked
    ```
    Without it the dashboard works, but live reads answer "Live reads are off".
+   If the two copies differ, live reads say the gateway refused the
+   dashboard's admin secret: set the same value again on both.
    Neither secret alone reaches the supplier: the gateway also claims the
    read's audit note in the database first.
 6. **`SUPABASE_ACCESS_TOKEN` and the database password are never set in CI or

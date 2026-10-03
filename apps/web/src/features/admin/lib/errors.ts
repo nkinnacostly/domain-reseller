@@ -142,7 +142,10 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   REVOKED: 'Your admin access was removed.',
 
   // ── The gateway itself ──
-  ADMIN_DISABLED: "Live reads are off: the gateway's admin secret is not set.",
+  ADMIN_DISABLED:
+    'Live reads are off: the admin secret the dashboard shares with the gateway is not set.',
+  ADMIN_AUTH:
+    "The gateway refused the dashboard's admin secret: the two copies of GATEWAY_ADMIN_SECRET differ. Operations need to set the same value on both (DEPLOY §6b).",
   OTHER_SIDE: 'The gateway reads the other side. Switch sides to read this.',
   WRITES_OFF: 'No gateway is reading this side right now.',
   TOO_SOON: 'This was read moments ago. Wait a little before reading it again.',

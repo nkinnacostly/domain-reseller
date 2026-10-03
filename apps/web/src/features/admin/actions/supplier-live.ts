@@ -27,7 +27,7 @@ import {
   toAdminResult,
 } from '@/features/admin/lib/errors'
 import type { AdminSide } from '@/features/admin/lib/side'
-import { callAdminGateway } from '@/features/admin/queries/gateway'
+import { adminGatewayConfigured, callAdminGateway } from '@/features/admin/queries/gateway'
 import { getAdminSide } from '@/features/admin/queries/session'
 import {
   bigintIdSchema,
@@ -60,6 +60,8 @@ type LiveRead = {
 }
 
 async function liveRead<T>(ctx: AdminContext, read: LiveRead): Read<T> {
+  // No admin secret here: say live reads are off, before any note is written.
+  if (!adminGatewayConfigured()) return refusedResult('ADMIN_DISABLED')
   const side: AdminSide = await getAdminSide(ctx.admin)
   const noteSide = adminRouteSide(read.route, side)
   const target = adminNoteTarget(read.route, {

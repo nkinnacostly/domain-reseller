@@ -153,6 +153,22 @@ describe('live supplier reads (D22)', () => {
     expect(result.data).toMatchObject({ ok: false, code: 'EXPIRED', auditId: 41 })
   })
 
+  it("words a wrong admin secret as the two copies differing, not as DomainNameAPI's credentials", async () => {
+    admin()
+    capture('admin/supplier/balance', () =>
+      HttpResponse.json(
+        { ok: false, code: 'ADMIN_AUTH', message: 'Unauthorised' },
+        { status: 401 },
+      ),
+    )
+    const result = await readLiveBalance({})
+    expect(result.data).toMatchObject({ ok: false, code: 'ADMIN_AUTH', auditId: 41 })
+    expect(result.data?.ok === false && result.data.message).toContain(
+      'GATEWAY_ADMIN_SECRET differ',
+    )
+    expect(result.data?.ok === false && result.data.message).not.toContain('DomainNameAPI')
+  })
+
   it("words the gateway's own refusals", async () => {
     admin()
     capture('admin/supplier/balance', () =>

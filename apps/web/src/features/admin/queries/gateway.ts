@@ -32,6 +32,20 @@ export type AdminGatewayCall = {
   body?: unknown
 }
 
+/**
+ * Whether live reads can run at all: the web holds the admin secret it shares
+ * with the gateway. Asked before the audit note is written, so a dashboard
+ * without it says live reads are off (DEPLOY §6b) and leaves no orphan note.
+ */
+export function adminGatewayConfigured(): boolean {
+  try {
+    requireAdminGatewayEnv()
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function callAdminGateway<T>({
   admin,
   auditId,
