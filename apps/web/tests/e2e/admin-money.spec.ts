@@ -8,7 +8,7 @@ import {
   hasAdminSchema,
   settleRegistration,
 } from './support/accounts.mjs'
-import { type AdminUser, expect, signInAsAdmin, test } from './support/admin'
+import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from './support/admin'
 import {
   fillRegistrant,
   payOnMockFlutterwave,
@@ -26,8 +26,6 @@ import {
  * lost row, both CSV files and their formula guard, axe and no sideways
  * scroll. One desktop and one phone: sign-ins are rate-limited per address.
  */
-
-const PROJECTS = ['chromium-desktop', 'mobile-android']
 
 const CAPTION =
   "Margin is shown at the rate we charged, and only for lines whose cost is known — matched to DomainNameAPI's ledger, or recorded at checkout."
@@ -105,7 +103,7 @@ test.describe('the money page', () => {
   let customer: TestUser | undefined
 
   test.beforeEach(async () => {
-    test.skip(!PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
+    test.skip(!SIGN_IN_PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
     test.skip(!(await hasAdminSchema()), 'migrations 40–41 are not applied to this database')
     customer = (await createTestUser('money')) as TestUser
     admin = (await createAdminTestUser('money')) as AdminUser
@@ -125,7 +123,7 @@ test.describe('the money page', () => {
     test.setTimeout(240_000)
     if (!admin || !customer) throw new Error('no users')
 
-    // A paid test order, registered: a sale today, and a line with no recorded cost.
+    // A paid test order, registered: a sale today, its line costed at checkout (ADMIN-SPEC §6).
     const name = uniqueName()
     await signInWithDomainInCart(page, customer, name)
     await fillRegistrant(page)
@@ -180,35 +178,34 @@ test.describe('the money page', () => {
     expect(ordersPaid).toBeGreaterThanOrEqual(1)
     await expect(revenue.locator('figure svg[role="img"]')).toHaveCount(2)
 
-    // Margin: the caption, the source column, our uncosted line, and the lost row.
+    // Margin: the caption, the source column, our line costed at checkout, and
+    // the lost row. Lines sold before costs were recorded may or may not fall
+    // in today's range, so the caption's second sentence is not asserted.
     const margin = main.getByRole('region', { name: 'Margin' })
     await expect(margin.locator('[data-margin-caption]')).toContainText(CAPTION)
-    await expect(margin.locator('[data-margin-caption]')).toContainText(
-      /\d+ lines? sold before costs were recorded (is|are) left out\.$/,
-    )
     const lost = margin.locator('[data-margin-row="lost"]').filter({ visible: true })
     await expect(lost).toHaveText('Supplier cost on failed or refunded lines')
     await expect(
-      margin.locator('[data-margin-row="register:none"]').filter({ visible: true }),
+      margin.locator('[data-margin-row="register:checkout"]').filter({ visible: true }),
     ).toHaveText('Registrations')
     const wide = (page.viewportSize()?.width ?? 0) >= 1280
     if (wide) {
       const table = margin.getByRole('table', { name: /^Margin by what was sold/ })
       await expect(table.getByRole('columnheader', { name: 'Source', exact: true })).toBeVisible()
-      const uncosted = table
+      const costed = table
         .getByRole('row')
-        .filter({ has: page.locator('[data-margin-row="register:none"]') })
-      await expect(uncosted).toContainText('Not costed')
-      await expect(uncosted).toContainText('Not known')
+        .filter({ has: page.locator('[data-margin-row="register:checkout"]') })
+      await expect(costed).toContainText('Recorded at checkout')
+      await expect(costed).not.toContainText('Not known')
       await expect(
         table.getByRole('row').filter({ has: page.locator('[data-margin-row="lost"]') }),
       ).toContainText("DomainNameAPI's ledger")
     } else {
       const card = margin
         .getByRole('listitem')
-        .filter({ has: page.locator('[data-margin-row="register:none"]') })
+        .filter({ has: page.locator('[data-margin-row="register:checkout"]') })
       await expect(card.getByText('Source', { exact: true })).toBeVisible()
-      await expect(card).toContainText('Not costed')
+      await expect(card).toContainText('Recorded at checkout')
     }
 
     // Grain switching: links that keep the dates, the chosen one marked.
@@ -275,9 +272,9 @@ test.describe('the money page', () => {
     const labels = marginRows.slice(1).map((row) => row[3])
     expect(labels).toContain('Supplier cost on failed or refunded lines')
     expect(labels.at(-1)).toBe('Total, lines with a known cost')
-    expect(marginRows.some((row) => row[3] === 'Registrations' && row[9] === 'Not costed')).toBe(
-      true,
-    )
+    expect(
+      marginRows.some((row) => row[3] === 'Registrations' && row[9] === 'Recorded at checkout'),
+    ).toBe(true)
     expectGuarded(marginRows)
 
     // Accessible, and no sideways scroll from a phone to a wide screen.

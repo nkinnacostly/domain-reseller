@@ -41,6 +41,12 @@ export const ATTENTION_SPECS: readonly Spec[] = [
     label: 'Jobs needing a person',
     href: '/admin/queue?status=needs_attention',
     tone: 'danger',
+    // admin_attention_counts adds certificate jobs to domain jobs; the link
+    // opens the domain jobs, so say where the rest are.
+    hint: (counts) =>
+      counts.jobs > 0
+        ? 'Domain and certificate jobs; each has its own tab in the queue'
+        : undefined,
   },
   {
     key: 'alertsCritical',

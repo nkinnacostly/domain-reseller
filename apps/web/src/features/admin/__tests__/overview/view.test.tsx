@@ -183,7 +183,11 @@ describe('the sections', () => {
   it('needs a person: the tiles, or an error', async () => {
     session()
     const { unmount } = render(await AttentionSection({ side: 'test' }))
-    expect(screen.getByRole('link', { name: /^Jobs needing a person\s+1$/ })).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', {
+        name: /^Jobs needing a person\s+1\s+Domain and certificate jobs; each has its own tab in the queue$/,
+      }),
+    ).toBeInTheDocument()
     unmount()
 
     session({ admin_attention_counts: { error: { message: 'admin:test_admin' } } })
