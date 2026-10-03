@@ -1,18 +1,18 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { AdminPageSkeleton } from '@/features/admin/components/shell/admin-page-skeleton'
-import { AdminPlaceholder } from '@/features/admin/components/shell/admin-placeholder'
+import { AlertsSkeleton, AlertsView } from '@/features/admin/components/alerts/alerts-view'
 
 export const metadata: Metadata = { title: 'Alerts' }
 
-/** Package B5 builds this page (docs/ADMIN-SPEC.md §5.2, §9); until then, a placeholder. */
-export default function AdminAlertsPage() {
+/** Alerts and health (docs/ADMIN-SPEC.md §5.2, B5). `searchParams` is read inside Suspense. */
+export default function AdminAlertsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   return (
-    <Suspense fallback={<AdminPageSkeleton />}>
-      <AdminPlaceholder
-        title="Alerts and health"
-        description="Open alerts, drift, heartbeats and scheduled jobs."
-      />
+    <Suspense fallback={<AlertsSkeleton />}>
+      <AlertsView searchParams={searchParams} />
     </Suspense>
   )
 }
