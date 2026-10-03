@@ -9,7 +9,8 @@ import {
   deleteTestUser,
   hasAdminSchema,
 } from './support/accounts.mjs'
-import { type AdminUser, expect, signInAsAdmin, test } from './support/admin'
+import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from './support/admin'
+import { seedTestFailedEmail } from './support/admin-seed.mjs'
 
 /**
  * The customers pages (docs/ADMIN-SPEC.md §5.2, §9 B8), as a test-only
@@ -19,9 +20,6 @@ import { type AdminUser, expect, signInAsAdmin, test } from './support/admin'
  * one account, writes one `customer.reveal` audit row, and is forgotten when
  * the page is left. Every account here is an e2e-*@example.com user (D15).
  */
-
-/** One desktop and one phone: sign-ins are rate-limited per address. */
-const PROJECTS = ['chromium-desktop', 'mobile-android']
 
 const FULL_NAME = 'Cust Omer'
 const MASKED = /^e•••@example\.com$/
@@ -77,7 +75,7 @@ test.describe('the customers pages, as a test administrator', () => {
   let page: Page
 
   test.beforeAll(async ({ browser }, info) => {
-    test.skip(!PROJECTS.includes(info.project.name), 'sign-in rate limits')
+    test.skip(!SIGN_IN_PROJECTS.includes(info.project.name), 'sign-in rate limits')
     test.skip(!(await hasAdminSchema()), 'migrations 40–41 are not applied to this database')
     test.setTimeout(180_000)
     customer = (await createTestUser('customer', { fullName: FULL_NAME })) as TestUser
@@ -230,21 +228,27 @@ test.describe('the customers pages, as a test administrator', () => {
     await expect(
       main.getByRole('link', { name: 'Domains', exact: true }).filter({ visible: true }),
     ).toHaveAttribute('aria-current', 'page')
-    await expect(
-      main.getByText('No domains on this customer’s orders on the Test side.'),
-    ).toBeVisible()
+    await expect(main.getByText('No domains for this customer on the Test side.')).toBeVisible()
 
     await page.goto(`/admin/customers/${customer.id}/certificates`)
     await expect(
-      main.getByText('No certificates on this customer’s orders on the Test side.'),
+      main.getByText('No certificates for this customer on the Test side.'),
     ).toBeVisible()
 
+    // One email of theirs, so the tab has a row and the way to all of them.
+    const emailId = (await seedTestFailedEmail(customer.id)) as string
     await page.goto(`/admin/customers/${customer.id}/emails`)
-    await expect(main.getByText('This customer’s emails aren’t listed here yet.')).toBeVisible()
-    await expect(main.getByRole('link', { name: 'Go to Emails' })).toHaveAttribute(
-      'href',
-      '/admin/emails',
-    )
+    await expect(main.locator('h2', { hasText: /^Emails · \d+$/ })).toBeVisible()
+    const all = main.getByRole('link', { name: 'All of this customer’s emails' })
+    await expect(all).toHaveAttribute('href', `/admin/emails?user=${customer.id}`)
+    expect(await page.content()).not.toContain(customer.email)
+    // The Emails page, narrowed to this account by its id.
+    await all.click()
+    await expect(page).toHaveURL(new RegExp(`/admin/emails\\?user=${customer.id}$`))
+    await expect(page.getByTestId('emails-user-filter')).toBeVisible()
+    await expect(
+      main.locator(`[data-email-id="${emailId}"]`).filter({ visible: true }),
+    ).toHaveCount(1)
 
     await page.goto('/admin/customers/00000000-0000-4000-8000-000000000000')
     await expect(main.getByText('No customer with this id.')).toBeVisible()
