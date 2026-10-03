@@ -102,7 +102,7 @@ function SidebarContent({
         <Link
           href="/app/domains"
           className={cn(
-            'flex h-11 items-center gap-2 rounded-xl border border-border bg-background/70 px-3 text-sm text-foreground hover:bg-brand-subtle',
+            'flex h-11 items-center gap-2 rounded-xl border border-border bg-background/70 px-3 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.99]',
             FOCUS,
           )}
         >

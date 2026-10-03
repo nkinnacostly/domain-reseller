@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect } from 'react'
+import { QUIET_BUTTON } from '@/components/common/action-parts'
 import { PanelPage } from '@/components/layout/panel'
 import { ErrorState } from '@/features/admin/components/error-state'
 
@@ -25,7 +26,7 @@ export default function AdminError({
         body="Nothing was changed. Try again; if it keeps failing, the alerts page says what is down."
         retry={reset}
       />
-      <Link href="/admin" className="text-sm text-foreground underline underline-offset-4">
+      <Link href="/admin" className={QUIET_BUTTON}>
         Back to the admin overview
       </Link>
     </PanelPage>
