@@ -75,6 +75,40 @@ jobs:
             exit 1
           fi
 
+      # N1, ADMIN-SPEC §4.2 — the supplier's REST host, its key header and its
+      # reseller path segment belong to the gateway's admin module alone.
+      - name: Supplier API stays in the gateway
+        run: |
+          if grep -rn "domainresellerapi\.com\|X-API-KEY\|__reseller" apps/web/src --include='*.ts' --include='*.tsx'; then
+            echo "::error::DomainNameAPI's REST API must not be called from apps/web"
+            exit 1
+          fi
+
+      # ADR-006 — the admin area reads with the service client only through
+      # adminDb (features/admin/queries/session.ts), never directly.
+      - name: Admin code reaches the service client only through adminDb
+        run: |
+          bad=$(grep -rlE "@/lib/supabase/(service|admin)['\"]" apps/web/src/features/admin "apps/web/src/app/(admin)" \
+                  --include='*.ts' --include='*.tsx' \
+                | grep -v "/__tests__/" | grep -v "apps/web/src/features/admin/queries/session.ts" || true)
+          if [ -n "$bad" ]; then
+            for file in $bad; do echo "::error file=$file::imports the service client outside adminDb"; done
+            exit 1
+          fi
+
+      # ADMIN-SPEC §4.1 — the admin gateway secret is read only on the server.
+      - name: Admin gateway secret is server-only
+        run: |
+          bad=0
+          for file in $(grep -rlE "GATEWAY_ADMIN_SECRET|requireAdminGatewayEnv" apps/web/src --include='*.ts' --include='*.tsx' \
+                        | grep -v "/__tests__/" | grep -v "apps/web/src/lib/env.ts"); do
+            if ! grep -q "^import 'server-only'" "$file"; then
+              echo "::error file=$file::reads the admin gateway secret without import 'server-only'"
+              bad=1
+            fi
+          done
+          exit $bad
+
       # SEC-14 — supplier SDK telemetry stays off (NDPA).
       - name: Supplier SDK telemetry disabled
         run: |
