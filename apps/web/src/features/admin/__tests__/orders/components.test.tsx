@@ -193,10 +193,10 @@ describe('OrdersList', () => {
       <OrdersList
         side="test"
         params={parseOrderListParams({ stuck: '1', page: '2' })}
-        list={list({ total: 60, stuckNote: 'test_admin' })}
+        list={list({ total: 60, stuckNote: 'no_threshold' })}
       />,
     )
-    expect(screen.getByText(STUCK_NOTE.test_admin)).toBeInTheDocument()
+    expect(screen.getByText(STUCK_NOTE.no_threshold)).toBeInTheDocument()
     expect(screen.getByText('Page 2 of 3 · 60 in all')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Previous' })).toHaveAttribute(
       'href',

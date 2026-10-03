@@ -28,9 +28,7 @@ export const UNKNOWN_SEARCH =
 export const CAPPED_NOTICE =
   'This filter matched more orders than one read takes, so only the newest are listed. Narrow the dates to see older ones.'
 
-export const STUCK_NOTE: Record<'test_admin' | 'no_threshold', string> = {
-  test_admin:
-    'Test administrators can’t read the stuck-order threshold, so this lists every paid order still settling.',
+export const STUCK_NOTE: Record<'no_threshold', string> = {
   no_threshold:
     'The stuck-order threshold couldn’t be read, so this lists every paid order still settling.',
 }
