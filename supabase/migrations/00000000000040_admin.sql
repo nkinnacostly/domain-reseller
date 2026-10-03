@@ -233,7 +233,8 @@ $$;
 
 -- The only copy of the action map (§2.2). test_rule: `test_target` — a test
 -- admin may act only on a test-mode target or the test side;
--- `reserved_target` — only on a reserved-email profile; `never`.
+-- `reserved_target` — only on a reserved-email profile, or a test-mode
+-- domain or email that belongs to one; `never`.
 create function public.admin_tier(p_action text, out min_role text, out money boolean, out test_rule text)
 language sql
 immutable
@@ -252,9 +253,9 @@ as $$
       ('job.fail',                    'operator', true,  'test_target'),
       ('ssl_job.retry',               'operator', true,  'test_target'),
       ('ssl_job.fail',                'operator', true,  'test_target'),
-      ('email.requeue',               'operator', false, 'test_target'),
+      ('email.requeue',               'operator', false, 'reserved_target'),
       ('domain.deep_sync',            'operator', false, 'test_target'),
-      ('domain.reveal_contacts',      'operator', false, 'test_target'),
+      ('domain.reveal_contacts',      'operator', false, 'reserved_target'),
       ('customer.search',             'operator', false, 'reserved_target'),
       ('customer.reveal',             'operator', false, 'reserved_target'),
       ('fx.activate',                 'owner',    true,  'never'),
@@ -1822,6 +1823,10 @@ begin
     p_reason, p_request_key, 'ok', null, null, jsonb_build_object('before', v_before, 'after', v_after));
 end $$;
 
+-- A null p_is_paused keeps the pause as stored. Rank and tagline are set as
+-- sent, null clearing them — that is how an extension is un-featured — so a
+-- caller sends all four flags, the current rank and tagline with a pause
+-- (§3.1.2; admin.sql check 34 pins it).
 create function public.admin_set_tld_flags(p_name text, p_is_paused boolean, p_paused_reason text,
                                            p_featured_rank integer, p_featured_tagline text, p_reason text,
                                            p_request_key uuid)
@@ -2168,7 +2173,12 @@ begin
   v_side := case when v_email.test_mode then 'test' else 'live' end;
   v_detail := jsonb_build_object('kind', v_email.kind, 'category', v_email.category,
                                  'before', jsonb_build_object('status', v_email.status));
-  v_code := public.admin_gate(v_admin, c_action, v_email.test_mode);
+  -- reserved_target: a test admin sends again only a test email to a reserved
+  -- address, of a reserved account — never a real person's mail (D15).
+  select p.email::text into v_owner from public.profiles p where p.id = v_email.user_id;
+  v_code := public.admin_gate(v_admin, c_action,
+              v_email.test_mode and public.is_reserved_email(v_email.to_email)
+              and (v_email.user_id is null or (v_owner is not null and public.is_reserved_email(v_owner))));
   if v_code is null and p_reason is not null and char_length(trim(p_reason)) > 500 then v_code := 'REASON'; end if;
   if v_code is null and v_email.status <> 'failed' then v_code := 'NOT_FAILED'; end if;
   if v_code is null and v_email.complained_at is not null then v_code := 'COMPLAINED'; end if;
@@ -2228,7 +2238,9 @@ begin
 end $$;
 
 -- 30 searches and reveals per admin per hour, shared by the three lookups
--- that return personal data.
+-- that return personal data (D4). The lock is held to the end of the
+-- caller's transaction, past its audit row, so parallel calls from one
+-- session count one after another instead of all reading the same total.
 create function public.admin_lookup_rate_limited(p_admin_id uuid)
 returns boolean
 language sql
@@ -2358,7 +2370,12 @@ begin
                                p_request_key, 'refused', 'NOT_FOUND', null, '{}');
   end if;
   v_side := case when v_domain.test_mode then 'test' else 'live' end;
-  v_code := public.admin_gate(v_admin, c_action, v_domain.test_mode);
+  -- reserved_target: a test admin sees the contacts of a test-mode domain
+  -- held by a reserved account only. A real customer's test order carries
+  -- their real details (D15, as customer.reveal).
+  select p.email::text into v_owner from public.profiles p where p.id = v_domain.user_id;
+  v_code := public.admin_gate(v_admin, c_action,
+              v_domain.test_mode and v_owner is not null and public.is_reserved_email(v_owner));
   if v_code is null and public.admin_lookup_rate_limited(v_admin.user_id) then v_code := 'RATE_LIMITED'; end if;
   if v_code is null and p_reason is not null and char_length(trim(p_reason)) > 500 then v_code := 'REASON'; end if;
   if v_code is not null then
@@ -2477,3 +2494,8 @@ revoke execute on function public.activate_fx_rate(uuid, uuid) from public, anon
 revoke insert, update, delete, truncate on public.fx_rates, public.pricing_settings, public.tlds,
   public.ssl_products, public.nameserver_presets, public.market_references from anon, authenticated;
 revoke truncate on all tables in schema public from anon, authenticated;
+
+-- Supabase's default privileges give anon and authenticated every new
+-- sequence. PostgREST cannot reach these, but §3.0 is revoke-everything.
+revoke all on sequence public.admin_changes_id_seq, public.admin_audit_log_id_seq,
+  public.flw_refund_checks_id_seq from public, anon, authenticated;

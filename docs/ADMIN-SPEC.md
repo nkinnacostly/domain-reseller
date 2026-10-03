@@ -216,7 +216,7 @@ end $$;
 
 **`admin_tier(p_action text, out min_role text, out money boolean, out test_rule text)`** is IMMUTABLE and holds the only copy of the action map. `test_rule` takes one of three values:
 - `test_target`: a test admin may act only on a `test_mode` target or on the test side.
-- `reserved_target`: a test admin may act only on a reserved-email profile.
+- `reserved_target`: a test admin may act only on a reserved-email profile — and, for a domain or an email, only on a test-mode one whose owner's `profiles.email` is reserved (for an email, its `to_email` too). A real customer's test order carries their real details. *(Package A review, 3 Oct 2026: `email.requeue` and `domain.reveal_contacts` moved here from `test_target`.)*
 - `never`: a test admin is always refused.
 
 | Action | Role | Tier | Test admin |
@@ -227,7 +227,8 @@ end $$;
 | `incident.resolve` (kinds where nothing is owed) | operator | standard | test_target |
 | `incident.resolve_money` (`unrecorded_payment`, `refund_not_created`, `currency_mismatch`, `mode_mismatch`) | operator (owner for `handled_outside`) | money | test_target |
 | `job.retry`, `job.fail`, `ssl_job.retry`, `ssl_job.fail` | operator | money | test_target |
-| `email.requeue`, `domain.deep_sync`, `domain.reveal_contacts` | operator | standard | test_target |
+| `domain.deep_sync` | operator | standard | test_target |
+| `email.requeue`, `domain.reveal_contacts` | operator | standard | reserved_target |
 | `customer.search`, `customer.reveal` | operator | standard | reserved_target |
 | `fx.activate`, `fx.reject`, `pricing.update`, `settings.update`, `settings.refund_limit_raise`, `extension.flags`, `ssl_product.sellable` | owner | money | never |
 | `preset.draft_save`, `preset.publish`, `preset.show` | owner | money | never |
@@ -492,7 +493,7 @@ Each statement raises an `admin_changed` Telegram alert. That alert is how the o
   - the user has at least one verified TOTP factor;
   - the user has no `admins` row with `test_only = false`.
 
-  It then inserts `(label 'e2e-'||left(p_user_id::text,8), role 'operator', test_only true, mfa_factor_ids = every verified factor, added_by 'e2e')`. Test rows are logged in `admin_changes` but raise no alert.
+  It then inserts `(label 'e2e-'||left(p_user_id::text,8), role 'operator', test_only true, mfa_factor_ids = every verified factor, added_by 'e2e')`. An e2e user's test rows are logged in `admin_changes` but raise no alert; a test row for anyone else does (§2.1).
 - `tests/e2e/support/accounts.mjs` gains `createAdminTestUser(label)`: `createTestUser` → `enableTotp` → `rpc('grant_test_admin')`. It returns `{ user, totpSecret, label }`. Deleting the user cascades to the `admins` row. Audit rows age out through the cron purge, and **teardown purges nothing from the audit log**.
 - Test-only helpers in migration 41 (§3.2j), each `service_role` and each refusing anything not tied to an `e2e-*@example.com` user or a `test_mode` row:
   - `seed_test_failed_email(p_user_id)`
@@ -658,7 +659,7 @@ The tier comes from `admin_tier` (§2.2). A `test_only` admin is refused `TEST_A
 | `admin_set_preset_hidden(p_id, p_hidden, p_reason, …)` | Hide is `preset.hide` (operator). Show is `preset.show` (owner, money), and a preset with `auto_hidden_at` set gives `CHECKER_HID_IT`. Registrar defaults give `REGISTRAR_DEFAULT`. | `update nameserver_presets set is_hidden` | blast radius counts |
 | `admin_requeue_email(p_email_id, p_reason, …)` | Status `failed`. `complained_at` null. `coalesce(delivery_status,'') <> 'bounced'`. | `update email_outbox set status='pending', attempts=0, next_attempt_at=now(), last_error=null, claimed_by=null, claimed_at=null` | kind, category |
 | `admin_queue_deep_sync(p_domain_id, p_reason, …)` | The domain exists, `source <> 'demo'`, and `local_status in ('active','expired_grace','redemption')` (`NOT_SYNCABLE`). The side's `gateway:<production\|ote>` heartbeat is under 15 min old (`NO_GATEWAY`). | `update domains set deep_checked_at = null` | domain id |
-| `admin_find_customers(p_query text)` | `customer.search`. A test admin sees reserved-email profiles only. 30 searches and reveals per admin per hour (`RATE_LIMITED`). | Exact match on a lower-cased email, order number, or domain. Returns at most 20 masked rows: `{userId, maskedEmail, joinedAt, domainsHeld, ordersPaid}`. | `{kind, matched: [user ids]}`; the query text is never stored |
+| `admin_find_customers(p_query text)` | `customer.search`. A test admin sees reserved-email profiles only. 30 searches and reveals per admin per hour (`RATE_LIMITED`), counted by `admin_lookup_rate_limited` under `pg_advisory_xact_lock(hashtextextended('admin_lookup:' \|\| admin_id, 0))`, so parallel calls from one session queue instead of all reading the same count. | Exact match on a lower-cased email, order number, or domain. Returns at most 20 masked rows: `{userId, maskedEmail, joinedAt, domainsHeld, ordersPaid}`. | `{kind, matched: [user ids]}`; the query text is never stored |
 | `admin_reveal_customer(p_user_id, p_reason, …)` | `customer.reveal`. A reserved-email target for a test admin. Same rate limit. Reason optional. | Returns `{email, fullName, phone, businessName}`. **A replayed key returns `{ok, auditId, replayed}` with no details**: they are read only after the gate, the limit and a new audit row, so a key kept from before a demotion shows nothing. | target id only |
 | `admin_reveal_registrant(p_domain_id, p_reason, …)` | `domain.reveal_contacts`. A `test_mode` domain for a test admin. Same rate limit. | Returns the registrant and `contacts`. A replay carries no details, as above. | target id only |
 
@@ -823,7 +824,8 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 
 | Key | Severity | Fires when |
 |---|---|---|
-| `admin_changed:<change id>` | critical | An `admin_changes` row for a non-test admin in the last 24 h. |
+| `admin_changed:<change id>` | critical | An `admin_changes` row in the last 24 h whose row was non-test before or after the change, or an insert or update of a test row for a user who is not an e2e user. |
+| `admin_test_not_e2e:<label>` | critical | A non-revoked `test_only` admin whose user is not an `e2e-*@example.com` reserved address. |
 | `admin_factor_missing:<label>` | critical when no pinned factor is still verified; warning when some are gone | A non-revoked, non-test admin. |
 | `admin_burst:<label>` | warning | ≥ 20 `customer.search`, `customer.reveal` or `domain.reveal_contacts` rows in the last hour. |
 | `admin_limit_raised:<audit id>` | warning | A `settings.refund_limit_raise` row in the last 24 h. |
@@ -946,7 +948,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
     - updating or deleting a non-test row raises;
     - deleting a test row under 30 days old raises;
     - `admin_redact_reason` nulls only `reason` and stamps `redacted_at`, and writes its own row.
-27. `grant_test_admin` refuses a non-`e2e-` email and a user without a verified factor.
+27. `grant_test_admin` refuses a non-`e2e-` email, a user without a verified factor, and a user with a non-test `admins` row. `purge_test_admin_audit()` deletes a `test_actor` row over 30 days old and its claim, and keeps a test row 29 days old and a live row 31 days old.
 28. An `admins` insert with someone else's factor raises. Any insert or update writes one `admin_changes` row, and `admin_alert_conditions(false)` shows `admin_changed`.
 29. The 31st reveal or search within an hour gives `RATE_LIMITED`. A test admin revealing a non-reserved profile gives `TEST_ADMIN`.
 30. The ACL loop and table-privilege assertions (§3.0).
@@ -978,6 +980,7 @@ grant execute on function public.bump_funnel(text, boolean) to service_role;
 12. `current_alert_conditions(true)` still returns every pre-existing key family (a fixture of one row per kind).
 13. `cron_alert_conditions`: no `email-notices` success in 26 h gives `cron_stale:email-notices`. This is done by inserting `cron.job_run_details` rows inside the rollback.
 14. The ACL loop, the views, and `order_item_costs` (§3.0).
+15. The test-only helpers (§2.7, N12): `seed_test_failed_email` refuses a non-e2e user; `hold_test_refund` refuses a missing refund, a live refund, a non-e2e user's test refund and a refund that is not `queued`, and holds an e2e user's queued test refund; `purge_test_ledger_entries` deletes a test `e2e-` row and keeps a test row with another description and a live `e2e-` row.
 
 ---
 

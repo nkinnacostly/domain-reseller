@@ -9,7 +9,8 @@ export type AdminRole = 'owner' | 'operator' | 'viewer'
 
 /**
  * - `test_target`: a test admin acts only on a test-mode target or the test side.
- * - `reserved_target`: only on a reserved-email profile.
+ * - `reserved_target`: only on a reserved-email profile, or a test-mode
+ *   domain or email that belongs to one.
  * - `never`: a test admin is always refused.
  */
 export type TestRule = 'test_target' | 'reserved_target' | 'never'
@@ -34,9 +35,9 @@ export const ADMIN_TIERS = {
   'job.fail': tier('operator', true, 'test_target'),
   'ssl_job.retry': tier('operator', true, 'test_target'),
   'ssl_job.fail': tier('operator', true, 'test_target'),
-  'email.requeue': tier('operator', false, 'test_target'),
+  'email.requeue': tier('operator', false, 'reserved_target'),
   'domain.deep_sync': tier('operator', false, 'test_target'),
-  'domain.reveal_contacts': tier('operator', false, 'test_target'),
+  'domain.reveal_contacts': tier('operator', false, 'reserved_target'),
   'customer.search': tier('operator', false, 'reserved_target'),
   'customer.reveal': tier('operator', false, 'reserved_target'),
   'fx.activate': tier('owner', true, 'never'),

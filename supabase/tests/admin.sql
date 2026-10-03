@@ -153,6 +153,7 @@ declare
   v_row      record;
   v_want     text;
   v_n        integer := 0;
+  v_email_id uuid;
   v_passed   integer := 0;
 begin
   -- ── People: an owner with two pinned devices, an operator, a viewer, a test
@@ -732,6 +733,24 @@ begin
   if public.admin_claim_note(v_note2, 'supplier.balance', l_op, 'test', 'test') ->> 'code' is distinct from 'EXPIRED' then
     raise exception 'FAILED 25: an old note was claimed';
   end if;
+  -- No such note; a refused row and an ok row are not intents.
+  perform pg_temp.expect_code(public.admin_claim_note(-1, 'supplier.balance', l_op, 'test', 'test'),
+                              'NOT_FOUND', 'FAILED 25: a note that does not exist');
+  select a.id into v_note2 from public.admin_audit_log a
+   where a.admin_label = l_view and a.action = 'domain.deep_sync' and a.outcome = 'refused';
+  perform pg_temp.expect_code(public.admin_claim_note(v_note2, 'domain.deep_sync', l_view, null, null),
+                              'NOT_INTENT', 'FAILED 25: a refused row');
+  select a.id into v_note2 from public.admin_audit_log a
+   where a.admin_label = l_owner and a.action = 'refund.approve' and a.outcome = 'ok' limit 1;
+  perform pg_temp.expect_code(public.admin_claim_note(v_note2, 'refund.approve', l_owner, 'test', v_note2::text),
+                              'NOT_INTENT', 'FAILED 25: an ok row');
+  -- Defensive: a test admin's intent on the live side never exists (admin_note
+  -- refuses it), and the claim refuses one all the same.
+  insert into public.admin_audit_log (admin_id, admin_label, admin_role, test_actor, action, side, target_id, outcome)
+  values (u_test, l_test, 'operator', true, 'supplier.balance', 'live', 'live', 'intent')
+  returning id into v_note2;
+  perform pg_temp.expect_code(public.admin_claim_note(v_note2, 'supplier.balance', l_test, 'live', 'live'),
+                              'TEST_ADMIN', 'FAILED 25: a test admin''s live note');
   perform pg_temp.act(u_test, s_test);
   v_j := public.admin_note('supplier.balance', 'live', 'side', 'live', '{}');
   perform pg_temp.expect_code(v_j, 'TEST_ADMIN', 'FAILED 25: a test admin noted the live side');
