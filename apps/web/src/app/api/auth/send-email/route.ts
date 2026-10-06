@@ -1,9 +1,9 @@
+import { verifyWebhook } from '@dr/shared/webhooks'
 import { type NextRequest, NextResponse } from 'next/server'
 import { authEmailPayloadSchema, planAuthEmail } from '@/features/auth/lib/auth-email'
 import { sendEmail } from '@/lib/email/send'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
-import { verifyWebhook } from '@/lib/standard-webhooks'
 
 /**
  * Supabase Auth's Send Email hook (L1). Sign-up, sign-in links, password
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   const body = await request.text()
   if (body.length > MAX_BODY_BYTES) return failure(413, 'Payload too large')
 
-  const signed = verifyWebhook(
+  const signed = await verifyWebhook(
     secret,
     {
       id: request.headers.get('webhook-id'),
