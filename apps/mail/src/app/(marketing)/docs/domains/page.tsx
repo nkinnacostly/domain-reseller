@@ -30,8 +30,10 @@ export default function DomainsDocsPage() {
         <p>
           It will list the DNS records a domain needs, and how to add them at the common hosts. You
           send only from a domain verified on your account; the dashboard’s{' '}
-          <Link href="/dashboard/domains">Domains</Link> page is where it is added. Questions in the
-          meantime: <a href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>.
+          <Link href="/dashboard/domains">Domains</Link> page is where it is added, and lists the
+          records it needs. Your code can manage domains too: see{' '}
+          <Link href="/docs/api#addDomain">the domains endpoints</Link> in the API reference.
+          Questions in the meantime: <a href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>.
         </p>
       </StubNotice>
     </DocsFrame>

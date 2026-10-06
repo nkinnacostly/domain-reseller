@@ -6,7 +6,11 @@ import {
   apiKeySchema,
   batchQueuedSchema,
   createApiKeySchema,
+  createDomainSchema,
   createdApiKeySchema,
+  deletedDomainSchema,
+  domainListSchema,
+  domainSchema,
   emailChangedSchema,
   emailListSchema,
   emailSchema,
@@ -59,6 +63,10 @@ export const API_SCHEMAS = {
   ApiKeyList: { schema: apiKeyListSchema, io: 'output' },
   CreatedApiKey: { schema: createdApiKeySchema, io: 'output' },
   RevokedApiKey: { schema: revokedApiKeySchema, io: 'output' },
+  CreateDomain: { schema: createDomainSchema, io: 'input' },
+  Domain: { schema: domainSchema, io: 'output' },
+  DomainList: { schema: domainListSchema, io: 'output' },
+  DeletedDomain: { schema: deletedDomainSchema, io: 'output' },
   Error: { schema: apiErrorSchema, io: 'output' },
   OpenApi: { schema: z.looseObject({ openapi: z.literal('3.1.0') }), io: 'output' },
 } as const satisfies Record<string, { schema: z.ZodType; io: 'input' | 'output' }>
@@ -95,6 +103,18 @@ const NOT_PENDING: ErrorCase = {
   status: 409,
   names: ['validation_error'],
   when: 'The email has already left the queue (or is being sent).',
+}
+
+const DOMAIN_FULL_ONLY: ErrorCase = {
+  status: 403,
+  names: ['forbidden'],
+  when: 'A sending key was used: managing domains takes a full-access key.',
+}
+
+const DOMAIN_NOT_FOUND: ErrorCase = {
+  status: 404,
+  names: ['not_found'],
+  when: 'No domain with that id belongs to this account.',
 }
 
 const SEND_ERRORS: readonly ErrorCase[] = [
@@ -260,11 +280,85 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
       { status: 404, names: ['not_found'], when: 'No key with that id belongs to this account.' },
     ],
   },
-  // TODO(MB2 merge): GET/POST /domains, GET/DELETE /domains/{id} and
-  // POST /domains/{id}/verify belong to the domains package (MB2), which owns
-  // their routes and schemas. When its Zod schemas are on master, list its
-  // operations here (and its schemas in API_SCHEMAS); `paths.test.ts` in
-  // apps/mail then holds each listed operation to its route.
+  {
+    id: 'listDomains',
+    method: 'GET',
+    path: '/domains',
+    summary: 'List domains',
+    description:
+      'The account’s domains, each with its status and, while it is pending, the DNS records to add.',
+    access: 'full',
+    response: 'DomainList',
+    errors: [...KEY_ERRORS, DOMAIN_FULL_ONLY],
+  },
+  {
+    id: 'addDomain',
+    method: 'POST',
+    path: '/domains',
+    summary: 'Add a domain',
+    description:
+      'Adds a domain to send from and sets it up with Amazon SES. The answer lists the DNS records to add at your DNS host; Amazon SES verifies the domain once it finds them.',
+    access: 'full',
+    body: 'CreateDomain',
+    response: 'Domain',
+    errors: [
+      ...KEY_ERRORS,
+      {
+        status: 403,
+        names: ['forbidden'],
+        when: 'A sending key was used, the plan’s domains are all taken, or the account is closed.',
+      },
+      {
+        status: 409,
+        names: ['validation_error'],
+        when: 'The domain is already on this account, or in use on another.',
+      },
+      {
+        status: 422,
+        names: ['validation_error'],
+        when: 'The name is not a domain, or is one of ours.',
+      },
+    ],
+  },
+  {
+    id: 'getDomain',
+    method: 'GET',
+    path: '/domains/{id}',
+    summary: 'Read a domain',
+    description: 'One domain: its status and the DNS records it needs.',
+    access: 'full',
+    pathId: 'The domain’s id, from GET /domains.',
+    response: 'Domain',
+    errors: [...KEY_ERRORS, DOMAIN_FULL_ONLY, DOMAIN_NOT_FOUND],
+  },
+  {
+    id: 'verifyDomain',
+    method: 'POST',
+    path: '/domains/{id}/verify',
+    summary: 'Check a domain now',
+    description:
+      'Asks Amazon SES about the domain now, as the dashboard’s “Check now” does, and answers what it found.',
+    access: 'full',
+    pathId: 'The domain’s id.',
+    response: 'Domain',
+    errors: [...KEY_ERRORS, DOMAIN_FULL_ONLY, DOMAIN_NOT_FOUND],
+  },
+  {
+    id: 'removeDomain',
+    method: 'DELETE',
+    path: '/domains/{id}',
+    summary: 'Remove a domain',
+    description: 'Removes a domain from the account. Refused while emails from it wait to be sent.',
+    access: 'full',
+    pathId: 'The domain’s id.',
+    response: 'DeletedDomain',
+    errors: [
+      ...KEY_ERRORS,
+      DOMAIN_FULL_ONLY,
+      DOMAIN_NOT_FOUND,
+      { status: 409, names: ['validation_error'], when: 'Emails from it still wait to be sent.' },
+    ],
+  },
   {
     id: 'openApi',
     method: 'GET',

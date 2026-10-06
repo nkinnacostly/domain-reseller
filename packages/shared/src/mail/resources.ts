@@ -270,3 +270,63 @@ export const revokedApiKeySchema = z.object({
   id: z.uuid(),
   revoked: z.literal(true),
 })
+
+// ── Domains: /domains (the domains package's routes, migration 47) ─────────
+// Its handlers build these answers; apps/mail holds them to these schemas in
+// a test, so the description cannot drift from what the routes answer.
+
+export const DOMAIN_STATUSES = ['pending', 'verified', 'failed', 'removing'] as const
+
+export const createDomainSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(260)
+    .describe('The domain you send from, such as acme.ng. Not mydomainshub.com or its subdomains.'),
+})
+
+const domainRecordSchema = z.object({
+  record: z
+    .enum(['dkim', 'mail_from_mx', 'mail_from_spf', 'dmarc'])
+    .describe('What it is for: three DKIM records, the MAIL FROM MX and SPF, and DMARC.'),
+  type: z.enum(['CNAME', 'MX', 'TXT']),
+  name: z.string().describe('The full host name.'),
+  value: z.string().describe('What to put in the record’s value (an MX without its priority).'),
+  priority: z.number().int().optional().describe('An MX record’s priority.'),
+  required: z.boolean().describe('False only for DMARC, which is suggested, not needed.'),
+})
+
+export const domainSchema = z.object({
+  object: z.literal('domain'),
+  id: z.uuid(),
+  name: z.string(),
+  status: z.enum(DOMAIN_STATUSES),
+  setting_up: z.boolean().describe('True while it is still being set up with Amazon SES.'),
+  created_at: at,
+  verify_by: atOrNull.describe(
+    'A pending domain only: 72 hours after it was added, the time to verify it by. Null otherwise.',
+  ),
+  verified_at: atOrNull,
+  last_checked_at: atOrNull,
+  failure: z
+    .object({ reason: z.string(), missing_record: z.string().nullable() })
+    .nullable()
+    .describe('Why it failed, and the record that was missing; null unless failed.'),
+  records: z
+    .array(domainRecordSchema)
+    .describe(
+      'The DNS records to add at your DNS host; empty while it is being set up, and once it has failed.',
+    ),
+})
+
+export const domainListSchema = z.object({
+  object: z.literal('list'),
+  data: z.array(domainSchema),
+})
+
+export const deletedDomainSchema = z.object({
+  object: z.literal('domain'),
+  id: z.uuid(),
+  deleted: z.literal(true),
+})

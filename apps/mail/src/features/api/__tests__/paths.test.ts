@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import * as notFound from '@/app/api/v1/[...path]/route'
 import * as key from '@/app/api/v1/api-keys/[id]/route'
 import * as keys from '@/app/api/v1/api-keys/route'
+import * as domain from '@/app/api/v1/domains/[id]/route'
+import * as domainCheck from '@/app/api/v1/domains/[id]/verify/route'
+import * as domains from '@/app/api/v1/domains/route'
 import * as cancel from '@/app/api/v1/emails/[id]/cancel/route'
 import * as email from '@/app/api/v1/emails/[id]/route'
 import * as batch from '@/app/api/v1/emails/batch/route'
@@ -17,7 +20,8 @@ import * as openapi from '@/app/api/v1/openapi.json/route'
 
 vi.mock('next/server', () => ({ connection: async () => undefined }))
 
-const ROUTES: Record<string, Record<string, unknown>> = {
+/** This package's routes: each answers the methods it does not take itself. */
+const OWN: Record<string, Record<string, unknown>> = {
   '/emails': emails,
   '/emails/batch': batch,
   '/emails/{id}': email,
@@ -25,6 +29,14 @@ const ROUTES: Record<string, Record<string, unknown>> = {
   '/api-keys': keys,
   '/api-keys/{id}': key,
   '/openapi.json': openapi,
+}
+
+/** Every route the document lists — the domains package's too (migration 47). */
+const ROUTES: Record<string, Record<string, unknown>> = {
+  ...OWN,
+  '/domains': domains,
+  '/domains/{id}': domain,
+  '/domains/{id}/verify': domainCheck,
 }
 
 const NOT_FOUND = {
@@ -53,7 +65,7 @@ describe('the v1 paths', () => {
   })
 
   it('answers a method a path does not take with a JSON 405, its allow header and x-request-id', async () => {
-    for (const [path, route] of Object.entries(ROUTES)) {
+    for (const [path, route] of Object.entries(OWN)) {
       const listed = API_OPERATIONS.filter((op) => op.path === path).map((op) => op.method)
       for (const method of ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].filter(
         (m) => !listed.includes(m as never),
