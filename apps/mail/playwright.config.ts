@@ -1,4 +1,6 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
+import { E2E_SNS_TOPIC_ARN, E2E_WEBHOOK_KEY, snsKeyFiles } from './tests/e2e/support/sns-keys'
 
 /**
  * Mail's end-to-end suite. Its own port (3301), never the dev server's
@@ -12,6 +14,10 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`
 // https://developers.cloudflare.com/turnstile/troubleshooting/testing/
 const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
 const TURNSTILE_TEST_SECRET_KEY = '1x0000000000000000000000000000000AA'
+// SES events (§4.2): the server verifies SNS signatures as in production; a
+// preload serves this run's own key at a certificate name real SNS never uses.
+const SNS_KEYS = snsKeyFiles(PORT)
+const SNS_PRELOAD = fileURLToPath(new URL('./tests/e2e/support/sns-preload.mjs', import.meta.url))
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -53,6 +59,10 @@ export default defineConfig({
       // answering yes without a click. A live secret would refuse their tokens.
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_TEST_SITE_KEY,
       TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET_KEY,
+      MAIL_SES_EVENTS_TOPIC_ARN: E2E_SNS_TOPIC_ARN,
+      MAIL_E2E_SNS_PUBLIC_KEY_FILE: SNS_KEYS.publicFile,
+      NODE_OPTIONS: `--import=${SNS_PRELOAD}`,
+      MAIL_WEBHOOK_SECRET_KEY: E2E_WEBHOOK_KEY,
     },
   },
 })

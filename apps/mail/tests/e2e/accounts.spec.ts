@@ -210,7 +210,10 @@ test.describe('the account journey', () => {
     for (const name of ['Emails', 'Domains', 'API keys', 'Webhooks', 'Suppressions', 'Billing']) {
       await openPage(page, name)
       await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'This page is coming' })).toBeVisible()
+      // Webhooks and Suppressions are built (package MB4); the rest are placeholders still.
+      if (!['Webhooks', 'Suppressions'].includes(name)) {
+        await expect(page.getByRole('heading', { name: 'This page is coming' })).toBeVisible()
+      }
       const current = page
         .getByRole('navigation', { name: 'Dashboard' })
         .locator('[aria-current="page"]')
