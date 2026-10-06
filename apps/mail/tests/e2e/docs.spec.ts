@@ -23,36 +23,43 @@ const DOCS = [
   ['/docs/domains', 'Domains and DNS'],
 ] as const
 
+// Three tests a page, so a long page (the reference) stays inside one test's time.
 for (const [path, title] of DOCS) {
-  test(`${path}: the frame, the current page, axe in both themes, every width, one edge`, async ({
-    page,
-  }) => {
-    await page.goto(path)
-    const h1 = page.getByRole('heading', { level: 1 })
-    await expect(h1).toHaveText(path === '/docs' ? 'Documentation' : title)
-    const panel = await page.getByTestId('hero-panel').first().boundingBox()
-    const box = await h1.boundingBox()
-    expect(box?.y ?? 0).toBeGreaterThan(panel?.y ?? 0)
-
-    const nav = page.getByRole('navigation', { name: 'Docs' })
-    await expect(nav.locator('[aria-current="page"]')).toContainText(title)
+  test.describe(path, () => {
+    test('opens on the blue panel, and the docs’ navigation marks it (S13)', async ({ page }) => {
+      await page.goto(path)
+      const h1 = page.getByRole('heading', { level: 1 })
+      await expect(h1).toHaveText(path === '/docs' ? 'Documentation' : title)
+      const panel = await page.getByTestId('hero-panel').first().boundingBox()
+      const box = await h1.boundingBox()
+      expect(box?.y ?? 0).toBeGreaterThan(panel?.y ?? 0)
+      const nav = page.getByRole('navigation', { name: 'Docs' })
+      await expect(nav.locator('[aria-current="page"]')).toContainText(title)
+    })
 
     for (const theme of ['light', 'dark'] as const) {
-      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
-      await page.evaluate((value) => localStorage.setItem('theme', value), theme)
-      await page.reload()
-      const results = await new AxeBuilder({ page }).analyze()
-      expect(results.violations, theme).toEqual([])
+      test(`passes axe in the ${theme} theme`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
+        await page.addInitScript((value) => localStorage.setItem('theme', value), theme)
+        await page.goto(path)
+        const results = await new AxeBuilder({ page }).analyze()
+        expect(results.violations).toEqual([])
+      })
     }
 
-    await noHorizontalOverflow(page)
-    for (const width of WIDE) {
-      await page.setViewportSize({ width, height: 900 })
+    test('never scrolls sideways, 320 to 1920, and keeps one left edge (S4, S5)', async ({
+      page,
+    }) => {
       await page.goto(path)
-      const { edges, loose } = await leftEdges(page)
-      expect(loose, `blocks in <main> without Container at ${width}px`).toEqual([])
-      expect([...new Set(Object.values(edges))], `edges at ${width}px`).toHaveLength(1)
-    }
+      await noHorizontalOverflow(page)
+      for (const width of WIDE) {
+        await page.setViewportSize({ width, height: 900 })
+        await page.goto(path)
+        const { edges, loose } = await leftEdges(page)
+        expect(loose, `blocks in <main> without Container at ${width}px`).toEqual([])
+        expect([...new Set(Object.values(edges))], `edges at ${width}px`).toHaveLength(1)
+      }
+    })
   })
 }
 
