@@ -4,7 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 export function DashboardSkeleton() {
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
-      <div className="hidden border-r border-border bg-card lg:block lg:w-72 lg:shrink-0 lg:space-y-4 lg:px-4 lg:py-5">
+      <div className="hidden border-r border-border bg-card lg:block lg:w-76 lg:shrink-0 lg:space-y-4 lg:px-4 lg:py-5">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-12 w-full rounded-xl" />
         {Array.from({ length: 8 }, (_, i) => (

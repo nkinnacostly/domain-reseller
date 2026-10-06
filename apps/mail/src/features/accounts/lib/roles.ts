@@ -18,10 +18,12 @@ export const ROLE_LABEL: Record<MemberRole, string> = {
   viewer: 'Viewer',
 }
 
+/** What each role may do, as SQL allows it today (migrations 43, 44, 46). */
 export const ROLE_SUMMARY: Record<MemberRole, string> = {
-  owner: 'Everything, including billing, admins and handing the account over.',
-  admin: 'Settings, members (developers and viewers), domains and keys.',
-  developer: 'Domains, sending keys, webhooks and the email log.',
+  owner: 'Everything an admin can, and also manages admins and can hand the account over.',
+  admin:
+    'Edits the profile, invites developers and viewers, makes full-access keys and reads the account log.',
+  developer: 'Makes and revokes sending keys, and reads sent emails’ bodies while they are kept.',
   viewer: 'Reads the dashboard; changes nothing.',
 }
 

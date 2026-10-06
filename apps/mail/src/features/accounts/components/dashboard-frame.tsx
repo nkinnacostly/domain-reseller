@@ -71,7 +71,7 @@ export function DashboardFrame({ accounts, currentId, email, children }: FramePr
   const [open, setOpen] = useState(false)
   return (
     <div className="flex min-h-dvh flex-col lg:flex-row">
-      <aside className="hidden border-r border-border bg-card lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-72 lg:shrink-0 lg:flex-col lg:gap-6 lg:overflow-y-auto lg:px-4 lg:py-5">
+      <aside className="hidden border-r border-border bg-card lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-76 lg:shrink-0 lg:flex-col lg:gap-6 lg:overflow-y-auto lg:px-4 lg:py-5">
         <Link
           href="/dashboard"
           aria-label={`${PRODUCT_NAME}, dashboard`}
