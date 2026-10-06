@@ -64,6 +64,13 @@ describe('the Content Security Policy', () => {
     expect(mailCsp({ supabaseHost: 'x', development: true })).toContain("'unsafe-eval'")
   })
 
+  it('lets in Turnstile’s script and frame, and Google as a form’s destination (§7.1)', () => {
+    const csp = mailCsp({ supabaseHost: 'abc.supabase.co', development: false })
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com")
+    expect(csp).toContain('frame-src https://challenges.cloudflare.com')
+    expect(csp).toContain("form-action 'self' https://abc.supabase.co https://accounts.google.com")
+  })
+
   it('reads the project’s host, or falls back to any Supabase host', () => {
     expect(supabaseHostOf('https://abc.supabase.co')).toBe('abc.supabase.co')
     expect(supabaseHostOf(undefined)).toBe('*.supabase.co')

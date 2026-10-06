@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId } from 'react'
 import {
@@ -68,7 +69,14 @@ export function OnboardingForm() {
             <p id={`${id}-aup-hint`} className="mt-1 text-pretty text-xs/5 text-muted-foreground">
               Receipts, sign-in links, alerts: email a person expects because of something they did.
               No newsletters or marketing, and no bought, rented or scraped lists. Mail does not
-              offer bulk or marketing email.
+              offer bulk or marketing email. The{' '}
+              <Link
+                href="/legal/acceptable-use"
+                className="rounded-sm underline underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                Acceptable Use Policy
+              </Link>{' '}
+              has the whole of it.
             </p>
           </div>
         </div>

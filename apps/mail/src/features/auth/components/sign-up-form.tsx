@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useAction } from 'next-safe-action/hooks'
 import { useId, useRef } from 'react'
 import {
@@ -14,6 +15,9 @@ import {
 import { PasswordInput } from '@/components/common/password-input'
 import { Turnstile, type TurnstileHandle, turnstileInput } from '@/components/common/turnstile'
 import { resendConfirmation, signUp } from '../actions/session'
+
+const LEGAL_LINK =
+  'rounded-sm underline underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 
 const PASSWORD_HINT = 'At least 10 characters. A few unrelated words is strong and easy to type.'
 
@@ -143,7 +147,19 @@ export function SignUpForm({ next }: { next?: string }) {
 
       <p className="text-pretty text-xs/5 text-muted-foreground">
         One sign-in works across MyDomainsHub: if you already have a domain shop account, sign in
-        with it instead.
+        with it instead. The{' '}
+        <Link href="/legal/terms" className={LEGAL_LINK}>
+          Terms of Service
+        </Link>
+        ,{' '}
+        <Link href="/legal/acceptable-use" className={LEGAL_LINK}>
+          Acceptable Use Policy
+        </Link>{' '}
+        and{' '}
+        <Link href="/legal/privacy" className={LEGAL_LINK}>
+          Privacy Notice
+        </Link>{' '}
+        say how Mail works and what we do with your details.
       </p>
     </form>
   )
