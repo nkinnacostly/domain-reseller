@@ -38,6 +38,23 @@ describe('admin links in alerts', () => {
     ).not.toContain('/admin')
   })
 
+  it('links a Mail alert to Mail’s own admin, with or without the shop’s address', () => {
+    const mail = alert({
+      kind: 'mail_threshold_pause',
+      summary: 'Mail: account mdm-0123456789 paused by our threshold',
+      key: 'mail_threshold_pause:8dbd7ea2-c535-4a4a-a091-e202d9185a20',
+    })
+    const expected =
+      ' — https://emails.mydomainshub.com/admin/accounts/8dbd7ea2-c535-4a4a-a091-e202d9185a20'
+    expect(formatAlerts([mail], 'live', 'X', 'https://www.mydomainshub.com')[0]?.text).toContain(
+      expected,
+    )
+    expect(formatAlerts([mail], 'live', 'X', undefined)[0]?.text).toContain(expected)
+    expect(
+      formatAlerts([mail], 'live', 'X', 'https://www.mydomainshub.com')[0]?.text,
+    ).not.toContain('www.mydomainshub.com/https')
+  })
+
   it('keeps every message within Telegram’s budget with links on', () => {
     const many = Array.from({ length: 120 }, (_, index) =>
       alert({
