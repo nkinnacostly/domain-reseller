@@ -3,7 +3,8 @@ project_id = "domain-reseller"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "graphql_public"]
+# `mail`: MyDomainsHub Mail (docs/MAIL-SPEC.md, M5), RLS on every table.
+schemas = ["public", "graphql_public", "mail"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
@@ -35,6 +36,9 @@ additional_redirect_urls = [
   "https://mydomainshub.vercel.app/**",
   "http://localhost:3000/**",
   "http://localhost:3100/**",
+  # MyDomainsHub Mail shares Supabase Auth (MAIL-SPEC M5).
+  "https://emails.mydomainshub.com/**",
+  "http://localhost:3001/**",
 ]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
