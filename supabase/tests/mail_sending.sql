@@ -631,7 +631,7 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–46), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–47), granted to exactly the role it names.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -646,7 +646,17 @@ begin
     "update_account_profile":"authenticated", "create_invite":"authenticated",
     "revoke_invite":"authenticated", "invite_preview":"authenticated", "accept_invite":"authenticated",
     "change_member_role":"authenticated", "remove_member":"authenticated", "leave_account":"authenticated",
-    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role"
+    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role",
+    "domain_name_ok":"none", "is_reserved_domain":"none", "clean_error":"none", "is_test_account":"none",
+    "on_jobs_side":"none", "kick_ses_jobs":"none", "provisioning_on_account":"none", "sandbox_on_state":"none",
+    "sandbox_domain_for":"none",
+    "add_domain":"authenticated", "retry_domain":"authenticated", "remove_domain":"authenticated",
+    "begin_ses_jobs":"service_role", "record_sandbox_identity":"service_role",
+    "claim_provisioning_work":"service_role", "record_provisioning":"service_role",
+    "record_provisioning_error":"service_role", "claim_domain_work":"service_role",
+    "record_domain_step":"service_role", "record_domain_check":"service_role",
+    "record_domain_failed":"service_role", "record_domain_released":"service_role",
+    "record_domain_error":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
