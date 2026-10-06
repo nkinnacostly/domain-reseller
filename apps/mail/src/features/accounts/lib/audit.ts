@@ -81,7 +81,46 @@ export function describeAction(row: AuditRow, names: Named): string {
     case 'domain.removed':
       return 'removed a domain'
     default:
-      return row.action.replaceAll('.', ' ').replaceAll('_', ' ')
+      return (
+        describeBilling(row.action, detail) ?? row.action.replaceAll('.', ' ').replaceAll('_', ' ')
+      )
+  }
+}
+
+/** A plan's code as its name reads ("starter" → "Starter"): the log keeps codes only. */
+const plan = (value: unknown) => {
+  const code = String(value ?? '')
+  return code ? `${code[0]?.toUpperCase()}${code.slice(1)}` : 'a'
+}
+
+/** Billing's entries (migration 50): plan codes and invoice numbers, never an amount. */
+function describeBilling(action: string, detail: Record<string, unknown>): string | null {
+  const invoice = typeof detail.invoice === 'string' ? ` (invoice ${detail.invoice})` : ''
+  switch (action) {
+    case 'billing.subscribed':
+      return `recorded a payment and started the ${plan(detail.plan)} plan${invoice}`
+    case 'billing.upgraded':
+      return `recorded a payment and moved the account up to the ${plan(detail.plan)} plan${invoice}`
+    case 'billing.paid':
+      return `recorded a payment for the ${plan(detail.plan)} plan${invoice}`
+    case 'billing.renewed':
+      return `renewed the ${plan(detail.plan)} plan${invoice}`
+    case 'billing.renewal_failed':
+      return `recorded a renewal payment for the ${plan(detail.plan)} plan that did not go through`
+    case 'billing.past_due':
+      return `marked the ${plan(detail.plan)} plan past due: its renewal payment had not come through`
+    case 'billing.change_scheduled':
+      return `scheduled a move from the ${plan(detail.from)} plan to the ${plan(detail.to)} plan at the period’s end`
+    case 'billing.change_withdrawn':
+      return `kept the ${plan(detail.kept)} plan, withdrawing a scheduled change`
+    case 'billing.canceled':
+      return `moved the account to the ${plan(detail.to)} plan at the period’s end`
+    case 'billing.downgraded':
+      return `moved the account to the ${plan(detail.to)} plan at the period’s end, waiting for its first payment`
+    case 'billing.lapsed':
+      return 'moved the account to the Free plan: its payment was past due'
+    default:
+      return null
   }
 }
 

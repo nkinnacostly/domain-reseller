@@ -9,6 +9,14 @@ import { defineConfig, devices } from '@playwright/test'
  */
 const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3301)
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`
+// Billing pays a mock Flutterwave (tests/e2e/support/mock-flutterwave.mjs), never
+// Flutterwave itself (N12). Both ports move, for two checkouts side by side.
+const MOCK_FLUTTERWAVE_PORT = Number(process.env.MOCK_FLUTTERWAVE_PORT ?? 4301)
+const MOCK_FLUTTERWAVE = `http://127.0.0.1:${MOCK_FLUTTERWAVE_PORT}`
+// Made-up test values, not secrets: the mock accepts only `_TEST-` keys, and
+// process env wins over .env, so the e2e server never holds a real key.
+const E2E_FLUTTERWAVE_KEY_TAIL = 'e2e-mock-key-not-a-secret'
+const E2E_WEBHOOK_HASH = 'e2e-mock-webhook-hash-not-a-secret'
 // https://developers.cloudflare.com/turnstile/troubleshooting/testing/
 const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
 const TURNSTILE_TEST_SECRET_KEY = '1x0000000000000000000000000000000AA'
@@ -36,23 +44,39 @@ export default defineConfig({
     { name: 'mobile-ios', use: { ...devices['iPhone 14'] } },
     { name: 'tablet', use: { ...devices['iPad Pro 11'] } },
   ],
-  webServer: {
-    command: `pnpm build && pnpm exec next start -p ${PORT}`,
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-    env: {
-      NEXT_PUBLIC_MAIL_URL: baseURL,
-      // A test pepper: e2e keys are made and hashed with it, never production's.
-      MAIL_API_KEY_PEPPER: 'e2e pepper, not a secret, 0123456789',
-      // No SES key of any kind in the e2e server: nothing here may send.
-      MAIL_SES_MANAGER_ACCESS_KEY_ID: '',
-      MAIL_SES_MANAGER_SECRET_ACCESS_KEY: '',
-      // Cloudflare's documented always-pass Turnstile test keys, as the shop's
-      // e2e uses (CLAUDE.md §15): the real widget and a real siteverify call,
-      // answering yes without a click. A live secret would refuse their tokens.
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_TEST_SITE_KEY,
-      TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET_KEY,
+  webServer: [
+    {
+      command: 'node tests/e2e/support/mock-flutterwave.mjs',
+      url: `${MOCK_FLUTTERWAVE}/health`,
+      reuseExistingServer: !process.env.CI,
+      env: {
+        MOCK_FLUTTERWAVE_PORT: String(MOCK_FLUTTERWAVE_PORT),
+        // Flutterwave's renewal webhook, as Paidly forwards it here.
+        MOCK_FLUTTERWAVE_WEBHOOK_URL: `${baseURL}/api/billing/flutterwave`,
+        MOCK_FLUTTERWAVE_WEBHOOK_HASH: E2E_WEBHOOK_HASH,
+      },
     },
-  },
+    {
+      command: `pnpm build && pnpm exec next start -p ${PORT}`,
+      url: baseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      env: {
+        FLUTTERWAVE_API_URL: `${MOCK_FLUTTERWAVE}/flw/v3`,
+        FLUTTERWAVE_SECRET_KEY: `FLWSECK_TEST-${E2E_FLUTTERWAVE_KEY_TAIL}`,
+        FLUTTERWAVE_WEBHOOK_HASH: E2E_WEBHOOK_HASH,
+        NEXT_PUBLIC_MAIL_URL: baseURL,
+        // A test pepper: e2e keys are made and hashed with it, never production's.
+        MAIL_API_KEY_PEPPER: 'e2e pepper, not a secret, 0123456789',
+        // No SES key of any kind in the e2e server: nothing here may send.
+        MAIL_SES_MANAGER_ACCESS_KEY_ID: '',
+        MAIL_SES_MANAGER_SECRET_ACCESS_KEY: '',
+        // Cloudflare's documented always-pass Turnstile test keys, as the shop's
+        // e2e uses (CLAUDE.md §15): the real widget and a real siteverify call,
+        // answering yes without a click. A live secret would refuse their tokens.
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_TEST_SITE_KEY,
+        TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET_KEY,
+      },
+    },
+  ],
 })
