@@ -66,7 +66,7 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     slug: 'webhooks',
     href: '/docs/webhooks',
     title: 'Webhooks',
-    summary: 'Events sent to your own server. Not available yet.',
+    summary: 'Events sent to your own server. The guide is being written.',
     stub: true,
   },
   {

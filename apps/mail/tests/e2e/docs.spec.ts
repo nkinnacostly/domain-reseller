@@ -80,7 +80,7 @@ test('the reference lists every endpoint the OpenAPI document does', async ({ pa
 
 test('the stubs say they are not written yet', async ({ page }) => {
   await page.goto('/docs/webhooks')
-  await expect(page.getByText('Webhooks are not available yet.')).toBeVisible()
+  await expect(page.getByText('This guide is being written.')).toBeVisible()
   await page.goto('/docs/domains')
   await expect(page.getByText('This guide is being written.')).toBeVisible()
 })

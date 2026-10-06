@@ -46,7 +46,7 @@ describe('the docs pages', () => {
 
   it('the stubs say plainly that they are not written', () => {
     render(<WebhooksPage />)
-    expect(screen.getByText('Webhooks are not available yet.')).toBeInTheDocument()
+    expect(screen.getAllByText('This guide is being written.')).toHaveLength(1)
   })
 
   it('the quickstart shows all four languages', () => {
