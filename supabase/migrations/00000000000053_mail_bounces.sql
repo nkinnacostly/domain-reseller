@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Migration 52: MyDomainsHub Mail — `usage_daily.bounced` counts hard bounces
+-- Migration 53: MyDomainsHub Mail — `usage_daily.bounced` counts hard bounces
 -- only (docs/MAIL-SPEC.md §7.4, §9).
 --
 -- MB6's threshold pause (migration 51) compares an account's `bounced` with

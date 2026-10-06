@@ -17,14 +17,17 @@ function lookupWith(resolved: Resolved, all = false) {
   const lookup = publicOnlyLookup((_host, callback) =>
     callback(resolved.error ?? null, resolved.addresses ?? []),
   )
-  return new Promise<{ error: NodeJS.ErrnoException | null; address: unknown; family?: number }>(
-    (resolve) =>
-      lookup(
-        'hooks.acme.example',
-        { all } as never,
-        ((error: NodeJS.ErrnoException | null, address: unknown, family?: number) =>
-          resolve({ error, address, family })) as never,
-      ),
+  return new Promise<{
+    error: NodeJS.ErrnoException | null
+    address: unknown
+    family?: number | undefined
+  }>((resolve) =>
+    lookup(
+      'hooks.acme.example',
+      { all } as never,
+      ((error: NodeJS.ErrnoException | null, address: unknown, family?: number) =>
+        resolve({ error, address, family })) as never,
+    ),
   )
 }
 
@@ -115,7 +118,7 @@ describe('posting a delivery', () => {
     })
 
   it('POSTs the body with its headers and keeps the status and the start of the answer', async () => {
-    let seen: { method?: string; headers?: Record<string, unknown>; body?: string } = {}
+    let seen: { method?: string | undefined; headers?: Record<string, unknown>; body?: string } = {}
     const url = await endpoint((req, res) => {
       let body = ''
       req.on('data', (chunk) => {

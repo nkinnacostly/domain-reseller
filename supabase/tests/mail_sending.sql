@@ -496,7 +496,7 @@ begin
                            jsonb_build_object('bounceType', 'Transient', 'diagnosticCode',
                                               'smtp; 550 5.1.1 <' || m_o || '>: no such user', 'emailAddress', m_o),
                            array[lower(m_o)]);
-  -- A soft bounce moves the status, but usage counts hard bounces only (migration 52).
+  -- A soft bounce moves the status, but usage counts hard bounces only (migration 53).
   if (select status from mail.emails where id = v_eid) <> 'bounced' or pg_temp.ms_used(a_acc, 'bounced') <> 0 then
     raise exception 'FAILED 11: a late bounce did not win, or a soft one was counted';
   end if;
@@ -633,7 +633,9 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–46, 49), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–51, 53), granted to exactly the role it names.
+  -- 47, 48, 50 and 51's names are as the hosted project holds them (6 Oct 2026); their packages'
+  -- own maps are reconciled with this one at merge.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -656,7 +658,37 @@ begin
     "rotate_webhook_secret":"authenticated", "delete_webhook":"authenticated",
     "resend_webhook_delivery":"authenticated", "remove_suppression":"authenticated",
     "claim_webhook_deliveries":"service_role", "record_webhook_attempt":"service_role",
-    "purge_webhook_deliveries":"none"
+    "purge_webhook_deliveries":"none",
+    "account_emails":"authenticated", "add_domain":"authenticated", "advance_warmup":"none",
+    "alert_conditions":"none", "api_add_domain":"service_role", "api_create_key":"service_role",
+    "api_get_domain":"service_role", "api_list_domains":"service_role", "api_list_keys":"service_role",
+    "api_remove_domain":"service_role", "api_revoke_key":"service_role", "as_timestamptz":"none",
+    "asked_ses_to_pause":"none", "begin_ses_jobs":"service_role", "billing_issue_invoice":"none",
+    "billing_keep_record_only":"none", "billing_note":"none", "billing_overview":"authenticated",
+    "billing_payment_record":"none", "billing_period_end":"none", "billing_provider_state":"service_role",
+    "billing_quote":"none", "billing_rows_are_final":"none", "billing_settings_stay":"none",
+    "billing_sweep":"none", "billing_unapplied":"none", "billing_vat":"none", "cancel_email":"service_role",
+    "claim_domain_name":"none", "claim_domain_work":"service_role", "claim_provisioning_work":"service_role",
+    "claim_tenant_actions":"service_role", "clean_error":"none", "domain_api_key":"none",
+    "domain_name_ok":"none", "domain_view":"none", "e2e_evaluate":"service_role",
+    "e2e_seed_usage":"service_role", "email_page":"none", "email_view":"none", "enqueue_batch":"service_role",
+    "evaluate_account":"none", "flutterwave_plan_for":"service_role", "is_full_key":"none",
+    "is_reserved_domain":"none", "is_test_account":"none", "keep_current_plan":"authenticated",
+    "kick_ses_jobs":"none", "list_emails":"service_role", "note_cap_use":"none",
+    "note_provider_active":"service_role", "note_provider_canceled":"service_role", "on_jobs_side":"none",
+    "open_finding":"none", "ppm_text":"none", "profile_complete":"none", "provisioning_on_account":"none",
+    "purge_old_emails":"none", "purge_safety_records":"none", "queue_tenant_action":"none", "rate_ppm":"none",
+    "recipient_addresses":"none", "record_billing_charge":"service_role",
+    "record_billing_incident":"service_role", "record_domain_check":"service_role",
+    "record_domain_error":"service_role", "record_domain_failed":"service_role",
+    "record_domain_released":"service_role", "record_domain_step":"service_role",
+    "record_provisioning":"service_role", "record_provisioning_error":"service_role",
+    "record_sandbox_identity":"service_role", "record_tenant_action":"service_role",
+    "register_flutterwave_plan":"service_role", "remove_domain":"authenticated",
+    "request_domain_removal":"none", "reschedule_email":"service_role", "retry_domain":"authenticated",
+    "run_safety_checks":"service_role", "sandbox_domain_for":"none", "sandbox_on_state":"none",
+    "schedule_plan_change":"authenticated", "ses_findings_of":"none", "start_checkout":"authenticated",
+    "utc_text":"none", "window_usage":"none"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
