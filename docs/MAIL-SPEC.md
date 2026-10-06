@@ -166,8 +166,11 @@ Neither can touch `notify.mydomainshub.com` or the shop's `mydomainshub` configu
 The account allows **14 emails a second** and 50,000 a day today, for everything. The shop's
 gateway is paced at `SES_MAX_SEND_RATE=10`. Before launch:
 
-- **Owner:** ask AWS for a higher quota (SES → Account dashboard → Request increase), e.g. 50 a
-  second and 500,000 a day, citing the tenant isolation and §7.
+- **Owner, 6 Oct 2026: launch on the quota AWS has given** (14 a second, 50,000 a day). Ask for more
+  only when Mail's volume needs it. Until then **Scale is not offered** (`plans.is_offered = false`:
+  its 60,000-a-day cap is above the whole account's), and the worker keeps an **account-wide daily
+  budget**: Mail may use what the shop leaves of the 24-hour quota, and no single customer account
+  may take more than half of what is left on a given day.
 - Until it is raised, split the budget: shop **4/s**, mail **10/s**. The shop sends a few hundred a
   day, so 4/s is plenty.
 - The worker paces with a token bucket at `MAIL_MAX_SEND_RATE`, and treats `Throttling` /
@@ -397,8 +400,8 @@ As `CLAUDE.md` §10, plus:
 
 ## 14. Owner tasks
 
-1. **AWS:** request a higher SES quota (rate and daily); confirm SES tenant management is enabled in
-   eu-west-2. I can create the IAM users, SNS topic and EventBridge rule with the setup key, as before.
+1. **AWS:** ~~IAM users, SNS topic, EventBridge rule~~ done 6 Oct 2026 (`infra/aws/`). A higher SES
+   quota is deferred until Mail's volume needs it (§4.4).
 2. **Supabase:** none now (M5). Before Mail's paid launch, consider the Pro plan for backups and
    no auto-pause — the shop needs them too.
 3. **Vercel:** I can create the second project with the token; a Cloudflare CNAME for `emails`.
