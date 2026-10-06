@@ -7,7 +7,8 @@ pre-commit:
       stage_fixed: true
     secrets:
       run: |
-        if git diff --cached -U0 | grep -nE '(SUPABASE_SECRET_KEY|DNA_API_KEY|DNA_API_TEST_KEY|FLUTTERWAVE_SECRET_KEY|PAYSTACK_SECRET_KEY|AWS_SES_SECRET_ACCESS_KEY|MAIL_SES_[A-Z]+_SECRET_ACCESS_KEY|MAIL_API_KEY_PEPPER|sk_live_|sk_test_)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9_\-]{8,}'; then
+        # Added lines only: taking a secret out must never be blocked.
+        if git diff --cached -U0 | grep '^+' | grep -v '^+++ ' | grep -nE '(SUPABASE_SECRET_KEY|DNA_API_KEY|DNA_API_TEST_KEY|FLUTTERWAVE_SECRET_KEY|PAYSTACK_SECRET_KEY|AWS_SES_SECRET_ACCESS_KEY|MAIL_SES_[A-Z]+_SECRET_ACCESS_KEY|MAIL_API_KEY_PEPPER|sk_live_|sk_test_)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9_\-]{8,}'; then
           echo "✖ Possible secret in staged changes. Remove it or use .env (never committed)."
           exit 1
         fi
