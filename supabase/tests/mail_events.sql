@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Migration 49 (MyDomainsHub Mail: SES events in, suppressions, findings and
+-- Migrations 49 and 52 (MyDomainsHub Mail: SES events in, suppressions, findings and
 -- outbound webhooks), tried as the database owner and, where the grant is the
 -- point, as `authenticated` and `service_role`: endpoints and who may manage
 -- them, what an SES event queues (and what it never carries), email.failed and
@@ -349,6 +349,17 @@ begin
   if (select bounced from mail.usage_daily where account_id = a_acc and day = mail.lagos_day(now())) <> 1
      or (select delivered from mail.usage_daily where account_id = a_acc and day = mail.lagos_day(now())) <> 1 then
     raise exception 'FAILED 2: usage_daily did not count the delivery and the bounce';
+  end if;
+  -- A soft bounce (migration 52): an event, a webhook, but neither counted nor suppressed.
+  delete from mail.suppressions where account_id = a_acc;
+  perform pg_temp.mv_event('m49-' || v_tag || '-1', 'bounce', 'k-soft',
+                           '{"bounceType":"Transient","bounceSubType":"MailboxFull"}', array[m_o]);
+  if (select bounced from mail.usage_daily where account_id = a_acc and day = mail.lagos_day(now())) <> 1
+     or exists (select 1 from mail.suppressions where account_id = a_acc)
+     or (select count(*) from mail.webhook_deliveries where webhook_id = w1 and event_type = 'email.bounced') <> 2
+     or not exists (select 1 from mail.email_events e join mail.emails m on m.id = e.email_id
+                     where m.id = v_e1 and e.event_key = 'k-soft') then
+    raise exception 'FAILED 2: a soft bounce was counted, suppressed, or lost';
   end if;
   perform pg_temp.mv_event('m49-' || v_tag || '-1', 'complaint', 'k-comp');
   perform pg_temp.mv_event('m49-' || v_tag || '-1', 'delivery_delay', 'k-delay', '{"delayType":"MailboxFull"}');

@@ -496,8 +496,9 @@ begin
                            jsonb_build_object('bounceType', 'Transient', 'diagnosticCode',
                                               'smtp; 550 5.1.1 <' || m_o || '>: no such user', 'emailAddress', m_o),
                            array[lower(m_o)]);
-  if (select status from mail.emails where id = v_eid) <> 'bounced' or pg_temp.ms_used(a_acc, 'bounced') <> 1 then
-    raise exception 'FAILED 11: a late bounce did not win';
+  -- A soft bounce moves the status, but usage counts hard bounces only (migration 52).
+  if (select status from mail.emails where id = v_eid) <> 'bounced' or pg_temp.ms_used(a_acc, 'bounced') <> 0 then
+    raise exception 'FAILED 11: a late bounce did not win, or a soft one was counted';
   end if;
   select detail::text into v_text from mail.email_events where email_id = v_eid and type = 'bounce';
   if v_text like '%@%' or v_text not like '%[address]%' or v_text like '%emailAddress%' then
@@ -536,7 +537,8 @@ begin
   end if;
   perform pg_temp.ms_event('m44-' || v_tag || '-2', null, 'bounce', 'k-perm', '{"bounceType":"Permanent"}', array[lower(m_d)]);
   if (select status from mail.emails where id = v_eid2) <> 'bounced'
-     or not exists (select 1 from mail.suppressions where account_id = a_acc and address = lower(m_d) and reason = 'bounce') then
+     or not exists (select 1 from mail.suppressions where account_id = a_acc and address = lower(m_d) and reason = 'bounce')
+     or pg_temp.ms_used(a_acc, 'bounced') <> 1 then
     raise exception 'FAILED 11: a permanent bounce did not suppress';
   end if;
   begin
