@@ -11,6 +11,7 @@ import { authenticate } from '@/features/api/lib/authenticate'
 import { readIdempotencyKey, readJson } from '@/features/api/lib/body'
 import { apiErrorResponse, apiJson } from '@/features/api/lib/respond'
 import { logger } from '@/lib/logger'
+import { contentProblem } from './content'
 
 /**
  * POST /api/v1/emails/batch (MAIL-SPEC §6): up to 100 emails, each
@@ -49,10 +50,18 @@ export async function sendBatch(
   }
 
   const emails = parsed.data.map(toEnqueueInput)
-  // TODO(MB6 merge): MAIL-SPEC §7.6's content check — one line here, calling
-  // `features/safety`'s check on each of `emails` and answering the first
-  // refusal as `emails[n]: …` before enqueue_batch. That module is not on
-  // master yet (6 Oct 2026).
+  // §7.6: the first email the content check refuses refuses the batch, by its place.
+  const content = contentProblem(emails)
+  if (content) {
+    logger.info(
+      { requestId, keyId: key.keyId, refused: content.rule, index: content.index },
+      'v1 batch refused by content',
+    )
+    return apiErrorResponse(
+      { ...content.error, message: `emails[${content.index}]: ${content.error.message}` },
+      requestId,
+    )
+  }
   const idempotencyKey = idempotency.value
   const answer = await deps.store.enqueueBatch({
     accountId: key.accountId,

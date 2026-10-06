@@ -7,7 +7,7 @@ import type { ApiErrorName } from '@dr/shared/mail'
  */
 export const ERROR_DOCS: Record<ApiErrorName, { when: string; next: string }> = {
   validation_error: {
-    when: 'The request is not valid: the message names each field and what is wrong with it. Also 409 (an Idempotency-Key reused for a different request, or an email that has already left the queue), 413 (a request over 4 MB) and 405 (a method the path does not take).',
+    when: 'The request is not valid: the message names each field and what is wrong with it, or the content rule that refused the email (see Limits). Also 409 (an Idempotency-Key reused for a different request, or an email that has already left the queue), 413 (a request over 4 MB) and 405 (a method the path does not take).',
     next: 'Fix the request. Sending it again unchanged gets the same answer.',
   },
   unauthorized: {

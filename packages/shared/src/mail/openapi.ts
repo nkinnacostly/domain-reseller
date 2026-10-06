@@ -132,7 +132,7 @@ const SEND_ERRORS: readonly ErrorCase[] = [
   {
     status: 422,
     names: ['validation_error'],
-    when: 'The body is not valid; the message says where.',
+    when: 'The body is not valid (the message says where), or the content check refuses it: a From that imitates a bank, a payments company or a government body, a link through a URL shortener, or a program attached.',
   },
   {
     status: 429,

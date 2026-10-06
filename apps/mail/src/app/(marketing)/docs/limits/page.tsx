@@ -56,6 +56,25 @@ export default function LimitsPage() {
         />
       </DocsSection>
 
+      <DocsSection id="content" title="Content we refuse">
+        <p>
+          Before an email is queued, we check three things, and refuse it with{' '}
+          <code>422 validation_error</code> if any is true:
+        </p>
+        <ul>
+          <li>
+            the From name or domain imitates a bank, a payments company or a government body on our
+            list;
+          </li>
+          <li>a link goes through a URL shortener, which hides where it leads;</li>
+          <li>an attachment is a program, such as .exe, .js or .apk.</li>
+        </ul>
+        <p>
+          The message says which, and nothing is counted against your caps. In a batch, one refused
+          email refuses the batch.
+        </p>
+      </DocsSection>
+
       <DocsSection id="request" title="One request">
         <DocsTable
           label="Limits for one request"

@@ -117,6 +117,14 @@ describe('POST /api/v1/emails/batch', () => {
     expect(JSON.stringify(info.mock.calls)).not.toContain('ada@example.com')
   })
 
+  it('refuses the whole batch for the first email the content check refuses, by its place', async () => {
+    const calls = mockRpc({ authenticate_key: () => KEY_OK })
+    const response = await post([EMAIL, { ...EMAIL, text: 'Pay at https://tinyurl.com/x' }])
+    expect(response.status).toBe(422)
+    expect((await response.json()).message).toMatch(/^emails\[1\]: .*shortener/)
+    expect(calls.map((call) => call.fn)).toEqual(['authenticate_key'])
+  })
+
   it('answers a refusal of the batch itself without an index', async () => {
     mockRpc({
       authenticate_key: () => KEY_OK,

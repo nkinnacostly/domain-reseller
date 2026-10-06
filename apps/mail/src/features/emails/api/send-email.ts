@@ -11,6 +11,7 @@ import { authenticate } from '@/features/api/lib/authenticate'
 import { readIdempotencyKey, readJson } from '@/features/api/lib/body'
 import { apiErrorResponse, apiJson } from '@/features/api/lib/respond'
 import { logger } from '@/lib/logger'
+import { contentProblem } from './content'
 
 /**
  * POST /api/v1/emails (MAIL-SPEC §6): queue one email and answer its id.
@@ -45,9 +46,15 @@ export async function sendEmail(
   }
 
   const email = toEnqueueInput(parsed.data)
-  // TODO(MB6 merge): MAIL-SPEC §7.6's content check — one line here, calling
-  // `features/safety`'s check on `email` and answering its refusal before
-  // enqueue_email. That module is not on master yet (6 Oct 2026).
+  // §7.6: refused before anything is queued or reserved.
+  const content = contentProblem([email])
+  if (content) {
+    logger.info(
+      { requestId, keyId: key.keyId, refused: content.rule },
+      'v1 send refused by content',
+    )
+    return apiErrorResponse(content.error, requestId)
+  }
   const idempotencyKey = idempotency.value
   const answer = await deps.store.enqueueEmail({
     accountId: key.accountId,
