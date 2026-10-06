@@ -631,7 +631,7 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail, granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–46), granted to exactly the role it names.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -640,7 +640,13 @@ begin
     "settle_unsent":"none", "send_gate":"none", "purge_payloads":"none", "purge_send_budget":"none",
     "enqueue_email":"service_role", "authenticate_key":"service_role", "get_email":"service_role",
     "claim_sends":"service_role", "record_send_result":"service_role", "record_send_event":"service_role",
-    "is_e2e_account":"none", "e2e_ready_account":"service_role", "e2e_purge_account":"service_role"
+    "is_e2e_account":"none", "e2e_ready_account":"service_role", "e2e_purge_account":"service_role",
+    "caller_role":"none", "seats_taken":"none", "is_invite_email":"none",
+    "account_usage":"authenticated", "account_members":"authenticated",
+    "update_account_profile":"authenticated", "create_invite":"authenticated",
+    "revoke_invite":"authenticated", "invite_preview":"authenticated", "accept_invite":"authenticated",
+    "change_member_role":"authenticated", "remove_member":"authenticated", "leave_account":"authenticated",
+    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
