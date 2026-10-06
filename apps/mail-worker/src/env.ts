@@ -39,6 +39,16 @@ const schema = z.object({
     .string()
     .regex(/^[A-Za-z0-9._:-]{1,100}$/)
     .default(`mail-worker:${hostname().slice(0, 80)}`),
+  /**
+   * MR6: opens each endpoint's sealed signing secret (apps/mail seals with the
+   * same key). Unset, the webhook loop does not start; sending is unaffected.
+   */
+  MAIL_WEBHOOK_SECRET_KEY: z.string().min(40).optional(),
+  /** Deliveries claimed at once, and how many are in flight together. */
+  MAIL_WEBHOOK_BATCH: z.coerce.number().int().min(1).max(100).default(20),
+  MAIL_WEBHOOK_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(5),
+  /** How long an empty webhook queue is left before it is asked again. */
+  MAIL_WEBHOOK_POLL_MS: z.coerce.number().int().min(200).max(60_000).default(2_000),
   /** Fly's health check (/health). */
   PORT: z.coerce.number().int().default(8080),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),

@@ -210,10 +210,7 @@ test.describe('the account journey', () => {
     for (const name of ['Emails', 'Domains', 'API keys', 'Webhooks', 'Suppressions', 'Billing']) {
       await openPage(page, name)
       await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible()
-      // Built since: Billing (billing.spec.ts), Emails and API keys (api.spec.ts).
-      if (!['Emails', 'API keys', 'Billing'].includes(name)) {
-        await expect(page.getByRole('heading', { name: 'This page is coming' })).toBeVisible()
-      }
+      // Every page here is built now; each has its own spec.
       const current = page
         .getByRole('navigation', { name: 'Dashboard' })
         .locator('[aria-current="page"]')

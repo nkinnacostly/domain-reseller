@@ -1,4 +1,6 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
+import { E2E_SNS_TOPIC_ARN, E2E_WEBHOOK_KEY, snsKeyFiles } from './tests/e2e/support/sns-keys'
 
 /**
  * Mail's end-to-end suite. Its own port (3301), never the dev server's
@@ -20,6 +22,10 @@ const E2E_WEBHOOK_HASH = 'e2e-mock-webhook-hash-not-a-secret'
 // https://developers.cloudflare.com/turnstile/troubleshooting/testing/
 const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
 const TURNSTILE_TEST_SECRET_KEY = '1x0000000000000000000000000000000AA'
+// SES events (§4.2): the server verifies SNS signatures as in production; a
+// preload serves this run's own key at a certificate name real SNS never uses.
+const SNS_KEYS = snsKeyFiles(PORT)
+const SNS_PRELOAD = fileURLToPath(new URL('./tests/e2e/support/sns-preload.mjs', import.meta.url))
 
 // ── MB2: a mock SES and DNS-over-HTTPS for the domains journey (MAIL-SPEC §12) ──
 // The app's SES calls go to this loopback mock (MAIL_SES_ENDPOINT, refused in
@@ -103,6 +109,11 @@ export default defineConfig({
         TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET_KEY,
         // MB2: after the lines above, so the mock's example key is the only one.
         ...mockSesEnv,
+        // MB4: last, so SNS messages and provisioning name the one e2e topic.
+        MAIL_SES_EVENTS_TOPIC_ARN: E2E_SNS_TOPIC_ARN,
+        MAIL_E2E_SNS_PUBLIC_KEY_FILE: SNS_KEYS.publicFile,
+        NODE_OPTIONS: `--import=${SNS_PRELOAD}`,
+        MAIL_WEBHOOK_SECRET_KEY: E2E_WEBHOOK_KEY,
       },
     },
     mockSesServer,
