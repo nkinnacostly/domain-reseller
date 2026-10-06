@@ -1,0 +1,246 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ───────────────────────────────────────────────────────────────────────────
+   MyDomainsHub Mail — design tokens.
+   The shop's brand (.claude/skills/mydomainshub-brand): the same blue, ink,
+   type and footer, so Mail reads as the same company. Both themes are
+   designed deliberately (S3) — dark is not an auto-inversion. Never hardcode
+   a colour in a component (S2); reference a token.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.222 0.027 221);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.222 0.027 221);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.222 0.027 221);
+
+  /* The action blue, a step deeper than --brand: white on it keeps 4.5:1
+     even at the 90% opacity hover states use. */
+  --primary: oklch(0.488 0.243 264.376);
+  --primary-foreground: oklch(1 0 0);
+  --accent: oklch(0.966 0.012 254.604);
+  --accent-foreground: oklch(0.222 0.027 221);
+
+  --secondary: oklch(0.966 0.003 216);
+  --secondary-foreground: oklch(0.222 0.027 221);
+  --muted: oklch(0.966 0.003 216);
+  --muted-foreground: oklch(0.545 0.009 228);
+
+  /* Brand blue: the hero panel, the mark's tile, highlights. --brand-ink is
+     the blue for text on the page; --brand-arc is decorative only. */
+  --brand: oklch(0.546 0.245 262.881);
+  --brand-foreground: oklch(1 0 0);
+  --brand-muted-foreground: oklch(0.97 0.014 254.604);
+  --brand-arc: oklch(0.623 0.214 259.815);
+  --brand-ink: oklch(0.546 0.245 262.881);
+  --brand-subtle: oklch(0.975 0.012 254.604);
+  --brand-subtle-border: oklch(0.932 0.032 255.585);
+
+  /* Dark footer, deep navy in both themes. */
+  --footer: oklch(0.208 0.042 265.755);
+  --footer-foreground: oklch(0.984 0.003 247.858);
+  --footer-muted-foreground: oklch(0.792 0.024 256.8);
+  --footer-border: oklch(1 0 0 / 12%);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.918 0.004 216);
+  --input: oklch(0.918 0.004 216);
+  --ring: oklch(0.488 0.243 264.376);
+
+  /* Tones for statuses — an email's (sent, delivered, bounced…), a domain's,
+     an account's. A pale tint with a deep ink of the same hue, every pair
+     above 6:1; the status's name is always shown, so colour is never the
+     only signal (S8). */
+  --tone-success: oklch(0.95 0.045 155);
+  --tone-success-foreground: oklch(0.41 0.1 155);
+  --tone-warning: oklch(0.95 0.055 85);
+  --tone-warning-foreground: oklch(0.43 0.09 65);
+  --tone-danger: oklch(0.95 0.03 22);
+  --tone-danger-foreground: oklch(0.45 0.16 25);
+  --tone-info: oklch(0.95 0.035 255);
+  --tone-info-foreground: oklch(0.42 0.16 262);
+  --tone-neutral: oklch(0.95 0.008 250);
+  --tone-neutral-foreground: oklch(0.41 0.03 255);
+
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.646 0.222 41.116);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.577 0.245 27.325);
+}
+
+/* Paper is white: dark tokens apply on screens only, so a printed invoice
+   from dark mode keeps the light palette. */
+@media screen {
+  .dark {
+    --background: oklch(0.205 0.019 221);
+    --foreground: oklch(0.964 0.004 216);
+    --card: oklch(0.24 0.02 221);
+    --card-foreground: oklch(0.964 0.004 216);
+    --popover: oklch(0.24 0.02 221);
+    --popover-foreground: oklch(0.964 0.004 216);
+
+    /* A lighter blue for actions, with navy text on it, so both hold contrast. */
+    --primary: oklch(0.707 0.165 254.624);
+    --primary-foreground: oklch(0.208 0.042 265.755);
+    --accent: oklch(0.262 0.03 258);
+    --accent-foreground: oklch(0.964 0.004 216);
+
+    --secondary: oklch(0.262 0.018 221);
+    --secondary-foreground: oklch(0.964 0.004 216);
+    --muted: oklch(0.262 0.018 221);
+    --muted-foreground: oklch(0.724 0.011 222);
+
+    --brand: oklch(0.488 0.243 264.376);
+    --brand-foreground: oklch(1 0 0);
+    --brand-muted-foreground: oklch(0.97 0.014 254.604);
+    --brand-arc: oklch(0.546 0.245 262.881);
+    --brand-ink: oklch(0.707 0.165 254.624);
+    --brand-subtle: oklch(0.255 0.035 258);
+    --brand-subtle-border: oklch(1 0 0 / 10%);
+
+    --footer: oklch(0.165 0.02 250);
+    --footer-foreground: oklch(0.964 0.004 216);
+    --footer-muted-foreground: oklch(0.76 0.018 250);
+    --footer-border: oklch(1 0 0 / 10%);
+
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(1 0 0 / 12%);
+    --input: oklch(1 0 0 / 16%);
+    --ring: oklch(0.707 0.165 254.624);
+
+    /* On the dark card: a deep tint with a light ink, above 8:1. */
+    --tone-success: oklch(0.33 0.06 155);
+    --tone-success-foreground: oklch(0.88 0.09 155);
+    --tone-warning: oklch(0.34 0.06 75);
+    --tone-warning-foreground: oklch(0.9 0.1 85);
+    --tone-danger: oklch(0.33 0.08 25);
+    --tone-danger-foreground: oklch(0.88 0.06 22);
+    --tone-info: oklch(0.33 0.07 260);
+    --tone-info-foreground: oklch(0.88 0.07 255);
+    --tone-neutral: oklch(0.33 0.015 250);
+    --tone-neutral-foreground: oklch(0.89 0.015 250);
+
+    --chart-1: oklch(0.707 0.165 254.624);
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.769 0.188 70.08);
+    --chart-4: oklch(0.627 0.265 303.9);
+    --chart-5: oklch(0.645 0.246 16.439);
+  }
+}
+
+@media print {
+  :root {
+    /* next-themes writes color-scheme inline; print always uses light. */
+    color-scheme: light !important;
+  }
+}
+
+@theme inline {
+  --font-sans:
+    var(--font-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted-foreground: var(--brand-muted-foreground);
+  --color-brand-arc: var(--brand-arc);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-subtle-border: var(--brand-subtle-border);
+  --color-footer: var(--footer);
+  --color-footer-foreground: var(--footer-foreground);
+  --color-footer-muted-foreground: var(--footer-muted-foreground);
+  --color-footer-border: var(--footer-border);
+
+  --color-tone-success: var(--tone-success);
+  --color-tone-success-foreground: var(--tone-success-foreground);
+  --color-tone-warning: var(--tone-warning);
+  --color-tone-warning-foreground: var(--tone-warning-foreground);
+  --color-tone-danger: var(--tone-danger);
+  --color-tone-danger-foreground: var(--tone-danger-foreground);
+  --color-tone-info: var(--tone-info);
+  --color-tone-info-foreground: var(--tone-info-foreground);
+  --color-tone-neutral: var(--tone-neutral);
+  --color-tone-neutral-foreground: var(--tone-neutral-foreground);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* S12: pressed feedback on real controls, only when they are not disabled.
+     Without it a tap on a slow connection reads as "nothing happened". */
+  button:not(:disabled):not([aria-disabled='true']):active,
+  [role='button']:not([aria-disabled='true']):active,
+  a[data-slot='button']:not([aria-disabled='true']):active {
+    transform: scale(0.98);
+  }
+
+  button,
+  [role='button'],
+  a[data-slot='button'] {
+    transition: transform 120ms ease-out;
+  }
+
+  :disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  /* S9: the person's motion preference, everywhere. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
