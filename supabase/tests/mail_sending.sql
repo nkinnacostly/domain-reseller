@@ -631,7 +631,7 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–46), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–46 and 48), granted to exactly the role it names.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -646,7 +646,11 @@ begin
     "update_account_profile":"authenticated", "create_invite":"authenticated",
     "revoke_invite":"authenticated", "invite_preview":"authenticated", "accept_invite":"authenticated",
     "change_member_role":"authenticated", "remove_member":"authenticated", "leave_account":"authenticated",
-    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role"
+    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role",
+    "recipient_addresses":"none", "as_timestamptz":"none", "utc_text":"none", "email_view":"none",
+    "email_page":"none", "is_full_key":"none", "enqueue_batch":"service_role", "list_emails":"service_role",
+    "account_emails":"authenticated", "reschedule_email":"service_role", "cancel_email":"service_role",
+    "api_list_keys":"service_role", "api_create_key":"service_role", "api_revoke_key":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
