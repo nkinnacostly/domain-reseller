@@ -32,6 +32,12 @@ export type EmailBlock =
   | { kind: 'note'; text: string }
 
 export type EmailContent = {
+  /**
+   * The name beside the mark at the top: the company's by default, or one of
+   * its products' (MyDomainsHub Mail, docs/MAIL-SPEC.md M5), so an email reads
+   * as coming from the product the person signed up to.
+   */
+  product?: string
   heading: string
   blocks: EmailBlock[]
   action?: EmailAction
@@ -88,6 +94,7 @@ function blockText(block: EmailBlock): string {
 }
 
 export function renderEmail(content: EmailContent): { html: string; text: string } {
+  const name = content.product ?? EMAIL_BRAND.name
   const action = content.action
     ? 'code' in content.action
       ? `<tr><td style="padding-top:24px;font-size:28px;font-weight:bold;letter-spacing:6px">${escapeHtml(content.action.code)}</td></tr>`
@@ -107,7 +114,7 @@ export function renderEmail(content: EmailContent): { html: string; text: string
       <tr>
         <td align="center">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;padding:32px">
-            <tr><td style="font-size:18px;font-weight:bold;color:#0b1e24"><img src="${EMAIL_BRAND.markUrl}" width="32" height="32" alt="" style="vertical-align:middle;border:0;border-radius:7px;margin-right:8px">${escapeHtml(EMAIL_BRAND.name)}</td></tr>
+            <tr><td style="font-size:18px;font-weight:bold;color:#0b1e24"><img src="${EMAIL_BRAND.markUrl}" width="32" height="32" alt="" style="vertical-align:middle;border:0;border-radius:7px;margin-right:8px">${escapeHtml(name)}</td></tr>
             <tr><td style="padding-top:24px;font-size:22px;line-height:28px;font-weight:bold">${escapeHtml(content.heading)}</td></tr>
             ${content.blocks.map(blockHtml).join('\n            ')}
             ${action}
@@ -126,7 +133,7 @@ export function renderEmail(content: EmailContent): { html: string; text: string
       : `${content.action.label}: ${content.action.href}`
     : null
   const text = [
-    EMAIL_BRAND.name,
+    name,
     '',
     content.heading,
     '',
