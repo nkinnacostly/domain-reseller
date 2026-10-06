@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, type Page, test } from '@playwright/test'
+import { expect as baseExpect, type Page, test } from '@playwright/test'
 import {
   createTestUser,
   deleteTestUser,
@@ -21,6 +21,13 @@ import {
  */
 
 const SIGN_IN_PROJECTS = ['chromium-desktop', 'mobile-ios']
+
+// Every step here waits on the hosted project, whose answers can take seconds.
+const expect = baseExpect.configure({ timeout: 30_000 })
+
+// axe measures colours as drawn: with motion reduced (S9 honours it) no button
+// is caught half-way through a fade, and no dialog half-way in.
+test.use({ reducedMotion: 'reduce' })
 const WIDTHS = [320, 375, 414, 768, 1024, 1440, 1920]
 
 async function fitsEveryWidth(page: Page) {
@@ -307,6 +314,7 @@ test.describe('the account journey', () => {
     await row.getByRole('button', { name: 'Remove' }).click()
     const dialog = page.getByRole('alertdialog', { name: 'Remove Bola Invitee?' })
     await expect(dialog).toBeVisible()
+    await expect(dialog).toHaveCSS('opacity', '1')
     await passesAxe(page, '[role="alertdialog"]')
     await dialog.getByRole('button', { name: 'Remove from the account' }).click()
     await expect(row).toHaveCount(0)

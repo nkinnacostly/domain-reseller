@@ -57,7 +57,6 @@ export function AccountSwitcher({
           <span className="block truncate text-sm font-semibold text-foreground">
             {current.name}
           </span>
-          <span className="sr-only">, </span>
           <span className="block truncate text-xs text-muted-foreground">
             {action.isPending
               ? 'Switching…'
