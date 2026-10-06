@@ -38,7 +38,8 @@
         "ses:DeleteSuppressedDestination",
         "ses:GetSuppressedDestination",
         "ses:ListSuppressedDestinations",
-        "ses:GetAccount"
+        "ses:GetAccount",
+        "ses:PutTenantSuppressionAttributes"
       ],
       "Resource": "*"
     },
