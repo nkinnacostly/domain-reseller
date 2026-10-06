@@ -63,6 +63,10 @@ export const sqlRefusalSchema = z.looseObject({
   cap: z.number().optional(),
   retryAfter: z.number().optional(),
   retryAfterMs: z.number().optional(),
+  /** `not_pending`: the email's status now (cancel_email, reschedule_email). */
+  status: z.string().optional(),
+  /** `enqueue_batch`: which email of the batch was refused, from 0. */
+  index: z.number().int().min(0).optional(),
 })
 
 export type SqlRefusal = z.infer<typeof sqlRefusalSchema>
@@ -74,6 +78,14 @@ const FIELD_WORDS: Record<string, string> = {
   subject: 'The subject must be one line of 1 to 998 characters.',
   size: 'The email is too large for one request.',
   idempotency_key: 'The Idempotency-Key header must be printable ASCII, at most 256 characters.',
+  scheduled_at:
+    'scheduled_at must be an ISO 8601 date and time with its zone, at most 72 hours from now.',
+  emails: 'A batch is a JSON array of 1 to 100 emails.',
+  name: 'The name must be 1 to 60 characters.',
+  permission: 'The permission must be "full" or "sending".',
+  domain:
+    'domain_id must be one of this account’s domains, and only a sending key can be limited to one.',
+  key: 'The key could not be made. Try again.',
 }
 
 /** A refusal from SQL in the API's words. */
@@ -149,16 +161,39 @@ export function refusalToApiError(refusal: SqlRefusal): ApiError {
       )
     case 'not_found':
       return apiError('not_found', 'Nothing with that id belongs to this account.')
+    case 'not_pending':
+      // A state conflict, answered as the idempotency conflict is: 409.
+      return {
+        ...apiError(
+          'validation_error',
+          `This email can no longer be changed: its status is ${refusal.status ?? 'past queued'}. Only an email still waiting in the queue can be rescheduled or canceled.`,
+        ),
+        status: 409,
+      }
+    case 'account_closed':
+      return apiError('forbidden', 'This account is closed, so nothing on it can be changed.')
     default:
       return apiError('internal_error', 'Something went wrong on our side. Try again in a moment.')
   }
 }
 
-/** Zod's issues in a sentence: the field paths and what is wrong — never the values. */
-export function describeIssues(error: z.ZodError): string {
-  const parts = error.issues.slice(0, 5).map((issue) => {
-    const path = issue.path.length ? issue.path.map(String).join('.') : 'body'
-    return `${path}: ${issue.message}`
-  })
+/** `[3].to`-style paths: indexes in brackets, names after dots, under an optional root. */
+function issuePath(path: readonly PropertyKey[], root: string): string {
+  const text = path
+    .map((part) => (typeof part === 'number' ? `[${part}]` : `.${String(part)}`))
+    .join('')
+  const joined = `${root}${text}`.replace(/^\./, '')
+  return joined || 'body'
+}
+
+/**
+ * Zod's issues in a sentence: the field paths and what is wrong — never the
+ * values. `root` names what the body is (`emails` for a batch, so a path
+ * reads `emails[3].to`).
+ */
+export function describeIssues(error: z.ZodError, root = ''): string {
+  const parts = error.issues
+    .slice(0, 5)
+    .map((issue) => `${issuePath(issue.path, root)}: ${issue.message}`)
   return parts.join('; ')
 }

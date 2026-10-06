@@ -23,13 +23,32 @@ export const MISSING_KEY = apiError(
 
 export type Authenticated = { ok: true; key: ApiKeyAuth } | { ok: false; error: ApiError }
 
-export async function authenticate(
-  request: Request,
-  deps: { store: ApiStore; pepper: string },
-): Promise<Authenticated> {
+/**
+ * All the key door needs: the store's `authenticate_key` and the pepper.
+ * Kept this narrow so every v1 route — the domains package's too — can use
+ * the same door with its own store.
+ */
+export type KeyDeps = { store: Pick<ApiStore, 'authenticateKey'>; pepper: string }
+
+export async function authenticate(request: Request, deps: KeyDeps): Promise<Authenticated> {
   const key = bearerKey(request.headers.get('authorization'))
   if (!key || !isApiKey(key)) return { ok: false, error: MISSING_KEY }
   const answer = await deps.store.authenticateKey(await hashApiKey(key, deps.pepper))
   if (!answer.ok) return { ok: false, error: refusalToApiError(answer) }
   return { ok: true, key: answer.key }
+}
+
+/**
+ * A sending key may only send (§9, MR7): reading the log, changing a queued
+ * email and managing keys take a full-access key.
+ */
+export const FULL_KEY_ONLY = apiError(
+  'forbidden',
+  'This API key may only send. This request takes a full-access key.',
+)
+
+export async function authenticateFull(request: Request, deps: KeyDeps): Promise<Authenticated> {
+  const auth = await authenticate(request, deps)
+  if (auth.ok && auth.key.permission !== 'full') return { ok: false, error: FULL_KEY_ONLY }
+  return auth
 }

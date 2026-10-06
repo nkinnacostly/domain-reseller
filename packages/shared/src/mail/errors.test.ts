@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sendEmailSchema } from './api'
+import { batchSchema, sendEmailSchema } from './api'
 import {
   API_ERROR_NAMES,
   API_ERROR_STATUS,
@@ -52,6 +52,10 @@ describe('SQL refusals in the API’s words', () => {
     [{ code: 'validation', field: 'subject' }, 'validation_error', 422],
     [{ code: 'validation', field: 'something new' }, 'validation_error', 422],
     [{ code: 'idempotency_conflict' }, 'validation_error', 409],
+    [{ code: 'not_pending', status: 'sent' }, 'validation_error', 409],
+    [{ code: 'not_pending' }, 'validation_error', 409],
+    [{ code: 'account_closed' }, 'forbidden', 403],
+    [{ code: 'validation', field: 'scheduled_at' }, 'validation_error', 422],
     [{ code: 'no_such_code' }, 'internal_error', 500],
   ])('%j → %s %i', (fields, name, status) => {
     const error = refusalToApiError(refused(fields))
@@ -82,6 +86,37 @@ describe('SQL refusals in the API’s words', () => {
     expect(ours).toMatchObject({ name: 'quota_exceeded', status: 429, retryAfter: 600 })
     expect(ours.message).toContain('our limit, not your plan’s')
     expect(refusalToApiError(refused({ code: 'budget_exceeded' })).retryAfter).toBe(3600)
+  })
+
+  it('says why an email can no longer change, naming its status', () => {
+    expect(refusalToApiError(refused({ code: 'not_pending', status: 'sent' })).message).toContain(
+      'its status is sent',
+    )
+    expect(
+      refusalToApiError(refused({ code: 'validation', field: 'scheduled_at' })).message,
+    ).toContain('72 hours')
+  })
+
+  it('names a batch’s email by its place, and a nested field by its path', () => {
+    const batch = batchSchema.safeParse([
+      { from: 'a@b.example', to: 'c@d.example', subject: 'x', text: 'y' },
+      { from: 'a@b.example', to: 'nobody', subject: 'x', text: 'y' },
+    ])
+    expect(batch.success).toBe(false)
+    if (!batch.success) expect(describeIssues(batch.error, 'emails')).toContain('emails[1].to:')
+    const nested = sendEmailSchema.safeParse({
+      from: 'a@b.example',
+      to: 'c@d.example',
+      subject: 'x',
+      text: 'y',
+      attachments: [{ filename: 'a.exe', content: 'QQ==' }],
+    })
+    if (!nested.success) {
+      expect(describeIssues(nested.error)).toContain('attachments[0].filename:')
+    }
+    expect(nested.success).toBe(false)
+    const root = batchSchema.safeParse([])
+    if (!root.success) expect(describeIssues(root.error)).toMatch(/^body: /)
   })
 
   it('describes Zod issues by path and rule, never by value', () => {

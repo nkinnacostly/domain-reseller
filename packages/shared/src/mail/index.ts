@@ -4,5 +4,7 @@
 export * from './api'
 export * from './errors'
 export * from './keys'
+export * from './openapi'
 export * from './plans'
+export * from './resources'
 export * from './status'
