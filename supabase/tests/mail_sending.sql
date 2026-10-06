@@ -631,7 +631,7 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–46), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–46, 49), granted to exactly the role it names.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -646,7 +646,15 @@ begin
     "update_account_profile":"authenticated", "create_invite":"authenticated",
     "revoke_invite":"authenticated", "invite_preview":"authenticated", "accept_invite":"authenticated",
     "change_member_role":"authenticated", "remove_member":"authenticated", "leave_account":"authenticated",
-    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role"
+    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role",
+    "iso_time":"none", "is_webhook_url":"none", "webhook_event_list":"none", "is_sealed_secret":"none",
+    "email_webhook_data":"none", "queue_webhook_event":"none", "webhook_on_email_failed":"none",
+    "webhook_on_domain_status":"none", "record_tenant_event":"service_role", "create_webhook":"authenticated",
+    "webhook_for_caller":"none", "update_webhook":"authenticated", "set_webhook_enabled":"authenticated",
+    "rotate_webhook_secret":"authenticated", "delete_webhook":"authenticated",
+    "resend_webhook_delivery":"authenticated", "remove_suppression":"authenticated",
+    "claim_webhook_deliveries":"service_role", "record_webhook_attempt":"service_role",
+    "purge_webhook_deliveries":"none"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
