@@ -5,6 +5,7 @@ import {
   sesCall,
   sesPath,
 } from './request'
+import { uriEncode } from './sigv4'
 
 /**
  * The SES API v2 management calls Mail makes (MAIL-SPEC §4.1, §5, §7.4),
@@ -38,6 +39,8 @@ export type CustomerManagedStatus = 'ENABLED' | 'DISABLED' | 'REINSTATED'
 const DOMAIN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/
 const NAME = /^[A-Za-z0-9_-]{1,64}$/
 const ARN = /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:\S+$/
+/** One address, as it was sent: SES keeps a suppressed address's case. */
+const ADDRESS = /^[^\s@<>]{1,64}@[^\s@<>]{1,255}$/
 
 function check(condition: boolean, what: string): void {
   if (!condition) throw new Error(`SES: ${what} is not valid`)
@@ -291,6 +294,30 @@ export function createSesManager(settings: SesCredentials) {
           },
         ),
       )
+    },
+
+    /**
+     * §7.5: an address off the tenant's own suppression list (tenant-level
+     * suppression: DeleteSuppressedDestination with `TenantName`; without it
+     * SES would act on the account-level list, which Mail never uses). SES
+     * keeps the address in the case it was sent to and matches it exactly.
+     * `NotFoundException` means it is not on the list — the removal is done.
+     */
+    async deleteSuppressedDestination(
+      address: string,
+      tenantName: string,
+    ): Promise<SesResult<{ found: boolean }>> {
+      check(ADDRESS.test(address), 'the address')
+      check(NAME.test(tenantName), 'the tenant name')
+      const answer = await call(
+        'DELETE',
+        `${sesPath('suppression', 'addresses', address)}?TenantName=${uriEncode(tenantName)}`,
+      )
+      if (answer.ok) return { ok: true, found: true }
+      if (answer.status === 404 || answer.code === 'NotFoundException') {
+        return { ok: true, found: false }
+      }
+      return answer
     },
 
     getAccount: () => getSesAccount(settings),

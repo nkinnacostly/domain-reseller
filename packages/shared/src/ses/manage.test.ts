@@ -402,3 +402,56 @@ describe('failures, as status and type only', () => {
     expect(() => createSesManager({ ...EXAMPLE_CREDENTIALS, region: 'nowhere' })).toThrow('region')
   })
 })
+
+describe('the tenant’s suppression list (§7.5)', () => {
+  it('DeleteSuppressedDestination: the address as SES holds it, on the tenant’s own list', async () => {
+    const { ses, calls } = manager({ status: 200 })
+    expect(await ses.deleteSuppressedDestination('Ada.Obi@Example.com', 'mdm-0a1b2c3d4e')).toEqual({
+      ok: true,
+      found: true,
+    })
+    expect(shape(calls[0])).toEqual({
+      method: 'DELETE',
+      url: `${BASE}/suppression/addresses/Ada.Obi%40Example.com?TenantName=mdm-0a1b2c3d4e`,
+      body: undefined,
+    })
+    expectSigned(calls[0], false)
+    // SigV4 signs each path segment encoded again, and the tenant as a query parameter.
+    const signed = await canonicalRequest({
+      method: 'DELETE',
+      url: calls[0]?.url ?? '',
+      headers: { 'x-amz-date': '20261006T093000Z' },
+    })
+    expect(signed.text.split('\n').slice(0, 3)).toEqual([
+      'DELETE',
+      '/v2/email/suppression/addresses/Ada.Obi%2540Example.com',
+      'TenantName=mdm-0a1b2c3d4e',
+    ])
+  })
+
+  it('an address that is not on the list is already removed', async () => {
+    const { ses } = manager({ status: 404, errorType: 'NotFoundException' })
+    expect(await ses.deleteSuppressedDestination('ada@example.com', 'mdm-0a1b2c3d4e')).toEqual({
+      ok: true,
+      found: false,
+    })
+  })
+
+  it('anything else is SES’s refusal, by status and type only', async () => {
+    const { ses } = manager({ status: 429, errorType: 'TooManyRequestsException' })
+    expect(
+      await ses.deleteSuppressedDestination('ada@example.com', 'mdm-0a1b2c3d4e'),
+    ).toMatchObject({ ok: false, status: 429, code: 'TooManyRequestsException', retryable: true })
+  })
+
+  it('refuses an address or a tenant it would not send', async () => {
+    const { ses, calls } = manager({ status: 200 })
+    await expect(
+      ses.deleteSuppressedDestination('not an address', 'mdm-0a1b2c3d4e'),
+    ).rejects.toThrow('address')
+    await expect(ses.deleteSuppressedDestination('ada@example.com', 'mdm/../x')).rejects.toThrow(
+      'tenant',
+    )
+    expect(calls).toHaveLength(0)
+  })
+})
