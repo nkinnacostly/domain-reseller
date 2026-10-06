@@ -161,8 +161,8 @@ describe('AdminSidebar', () => {
       within(nav).getByRole('link', { name: 'Settings, 1 preset drafts open' }),
     ).toBeInTheDocument()
     expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
-    const back = screen.getAllByRole('link', { name: 'Back to your account' })[0] as HTMLElement
-    expect(back).toHaveAttribute('href', '/app/domains')
+    const back = screen.getAllByRole('link', { name: 'Account settings' })[0] as HTMLElement
+    expect(back).toHaveAttribute('href', '/app/settings')
     // S7, S12: a 44 px target with hover, focus and pressed states.
     for (const state of [/\bh-11\b/, /hover:/, /focus-visible:outline/, /active:scale-/]) {
       expect(back.className).toMatch(state)

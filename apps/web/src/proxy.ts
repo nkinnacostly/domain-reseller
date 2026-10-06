@@ -29,6 +29,13 @@ import { forwardedAuthHeaders } from '@/lib/supabase/forwarded'
  * is what keeps them apart. /admin has its own gate below (ADMIN-SPEC §2.3).
  */
 const PROTECTED = ['/app']
+/**
+ * An admin's account is for the admin area only (owner, 6 Oct 2026): its
+ * customer pages send it to /admin, so it is never used to buy or hold
+ * domains. Its own settings stay — password, two-factor and sessions are how
+ * the admin's sign-in is kept safe.
+ */
+const ADMIN_ACCOUNT_KEEPS = ['/app/settings']
 /** Pages for signed-out people; someone signed in is sent on. */
 const SIGNED_OUT_ONLY = ['/sign-in', '/sign-up', '/forgot-password']
 /** Need a session, but a partial one is fine — they are how you complete it. */
@@ -176,6 +183,13 @@ export async function proxy(request: NextRequest) {
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
     if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
       return redirectTo('/verify', { next: `${pathname}${search}` })
+    }
+
+    // Only someone already in the admins table is sent on, so this tells a
+    // stranger nothing about /admin (D9). A failed check leaves the page be.
+    if (!matches(pathname, ADMIN_ACCOUNT_KEEPS)) {
+      const { data, error } = await supabase.rpc('admin_status')
+      if (!error && toAdminStatus(data) !== 'not_admin') return redirectTo('/admin')
     }
   }
 

@@ -18,14 +18,14 @@ import { type AdminUser, expect, SIGN_IN_PROJECTS, signInAsAdmin, test } from '.
 
 type TestUser = { id: string; email: string; password: string }
 
-const ADMIN_WORDS = ['Operations', 'Audit log', 'Records shown', 'Back to your account']
+const ADMIN_WORDS = ['Operations', 'Audit log', 'Records shown', 'Account settings']
 /** Admin chrome as it sits in the HTML: aria-labels, the title template, the sidebar. */
 const ADMIN_HTML = [
   'Admin panel',
   'Pages in the admin area',
   'admin — overview',
   ' · Admin</title>',
-  'Back to your account',
+  'Account settings',
   'Records shown',
 ]
 const TEST_ADMIN_BANNER =

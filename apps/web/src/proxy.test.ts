@@ -367,4 +367,27 @@ describe('the proxy elsewhere', () => {
     const half = await proxy(request('/app/domains'))
     expect(new URL(half.headers.get('location') ?? '').pathname).toBe('/verify')
   })
+
+  it('sends an admin account from the customer panel to /admin, but keeps its own settings', async () => {
+    auth.user = { id: 'u1' }
+    auth.status = { data: 'ok', error: null }
+    for (const path of ['/app/domains', '/app/checkout', '/app/orders/x']) {
+      const response = await proxy(request(path))
+      expect(new URL(response.headers.get('location') ?? '').pathname).toBe('/admin')
+    }
+    const settings = await proxy(request('/app/settings/security'))
+    expect(settings.headers.get('location')).toBeNull()
+
+    // An admin whose code has gone stale is still an admin account.
+    auth.status = { data: 'needs_code', error: null }
+    const stale = await proxy(request('/app/domains'))
+    expect(new URL(stale.headers.get('location') ?? '').pathname).toBe('/admin')
+  })
+
+  it('leaves a customer in the panel, and a failed admin check changes nothing', async () => {
+    auth.user = { id: 'u1' }
+    expect((await proxy(request('/app/domains'))).headers.get('location')).toBeNull()
+    auth.status = { data: null, error: { message: 'timeout' } }
+    expect((await proxy(request('/app/domains'))).headers.get('location')).toBeNull()
+  })
 })

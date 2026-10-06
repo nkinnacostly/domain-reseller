@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react'
+import { UserCog } from 'lucide-react'
 import Link from 'next/link'
 import { AccountMenu, MobileNav } from '@/components/layout/app-sidebar-client'
 import { BRAND_NAME, Brand } from '@/components/layout/brand'
@@ -99,15 +99,16 @@ function SidebarContent({
       )}
 
       <div className="space-y-2">
+        {/* An admin's account has no customer panel (proxy.ts): only its own settings. */}
         <Link
-          href="/app/domains"
+          href="/app/settings"
           className={cn(
             'flex h-11 items-center gap-2 rounded-xl border border-border bg-background/70 px-3 text-sm text-foreground transition hover:bg-brand-subtle active:scale-[0.99]',
             FOCUS,
           )}
         >
-          <ArrowLeft className="size-4 text-muted-foreground" aria-hidden="true" />
-          Back to your account
+          <UserCog className="size-4 text-muted-foreground" aria-hidden="true" />
+          Account settings
         </Link>
         <AccountMenu name={name} email={email} initials={initials(name, email)} />
       </div>
