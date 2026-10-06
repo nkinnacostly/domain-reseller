@@ -35,6 +35,13 @@ export const env = createEnv({
       .string()
       .regex(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/, 'Not an SNS topic ARN')
       .optional(),
+    /**
+     * MR6, §9: seals each webhook endpoint's signing secret (AES-256-GCM);
+     * the mail worker holds the same key to open it and sign. 32 random
+     * bytes, base64: `openssl rand -base64 32`. Changing it orphans every
+     * endpoint's secret (each must be rotated).
+     */
+    MAIL_WEBHOOK_SECRET_KEY: z.string().min(40).optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
     /**
      * Cloudflare Turnstile (§7.1, the shop's SEC-9), checked on our server
