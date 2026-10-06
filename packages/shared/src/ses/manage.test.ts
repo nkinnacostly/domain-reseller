@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { createSesManager, getSesAccount, MAIL_EVENT_TYPES } from './manage'
+import {
+  awsAccountOf,
+  createSesManager,
+  getSesAccount,
+  isSesAlreadyThere,
+  isSesNotFound,
+  MAIL_EVENT_DESTINATION,
+  MAIL_EVENT_TYPES,
+  reputationPolicyArn,
+  sesResourceArn,
+} from './manage'
 import { sesCall } from './request'
 import { canonicalRequest } from './sigv4'
 import { EXAMPLE_CREDENTIALS, recordingFetch } from './test-fetch'
@@ -171,6 +181,10 @@ describe('tenants and configuration sets (§4.1)', () => {
         TenantId: 'tn-1',
         TenantArn: TENANT_ARN,
         SendingStatus: 'ENABLED',
+        SuppressionAttributes: {
+          SuppressedReasons: ['BOUNCE', 'COMPLAINT'],
+          SuppressionScope: 'TENANT',
+        },
       },
     })
     expect(await ses.createTenant('mdm-0a1b2c3d4e')).toEqual({
@@ -178,6 +192,8 @@ describe('tenants and configuration sets (§4.1)', () => {
       tenantArn: TENANT_ARN,
       tenantId: 'tn-1',
       sendingStatus: 'ENABLED',
+      suppressionScope: 'TENANT',
+      suppressedReasons: ['BOUNCE', 'COMPLAINT'],
     })
     expect(shape(calls[0])).toEqual({
       method: 'POST',
@@ -400,5 +416,296 @@ describe('failures, as status and type only', () => {
 
   it('refuses settings it cannot sign with', () => {
     expect(() => createSesManager({ ...EXAMPLE_CREDENTIALS, region: 'nowhere' })).toThrow('region')
+  })
+})
+
+describe('the reads provisioning makes before each write (§4.1)', () => {
+  it('GetTenant: a POST to /tenants/get, read into its ARN and suppression', async () => {
+    const { ses, calls } = manager({
+      status: 200,
+      body: {
+        Tenant: {
+          TenantName: 'mdm-0a1b2c3d4e',
+          TenantId: 'tn-1',
+          TenantArn: TENANT_ARN,
+          SendingStatus: 'ENABLED',
+          SuppressionAttributes: { SuppressedReasons: ['BOUNCE'], SuppressionScope: 'ACCOUNT' },
+        },
+      },
+    })
+    expect(await ses.getTenant('mdm-0a1b2c3d4e')).toEqual({
+      ok: true,
+      tenantArn: TENANT_ARN,
+      tenantId: 'tn-1',
+      sendingStatus: 'ENABLED',
+      suppressionScope: 'ACCOUNT',
+      suppressedReasons: ['BOUNCE'],
+    })
+    expect(shape(calls[0])).toEqual({
+      method: 'POST',
+      url: `${BASE}/tenants/get`,
+      body: { TenantName: 'mdm-0a1b2c3d4e' },
+    })
+    expectSigned(calls[0], true)
+  })
+
+  it('GetTenant: a tenant SES does not have is a NotFoundException, never thrown', async () => {
+    const { ses } = manager({ status: 404, errorType: 'NotFoundException' })
+    const answer = await ses.getTenant('mdm-0a1b2c3d4e')
+    expect(isSesNotFound(answer)).toBe(true)
+    expect(isSesAlreadyThere(answer)).toBe(false)
+    expect(isSesNotFound({ ok: true })).toBe(false)
+  })
+
+  it('PutTenantSuppressionAttributes: the tenant’s own list, bounces and complaints', async () => {
+    const { ses, calls } = manager({ status: 200 })
+    expect(await ses.putTenantSuppressionAttributes('mdm-0a1b2c3d4e')).toEqual({ ok: true })
+    expect(shape(calls[0])).toEqual({
+      method: 'POST',
+      url: `${BASE}/tenant/suppression`,
+      body: {
+        TenantName: 'mdm-0a1b2c3d4e',
+        SuppressionScope: 'TENANT',
+        SuppressedReasons: ['BOUNCE', 'COMPLAINT'],
+      },
+    })
+    expectSigned(calls[0], true)
+  })
+
+  it('GetConfigurationSet: there, or not found', async () => {
+    const { ses, calls } = manager(
+      { status: 200, body: { ConfigurationSetName: 'mdm-0a1b2c3d4e' } },
+      { status: 404, errorType: 'NotFoundException' },
+    )
+    expect(await ses.getConfigurationSet('mdm-0a1b2c3d4e')).toEqual({ ok: true })
+    expect(isSesNotFound(await ses.getConfigurationSet('mdm-0a1b2c3d4e'))).toBe(true)
+    expect(shape(calls[0])).toEqual({
+      method: 'GET',
+      url: `${BASE}/configuration-sets/mdm-0a1b2c3d4e`,
+      body: undefined,
+    })
+  })
+
+  it('GetConfigurationSetEventDestinations: each destination’s name, events and topic', async () => {
+    const { ses, calls } = manager({
+      status: 200,
+      body: {
+        EventDestinations: [
+          {
+            Name: 'mail-ses-events',
+            Enabled: true,
+            MatchingEventTypes: ['SEND', 'BOUNCE', 7],
+            SnsDestination: { TopicArn: TOPIC },
+          },
+          { Name: 'other', Enabled: false },
+        ],
+      },
+    })
+    expect(await ses.getConfigurationSetEventDestinations('mdm-0a1b2c3d4e')).toEqual({
+      ok: true,
+      destinations: [
+        {
+          name: 'mail-ses-events',
+          enabled: true,
+          matchingEventTypes: ['SEND', 'BOUNCE'],
+          topicArn: TOPIC,
+        },
+        { name: 'other', enabled: false, matchingEventTypes: [], topicArn: null },
+      ],
+    })
+    expect(shape(calls[0])).toEqual({
+      method: 'GET',
+      url: `${BASE}/configuration-sets/mdm-0a1b2c3d4e/event-destinations`,
+      body: undefined,
+    })
+    const none = manager({ status: 200, body: {} })
+    expect(await none.ses.getConfigurationSetEventDestinations('mdm-0a1b2c3d4e')).toEqual({
+      ok: true,
+      destinations: [],
+    })
+    const failed = manager({ status: 404, errorType: 'NotFoundException' })
+    expect(
+      isSesNotFound(await failed.ses.getConfigurationSetEventDestinations('mdm-0a1b2c3d4e')),
+    ).toBe(true)
+  })
+
+  it('UpdateConfigurationSetEventDestination: back to the seven events on the topic', async () => {
+    const { ses, calls } = manager({ status: 200 })
+    expect(
+      await ses.updateConfigurationSetEventDestination(
+        'mdm-0a1b2c3d4e',
+        MAIL_EVENT_DESTINATION,
+        TOPIC,
+      ),
+    ).toEqual({ ok: true })
+    expect(shape(calls[0])).toEqual({
+      method: 'PUT',
+      url: `${BASE}/configuration-sets/mdm-0a1b2c3d4e/event-destinations/mail-ses-events`,
+      body: {
+        EventDestination: {
+          Enabled: true,
+          MatchingEventTypes: [...MAIL_EVENT_TYPES],
+          SnsDestination: { TopicArn: TOPIC },
+        },
+      },
+    })
+    expectSigned(calls[0], true)
+    await expect(
+      ses.updateConfigurationSetEventDestination('mdm-0a1b2c3d4e', 'x', 'arn:aws:sqs:x'),
+    ).rejects.toThrow('topic')
+  })
+
+  it('ListTenantResources: filtered by type, every page followed', async () => {
+    const { ses, calls } = manager(
+      {
+        status: 200,
+        body: {
+          TenantResources: [{ ResourceArn: SET_ARN, ResourceType: 'CONFIGURATION_SET' }, {}],
+          NextToken: 'page-2',
+        },
+      },
+      { status: 200, body: { TenantResources: [{ ResourceArn: TENANT_ARN }] } },
+    )
+    expect(await ses.listTenantResources('mdm-0a1b2c3d4e', 'CONFIGURATION_SET')).toEqual({
+      ok: true,
+      resources: [
+        { resourceArn: SET_ARN, resourceType: 'CONFIGURATION_SET' },
+        { resourceArn: TENANT_ARN, resourceType: null },
+      ],
+    })
+    expect(shape(calls[0])).toEqual({
+      method: 'POST',
+      url: `${BASE}/tenants/resources/list`,
+      body: {
+        TenantName: 'mdm-0a1b2c3d4e',
+        PageSize: 100,
+        Filter: { RESOURCE_TYPE: 'CONFIGURATION_SET' },
+      },
+    })
+    expect(shape(calls[1]).body).toEqual({
+      TenantName: 'mdm-0a1b2c3d4e',
+      PageSize: 100,
+      Filter: { RESOURCE_TYPE: 'CONFIGURATION_SET' },
+      NextToken: 'page-2',
+    })
+    expectSigned(calls[0], true)
+  })
+
+  it('ListTenantResources: no filter, an empty tenant, and a failure on a later page', async () => {
+    const empty = manager({ status: 200, body: {} })
+    expect(await empty.ses.listTenantResources('mdm-0a1b2c3d4e')).toEqual({
+      ok: true,
+      resources: [],
+    })
+    expect(shape(empty.calls[0]).body).toEqual({ TenantName: 'mdm-0a1b2c3d4e', PageSize: 100 })
+    const broken = manager(
+      { status: 200, body: { TenantResources: [], NextToken: 'next' } },
+      { status: 503 },
+    )
+    expect(await broken.ses.listTenantResources('mdm-0a1b2c3d4e')).toMatchObject({
+      ok: false,
+      retryable: true,
+    })
+  })
+
+  it('DeleteTenantResourceAssociation: a POST to /tenants/resources/delete', async () => {
+    const { ses, calls } = manager({ status: 200 })
+    const identity = 'arn:aws:ses:eu-west-2:085568227110:identity/acme.example'
+    expect(await ses.deleteTenantResourceAssociation('mdm-0a1b2c3d4e', identity)).toEqual({
+      ok: true,
+    })
+    expect(shape(calls[0])).toEqual({
+      method: 'POST',
+      url: `${BASE}/tenants/resources/delete`,
+      body: { TenantName: 'mdm-0a1b2c3d4e', ResourceArn: identity },
+    })
+    expectSigned(calls[0], true)
+    await expect(ses.deleteTenantResourceAssociation('mdm-0a1b2c3d4e', 'nope')).rejects.toThrow(
+      'ARN',
+    )
+  })
+
+  it('GetReputationEntity: the tenant’s policy and who paused it', async () => {
+    const { ses, calls } = manager({
+      status: 200,
+      body: {
+        ReputationEntity: {
+          ReputationEntityReference: TENANT_ARN,
+          ReputationEntityType: 'RESOURCE',
+          ReputationManagementPolicy: 'arn:aws:ses:eu-west-2:aws:reputation-policy/standard',
+          CustomerManagedStatus: { Status: 'ENABLED' },
+          AwsSesManagedStatus: { Status: 'ENABLED' },
+          SendingStatusAggregate: 'ENABLED',
+        },
+      },
+    })
+    expect(await ses.getReputationEntity(TENANT_ARN)).toEqual({
+      ok: true,
+      policy: 'arn:aws:ses:eu-west-2:aws:reputation-policy/standard',
+      customerManagedStatus: 'ENABLED',
+      awsManagedStatus: 'ENABLED',
+      sendingStatus: 'ENABLED',
+    })
+    expect(shape(calls[0])).toEqual({
+      method: 'GET',
+      url: `${BASE}/reputation/entities/RESOURCE/arn%3Aaws%3Ases%3Aeu-west-2%3A085568227110%3Atenant%2Fmdm-0a1b2c3d4e%2Ftn-1`,
+      body: undefined,
+    })
+    expectSigned(calls[0], false)
+    const failed = manager({ status: 404, errorType: 'NotFoundException' })
+    expect(isSesNotFound(await failed.ses.getReputationEntity(TENANT_ARN))).toBe(true)
+  })
+
+  it('every new read and write passes a failure through', async () => {
+    const { ses } = manager({ status: 400, errorType: 'BadRequestException' })
+    const failure = { ok: false, code: 'BadRequestException', retryable: false }
+    expect(await ses.getTenant('mdm-0a1b2c3d4e')).toMatchObject(failure)
+    expect(await ses.putTenantSuppressionAttributes('mdm-0a1b2c3d4e')).toMatchObject(failure)
+    expect(await ses.listTenantResources('mdm-0a1b2c3d4e')).toMatchObject(failure)
+    expect(await ses.deleteTenantResourceAssociation('mdm-0a1b2c3d4e', SET_ARN)).toMatchObject(
+      failure,
+    )
+    expect(await ses.createTenant('mdm-0a1b2c3d4e')).toMatchObject(failure)
+  })
+
+  it('refuses names that are not ours before signing anything', async () => {
+    const { ses, calls } = manager({ status: 200 })
+    await expect(ses.getTenant('bad name')).rejects.toThrow('tenant name')
+    await expect(ses.putTenantSuppressionAttributes('../x')).rejects.toThrow('tenant name')
+    await expect(ses.listTenantResources('')).rejects.toThrow('tenant name')
+    await expect(ses.deleteTenantResourceAssociation('a b', SET_ARN)).rejects.toThrow('tenant name')
+    await expect(ses.getConfigurationSet('a/b')).rejects.toThrow('configuration set')
+    await expect(ses.getConfigurationSetEventDestinations('a b')).rejects.toThrow(
+      'configuration set',
+    )
+    await expect(
+      ses.updateConfigurationSetEventDestination('a b', 'mail-ses-events', TOPIC),
+    ).rejects.toThrow('configuration set')
+    await expect(
+      ses.updateConfigurationSetEventDestination('mdm-0a1b2c3d4e', 'a b', TOPIC),
+    ).rejects.toThrow('destination name')
+    await expect(ses.getReputationEntity('tenant')).rejects.toThrow('ARN')
+    expect(calls).toHaveLength(0)
+  })
+})
+
+describe('ARNs SES does not give back', () => {
+  it('builds identity and configuration set ARNs, and reads an account from an ARN', () => {
+    expect(sesResourceArn('eu-west-2', '085568227110', 'identity', 'acme.example')).toBe(
+      'arn:aws:ses:eu-west-2:085568227110:identity/acme.example',
+    )
+    expect(sesResourceArn('eu-west-2', '085568227110', 'configuration-set', 'mdm-0a1b2c3d4e')).toBe(
+      SET_ARN,
+    )
+    expect(() => sesResourceArn('eu-west-2', '12', 'identity', 'acme.example')).toThrow('account')
+    expect(() => sesResourceArn('eu-west-2', '085568227110', 'identity', 'Not A Domain')).toThrow(
+      'identity name',
+    )
+    expect(awsAccountOf(TOPIC)).toBe('085568227110')
+    expect(awsAccountOf('arn:aws:ses:eu-west-2:aws:reputation-policy/strict')).toBeNull()
+    expect(awsAccountOf('nonsense')).toBeNull()
+    expect(reputationPolicyArn('eu-west-2', 'strict')).toBe(
+      'arn:aws:ses:eu-west-2:aws:reputation-policy/strict',
+    )
   })
 })
