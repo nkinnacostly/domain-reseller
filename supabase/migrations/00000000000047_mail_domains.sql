@@ -17,13 +17,15 @@
 --   before each write, so a half-done provisioning resumes, never repeats.
 --   After 30 days the policy moves from Strict to Standard.
 --
---   Domains (§5). `add_domain` claims a name for an account (ownership,
+--   Domains (§5). `add_domain` (a member) or `api_add_domain` (a full-access
+--   API key, for /api/v1/domains) claims a name for an account (ownership,
 --   squatting and reserved-name rules below); the app creates the SES
 --   identity, MAIL FROM, default configuration set and tenant association,
 --   recording each step. `claim_domain_work` hands out what is due: set-up
 --   left half-done, a pending identity to re-read every ten minutes, a claim
 --   72 hours old to fail (naming the missing record) and release, and a
---   removal to carry out. `remove_domain` is refused while emails wait.
+--   removal to carry out. Removal (`remove_domain`, `api_remove_domain`) is
+--   refused while emails wait.
 --
 --   Who owns a name. One claim per name across every account (SES keeps one
 --   identity per name per AWS account): a claim lasts from `add_domain` until
@@ -346,23 +348,64 @@ as $$
      and mail.address_of(p_from) = si.from_address
 $$;
 
--- ── 6. Domains, as the person (authenticated) ───────────────────────────────
+-- ── 6. Domains: the rules, then the person's door and the API's ─────────────
 
--- §5: claims a name for the account. Owners, admins and developers may.
--- Answers {ok, domainId, name} or {ok: false, code}: unauthorized, not_found,
--- forbidden, account_closed, validation, reserved, already_added (with its
--- domainId), in_use (verified on another account), in_use_pending (another
--- account's unverified claim, with `until`), releasing (a name being let go),
--- domain_limit (the plan's, with `max`).
-create function mail.add_domain(p_account_id uuid, p_name text)
+-- A domain as the dashboard's and the API's answers show it: its state, its
+-- DKIM tokens and MAIL FROM (the records are built from them in the app),
+-- and its moments in UTC to the microsecond.
+create function mail.domain_view(p_domain mail.domains)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'id', p_domain.id, 'name', p_domain.name, 'status', p_domain.status,
+    'dkimTokens', to_jsonb(p_domain.dkim_tokens), 'dkimStatus', p_domain.dkim_status,
+    'mailFromDomain', p_domain.mail_from_domain, 'mailFromStatus', p_domain.mail_from_status,
+    'failedReason', p_domain.failed_reason, 'missingRecord', p_domain.missing_record,
+    'settingUp', p_domain.status = 'pending'
+                 and (p_domain.identity_created_at is null or p_domain.mail_from_set_at is null
+                      or p_domain.config_set_at is null or p_domain.tenant_associated_at is null),
+    'createdAt', to_char(p_domain.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'claimedAt', to_char(p_domain.claimed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'deadline', case when p_domain.status = 'pending'
+                     then to_char((p_domain.claimed_at + interval '72 hours') at time zone 'UTC',
+                                  'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end,
+    'verifiedAt', to_char(p_domain.verified_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'lastCheckedAt', to_char(p_domain.last_checked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'))
+$$;
+
+-- The prefix of a live full-access key of this account, or null: the API's
+-- domain functions ask it before anything else (§6: managing the account
+-- takes a full-access key), and the security log names the key by it.
+create function mail.domain_api_key(p_account_id uuid, p_key_id uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select k.prefix from mail.api_keys k
+   where k.id = p_key_id and k.account_id = p_account_id and k.revoked_at is null and k.permission = 'full'
+$$;
+
+-- §5: claims a name for the account, once the caller has been let in — a
+-- member by role (add_domain) or a full-access key (api_add_domain). Answers
+-- {ok, domainId, name} or {ok: false, code}: account_closed, reserved,
+-- validation, already_added (with its domainId), in_use (verified on another
+-- account), in_use_pending (another account's unverified claim, with
+-- `until`), releasing (a name being let go), domain_limit (the plan's, with
+-- `max`). The account's own failed and released claim on the name starts
+-- again in place: a new 72-hour window, new DKIM keys.
+create function mail.claim_domain_name(p_account_id uuid, p_name text, p_actor text, p_user uuid,
+                                       p_key_id uuid, p_key_prefix text)
 returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_user    uuid := auth.uid();
-  v_role    text;
   v_account mail.accounts;
   v_name    text := lower(regexp_replace(btrim(coalesce(p_name, '')), '\.+$', ''));
   v_claim   mail.domains;
@@ -371,18 +414,11 @@ declare
   v_held    integer;
   v_id      uuid;
 begin
-  if v_user is null then
-    return jsonb_build_object('ok', false, 'code', 'unauthorized');
-  end if;
-  v_role := mail.caller_role(p_account_id);
-  if v_role is null then
-    return jsonb_build_object('ok', false, 'code', 'not_found');
-  end if;
-  if v_role not in ('owner', 'admin', 'developer') then
-    return jsonb_build_object('ok', false, 'code', 'forbidden');
-  end if;
   -- One add at a time per account, so two cannot both pass the plan's count.
   select * into v_account from mail.accounts where id = p_account_id for update;
+  if v_account.id is null then
+    return jsonb_build_object('ok', false, 'code', 'not_found');
+  end if;
   if v_account.state = 'closed' then
     return jsonb_build_object('ok', false, 'code', 'account_closed');
   end if;
@@ -418,7 +454,6 @@ begin
     return jsonb_build_object('ok', false, 'code', 'domain_limit', 'max', coalesce(v_max, 0));
   end if;
 
-  -- The account's own failed, released claim on this name starts again in place.
   select d.id into v_reuse from mail.domains d
    where d.account_id = p_account_id and d.name = v_name and d.kind = 'customer'
      and d.status = 'failed' and d.released_at is not null
@@ -426,7 +461,7 @@ begin
    limit 1;
   if v_reuse is not null then
     update mail.domains
-       set status = 'pending', claimed_at = now(), released_at = null, added_by = v_user,
+       set status = 'pending', claimed_at = now(), released_at = null, added_by = p_user,
            identity_arn = null, dkim_tokens = '{}', dkim_status = null, mail_from_status = null,
            identity_created_at = null, mail_from_set_at = null, config_set_at = null,
            tenant_associated_at = null, failed_reason = null, missing_record = null, verified_at = null,
@@ -436,121 +471,38 @@ begin
     v_id := v_reuse;
   else
     insert into mail.domains (account_id, name, status, claimed_at, added_by, mail_from_domain)
-    values (p_account_id, v_name, 'pending', now(), v_user, 'send.' || v_name)
+    values (p_account_id, v_name, 'pending', now(), p_user, 'send.' || v_name)
     returning id into v_id;
   end if;
 
   insert into mail.account_audit_log (account_id, actor, actor_user_id, action, target, detail)
-  values (p_account_id, 'user', v_user, 'domain.added', v_id::text, jsonb_build_object('name', v_name));
+  values (p_account_id, p_actor, p_user, case when v_reuse is null then 'domain.added' else 'domain.retried' end,
+          v_id::text, jsonb_build_object('name', v_name)
+          || case when p_key_id is null then '{}'::jsonb
+                  else jsonb_build_object('byKeyId', p_key_id, 'byKeyPrefix', p_key_prefix) end);
   return jsonb_build_object('ok', true, 'domainId', v_id, 'name', v_name);
 end;
 $$;
 
--- §5: a failed claim, tried again — the same row, a new 72-hour window, new
--- DKIM keys. Answers as add_domain, plus not_failed and releasing (its SES
--- identity is still being let go).
-create function mail.retry_domain(p_domain_id uuid)
+-- §5: removes a domain, once the caller has been let in — refused while any
+-- email from it waits to be sent (`emails_queued`, with the count). A claim
+-- whose SES identity is already gone is removed here; any other becomes
+-- `removing`, and the app takes the identity off the tenant and deletes it
+-- (`needsRelease`). The sandbox sender is not the account's to remove.
+create function mail.request_domain_removal(p_domain_id uuid, p_actor text, p_user uuid,
+                                            p_key_id uuid, p_key_prefix text)
 returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_user    uuid := auth.uid();
-  v_domain  mail.domains;
-  v_role    text;
-  v_account mail.accounts;
-  v_claim   mail.domains;
-  v_max     integer;
-  v_held    integer;
-begin
-  if v_user is null then
-    return jsonb_build_object('ok', false, 'code', 'unauthorized');
-  end if;
-  select * into v_domain from mail.domains where id = p_domain_id;
-  if v_domain.id is not null then
-    v_role := mail.caller_role(v_domain.account_id);
-  end if;
-  if v_role is null then
-    return jsonb_build_object('ok', false, 'code', 'not_found');
-  end if;
-  if v_role not in ('owner', 'admin', 'developer') or v_domain.kind <> 'customer' then
-    return jsonb_build_object('ok', false, 'code', 'forbidden');
-  end if;
-  select * into v_account from mail.accounts where id = v_domain.account_id for update;
-  if v_account.state = 'closed' then
-    return jsonb_build_object('ok', false, 'code', 'account_closed');
-  end if;
-  perform pg_advisory_xact_lock(hashtextextended('mail.domain:' || v_domain.name, 0));
-  select * into v_domain from mail.domains where id = p_domain_id for update;
-  if v_domain.status <> 'failed' then
-    return jsonb_build_object('ok', false, 'code', 'not_failed', 'status', v_domain.status);
-  end if;
-  if v_domain.released_at is null then
-    return jsonb_build_object('ok', false, 'code', 'releasing');
-  end if;
-  select * into v_claim from mail.domains d
-   where d.name = v_domain.name and d.kind = 'customer' and d.released_at is null;
-  if v_claim.id is not null then
-    if v_claim.status = 'verified' then
-      return jsonb_build_object('ok', false, 'code', 'in_use');
-    end if;
-    if v_claim.status = 'pending' then
-      return jsonb_build_object('ok', false, 'code', 'in_use_pending',
-                                'until', v_claim.claimed_at + interval '72 hours');
-    end if;
-    return jsonb_build_object('ok', false, 'code', 'releasing');
-  end if;
-  select p.max_domains into v_max from mail.plans p where p.code = v_account.plan_code;
-  select count(*) into v_held from mail.domains d
-   where d.account_id = v_domain.account_id and d.kind = 'customer' and d.released_at is null;
-  if v_held >= coalesce(v_max, 0) then
-    return jsonb_build_object('ok', false, 'code', 'domain_limit', 'max', coalesce(v_max, 0));
-  end if;
-
-  update mail.domains
-     set status = 'pending', claimed_at = now(), released_at = null, added_by = v_user,
-         identity_arn = null, dkim_tokens = '{}', dkim_status = null, mail_from_status = null,
-         identity_created_at = null, mail_from_set_at = null, config_set_at = null,
-         tenant_associated_at = null, failed_reason = null, missing_record = null, verified_at = null,
-         last_checked_at = null, attempts = 0, last_error = null, next_attempt_at = now(),
-         locked_by = null, locked_until = null, updated_at = now()
-   where id = p_domain_id;
-  insert into mail.account_audit_log (account_id, actor, actor_user_id, action, target, detail)
-  values (v_domain.account_id, 'user', v_user, 'domain.retried', p_domain_id::text,
-          jsonb_build_object('name', v_domain.name));
-  return jsonb_build_object('ok', true, 'domainId', p_domain_id, 'name', v_domain.name);
-end;
-$$;
-
--- §5: removes a domain — refused while any email from it waits to be sent
--- (`emails_queued`, with the count). A claim whose SES identity is already
--- gone is removed here; any other becomes `removing`, and the app takes the
--- identity off the tenant and deletes it (`needsRelease`).
-create function mail.remove_domain(p_domain_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_user   uuid := auth.uid();
   v_domain mail.domains;
-  v_role   text;
   v_queued integer;
 begin
-  if v_user is null then
-    return jsonb_build_object('ok', false, 'code', 'unauthorized');
-  end if;
   select * into v_domain from mail.domains where id = p_domain_id for update;
-  if v_domain.id is not null then
-    v_role := mail.caller_role(v_domain.account_id);
-  end if;
-  if v_role is null then
+  if v_domain.id is null then
     return jsonb_build_object('ok', false, 'code', 'not_found');
-  end if;
-  if v_role not in ('owner', 'admin', 'developer') then
-    return jsonb_build_object('ok', false, 'code', 'forbidden');
   end if;
   if v_domain.kind <> 'customer' then
     return jsonb_build_object('ok', false, 'code', 'forbidden', 'reason', 'sandbox');
@@ -570,19 +522,200 @@ begin
   if v_domain.released_at is not null then
     update mail.domains
        set status = 'removed', removed_at = now(), removal_requested_at = now(),
-           removal_requested_by = v_user, locked_by = null, locked_until = null, updated_at = now()
+           removal_requested_by = p_user, locked_by = null, locked_until = null, updated_at = now()
      where id = p_domain_id;
   else
     update mail.domains
-       set status = 'removing', removal_requested_at = now(), removal_requested_by = v_user,
+       set status = 'removing', removal_requested_at = now(), removal_requested_by = p_user,
            attempts = 0, last_error = null, next_attempt_at = now(), updated_at = now()
      where id = p_domain_id;
   end if;
   insert into mail.account_audit_log (account_id, actor, actor_user_id, action, target, detail)
-  values (v_domain.account_id, 'user', v_user, 'domain.removed', p_domain_id::text,
-          jsonb_build_object('name', v_domain.name));
+  values (v_domain.account_id, p_actor, p_user, 'domain.removed', p_domain_id::text,
+          jsonb_build_object('name', v_domain.name)
+          || case when p_key_id is null then '{}'::jsonb
+                  else jsonb_build_object('byKeyId', p_key_id, 'byKeyPrefix', p_key_prefix) end);
   return jsonb_build_object('ok', true, 'domainId', p_domain_id,
                             'needsRelease', v_domain.released_at is null);
+end;
+$$;
+
+-- ── 6a. As the person (authenticated): owners, admins and developers ────────
+
+-- §5: claims a name (claim_domain_name's answers, plus unauthorized,
+-- not_found and forbidden).
+create function mail.add_domain(p_account_id uuid, p_name text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_role text;
+begin
+  if v_user is null then
+    return jsonb_build_object('ok', false, 'code', 'unauthorized');
+  end if;
+  v_role := mail.caller_role(p_account_id);
+  if v_role is null then
+    return jsonb_build_object('ok', false, 'code', 'not_found');
+  end if;
+  if v_role not in ('owner', 'admin', 'developer') then
+    return jsonb_build_object('ok', false, 'code', 'forbidden');
+  end if;
+  return mail.claim_domain_name(p_account_id, p_name, 'user', v_user, null, null);
+end;
+$$;
+
+-- §5: a failed claim, tried again — the same row, a new 72-hour window, new
+-- DKIM keys. Answers as add_domain, plus not_failed and releasing (its SES
+-- identity is still being let go).
+create function mail.retry_domain(p_domain_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user   uuid := auth.uid();
+  v_domain mail.domains;
+  v_role   text;
+begin
+  if v_user is null then
+    return jsonb_build_object('ok', false, 'code', 'unauthorized');
+  end if;
+  select * into v_domain from mail.domains where id = p_domain_id;
+  if v_domain.id is not null then
+    v_role := mail.caller_role(v_domain.account_id);
+  end if;
+  if v_role is null then
+    return jsonb_build_object('ok', false, 'code', 'not_found');
+  end if;
+  if v_role not in ('owner', 'admin', 'developer') or v_domain.kind <> 'customer' then
+    return jsonb_build_object('ok', false, 'code', 'forbidden');
+  end if;
+  if v_domain.status <> 'failed' then
+    return jsonb_build_object('ok', false, 'code', 'not_failed', 'status', v_domain.status);
+  end if;
+  if v_domain.released_at is null then
+    return jsonb_build_object('ok', false, 'code', 'releasing');
+  end if;
+  return mail.claim_domain_name(v_domain.account_id, v_domain.name, 'user', v_user, null, null);
+end;
+$$;
+
+-- §5: removes a domain (request_domain_removal's answers, plus unauthorized,
+-- not_found and forbidden).
+create function mail.remove_domain(p_domain_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user   uuid := auth.uid();
+  v_domain mail.domains;
+  v_role   text;
+begin
+  if v_user is null then
+    return jsonb_build_object('ok', false, 'code', 'unauthorized');
+  end if;
+  select * into v_domain from mail.domains where id = p_domain_id;
+  if v_domain.id is not null then
+    v_role := mail.caller_role(v_domain.account_id);
+  end if;
+  if v_role is null then
+    return jsonb_build_object('ok', false, 'code', 'not_found');
+  end if;
+  if v_role not in ('owner', 'admin', 'developer') then
+    return jsonb_build_object('ok', false, 'code', 'forbidden');
+  end if;
+  return mail.request_domain_removal(p_domain_id, 'user', v_user, null, null);
+end;
+$$;
+
+-- ── 6b. Over the API (service_role): a full-access key, asked again here ────
+-- p_actor_key_id is the key the request came with (authenticate_key); SQL
+-- asks again that it is live, full-access and this account's (`forbidden`
+-- otherwise). Nothing done here has a user behind it: the security log says
+-- `api`, and which key. A sandbox row is no customer domain and is not
+-- listed. POST /domains/{id}/verify reads api_get_domain, then the app
+-- claims the domain's check like "Check now" (claim_domain_work).
+
+create function mail.api_list_domains(p_account_id uuid, p_actor_key_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if mail.domain_api_key(p_account_id, p_actor_key_id) is null then
+    return jsonb_build_object('ok', false, 'code', 'forbidden');
+  end if;
+  return jsonb_build_object('ok', true, 'domains', coalesce((
+    select jsonb_agg(mail.domain_view(d) order by d.created_at desc, d.id)
+      from mail.domains d
+     where d.account_id = p_account_id and d.kind = 'customer' and d.status <> 'removed'), '[]'::jsonb));
+end;
+$$;
+
+create function mail.api_get_domain(p_account_id uuid, p_actor_key_id uuid, p_domain_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_domain mail.domains;
+begin
+  if mail.domain_api_key(p_account_id, p_actor_key_id) is null then
+    return jsonb_build_object('ok', false, 'code', 'forbidden');
+  end if;
+  select * into v_domain from mail.domains d
+   where d.id = p_domain_id and d.account_id = p_account_id and d.kind = 'customer' and d.status <> 'removed';
+  if v_domain.id is null then
+    return jsonb_build_object('ok', false, 'code', 'not_found');
+  end if;
+  return jsonb_build_object('ok', true, 'domain', mail.domain_view(v_domain));
+end;
+$$;
+
+create function mail.api_add_domain(p_account_id uuid, p_actor_key_id uuid, p_name text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_prefix text := mail.domain_api_key(p_account_id, p_actor_key_id);
+begin
+  if v_prefix is null then
+    return jsonb_build_object('ok', false, 'code', 'forbidden');
+  end if;
+  return mail.claim_domain_name(p_account_id, p_name, 'api', null, p_actor_key_id, v_prefix);
+end;
+$$;
+
+create function mail.api_remove_domain(p_account_id uuid, p_actor_key_id uuid, p_domain_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_prefix text := mail.domain_api_key(p_account_id, p_actor_key_id);
+begin
+  if v_prefix is null then
+    return jsonb_build_object('ok', false, 'code', 'forbidden');
+  end if;
+  if not exists (select 1 from mail.domains d
+                  where d.id = p_domain_id and d.account_id = p_account_id and d.kind = 'customer') then
+    return jsonb_build_object('ok', false, 'code', 'not_found');
+  end if;
+  return mail.request_domain_removal(p_domain_id, 'api', null, p_actor_key_id, v_prefix);
 end;
 $$;
 
@@ -1274,9 +1407,19 @@ revoke all on function mail.kick_ses_jobs(uuid) from public, anon, authenticated
 revoke all on function mail.provisioning_on_account() from public, anon, authenticated, service_role;
 revoke all on function mail.sandbox_on_state() from public, anon, authenticated, service_role;
 revoke all on function mail.sandbox_domain_for(uuid, text) from public, anon, authenticated, service_role;
+revoke all on function mail.domain_view(mail.domains) from public, anon, authenticated, service_role;
+revoke all on function mail.domain_api_key(uuid, uuid) from public, anon, authenticated, service_role;
+revoke all on function mail.claim_domain_name(uuid, text, text, uuid, uuid, text)
+  from public, anon, authenticated, service_role;
+revoke all on function mail.request_domain_removal(uuid, text, uuid, uuid, text)
+  from public, anon, authenticated, service_role;
 revoke all on function mail.add_domain(uuid, text) from public, anon, authenticated, service_role;
 revoke all on function mail.retry_domain(uuid) from public, anon, authenticated, service_role;
 revoke all on function mail.remove_domain(uuid) from public, anon, authenticated, service_role;
+revoke all on function mail.api_list_domains(uuid, uuid) from public, anon, authenticated, service_role;
+revoke all on function mail.api_get_domain(uuid, uuid, uuid) from public, anon, authenticated, service_role;
+revoke all on function mail.api_add_domain(uuid, uuid, text) from public, anon, authenticated, service_role;
+revoke all on function mail.api_remove_domain(uuid, uuid, uuid) from public, anon, authenticated, service_role;
 revoke all on function mail.begin_ses_jobs(text) from public, anon, authenticated, service_role;
 revoke all on function mail.record_sandbox_identity(jsonb) from public, anon, authenticated, service_role;
 revoke all on function mail.claim_provisioning_work(text, integer, boolean, uuid)
@@ -1299,6 +1442,10 @@ revoke all on function mail.record_domain_error(uuid, text, text, integer)
 grant execute on function mail.add_domain(uuid, text) to authenticated;
 grant execute on function mail.retry_domain(uuid) to authenticated;
 grant execute on function mail.remove_domain(uuid) to authenticated;
+grant execute on function mail.api_list_domains(uuid, uuid) to service_role;
+grant execute on function mail.api_get_domain(uuid, uuid, uuid) to service_role;
+grant execute on function mail.api_add_domain(uuid, uuid, text) to service_role;
+grant execute on function mail.api_remove_domain(uuid, uuid, uuid) to service_role;
 grant execute on function mail.begin_ses_jobs(text) to service_role;
 grant execute on function mail.record_sandbox_identity(jsonb) to service_role;
 grant execute on function mail.claim_provisioning_work(text, integer, boolean, uuid) to service_role;

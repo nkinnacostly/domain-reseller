@@ -656,7 +656,10 @@ begin
     "record_provisioning_error":"service_role", "claim_domain_work":"service_role",
     "record_domain_step":"service_role", "record_domain_check":"service_role",
     "record_domain_failed":"service_role", "record_domain_released":"service_role",
-    "record_domain_error":"service_role"
+    "record_domain_error":"service_role",
+    "domain_view":"none", "domain_api_key":"none", "claim_domain_name":"none", "request_domain_removal":"none",
+    "api_list_domains":"service_role", "api_get_domain":"service_role", "api_add_domain":"service_role",
+    "api_remove_domain":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop

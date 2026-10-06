@@ -5,8 +5,9 @@
 -- prove it, reserved names, the plan's count), the set-up steps and checks
 -- under a lease, failing and releasing a claim, removal refused while emails
 -- wait, provisioning to `tenant_ready_at` and Strict → Standard after 30 days
--- (§4.1), the sandbox sender (§7.2), the job route's token, the two sides
--- (real SES never takes a test account), RLS, and every grant. People are
+-- (§4.1), the sandbox sender (§7.2), the API's domain functions (§6: a
+-- full-access key only), the job route's token, the two sides (real SES
+-- never takes a test account), RLS, and every grant. People are
 -- made up inside the transaction; nothing reaches AWS (pg_net's queue is
 -- rolled back with the rest).
 --
@@ -136,6 +137,12 @@ declare
   v_row      record;
   v_want     text;
   v_expected jsonb;
+  v_r        jsonb[] := '{}';
+  k_full     uuid;
+  k_send     uuid;
+  k_old      uuid;
+  k_real     uuid;
+  v_ids      uuid[];
   v_passed   integer := 0;
 begin
   n_one := 'one-' || v_tag || '.example';
@@ -692,74 +699,152 @@ begin
   end if;
   v_passed := v_passed + 1;
 
-  -- ── 11. The job route's token, its heartbeat, and the schedule.
+  -- ── 11. The API's domain functions (§6): a live full-access key of the account, asked again in SQL.
+  insert into mail.api_keys (account_id, name, prefix, key_hash, permission) values
+    (a_acc, 'm47 full', 'mdh_live_af01', encode(extensions.digest('m47-af-' || v_tag, 'sha256'), 'hex'), 'full')
+  returning id into k_full;
+  insert into mail.api_keys (account_id, name, prefix, key_hash, permission) values
+    (a_acc, 'm47 send', 'mdh_live_as01', encode(extensions.digest('m47-as-' || v_tag, 'sha256'), 'hex'), 'sending')
+  returning id into k_send;
+  insert into mail.api_keys (account_id, name, prefix, key_hash, permission, revoked_at) values
+    (a_acc, 'm47 old', 'mdh_live_ao01', encode(extensions.digest('m47-ao-' || v_tag, 'sha256'), 'hex'), 'full', now())
+  returning id into k_old;
+  insert into mail.api_keys (account_id, name, prefix, key_hash, permission) values
+    (r_acc, 'm47 real', 'mdh_live_rf01', encode(extensions.digest('m47-rf-' || v_tag, 'sha256'), 'hex'), 'full')
+  returning id into k_real;
+  perform pg_temp.md_as(u_owner);
+  begin
+    perform mail.api_add_domain(a_acc, k_full, 'api-' || v_tag || '.example');
+    raise exception 'FAILED 11: a signed-in person called the API''s add';
+  exception when insufficient_privilege then null;
+  end;
+  execute 'reset role';
+  execute 'set local role service_role';
+  v_r := v_r || mail.api_list_domains(a_acc, k_send);                                -- 1
+  v_r := v_r || mail.api_list_domains(a_acc, k_real);                                -- 2
+  v_r := v_r || mail.api_list_domains(a_acc, k_old);                                 -- 3
+  v_r := v_r || mail.api_list_domains(a_acc, k_full);                                -- 4
+  v_r := v_r || mail.api_list_domains(r_acc, k_real);                                -- 5
+  v_r := v_r || mail.api_get_domain(a_acc, k_full, d_real);                          -- 6
+  v_r := v_r || mail.api_get_domain(a_acc, k_full, d_one);                           -- 7
+  v_r := v_r || mail.api_add_domain(a_acc, k_send, 'api-' || v_tag || '.example');   -- 8
+  v_r := v_r || mail.api_add_domain(a_acc, k_full, 'Api-' || v_tag || '.Example');   -- 9
+  v_r := v_r || mail.api_add_domain(a_acc, k_full, 'x.mydomainshub.com');            -- 10
+  v_r := v_r || mail.api_remove_domain(a_acc, k_full, d_real);                       -- 11
+  v_r := v_r || mail.api_remove_domain(r_acc, k_real, d_sand);                       -- 12
+  v_r := v_r || mail.api_remove_domain(a_acc, k_full, (v_r[9] ->> 'domainId')::uuid); -- 13
+  v_r := v_r || mail.api_get_domain(a_acc, k_full, d_three);                         -- 14
+  execute 'reset role';
+  perform pg_temp.md_code(v_r[1], 'forbidden', 'FAILED 11: a sending key listed domains');
+  perform pg_temp.md_code(v_r[2], 'forbidden', 'FAILED 11: another account''s key listed domains');
+  perform pg_temp.md_code(v_r[3], 'forbidden', 'FAILED 11: a revoked key listed domains');
+  perform pg_temp.md_ok(v_r[4], 'FAILED 11: a full key lists domains');
+  select coalesce(array_agg((e ->> 'id')::uuid), '{}') into v_ids from jsonb_array_elements(v_r[4] -> 'domains') e;
+  if not (d_one = any (v_ids)) or d_two = any (v_ids) or d_three = any (v_ids) then
+    raise exception 'FAILED 11: the list is not the live domains (%)', v_r[4];
+  end if;
+  select coalesce(array_agg((e ->> 'id')::uuid), '{}') into v_ids from jsonb_array_elements(v_r[5] -> 'domains') e;
+  if not (d_real = any (v_ids)) or d_sand = any (v_ids) then
+    raise exception 'FAILED 11: the sandbox row was listed, or a domain left out (%)', v_r[5];
+  end if;
+  perform pg_temp.md_code(v_r[6], 'not_found', 'FAILED 11: another account''s domain was read');
+  perform pg_temp.md_ok(v_r[7], 'FAILED 11: reading a domain');
+  if (v_r[7] -> 'domain' ->> 'id')::uuid is distinct from d_one
+     or v_r[7] -> 'domain' ->> 'status' is distinct from 'pending'
+     or v_r[7] -> 'domain' ->> 'mailFromDomain' is distinct from 'send.' || n_one
+     or v_r[7] -> 'domain' ->> 'deadline' is null or jsonb_typeof(v_r[7] -> 'domain' -> 'dkimTokens') is distinct from 'array' then
+    raise exception 'FAILED 11: the domain''s view is wrong (%)', v_r[7];
+  end if;
+  perform pg_temp.md_code(v_r[8], 'forbidden', 'FAILED 11: a sending key added a domain');
+  perform pg_temp.md_ok(v_r[9], 'FAILED 11: a full key adds a domain');
+  if v_r[9] ->> 'name' is distinct from 'api-' || v_tag || '.example' then
+    raise exception 'FAILED 11: the API''s name was not lower-cased (%)', v_r[9];
+  end if;
+  perform pg_temp.md_code(v_r[10], 'reserved', 'FAILED 11: the API added a name of ours');
+  perform pg_temp.md_code(v_r[11], 'not_found', 'FAILED 11: the API removed another account''s domain');
+  -- The sandbox row is no domain of the API's: not listed, not found.
+  perform pg_temp.md_code(v_r[12], 'not_found', 'FAILED 11: the API found the sandbox sender');
+  perform pg_temp.md_ok(v_r[13], 'FAILED 11: a full key removes a domain');
+  if (v_r[13] ->> 'needsRelease')::boolean is not true then
+    raise exception 'FAILED 11: the API''s removal does not let the identity go';
+  end if;
+  perform pg_temp.md_code(v_r[14], 'not_found', 'FAILED 11: a removed domain was read');
+  if (select count(*) from mail.account_audit_log l
+       where l.account_id = a_acc and l.actor = 'api' and l.actor_user_id is null
+         and l.target = v_r[9] ->> 'domainId' and l.action in ('domain.added', 'domain.removed')
+         and l.detail ->> 'byKeyPrefix' = 'mdh_live_af01' and (l.detail ->> 'byKeyId')::uuid = k_full) is distinct from 2 then
+    raise exception 'FAILED 11: the API''s add and removal were not logged with the key';
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 12. The job route's token, its heartbeat, and the schedule.
   select s.decrypted_secret into v_token from vault.decrypted_secrets s where s.name = 'mail_jobs_token';
-  if coalesce(v_token, '') !~ '^[0-9a-f]{64}$' then raise exception 'FAILED 11: no job token in the Vault'; end if;
+  if coalesce(v_token, '') !~ '^[0-9a-f]{64}$' then raise exception 'FAILED 12: no job token in the Vault'; end if;
   execute 'set local role service_role';
   v_j := mail.begin_ses_jobs('not-the-token');
   execute 'reset role';
-  perform pg_temp.md_code(v_j, 'unauthorized', 'FAILED 11: a wrong token opened the route');
+  perform pg_temp.md_code(v_j, 'unauthorized', 'FAILED 12: a wrong token opened the route');
   execute 'set local role service_role';
   v_j := mail.begin_ses_jobs(null);
   execute 'reset role';
-  perform pg_temp.md_code(v_j, 'unauthorized', 'FAILED 11: no token opened the route');
+  perform pg_temp.md_code(v_j, 'unauthorized', 'FAILED 12: no token opened the route');
   execute 'set local role service_role';
   v_j := mail.begin_ses_jobs(v_token);
   execute 'reset role';
-  perform pg_temp.md_ok(v_j, 'FAILED 11: the token did not open the route');
+  perform pg_temp.md_ok(v_j, 'FAILED 12: the token did not open the route');
   if v_j -> 'sandbox' ->> 'fromAddress' is distinct from 'onboarding@sandbox.emails.mydomainshub.com'
      or (v_j -> 'sandbox' ->> 'due')::boolean then
-    raise exception 'FAILED 11: the sandbox sender''s state is wrong (%)', v_j;
+    raise exception 'FAILED 12: the sandbox sender''s state is wrong (%)', v_j;
   end if;
   if not exists (select 1 from public.service_heartbeats h where h.name = 'mail:ses-jobs' and h.beat_at = now()) then
-    raise exception 'FAILED 11: the run left no heartbeat';
+    raise exception 'FAILED 12: the run left no heartbeat';
   end if;
   if not exists (select 1 from cron.job j where j.jobname = 'mail-ses-jobs' and j.schedule = '*/5 * * * *'
                     and j.command = 'select mail.kick_ses_jobs()') then
-    raise exception 'FAILED 11: the five-minute schedule is missing';
+    raise exception 'FAILED 12: the five-minute schedule is missing';
   end if;
-  if mail.kick_ses_jobs() is null then raise exception 'FAILED 11: the route could not be asked'; end if;
+  if mail.kick_ses_jobs() is null then raise exception 'FAILED 12: the route could not be asked'; end if;
   perform vault.update_secret((select id from vault.secrets where name = 'mail_jobs_url'), 'http://localhost:3001/x');
-  if mail.kick_ses_jobs() is not null then raise exception 'FAILED 11: the route was asked over plain http'; end if;
+  if mail.kick_ses_jobs() is not null then raise exception 'FAILED 12: the route was asked over plain http'; end if;
   v_passed := v_passed + 1;
 
-  -- ── 12. RLS: members read their account's domains; the rest read nothing they should not.
+  -- ── 13. RLS: members read their account's domains; the rest read nothing they should not.
   perform pg_temp.md_as(u_view);
   select count(*) into v_n from mail.domains where account_id = a_acc;
-  if v_n < 3 then raise exception 'FAILED 12: a viewer reads % of the account''s domains', v_n; end if;
+  if v_n < 3 then raise exception 'FAILED 13: a viewer reads % of the account''s domains', v_n; end if;
   select status into v_text from mail.sandbox_identity;
-  if v_text is distinct from 'verified' then raise exception 'FAILED 12: a member cannot read the sandbox sender''s state'; end if;
+  if v_text is distinct from 'verified' then raise exception 'FAILED 13: a member cannot read the sandbox sender''s state'; end if;
   begin
     select identity_arn into v_text from mail.sandbox_identity;
-    raise exception 'FAILED 12: the sandbox sender''s ARN is readable';
+    raise exception 'FAILED 13: the sandbox sender''s ARN is readable';
   exception when insufficient_privilege then null;
   end;
   begin
     perform 1 from mail.tenant_provisioning;
-    raise exception 'FAILED 12: provisioning is readable by a person';
+    raise exception 'FAILED 13: provisioning is readable by a person';
   exception when insufficient_privilege then null;
   end;
   perform pg_temp.md_as(u_none);
   if exists (select 1 from mail.domains where account_id in (a_acc, r_acc)) then
-    raise exception 'FAILED 12: a stranger reads another account''s domains';
+    raise exception 'FAILED 13: a stranger reads another account''s domains';
   end if;
   perform pg_temp.md_as(null);
   begin
     perform 1 from mail.sandbox_identity;
-    raise exception 'FAILED 12: anon reads the sandbox sender';
+    raise exception 'FAILED 13: anon reads the sandbox sender';
   exception when insufficient_privilege then null;
   end;
   execute 'reset role';
   execute 'set local role service_role';
   begin
     perform 1 from mail.tenant_provisioning;
-    raise exception 'FAILED 12: the service key reads provisioning directly';
+    raise exception 'FAILED 13: the service key reads provisioning directly';
   exception when insufficient_privilege then null;
   end;
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 13. Migration 47's functions, each granted to exactly the role it names.
+  -- ── 14. Migration 47's functions, each granted to exactly the role it names.
   v_expected := '{
     "domain_name_ok":"none", "is_reserved_domain":"none", "clean_error":"none", "is_test_account":"none",
     "on_jobs_side":"none", "kick_ses_jobs":"none", "provisioning_on_account":"none", "sandbox_on_state":"none",
@@ -770,30 +855,33 @@ begin
     "record_provisioning_error":"service_role", "claim_domain_work":"service_role",
     "record_domain_step":"service_role", "record_domain_check":"service_role",
     "record_domain_failed":"service_role", "record_domain_released":"service_role",
-    "record_domain_error":"service_role"
+    "record_domain_error":"service_role",
+    "domain_view":"none", "domain_api_key":"none", "claim_domain_name":"none", "request_domain_removal":"none",
+    "api_list_domains":"service_role", "api_get_domain":"service_role", "api_add_domain":"service_role",
+    "api_remove_domain":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p
                 where p.pronamespace = 'mail'::regnamespace and v_expected ? p.proname loop
     v_want := v_expected ->> v_row.proname;
     if has_function_privilege('anon', v_row.oid, 'execute') then
-      raise exception 'FAILED 13: mail.% is anon-executable', v_row.proname;
+      raise exception 'FAILED 14: mail.% is anon-executable', v_row.proname;
     end if;
     if has_function_privilege('authenticated', v_row.oid, 'execute') is distinct from (v_want = 'authenticated')
        or has_function_privilege('service_role', v_row.oid, 'execute') is distinct from (v_want = 'service_role') then
-      raise exception 'FAILED 13: mail.% has the wrong grants', v_row.proname;
+      raise exception 'FAILED 14: mail.% has the wrong grants', v_row.proname;
     end if;
     v_n := v_n + 1;
   end loop;
   if v_n is distinct from (select count(*) from jsonb_object_keys(v_expected)) then
-    raise exception 'FAILED 13: % of % expected functions found', v_n, (select count(*) from jsonb_object_keys(v_expected));
+    raise exception 'FAILED 14: % of % expected functions found', v_n, (select count(*) from jsonb_object_keys(v_expected));
   end if;
   for v_row in select c.oid, c.relname from pg_class c
                 where c.oid in ('mail.tenant_provisioning'::regclass, 'mail.sandbox_identity'::regclass, 'mail.domains'::regclass) loop
     if has_table_privilege('anon', v_row.oid, 'select, insert, update, delete, truncate')
        or has_table_privilege('authenticated', v_row.oid, 'insert, update, delete, truncate')
        or has_table_privilege('service_role', v_row.oid, 'select, insert, update, delete, truncate') then
-      raise exception 'FAILED 13: mail.% is open to an API role', v_row.relname;
+      raise exception 'FAILED 14: mail.% is open to an API role', v_row.relname;
     end if;
   end loop;
   v_passed := v_passed + 1;
