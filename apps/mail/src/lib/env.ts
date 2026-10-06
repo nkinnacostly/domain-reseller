@@ -2,6 +2,19 @@ import { API_KEY_PEPPER_MIN_CHARS } from '@dr/shared/mail'
 import { createEnv } from '@t3-oss/env-nextjs'
 import { z } from 'zod'
 
+/** A URL on this machine only: the e2e mocks' address, never anyone else's (N12, for email). */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+export const loopbackUrl = z.url().refine((value) => {
+  try {
+    const url = new URL(value)
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') && LOOPBACK_HOSTS.has(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}, 'A test endpoint must be on this machine (localhost, 127.0.0.1 or [::1])')
+
 /**
  * Mail's validated environment (docs/MAIL-SPEC.md). Import this — never
  * `process.env` directly. Values come from the repo's root .env (symlinked
@@ -35,6 +48,16 @@ export const env = createEnv({
       .string()
       .regex(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/, 'Not an SNS topic ARN')
       .optional(),
+    /**
+     * TEST ONLY (MB2's e2e): a mock SES on this machine in place of
+     * email.<region>.amazonaws.com, and a mock DNS-over-HTTPS resolver for
+     * the domains page's live check. Loopback addresses only; production
+     * refuses both (`testEndpoints`). No e2e test ever calls real SES or DNS.
+     */
+    MAIL_SES_ENDPOINT: loopbackUrl.optional(),
+    MAIL_DOH_URL: loopbackUrl.optional(),
+    /** Set by Vercel on each deployment; `production` refuses the test endpoints. */
+    VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
     /**
      * Cloudflare Turnstile (§7.1, the shop's SEC-9), checked on our server
@@ -65,6 +88,29 @@ export function requireApiKeyPepper(): string {
   const pepper = env.MAIL_API_KEY_PEPPER
   if (!pepper) throw new Error('API keys are not configured: set MAIL_API_KEY_PEPPER.')
   return pepper
+}
+
+/**
+ * The e2e mocks' addresses, or null for the real services. Asked again here,
+ * whatever validation the build skipped: an address off this machine, or
+ * either one on a production deployment, is refused outright — a mock must
+ * never stand in for SES where real customers are.
+ */
+export function testEndpoints(
+  source: { MAIL_SES_ENDPOINT?: string; MAIL_DOH_URL?: string; VERCEL_ENV?: string } = env,
+): { ses: string | null; doh: string | null } {
+  const ses = source.MAIL_SES_ENDPOINT || null
+  const doh = source.MAIL_DOH_URL || null
+  if (!ses && !doh) return { ses: null, doh: null }
+  if (source.VERCEL_ENV === 'production') {
+    throw new Error('MAIL_SES_ENDPOINT and MAIL_DOH_URL are for tests: production refuses them.')
+  }
+  for (const value of [ses, doh]) {
+    if (value !== null && !loopbackUrl.safeParse(value).success) {
+      throw new Error('MAIL_SES_ENDPOINT and MAIL_DOH_URL must be on this machine.')
+    }
+  }
+  return { ses, doh }
 }
 
 /** §4.3: the manager key — identities, tenants, configuration sets, reputation; never a send. */
