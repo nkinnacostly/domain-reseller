@@ -78,7 +78,7 @@ async function Overview({ searchParams }: { searchParams: Params }) {
               />
               <UsageMeter label="Today" meter={meter(usage.today.queued, usage.caps.daily)} />
               {usage.month.queued === 0 ? (
-                <p className="rounded-2xl bg-muted px-4 py-3 text-pretty text-sm/6 text-muted-foreground">
+                <p className="rounded-2xl border border-dashed border-border px-4 py-3 text-pretty text-sm/6 text-muted-foreground">
                   Nothing sent yet this month. Once your app sends, each email counts here by its
                   recipients: an email to three people counts three.
                 </p>

@@ -35,10 +35,16 @@ async function fitsEveryWidth(page: Page) {
   if (original) await page.setViewportSize(original)
 }
 
-async function passesAxe(page: Page) {
-  const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .analyze()
+/** axe on the page, or on one part of it — an open dialog, whose backdrop dims the rest. */
+async function passesAxe(page: Page, only?: string) {
+  const builder = new AxeBuilder({ page }).withTags([
+    'wcag2a',
+    'wcag2aa',
+    'wcag21a',
+    'wcag21aa',
+    'wcag22aa',
+  ])
+  const results = await (only ? builder.include(only) : builder).analyze()
   expect(results.violations).toEqual([])
 }
 
@@ -237,7 +243,7 @@ test.describe('the account journey', () => {
     await page.reload()
     await expect(page.getByText('1 of 3 seats on the Starter plan taken')).toBeVisible()
     await invite.getByLabel('Their email').fill(invitee.email)
-    await invite.getByLabel('Role').selectOption('developer')
+    await invite.getByLabel('Role', { exact: true }).selectOption('developer')
     await invite.getByRole('button', { name: 'Make an invite link' }).click()
     await expect(page.getByText('We don’t email invites yet')).toBeVisible()
     inviteLink = await page.getByLabel('Invite link').inputValue()
@@ -292,7 +298,7 @@ test.describe('the account journey', () => {
     const row = page.locator(`[data-member="${invitee.email}"]`)
     await expect(row).toContainText('Bola Invitee')
     await expect(row).toContainText('Developer')
-    await row.getByLabel('Role').selectOption('viewer')
+    await row.getByLabel('Role', { exact: true }).selectOption('viewer')
     await row.getByRole('button', { name: 'Change role' }).click()
     await expect(row.getByText('Role changed.')).toBeVisible()
     await expect(row).toContainText('Viewer')
@@ -301,7 +307,7 @@ test.describe('the account journey', () => {
     await row.getByRole('button', { name: 'Remove' }).click()
     const dialog = page.getByRole('alertdialog', { name: 'Remove Bola Invitee?' })
     await expect(dialog).toBeVisible()
-    await passesAxe(page)
+    await passesAxe(page, '[role="alertdialog"]')
     await dialog.getByRole('button', { name: 'Remove from the account' }).click()
     await expect(row).toHaveCount(0)
 

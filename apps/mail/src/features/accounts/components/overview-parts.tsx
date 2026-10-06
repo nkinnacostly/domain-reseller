@@ -74,7 +74,7 @@ export function DayCounts({ counts }: { counts: UsageCounts }) {
   return (
     <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {COUNT_LABELS.map(([key, label]) => (
-        <div key={key} className="rounded-2xl bg-muted px-4 py-3">
+        <div key={key} className="rounded-2xl border border-border bg-background px-4 py-3">
           <dt className="text-xs text-muted-foreground">{label}</dt>
           <dd className="mt-1 text-xl font-semibold tabular-nums">{formatCount(counts[key])}</dd>
         </div>

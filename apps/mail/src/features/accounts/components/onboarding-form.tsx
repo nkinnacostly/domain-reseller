@@ -51,7 +51,7 @@ export function OnboardingForm() {
       <ProfileFields id={id} errors={errors} />
 
       <div>
-        <div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/50 p-4">
+        <div className="flex items-start gap-3 rounded-2xl border border-border bg-background p-4">
           <input
             id={`${id}-aup`}
             name="transactionalOnly"

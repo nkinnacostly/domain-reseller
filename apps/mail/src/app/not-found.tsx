@@ -1,25 +1,27 @@
 import Link from 'next/link'
-import { Container } from '@/components/layout/container'
-import { SiteFooter } from '@/components/layout/site-footer'
-import { SiteHeader } from '@/components/layout/site-header'
-import { Button } from '@/components/ui/button'
+import { MarketingFooter } from '@/features/marketing/components/marketing-footer'
+import { MarketingHeader } from '@/features/marketing/components/marketing-header'
+import { PageHero } from '@/features/marketing/components/page-hero'
 
+/** A path no page answers: the public frame, what happened, and the way home. */
 export default function NotFound() {
   return (
-    <div className="flex min-h-dvh flex-col">
-      <SiteHeader />
+    <div className="relative flex min-h-dvh flex-col">
+      <MarketingHeader />
       <main id="main" className="flex-1">
-        <Container className="py-16 sm:py-24">
-          <h1 className="text-3xl font-semibold tracking-tight">This page is not here</h1>
-          <p className="mt-3 max-w-xl text-muted-foreground">
-            The address may be mistyped, or the page may have moved.
-          </p>
-          <Button asChild className="mt-6 min-h-11">
-            <Link href="/">Go to the home page</Link>
-          </Button>
-        </Container>
+        <PageHero
+          title="This page is not here"
+          intro="The address may be mistyped, or the page may have moved."
+        >
+          <Link
+            href="/"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand-foreground px-6 text-sm font-medium text-brand transition-colors hover:bg-brand-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-foreground active:scale-[0.98]"
+          >
+            Go to the home page
+          </Link>
+        </PageHero>
       </main>
-      <SiteFooter />
+      <MarketingFooter />
     </div>
   )
 }
