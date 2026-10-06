@@ -419,8 +419,8 @@ $$;
 -- `idempotency_conflict` (the key was used for a different request in the
 -- last 24 hours). A request whose recipient is suppressed is kept as a
 -- `suppressed` email that reserves nothing and is never sent (§7.5).
-create function mail.enqueue_email(p_account_id uuid, p_api_key_id uuid, p_idempotency_key text,
-                                   p_request_hash text, p_email jsonb, p_payload jsonb)
+create function mail.enqueue_email(p_account_id uuid, p_api_key_id uuid, p_email jsonb, p_payload jsonb,
+                                   p_idempotency_key text default null, p_request_hash text default null)
 returns jsonb
 language plpgsql
 security definer
@@ -828,8 +828,9 @@ $$;
 -- permanent bounce and a complaint put the address on the account's list
 -- (p_suppress: lower-case addresses, never logged). A repeated event (same
 -- p_event_key) changes nothing.
-create function mail.record_send_event(p_message_id text, p_email_public_id uuid, p_event text,
-                                       p_event_key text, p_occurred_at timestamptz, p_detail jsonb,
+create function mail.record_send_event(p_event text, p_message_id text default null,
+                                       p_email_public_id uuid default null, p_event_key text default null,
+                                       p_occurred_at timestamptz default null, p_detail jsonb default '{}',
                                        p_recipients integer default 1, p_suppress text[] default '{}')
 returns boolean
 language plpgsql
@@ -1006,7 +1007,7 @@ revoke all on function mail.sanitise_detail(jsonb) from public, anon, authentica
 revoke all on function mail.effective_caps(mail.accounts) from public, anon, authenticated, service_role;
 revoke all on function mail.release_reservation(bigint) from public, anon, authenticated, service_role;
 revoke all on function mail.reserve_send(uuid, uuid, text, text[]) from public, anon, authenticated, service_role;
-revoke all on function mail.enqueue_email(uuid, uuid, text, text, jsonb, jsonb) from public, anon, authenticated, service_role;
+revoke all on function mail.enqueue_email(uuid, uuid, jsonb, jsonb, text, text) from public, anon, authenticated, service_role;
 revoke all on function mail.authenticate_key(text) from public, anon, authenticated, service_role;
 revoke all on function mail.get_email(uuid, uuid) from public, anon, authenticated, service_role;
 revoke all on function mail.settle_unsent(bigint, text, text) from public, anon, authenticated, service_role;
@@ -1014,17 +1015,17 @@ revoke all on function mail.send_gate(bigint) from public, anon, authenticated, 
 revoke all on function mail.claim_sends(text, integer, boolean) from public, anon, authenticated, service_role;
 revoke all on function mail.record_send_result(bigint, text, text, text, text, integer)
   from public, anon, authenticated, service_role;
-revoke all on function mail.record_send_event(text, uuid, text, text, timestamptz, jsonb, integer, text[])
+revoke all on function mail.record_send_event(text, text, uuid, text, timestamptz, jsonb, integer, text[])
   from public, anon, authenticated, service_role;
 revoke all on function mail.purge_payloads() from public, anon, authenticated, service_role;
 revoke all on function mail.purge_send_budget() from public, anon, authenticated, service_role;
 
 -- The API (apps/mail, secret key): the door and the queue.
 grant execute on function mail.authenticate_key(text) to service_role;
-grant execute on function mail.enqueue_email(uuid, uuid, text, text, jsonb, jsonb) to service_role;
+grant execute on function mail.enqueue_email(uuid, uuid, jsonb, jsonb, text, text) to service_role;
 grant execute on function mail.get_email(uuid, uuid) to service_role;
 -- The worker and the SNS endpoint (secret key).
 grant execute on function mail.claim_sends(text, integer, boolean) to service_role;
 grant execute on function mail.record_send_result(bigint, text, text, text, text, integer) to service_role;
-grant execute on function mail.record_send_event(text, uuid, text, text, timestamptz, jsonb, integer, text[])
+grant execute on function mail.record_send_event(text, text, uuid, text, timestamptz, jsonb, integer, text[])
   to service_role;

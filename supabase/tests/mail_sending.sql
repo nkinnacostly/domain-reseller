@@ -39,10 +39,11 @@ declare
   v_j jsonb;
 begin
   execute 'set local role service_role';
-  v_j := mail.enqueue_email(p_account, p_key, p_idem, p_hash,
+  v_j := mail.enqueue_email(p_account, p_key,
            jsonb_build_object('from', p_from, 'to', to_jsonb(p_to), 'subject', 'Hello from the m44 check',
                               'tags', '[{"name":"kind","value":"check"}]'::jsonb),
-           '{"html":"<p>Hi</p>","text":"Hi","headers":{"X-Check":"m44"},"attachments":[]}'::jsonb);
+           '{"html":"<p>Hi</p>","text":"Hi","headers":{"X-Check":"m44"},"attachments":[]}'::jsonb,
+           p_idem, p_hash);
   execute 'reset role';
   return v_j;
 end $f$;
@@ -77,7 +78,7 @@ declare
   v_b boolean;
 begin
   execute 'set local role service_role';
-  v_b := mail.record_send_event(p_msg, p_public, p_event, p_key, now(), p_detail, 1, p_suppress);
+  v_b := mail.record_send_event(p_event, p_msg, p_public, p_key, now(), p_detail, 1, p_suppress);
   execute 'reset role';
   return v_b;
 end $f$;
@@ -539,7 +540,7 @@ begin
     raise exception 'FAILED 11: a permanent bounce did not suppress';
   end if;
   begin
-    perform mail.record_send_event('x', null, 'open', 'k', now(), '{}', 1, '{}');
+    perform mail.record_send_event('open', 'x');
     raise exception 'FAILED 11: an open event';
   exception when invalid_parameter_value then null;
   end;
@@ -618,7 +619,7 @@ begin
   exception when insufficient_privilege then null;
   end;
   begin
-    perform mail.enqueue_email(a_acc, k_full, null, null, '{}', '{}');
+    perform mail.enqueue_email(a_acc, k_full, '{}', '{}');
     raise exception 'FAILED 15: a signed-in person queued an email directly';
   exception when insufficient_privilege then null;
   end;

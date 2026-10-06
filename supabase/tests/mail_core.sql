@@ -175,29 +175,29 @@ begin
   insert into mail.domains (account_id, name, status) values (v_acct, 'm43-' || v_tag || '.example', 'verified')
   returning id into v_dom;
   perform pg_temp.mc_as(u_view);
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'v', 'sending', null, 'mdh_live_aaaa', repeat('a', 64)),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'v', 'sending', 'mdh_live_aaaa', repeat('a', 64), null),
                           'forbidden', 'FAILED 7: a viewer made a key');
   perform pg_temp.mc_as(u_none);
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'n', 'sending', null, 'mdh_live_aaaa', repeat('a', 64)),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'n', 'sending', 'mdh_live_aaaa', repeat('a', 64), null),
                           'not_found', 'FAILED 7: a stranger made a key');
   perform pg_temp.mc_as(u_dev);
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'full', null, 'mdh_live_aaaa', repeat('a', 64)),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'full', 'mdh_live_aaaa', repeat('a', 64), null),
                           'forbidden', 'FAILED 7: a developer made a full key');
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'sending', null, 'mdh_live_aa', repeat('a', 64)),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'sending', 'mdh_live_aa', repeat('a', 64), null),
                           'validation', 'FAILED 7: a short prefix');
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'sending', null, 'mdh_live_aaaa', 'plain-secret'),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'sending', 'mdh_live_aaaa', 'plain-secret', null),
                           'validation', 'FAILED 7: a secret instead of a hash');
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'full', v_dom, 'mdh_live_aaaa', repeat('a', 64)),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'full', 'mdh_live_aaaa', repeat('a', 64), v_dom),
                           'forbidden', 'FAILED 7: a developer''s full key, limited to a domain');
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'sending', gen_random_uuid(), 'mdh_live_aaaa', repeat('a', 64)),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'd', 'sending', 'mdh_live_aaaa', repeat('a', 64), gen_random_uuid()),
                           'validation', 'FAILED 7: a key for a domain not the account''s');
-  v_j := mail.create_api_key(v_acct, 'Deploys', 'sending', v_dom, 'mdh_live_aaaa', repeat('a', 64));
+  v_j := mail.create_api_key(v_acct, 'Deploys', 'sending', 'mdh_live_aaaa', repeat('a', 64), v_dom);
   perform pg_temp.mc_ok(v_j, 'FAILED 7: a developer''s sending key');
   v_key := (v_j ->> 'keyId')::uuid;
   perform pg_temp.mc_as(u_admin);
-  perform pg_temp.mc_ok(mail.create_api_key(v_acct, 'Admin', 'full', null, 'mdh_live_bbbb', repeat('b', 64)),
+  perform pg_temp.mc_ok(mail.create_api_key(v_acct, 'Admin', 'full', 'mdh_live_bbbb', repeat('b', 64), null),
                         'FAILED 7: an admin''s full key');
-  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'Admin', 'full', v_dom, 'mdh_live_bbbb', repeat('c', 64)),
+  perform pg_temp.mc_code(mail.create_api_key(v_acct, 'Admin', 'full', 'mdh_live_bbbb', repeat('c', 64), v_dom),
                           'validation', 'FAILED 7: a full key limited to a domain');
   -- Read back as a developer: names and prefixes, never the hash.
   perform pg_temp.mc_as(u_dev);

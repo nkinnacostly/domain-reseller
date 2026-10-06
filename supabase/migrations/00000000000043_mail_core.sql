@@ -332,7 +332,7 @@ $$;
 -- The app makes the secret, shows it once, and sends only its prefix and
 -- hash. Owners and admins may make full-access keys; developers sending keys.
 create function mail.create_api_key(p_account_id uuid, p_name text, p_permission text,
-                                    p_domain_id uuid, p_prefix text, p_key_hash text)
+                                    p_prefix text, p_key_hash text, p_domain_id uuid default null)
 returns jsonb
 language plpgsql
 security definer
@@ -467,11 +467,11 @@ revoke all on function mail.settings_stay() from public, anon, authenticated, se
 revoke all on function mail.append_only() from public, anon, authenticated, service_role;
 revoke all on function mail.has_role(uuid, text[]) from public, anon, authenticated, service_role;
 revoke all on function mail.create_account(text, text, text, integer) from public, anon, authenticated, service_role;
-revoke all on function mail.create_api_key(uuid, text, text, uuid, text, text) from public, anon, authenticated, service_role;
+revoke all on function mail.create_api_key(uuid, text, text, text, text, uuid) from public, anon, authenticated, service_role;
 revoke all on function mail.revoke_api_key(uuid) from public, anon, authenticated, service_role;
 
 -- has_role runs inside the policies, as the reading role.
 grant execute on function mail.has_role(uuid, text[]) to authenticated;
 grant execute on function mail.create_account(text, text, text, integer) to authenticated;
-grant execute on function mail.create_api_key(uuid, text, text, uuid, text, text) to authenticated;
+grant execute on function mail.create_api_key(uuid, text, text, text, text, uuid) to authenticated;
 grant execute on function mail.revoke_api_key(uuid) to authenticated;
