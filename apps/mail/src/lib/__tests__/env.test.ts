@@ -11,9 +11,7 @@ afterEach(() => vi.unstubAllEnvs())
 
 describe('requireApiKeyPepper (MR7)', () => {
   it('gives the pepper, or refuses by name when it is missing', async () => {
-    expect((await freshEnv()).requireApiKeyPepper()).toBe(
-      'test-pepper-of-at-least-thirty-two-characters',
-    )
+    expect((await freshEnv()).requireApiKeyPepper()).toBe('test pepper, not a secret, 0123456789')
     vi.stubEnv('MAIL_API_KEY_PEPPER', '')
     expect((await freshEnv()).requireApiKeyPepper).toThrow('set MAIL_API_KEY_PEPPER')
   })

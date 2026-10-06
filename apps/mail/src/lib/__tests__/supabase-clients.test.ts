@@ -29,17 +29,13 @@ function recordReads() {
 describe('Mail’s Supabase clients', () => {
   it('the public client reads plans in schema mail with the publishable key', async () => {
     const seen = recordReads()
-    await createPublicClient()
-      .from('plans' as never)
-      .select('*')
+    await createPublicClient().from('plans').select('*')
     expect(seen).toEqual([{ profile: 'mail', apikey: 'test-publishable-key' }])
   })
 
   it('the service client reads schema mail with the secret key, and needs it', async () => {
     const seen = recordReads()
-    await createServiceClient()
-      .from('plans' as never)
-      .select('*')
+    await createServiceClient().from('plans').select('*')
     expect(seen).toEqual([{ profile: 'mail', apikey: 'sb_test' }])
     vi.stubEnv('SUPABASE_SECRET_KEY', '')
     vi.resetModules()
@@ -53,7 +49,7 @@ describe('Mail’s Supabase clients', () => {
     vi.mocked(cookies).mockResolvedValue({ getAll: () => [], set } as never)
     vi.mocked(headers).mockResolvedValue(new Headers({ 'user-agent': 'Mozilla/5.0' }) as never)
     const seen = recordReads()
-    await (await createClient()).from('plans' as never).select('*')
+    await (await createClient()).from('plans').select('*')
     expect(seen).toEqual([{ profile: 'mail', apikey: 'test-publishable-key' }])
   })
 })

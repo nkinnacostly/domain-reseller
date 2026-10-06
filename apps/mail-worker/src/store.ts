@@ -1,4 +1,4 @@
-import type { MailDatabase } from '@dr/db'
+import type { Database, Json } from '@dr/db'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
@@ -10,7 +10,10 @@ import { z } from 'zod'
  * the shop's `public.record_heartbeat`, where the admin's alerts read them.
  */
 
-export type MailClient = SupabaseClient<MailDatabase, 'mail'>
+export type MailClient = SupabaseClient<Database, 'mail'>
+
+/** What a heartbeat carries: counts and flags, never an address. */
+export type HeartbeatDetail = { [key: string]: Json }
 
 const attachment = z.object({
   filename: z.string().min(1),
@@ -57,7 +60,7 @@ export type MailStore = {
     paidOnly: boolean,
   ): Promise<(ClaimedEmail | UnreadableClaim)[]>
   record(emailId: number, worker: string, result: SendOutcome): Promise<boolean>
-  heartbeat(name: string, detail: Record<string, unknown>): Promise<void>
+  heartbeat(name: string, detail: HeartbeatDetail): Promise<void>
 }
 
 export class StoreError extends Error {
@@ -112,7 +115,7 @@ export function createMailStore(client: MailClient): MailStore {
     async heartbeat(name, detail) {
       const { error } = await client
         .schema('public')
-        .rpc('record_heartbeat', { p_name: name, p_test_mode: false, p_detail: detail as never })
+        .rpc('record_heartbeat', { p_name: name, p_test_mode: false, p_detail: detail })
       if (error) throw new StoreError('record_heartbeat', error.code ?? null)
     },
   }

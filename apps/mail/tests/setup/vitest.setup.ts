@@ -8,7 +8,7 @@ process.env.NEXT_PUBLIC_MAIL_URL ??= 'http://localhost:3001'
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://127.0.0.1:54321'
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'test-publishable-key'
 process.env.SUPABASE_SECRET_KEY = 'sb_test'
-process.env.MAIL_API_KEY_PEPPER = 'test-pepper-of-at-least-thirty-two-characters'
+process.env.MAIL_API_KEY_PEPPER = 'test pepper, not a secret, 0123456789'
 process.env.LOG_LEVEL = 'silent'
 process.env.SKIP_ENV_VALIDATION = 'true'
 

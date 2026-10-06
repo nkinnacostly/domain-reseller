@@ -41,7 +41,7 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_MAIL_URL: baseURL,
       // A test pepper: e2e keys are made and hashed with it, never production's.
-      MAIL_API_KEY_PEPPER: 'e2e-pepper-not-a-secret-0123456789abcdef',
+      MAIL_API_KEY_PEPPER: 'e2e pepper, not a secret, 0123456789',
       // No SES key of any kind in the e2e server: nothing here may send.
       MAIL_SES_MANAGER_ACCESS_KEY_ID: '',
       MAIL_SES_MANAGER_SECRET_ACCESS_KEY: '',

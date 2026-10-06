@@ -12,7 +12,7 @@ import { mockRpc } from '../../../../tests/mocks/supabase'
  */
 
 const KEY = `mdh_live_${'A1b2C3d4'.repeat(5)}`
-const PEPPER = 'test-pepper-of-at-least-thirty-two-characters'
+const PEPPER = 'test pepper, not a secret, 0123456789'
 const ACCOUNT = '0b6c2a3e-6a1f-4c51-9d8e-1f2a3b4c5d6e'
 const KEY_ID = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
 const EMAIL_ID = '6f1d3a52-2a0e-4f0b-9d55-0c1f2a3b4c5d'

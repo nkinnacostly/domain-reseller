@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { MailDatabase } from '@dr/db'
+import type { Database } from '@dr/db'
 import { createClient } from '@supabase/supabase-js'
 import { env } from '@/lib/env'
 
@@ -17,7 +17,7 @@ export function createServiceClient() {
   const secretKey = env.SUPABASE_SECRET_KEY
   if (!secretKey) throw new Error('SUPABASE_SECRET_KEY is not set')
 
-  return createClient<MailDatabase, 'mail'>(env.NEXT_PUBLIC_SUPABASE_URL, secretKey, {
+  return createClient<Database, 'mail'>(env.NEXT_PUBLIC_SUPABASE_URL, secretKey, {
     db: { schema: 'mail' },
     auth: { autoRefreshToken: false, persistSession: false },
   })

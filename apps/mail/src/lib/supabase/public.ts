@@ -1,4 +1,4 @@
-import type { MailDatabase } from '@dr/db'
+import type { Database } from '@dr/db'
 import { createClient } from '@supabase/supabase-js'
 import { env } from '@/lib/env'
 
@@ -9,7 +9,7 @@ import { env } from '@/lib/env'
  * RLS applies: anon reads `mail.plans` and nothing else.
  */
 export function createPublicClient() {
-  return createClient<MailDatabase, 'mail'>(
+  return createClient<Database, 'mail'>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     { db: { schema: 'mail' }, auth: { autoRefreshToken: false, persistSession: false } },

@@ -2,7 +2,13 @@ import { createTenantSender, type Fetch, type FetchInit } from '@dr/shared/ses'
 import { describe, expect, it, vi } from 'vitest'
 import { createPacer } from './pacing'
 import { createSender, HEARTBEAT_NAME, type SenderOptions, THROTTLE_RETRY_SECONDS } from './sender'
-import type { ClaimedEmail, MailStore, SendOutcome, UnreadableClaim } from './store'
+import type {
+  ClaimedEmail,
+  HeartbeatDetail,
+  MailStore,
+  SendOutcome,
+  UnreadableClaim,
+} from './store'
 
 /**
  * The send loop against a mock SES at the network boundary (no test ever
@@ -55,7 +61,7 @@ function mockSes(...answers: Answer[]) {
   const ses = createTenantSender({
     region: 'eu-west-2',
     accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY',
+    secretAccessKey: 'test secret, not a real key',
     fetch,
     now: () => new Date('2026-10-06T09:30:00Z'),
   })
@@ -65,7 +71,7 @@ function mockSes(...answers: Answer[]) {
 function fakeStore(claims: (ClaimedEmail | UnreadableClaim)[][] = [], recordAnswer = true) {
   const queue = [...claims]
   const recorded: { id: number; worker: string; result: SendOutcome }[] = []
-  const beats: { name: string; detail: Record<string, unknown> }[] = []
+  const beats: { name: string; detail: HeartbeatDetail }[] = []
   const store = {
     claim: vi.fn(
       async (_worker: string, _limit: number, _paidOnly: boolean) => queue.shift() ?? [],
@@ -74,7 +80,7 @@ function fakeStore(claims: (ClaimedEmail | UnreadableClaim)[][] = [], recordAnsw
       recorded.push({ id, worker, result })
       return recordAnswer
     }),
-    heartbeat: vi.fn(async (name: string, detail: Record<string, unknown>) => {
+    heartbeat: vi.fn(async (name: string, detail: HeartbeatDetail) => {
       beats.push({ name, detail })
     }),
   } satisfies MailStore

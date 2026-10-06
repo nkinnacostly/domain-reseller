@@ -1,4 +1,4 @@
-import type { MailDatabase } from '@dr/db'
+import type { Database } from '@dr/db'
 import { createTenantSender, getSesAccount } from '@dr/shared/ses'
 import { createClient } from '@supabase/supabase-js'
 import { parseEnv } from './env'
@@ -17,14 +17,10 @@ import { createMailStore } from './store'
 const env = parseEnv(process.env)
 const log = createLogger(env.LOG_LEVEL)
 
-const db = createClient<MailDatabase, 'mail'>(
-  env.NEXT_PUBLIC_SUPABASE_URL,
-  env.SUPABASE_SECRET_KEY,
-  {
-    db: { schema: 'mail' },
-    auth: { autoRefreshToken: false, persistSession: false },
-  },
-)
+const db = createClient<Database, 'mail'>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+  db: { schema: 'mail' },
+  auth: { autoRefreshToken: false, persistSession: false },
+})
 const store = createMailStore(db)
 const credentials = {
   region: env.MAIL_SES_REGION,

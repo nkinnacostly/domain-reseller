@@ -33,7 +33,7 @@ describe('the worker’s environment', () => {
     NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
     SUPABASE_SECRET_KEY: 'sb_test',
     MAIL_SES_SENDER_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
-    MAIL_SES_SENDER_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY',
+    MAIL_SES_SENDER_SECRET_ACCESS_KEY: 'test secret, not a real key',
   }
 
   it('paces at 10 a second in eu-west-2 unless told otherwise (MR8)', () => {
@@ -46,7 +46,8 @@ describe('the worker’s environment', () => {
   })
 
   it('will not start without the sending key, or with a rate that is not a rate', () => {
-    expect(() => parseEnv({ ...base, MAIL_SES_SENDER_SECRET_ACCESS_KEY: undefined })).toThrow()
+    const { MAIL_SES_SENDER_ACCESS_KEY_ID: _id, ...withoutKey } = base
+    expect(() => parseEnv(withoutKey)).toThrow()
     expect(() => parseEnv({ ...base, MAIL_MAX_SEND_RATE: '0' })).toThrow()
     expect(() => parseEnv({ ...base, MAIL_SES_REGION: 'evil.example' })).toThrow()
   })

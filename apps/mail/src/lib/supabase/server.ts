@@ -1,4 +1,4 @@
-import type { MailDatabase } from '@dr/db'
+import type { Database } from '@dr/db'
 import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
 import { env } from '@/lib/env'
@@ -16,7 +16,7 @@ import { forwardedAuthHeaders } from './forwarded'
 export async function createClient() {
   const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()])
 
-  return createServerClient<MailDatabase, 'mail'>(
+  return createServerClient<Database, 'mail'>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {

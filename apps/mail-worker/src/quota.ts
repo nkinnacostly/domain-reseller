@@ -1,4 +1,5 @@
 import type { SesQuota, SesResult } from '@dr/shared/ses'
+import type { HeartbeatDetail } from './store'
 
 /**
  * The SES account's 24-hour quota, read every few minutes (MAIL-SPEC §4.4):
@@ -17,7 +18,7 @@ export type QuotaOptions = {
   holdFreeAt: number
   everyMs: number
   log: Log
-  heartbeat: (detail: Record<string, unknown>) => Promise<void>
+  heartbeat: (detail: HeartbeatDetail) => Promise<void>
 }
 
 export const QUOTA_HEARTBEAT = 'mail-worker:quota'
