@@ -17,8 +17,17 @@ export const STATE_LABEL: Record<AccountState, { label: string; tone: Tone }> = 
 export const isAccountState = (value: unknown): value is AccountState =>
   typeof value === 'string' && value in STATE_LABEL
 
-/** §8: a failed renewal gives seven days past due. Billing arrives with its own package. */
-export type BillingStanding = { status: 'past_due'; until: Date } | null
+/**
+ * §8: a renewal that failed or never came gives days past due before the
+ * Free plan (`renewal_failed`); so does a downgrade to a paid plan waiting
+ * for its first payment (`payment_needed`). Read from billing (migration 50).
+ */
+export type BillingStanding = {
+  status: 'past_due'
+  until: Date
+  reason?: 'renewal_failed' | 'payment_needed'
+  planName?: string
+} | null
 
 export type AccountBanner = {
   kind: 'sandbox' | 'paused' | 'past_due' | 'closed'
@@ -61,12 +70,21 @@ export function accountBanner(
     }
   }
   if (billing?.status === 'past_due') {
-    return {
-      kind: 'past_due',
-      tone: 'warning',
-      title: 'Your last payment failed',
-      body: `Sending continues until ${dayFormat.format(billing.until)}. After that the account drops to the Free plan’s caps until a payment goes through.`,
-    }
+    const until = dayFormat.format(billing.until)
+    const plan = billing.planName ? `the ${billing.planName} plan` : 'your plan'
+    return billing.reason === 'payment_needed'
+      ? {
+          kind: 'past_due',
+          tone: 'warning',
+          title: `${billing.planName ?? 'Your new plan'} needs its first payment`,
+          body: `A change of plan needs a new card payment. Sending continues on ${plan}’s caps until ${until}. Pay on the Billing page before then, or the account moves to the Free plan.`,
+        }
+      : {
+          kind: 'past_due',
+          tone: 'warning',
+          title: 'Your renewal payment has not come through',
+          body: `Sending continues until ${until}. Pay on the Billing page before then to keep ${plan}; after that the account moves to the Free plan’s caps.`,
+        }
   }
   if (account.state === 'sandbox') {
     const cap = sandboxDailyCap === null ? 'a small daily cap' : `${sandboxDailyCap} a day`

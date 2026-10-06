@@ -44,6 +44,14 @@ export function StateBanner({ banner }: { banner: AccountBanner | null }) {
               See the next steps
             </Link>
           ) : null}
+          {banner.kind === 'past_due' ? (
+            <Link
+              href="/dashboard/billing"
+              className="rounded-sm font-medium underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              Go to Billing
+            </Link>
+          ) : null}
         </p>
       </div>
     </section>
