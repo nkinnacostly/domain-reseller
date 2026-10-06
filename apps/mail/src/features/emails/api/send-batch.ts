@@ -49,6 +49,10 @@ export async function sendBatch(
   }
 
   const emails = parsed.data.map(toEnqueueInput)
+  // TODO(MB6 merge): MAIL-SPEC §7.6's content check — one line here, calling
+  // `features/safety`'s check on each of `emails` and answering the first
+  // refusal as `emails[n]: …` before enqueue_batch. That module is not on
+  // master yet (6 Oct 2026).
   const idempotencyKey = idempotency.value
   const answer = await deps.store.enqueueBatch({
     accountId: key.accountId,

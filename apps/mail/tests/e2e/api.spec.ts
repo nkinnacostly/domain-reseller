@@ -176,15 +176,17 @@ test.describe('the v1 API, from a key to the log', () => {
     await expect(
       page.getByRole('heading', { name: `Your receipt ${stamp}`, level: 1 }),
     ).toBeVisible()
-    const timeline = page.getByRole('region', { name: 'What happened' })
+    const timeline = page.getByRole('region', { name: 'What happened', exact: true })
     for (const step of ['Queued', 'Sent', 'Delivered']) {
       await expect(timeline.locator(`[data-event="${step}"]`)).toBeVisible()
     }
-    await expect(page.getByRole('region', { name: 'Headers' })).toContainText(
+    await expect(page.getByRole('region', { name: 'Headers', exact: true })).toContainText(
       `From:E2E <hello@${account.domain}>`,
     )
     await expect(page.getByText(/Kept until .*, then deleted within the hour\./)).toBeVisible()
-    await expect(page.getByRole('region', { name: 'The text body' })).toContainText(stamp)
+    await expect(page.getByRole('region', { name: 'The text body', exact: true })).toContainText(
+      stamp,
+    )
     await checkPage(page)
   })
 
@@ -219,7 +221,9 @@ test.describe('the v1 API, from a key to the log', () => {
     await row.getByRole('link').click()
     await expect(page.getByText('Its body was deleted when it was canceled.')).toBeVisible()
     await expect(
-      page.getByRole('region', { name: 'What happened' }).locator('[data-event="Canceled"]'),
+      page
+        .getByRole('region', { name: 'What happened', exact: true })
+        .locator('[data-event="Canceled"]'),
     ).toBeVisible()
     await checkPage(page)
   })

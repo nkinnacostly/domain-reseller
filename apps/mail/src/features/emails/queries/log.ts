@@ -1,6 +1,5 @@
 import 'server-only'
 
-import type { Json } from '@dr/db'
 import {
   type Cursor,
   EMAIL_STATUSES,
@@ -38,19 +37,13 @@ const page = z.object({
 
 export type LogPage = { emails: EmailRow[]; next: Cursor | null }
 
-type Untyped = (
-  fn: string,
-  args: Record<string, unknown>,
-) => PromiseLike<{ data: Json | null; error: { code?: string } | null }>
-
 export async function getEmailLog(
   accountId: string,
   filters: EmailFilters,
   cursor: Cursor | null,
 ): Promise<LogPage | null> {
   const supabase = await createClient()
-  // Migration 48's function, until the generated types know it.
-  const { data, error } = await (supabase.rpc as unknown as Untyped)('account_emails', {
+  const { data, error } = await supabase.rpc('account_emails', {
     p_account_id: accountId,
     p_filters: toSqlFilters(filters),
     p_limit: LOG_PAGE,

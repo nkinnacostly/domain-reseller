@@ -96,7 +96,7 @@ export default function ApiKeysPage() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">API keys</h1>
         <p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
           Your app sends with a key, as{' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
             Authorization: Bearer mdh_live_…
           </code>
           . A key is shown once, when it is made; we keep only a hash of it.

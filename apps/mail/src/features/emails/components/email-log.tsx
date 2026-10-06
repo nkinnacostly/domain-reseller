@@ -30,7 +30,7 @@ export function EmailLog({ emails }: { emails: EmailRow[] }) {
           <li key={email.id} data-email={email.id}>
             <Link
               href={`/dashboard/emails/${email.id}`}
-              className="group flex items-center gap-3 px-5 py-4 transition-colors first:rounded-t-3xl last:rounded-b-3xl hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted"
+              className="group flex items-center gap-3 px-5 py-4 transition-colors first:rounded-t-3xl last:rounded-b-3xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted"
             >
               <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">

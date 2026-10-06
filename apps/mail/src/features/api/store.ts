@@ -1,6 +1,5 @@
 import 'server-only'
 
-import type { Json } from '@dr/db'
 import {
   API_KEY_PERMISSIONS,
   type Cursor,
@@ -136,62 +135,55 @@ function parseAnswer<T>(operation: string, accepted: z.ZodType<T>, data: unknown
   throw new StoreError(operation, 'unexpected_answer')
 }
 
-/**
- * Migration 48's functions, called before the generated types know them.
- * After applying 48 and regenerating (`--schema public,mail`), these become
- * plain `client.rpc` calls.
- */
-type Untyped = (
-  fn: string,
-  args: Record<string, unknown>,
-) => PromiseLike<{ data: Json | null; error: { code?: string } | null }>
+/** What every RPC answers: the function's JSON, or PostgREST's error. */
+type Answered = { data: unknown; error: { code?: string } | null }
+
+function answered<T>(operation: string, accepted: z.ZodType<T>, { data, error }: Answered) {
+  if (error) throw new StoreError(operation, error.code ?? null)
+  return parseAnswer(operation, accepted, data)
+}
 
 export function createApiStore(client: MailServiceClient): ApiStore {
-  const call48 = (fn: string, args: Record<string, unknown>) =>
-    (client.rpc as unknown as Untyped)(fn, args)
-
-  async function run<T>(fn: string, args: Record<string, unknown>, accepted: z.ZodType<T>) {
-    const { data, error } = await call48(fn, args)
-    if (error) throw new StoreError(fn, error.code ?? null)
-    return parseAnswer(fn, accepted, data)
-  }
-
   return {
     async authenticateKey(keyHash) {
-      const { data, error } = await client.rpc('authenticate_key', { p_key_hash: keyHash })
-      if (error) throw new StoreError('authenticate_key', error.code ?? null)
-      const answer = parseAnswer('authenticate_key', keyAccepted, data)
+      const answer = answered(
+        'authenticate_key',
+        keyAccepted,
+        await client.rpc('authenticate_key', { p_key_hash: keyHash }),
+      )
       if (!answer.ok) return answer
       const { ok: _ok, ...key } = answer
       return { ok: true, key }
     },
 
     async enqueueEmail({ accountId, keyId, email, idempotencyKey, requestHash }) {
-      const { data, error } = await client.rpc('enqueue_email', {
-        p_account_id: accountId,
-        p_api_key_id: keyId,
-        p_email: email.email,
-        p_payload: email.payload,
-        ...(idempotencyKey && requestHash
-          ? { p_idempotency_key: idempotencyKey, p_request_hash: requestHash }
-          : {}),
-      })
-      if (error) throw new StoreError('enqueue_email', error.code ?? null)
-      return parseAnswer('enqueue_email', queued, data)
+      return answered(
+        'enqueue_email',
+        queued,
+        await client.rpc('enqueue_email', {
+          p_account_id: accountId,
+          p_api_key_id: keyId,
+          p_email: email.email,
+          p_payload: email.payload,
+          ...(idempotencyKey && requestHash
+            ? { p_idempotency_key: idempotencyKey, p_request_hash: requestHash }
+            : {}),
+        }),
+      )
     },
 
-    enqueueBatch({ accountId, keyId, emails, idempotencyKey, requestHash }) {
-      return run(
+    async enqueueBatch({ accountId, keyId, emails, idempotencyKey, requestHash }) {
+      return answered(
         'enqueue_batch',
-        {
+        batchQueued,
+        await client.rpc('enqueue_batch', {
           p_account_id: accountId,
           p_api_key_id: keyId,
           p_emails: emails.map(({ email, payload }) => ({ email, payload })),
           ...(idempotencyKey && requestHash
             ? { p_idempotency_key: idempotencyKey, p_request_hash: requestHash }
             : {}),
-        },
-        batchQueued,
+        }),
       )
     },
 
@@ -207,41 +199,54 @@ export function createApiStore(client: MailServiceClient): ApiStore {
       return view.data
     },
 
-    listEmails({ accountId, filters, cursor, limit }) {
-      return run(
+    async listEmails({ accountId, filters, cursor, limit }) {
+      return answered(
         'list_emails',
-        {
+        page,
+        await client.rpc('list_emails', {
           p_account_id: accountId,
           p_filters: filters,
           p_limit: limit,
           ...(cursor ? { p_cursor_at: cursor.at, p_cursor_id: cursor.id } : {}),
-        },
-        page,
+        }),
       )
     },
 
-    rescheduleEmail(accountId, emailId, at) {
-      return run(
+    async rescheduleEmail(accountId, emailId, at) {
+      return answered(
         'reschedule_email',
-        { p_account_id: accountId, p_public_id: emailId, p_scheduled_at: at },
         changed,
+        await client.rpc('reschedule_email', {
+          p_account_id: accountId,
+          p_public_id: emailId,
+          p_scheduled_at: at,
+        }),
       )
     },
 
-    cancelEmail(accountId, emailId) {
-      return run('cancel_email', { p_account_id: accountId, p_public_id: emailId }, changed)
+    async cancelEmail(accountId, emailId) {
+      return answered(
+        'cancel_email',
+        changed,
+        await client.rpc('cancel_email', { p_account_id: accountId, p_public_id: emailId }),
+      )
     },
 
     async listKeys(accountId) {
-      const answer = await run('api_list_keys', { p_account_id: accountId }, keyList)
+      const answer = answered(
+        'api_list_keys',
+        keyList,
+        await client.rpc('api_list_keys', { p_account_id: accountId }),
+      )
       if (!answer.ok) throw new StoreError('api_list_keys', answer.code)
       return answer.keys
     },
 
-    createKey({ accountId, actorKeyId, name, permission, prefix, keyHash, domainId }) {
-      return run(
+    async createKey({ accountId, actorKeyId, name, permission, prefix, keyHash, domainId }) {
+      return answered(
         'api_create_key',
-        {
+        keyCreated,
+        await client.rpc('api_create_key', {
           p_account_id: accountId,
           p_actor_key_id: actorKeyId,
           p_name: name,
@@ -249,16 +254,19 @@ export function createApiStore(client: MailServiceClient): ApiStore {
           p_prefix: prefix,
           p_key_hash: keyHash,
           ...(domainId ? { p_domain_id: domainId } : {}),
-        },
-        keyCreated,
+        }),
       )
     },
 
-    revokeKey(accountId, actorKeyId, keyId) {
-      return run(
+    async revokeKey(accountId, actorKeyId, keyId) {
+      return answered(
         'api_revoke_key',
-        { p_account_id: accountId, p_actor_key_id: actorKeyId, p_key_id: keyId },
         keyRevoked,
+        await client.rpc('api_revoke_key', {
+          p_account_id: accountId,
+          p_actor_key_id: actorKeyId,
+          p_key_id: keyId,
+        }),
       )
     },
   }

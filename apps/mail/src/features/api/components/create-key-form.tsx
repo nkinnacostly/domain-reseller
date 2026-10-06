@@ -88,7 +88,7 @@ export function CreateKeyForm({
             <label
               key={option}
               className={cn(
-                'flex cursor-pointer gap-3 rounded-2xl border border-border bg-background p-4 transition-colors hover:bg-muted has-[:checked]:border-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
+                'flex cursor-pointer gap-3 rounded-2xl border border-border bg-background p-4 transition-colors hover:border-foreground/40 has-[:checked]:border-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
               )}
             >
               <input
