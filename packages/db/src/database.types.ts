@@ -70,6 +70,7 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           ses_status: string
+          ses_status_at: string | null
           ses_tenant: string
           short_id: string
           state: string
@@ -94,6 +95,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           ses_status?: string
+          ses_status_at?: string | null
           ses_tenant: string
           short_id: string
           state?: string
@@ -118,6 +120,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           ses_status?: string
+          ses_status_at?: string | null
           ses_tenant?: string
           short_id?: string
           state?: string
@@ -485,6 +488,71 @@ export type Database = {
           },
         ]
       }
+      findings: {
+        Row: {
+          account_id: string
+          created_at: string
+          detail: Json
+          id: number
+          impact: string | null
+          kind: string
+          last_event: string | null
+          last_seen_at: string | null
+          open_event: string | null
+          opened_at: string
+          resolve_event: string | null
+          resolved_at: string | null
+          resource_arn: string | null
+          source: string
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          detail?: Json
+          id?: never
+          impact?: string | null
+          kind: string
+          last_event?: string | null
+          last_seen_at?: string | null
+          open_event?: string | null
+          opened_at: string
+          resolve_event?: string | null
+          resolved_at?: string | null
+          resource_arn?: string | null
+          source: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          detail?: Json
+          id?: never
+          impact?: string | null
+          kind?: string
+          last_event?: string | null
+          last_seen_at?: string | null
+          open_event?: string | null
+          opened_at?: string
+          resolve_event?: string | null
+          resolved_at?: string | null
+          resource_arn?: string | null
+          source?: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "findings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invites: {
         Row: {
           accepted_at: string | null
@@ -646,6 +714,9 @@ export type Database = {
           sandbox_daily_cap: number
           updated_at: string
           warmup_start_cap: number
+          webhook_disable_after_days: number
+          webhook_endpoints_max: number
+          webhook_retry_hours: number
         }
         Insert: {
           account_daily_budget?: number
@@ -657,6 +728,9 @@ export type Database = {
           sandbox_daily_cap?: number
           updated_at?: string
           warmup_start_cap?: number
+          webhook_disable_after_days?: number
+          webhook_endpoints_max?: number
+          webhook_retry_hours?: number
         }
         Update: {
           account_daily_budget?: number
@@ -668,6 +742,9 @@ export type Database = {
           sandbox_daily_cap?: number
           updated_at?: string
           warmup_start_cap?: number
+          webhook_disable_after_days?: number
+          webhook_endpoints_max?: number
+          webhook_retry_hours?: number
         }
         Relationships: []
       }
@@ -678,6 +755,7 @@ export type Database = {
           created_at: string
           id: number
           reason: string
+          ses_address: string | null
           source: string
         }
         Insert: {
@@ -686,6 +764,7 @@ export type Database = {
           created_at?: string
           id?: never
           reason: string
+          ses_address?: string | null
           source: string
         }
         Update: {
@@ -694,6 +773,7 @@ export type Database = {
           created_at?: string
           id?: never
           reason?: string
+          ses_address?: string | null
           source?: string
         }
         Relationships: [
@@ -747,6 +827,181 @@ export type Database = {
           },
         ]
       }
+      webhook_deliveries: {
+        Row: {
+          account_id: string
+          attempts: number
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          delivered_at: string | null
+          email_id: number | null
+          event_type: string
+          give_up_at: string
+          history: Json
+          id: number
+          last_attempt_at: string | null
+          last_duration_ms: number | null
+          last_error: string | null
+          last_response: string | null
+          last_status_code: number | null
+          message_id: string
+          next_attempt_at: string
+          payload: Json
+          resend_of: number | null
+          status: string
+          status_reason: string | null
+          updated_at: string
+          webhook_id: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email_id?: number | null
+          event_type: string
+          give_up_at: string
+          history?: Json
+          id?: never
+          last_attempt_at?: string | null
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_response?: string | null
+          last_status_code?: number | null
+          message_id: string
+          next_attempt_at?: string
+          payload: Json
+          resend_of?: number | null
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+          webhook_id: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email_id?: number | null
+          event_type?: string
+          give_up_at?: string
+          history?: Json
+          id?: never
+          last_attempt_at?: string | null
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_response?: string | null
+          last_status_code?: number | null
+          message_id?: string
+          next_attempt_at?: string
+          payload?: Json
+          resend_of?: number | null
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+          webhook_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_deliveries_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_deliveries_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "emails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_deliveries_resend_of_fkey"
+            columns: ["resend_of"]
+            isOneToOne: false
+            referencedRelation: "webhook_deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_deliveries_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhooks: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          disabled_at: string | null
+          disabled_reason: string | null
+          events: string[]
+          failing_since: string | null
+          id: string
+          last_success_at: string | null
+          owner_notice_due: boolean
+          secret_hint: string
+          secret_sealed: string
+          status: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          disabled_at?: string | null
+          disabled_reason?: string | null
+          events: string[]
+          failing_since?: string | null
+          id?: string
+          last_success_at?: string | null
+          owner_notice_due?: boolean
+          secret_hint: string
+          secret_sealed: string
+          status?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          disabled_at?: string | null
+          disabled_reason?: string | null
+          events?: string[]
+          failing_since?: string | null
+          id?: string
+          last_success_at?: string | null
+          owner_notice_due?: boolean
+          secret_hint?: string
+          secret_sealed?: string
+          status?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhooks_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -780,6 +1035,10 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_webhook_deliveries: {
+        Args: { p_account_id?: string; p_limit: number; p_worker: string }
+        Returns: Json
+      }
       create_account: {
         Args: {
           p_expected_monthly_volume?: number
@@ -809,6 +1068,18 @@ export type Database = {
         }
         Returns: Json
       }
+      create_webhook: {
+        Args: {
+          p_account_id: string
+          p_description?: string
+          p_events: string[]
+          p_secret_hint: string
+          p_secret_sealed: string
+          p_url: string
+        }
+        Returns: Json
+      }
+      delete_webhook: { Args: { p_webhook_id: string }; Returns: Json }
       e2e_purge_account: { Args: { p_account_id: string }; Returns: Json }
       e2e_ready_account: {
         Args: { p_account_id: string; p_domain: string }
@@ -824,6 +1095,13 @@ export type Database = {
           daily: number
           monthly: number
         }[]
+      }
+      email_webhook_data: {
+        Args: {
+          p_email: Database["mail"]["Tables"]["emails"]["Row"]
+          p_extra?: Json
+        }
+        Returns: Json
       }
       enqueue_email: {
         Args: {
@@ -848,10 +1126,27 @@ export type Database = {
       is_e2e_account: { Args: { p_account_id: string }; Returns: boolean }
       is_invite_email: { Args: { p_email: string }; Returns: boolean }
       is_mailbox: { Args: { p_mailbox: string }; Returns: boolean }
+      is_sealed_secret: {
+        Args: { p_hint: string; p_sealed: string }
+        Returns: boolean
+      }
+      is_webhook_url: { Args: { p_url: string }; Returns: boolean }
+      iso_time: { Args: { p_at: string }; Returns: string }
       lagos_day: { Args: { p_at: string }; Returns: string }
       leave_account: { Args: { p_account_id: string }; Returns: Json }
       purge_payloads: { Args: never; Returns: number }
       purge_send_budget: { Args: never; Returns: number }
+      purge_webhook_deliveries: { Args: never; Returns: number }
+      queue_webhook_event: {
+        Args: {
+          p_account_id: string
+          p_data: Json
+          p_email_id?: number
+          p_occurred_at?: string
+          p_type: string
+        }
+        Returns: number
+      }
       record_send_event: {
         Args: {
           p_detail?: Json
@@ -876,9 +1171,41 @@ export type Database = {
         }
         Returns: Json
       }
+      record_tenant_event: {
+        Args: {
+          p_event_id: string
+          p_finding?: string
+          p_identity?: string
+          p_impact?: string
+          p_occurred_at?: string
+          p_origin?: string
+          p_resource_arn?: string
+          p_status?: string
+          p_summary?: string
+          p_tenant?: string
+          p_type: string
+        }
+        Returns: Json
+      }
+      record_webhook_attempt: {
+        Args: {
+          p_delivery_id: number
+          p_duration_ms?: number
+          p_error?: string
+          p_response?: string
+          p_status_code?: number
+          p_worker: string
+        }
+        Returns: Json
+      }
       release_reservation: { Args: { p_email_id: number }; Returns: undefined }
       remove_member: {
         Args: { p_account_id: string; p_user_id: string }
+        Returns: Json
+      }
+      remove_suppression: { Args: { p_suppression_id: number }; Returns: Json }
+      resend_webhook_delivery: {
+        Args: { p_delivery_id: number }
         Returns: Json
       }
       reserve_send: {
@@ -892,6 +1219,14 @@ export type Database = {
       }
       revoke_api_key: { Args: { p_key_id: string }; Returns: Json }
       revoke_invite: { Args: { p_invite_id: string }; Returns: Json }
+      rotate_webhook_secret: {
+        Args: {
+          p_secret_hint: string
+          p_secret_sealed: string
+          p_webhook_id: string
+        }
+        Returns: Json
+      }
       sanitise_detail: { Args: { p_detail: Json }; Returns: Json }
       seats_taken: {
         Args: { p_account_id: string; p_with_invites: boolean }
@@ -903,6 +1238,10 @@ export type Database = {
           reason: string
           status: string
         }[]
+      }
+      set_webhook_enabled: {
+        Args: { p_enabled: boolean; p_webhook_id: string }
+        Returns: Json
       }
       settle_unsent: {
         Args: { p_email_id: number; p_reason: string; p_status: string }
@@ -922,6 +1261,24 @@ export type Database = {
           p_website?: string
         }
         Returns: Json
+      }
+      update_webhook: {
+        Args: {
+          p_description?: string
+          p_events: string[]
+          p_url: string
+          p_webhook_id: string
+        }
+        Returns: Json
+      }
+      webhook_event_list: { Args: { p_events: string[] }; Returns: string[] }
+      webhook_for_caller: {
+        Args: { p_webhook_id: string }
+        Returns: {
+          account_state: string
+          role: string
+          webhook: Database["mail"]["Tables"]["webhooks"]["Row"]
+        }[]
       }
     }
     Enums: {
