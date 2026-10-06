@@ -11,6 +11,8 @@ vi.mock('next/headers', () => ({
 vi.mock('../queries/notices', () => ({ noteSignIn: vi.fn(), queueAccountNotice: vi.fn() }))
 
 const REFUSED = "We couldn't confirm you're a person. Try again."
+const UNFINISHED =
+  'Finish the “Verify you are human” check first: tick its box if you see one, or reload the page if none appears.'
 
 /** env.ts reads process.env once, at import — so each case loads the actions fresh. */
 async function load(turnstile = true) {
@@ -55,7 +57,7 @@ describe('forms that send email ask Turnstile first — refusals first (SEC-9)',
     const { signUp, auth } = await load()
     const sent = cloudflareSays(person)
 
-    expect((await signUp(SIGN_UP))?.data).toEqual({ error: REFUSED })
+    expect((await signUp(SIGN_UP))?.data).toEqual({ error: UNFINISHED })
     expect(auth.signUp).not.toHaveBeenCalled()
     expect(sent).toHaveLength(0)
   })
@@ -91,7 +93,9 @@ describe('forms that send email ask Turnstile first — refusals first (SEC-9)',
     async (_case, action, call) => {
       const loaded = await load()
 
-      expect((await loaded[action]({ email: 'ada@example.com' }))?.data).toEqual({ error: REFUSED })
+      expect((await loaded[action]({ email: 'ada@example.com' }))?.data).toEqual({
+        error: UNFINISHED,
+      })
       expect(loaded.auth[call]).not.toHaveBeenCalled()
     },
   )

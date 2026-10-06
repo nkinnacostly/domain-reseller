@@ -39,12 +39,12 @@ beforeEach(() => vi.restoreAllMocks())
 afterEach(() => vi.unstubAllEnvs())
 
 describe('verifyTurnstile — refusals first (SEC-9)', () => {
-  it('refuses a missing token without asking Cloudflare', async () => {
+  it('refuses a missing token without asking Cloudflare, as a check not yet finished', async () => {
     const { verifyTurnstile } = await load()
     const sent = cloudflare(() => HttpResponse.json({ success: true }))
 
-    expect(await verifyTurnstile(undefined, headers())).toEqual({ ok: false, reason: 'refused' })
-    expect(await verifyTurnstile('', headers())).toEqual({ ok: false, reason: 'refused' })
+    expect(await verifyTurnstile(undefined, headers())).toEqual({ ok: false, reason: 'missing' })
+    expect(await verifyTurnstile('', headers())).toEqual({ ok: false, reason: 'missing' })
     expect(sent).toHaveLength(0)
   })
 
@@ -224,6 +224,9 @@ describe('humanCheckError', () => {
     const { humanCheckError } = await load()
     expect(humanCheckError({ ok: false, reason: 'refused' })).toBe(
       "We couldn't confirm you're a person. Try again.",
+    )
+    expect(humanCheckError({ ok: false, reason: 'missing' })).toBe(
+      'Finish the “Verify you are human” check first: tick its box if you see one, or reload the page if none appears.',
     )
     expect(humanCheckError({ ok: false, reason: 'unanswered' })).toMatch(
       /the check didn't answer\. Try again in a moment\.$/,

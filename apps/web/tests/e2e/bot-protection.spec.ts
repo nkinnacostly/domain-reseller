@@ -88,7 +88,7 @@ test.describe('forms that send email (SEC-9)', () => {
     await form.getByRole('button', { name: 'Create account' }).click()
 
     await expect(form.getByRole('alert')).toHaveText(
-      "We couldn't confirm you're a person. Try again.",
+      'Finish the “Verify you are human” check first: tick its box if you see one, or reload the page if none appears.',
     )
     await expect(form.getByLabel('Email')).toHaveValue(email)
     expect(await hasAccount(email)).toBe(false)

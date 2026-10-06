@@ -28,11 +28,14 @@ export type HumanCheck =
   /** `skipped`: Turnstile is not configured, so nothing was checked. */
   | { ok: true; skipped: boolean }
   /**
-   * `refused` — no token, or Cloudflare said no (bad, expired or used twice);
+   * `missing` — no token: the widget had not finished, most often because
+   * Cloudflare asked for its "Verify you are human" box to be ticked and the
+   * form was sent first (seen on sign-up, 6 Oct 2026);
+   * `refused` — Cloudflare said no (bad, expired or used twice);
    * `unanswered` — Cloudflare could not be asked, so we refuse rather than
    * wave everyone through while it is away.
    */
-  | { ok: false; reason: 'refused' | 'unanswered' }
+  | { ok: false; reason: 'missing' | 'refused' | 'unanswered' }
 
 let reportedMissing = false
 
@@ -66,7 +69,8 @@ export async function verifyTurnstile(
 ): Promise<HumanCheck> {
   const secret = secretKey()
   if (!secret) return { ok: true, skipped: true }
-  if (!token || token.length > MAX_TOKEN_LENGTH) return { ok: false, reason: 'refused' }
+  if (!token) return { ok: false, reason: 'missing' }
+  if (token.length > MAX_TOKEN_LENGTH) return { ok: false, reason: 'refused' }
 
   const form = new URLSearchParams({ secret, response: token })
   const remoteip = clientAddress(requestHeaders)
@@ -102,10 +106,14 @@ export async function verifyTurnstile(
 }
 
 export const HUMAN_CHECK_REFUSED = "We couldn't confirm you're a person. Try again."
+/** Said when the form arrived before the check finished — what to do, not just "try again". */
+export const HUMAN_CHECK_MISSING =
+  'Finish the “Verify you are human” check first: tick its box if you see one, or reload the page if none appears.'
 export const HUMAN_CHECK_UNANSWERED =
   "We couldn't confirm you're a person just now — the check didn't answer. Try again in a moment."
 
 /** What to tell someone whose check did not pass. */
 export function humanCheckError(check: Extract<HumanCheck, { ok: false }>): string {
+  if (check.reason === 'missing') return HUMAN_CHECK_MISSING
   return check.reason === 'unanswered' ? HUMAN_CHECK_UNANSWERED : HUMAN_CHECK_REFUSED
 }
