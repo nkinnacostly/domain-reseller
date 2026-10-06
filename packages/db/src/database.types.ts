@@ -67,6 +67,7 @@ export type Database = {
           monthly_cap_override: number | null
           name: string
           plan_code: string
+          pre_pause_state: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           ses_status: string
@@ -78,6 +79,7 @@ export type Database = {
           tenant_ready_at: string | null
           updated_at: string
           use_case: string | null
+          warmup_checked_on: string | null
           warmup_day: number | null
           website: string | null
         }
@@ -92,6 +94,7 @@ export type Database = {
           monthly_cap_override?: number | null
           name: string
           plan_code?: string
+          pre_pause_state?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           ses_status?: string
@@ -103,6 +106,7 @@ export type Database = {
           tenant_ready_at?: string | null
           updated_at?: string
           use_case?: string | null
+          warmup_checked_on?: string | null
           warmup_day?: number | null
           website?: string | null
         }
@@ -117,6 +121,7 @@ export type Database = {
           monthly_cap_override?: number | null
           name?: string
           plan_code?: string
+          pre_pause_state?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           ses_status?: string
@@ -128,6 +133,7 @@ export type Database = {
           tenant_ready_at?: string | null
           updated_at?: string
           use_case?: string | null
+          warmup_checked_on?: string | null
           warmup_day?: number | null
           website?: string | null
         }
@@ -280,6 +286,44 @@ export type Database = {
           vat_bps?: number
         }
         Relationships: []
+      }
+      cap_notices: {
+        Row: {
+          account_id: string
+          cap: number
+          created_at: string
+          level: number
+          period_start: string
+          scope: string
+          used: number
+        }
+        Insert: {
+          account_id: string
+          cap: number
+          created_at?: string
+          level: number
+          period_start: string
+          scope: string
+          used: number
+        }
+        Update: {
+          account_id?: string
+          cap?: number
+          created_at?: string
+          level?: number
+          period_start?: string
+          scope?: string
+          used?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cap_notices_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       checkouts: {
         Row: {
@@ -481,6 +525,51 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_batches: {
+        Row: {
+          account_id: string
+          api_key_id: string | null
+          created_at: string
+          email_ids: string[]
+          id: number
+          idempotency_key: string
+          request_hash: string
+        }
+        Insert: {
+          account_id: string
+          api_key_id?: string | null
+          created_at?: string
+          email_ids: string[]
+          id?: never
+          idempotency_key: string
+          request_hash: string
+        }
+        Update: {
+          account_id?: string
+          api_key_id?: string | null
+          created_at?: string
+          email_ids?: string[]
+          id?: never
+          idempotency_key?: string
+          request_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_batches_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_batches_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
             referencedColumns: ["id"]
           },
         ]
@@ -1123,6 +1212,80 @@ export type Database = {
         }
         Relationships: []
       }
+      reputation_readings: {
+        Row: {
+          bounce_ppm: number | null
+          complaint_ppm: number | null
+          id: number
+          metric_at: string | null
+          outcome: string
+          read_at: string
+        }
+        Insert: {
+          bounce_ppm?: number | null
+          complaint_ppm?: number | null
+          id?: never
+          metric_at?: string | null
+          outcome: string
+          read_at?: string
+        }
+        Update: {
+          bounce_ppm?: number | null
+          complaint_ppm?: number | null
+          id?: never
+          metric_at?: string | null
+          outcome?: string
+          read_at?: string
+        }
+        Relationships: []
+      }
+      safety_findings: {
+        Row: {
+          account_id: string
+          detail: Json
+          id: number
+          kind: string
+          opened_at: string
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          source: string
+        }
+        Insert: {
+          account_id: string
+          detail?: Json
+          id?: never
+          kind: string
+          opened_at?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+          source: string
+        }
+        Update: {
+          account_id?: string
+          detail?: Json
+          id?: never
+          kind?: string
+          opened_at?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_findings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sandbox_identity: {
         Row: {
           dkim_tokens: string[]
@@ -1191,12 +1354,19 @@ export type Database = {
       settings: {
         Row: {
           account_daily_budget: number
+          bounce_pause_ppm: number
+          bounce_warn_ppm: number
+          complaint_pause_ppm: number
+          complaint_warn_ppm: number
           id: boolean
           key_burst: number
           key_rate_per_second: number
           max_send_attempts: number
           owned_accounts_max: number
+          quota_alert_pct: number
           sandbox_daily_cap: number
+          threshold_min_sends: number
+          threshold_window_days: number
           updated_at: string
           warmup_start_cap: number
           webhook_disable_after_days: number
@@ -1205,12 +1375,19 @@ export type Database = {
         }
         Insert: {
           account_daily_budget?: number
+          bounce_pause_ppm?: number
+          bounce_warn_ppm?: number
+          complaint_pause_ppm?: number
+          complaint_warn_ppm?: number
           id?: boolean
           key_burst?: number
           key_rate_per_second?: number
           max_send_attempts?: number
           owned_accounts_max?: number
+          quota_alert_pct?: number
           sandbox_daily_cap?: number
+          threshold_min_sends?: number
+          threshold_window_days?: number
           updated_at?: string
           warmup_start_cap?: number
           webhook_disable_after_days?: number
@@ -1219,12 +1396,19 @@ export type Database = {
         }
         Update: {
           account_daily_budget?: number
+          bounce_pause_ppm?: number
+          bounce_warn_ppm?: number
+          complaint_pause_ppm?: number
+          complaint_warn_ppm?: number
           id?: boolean
           key_burst?: number
           key_rate_per_second?: number
           max_send_attempts?: number
           owned_accounts_max?: number
+          quota_alert_pct?: number
           sandbox_daily_cap?: number
+          threshold_min_sends?: number
+          threshold_window_days?: number
           updated_at?: string
           warmup_start_cap?: number
           webhook_disable_after_days?: number
@@ -1380,6 +1564,72 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_actions: {
+        Row: {
+          account_id: string
+          applied_at: string | null
+          attempts: number
+          claimed_at: string | null
+          claimed_by: string | null
+          finding_id: number | null
+          id: number
+          last_error: string | null
+          next_attempt_at: string
+          requested_at: string
+          requested_by: string
+          sending_status: string
+          state: string
+          why: string
+        }
+        Insert: {
+          account_id: string
+          applied_at?: string | null
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          finding_id?: number | null
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          requested_at?: string
+          requested_by: string
+          sending_status: string
+          state?: string
+          why: string
+        }
+        Update: {
+          account_id?: string
+          applied_at?: string | null
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          finding_id?: number | null
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          requested_at?: string
+          requested_by?: string
+          sending_status?: string
+          state?: string
+          why?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_actions_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "safety_findings"
             referencedColumns: ["id"]
           },
         ]
@@ -1677,6 +1927,16 @@ export type Database = {
     }
     Functions: {
       accept_invite: { Args: { p_token_hash: string }; Returns: Json }
+      account_emails: {
+        Args: {
+          p_account_id: string
+          p_cursor_at?: string
+          p_cursor_id?: string
+          p_filters?: Json
+          p_limit?: number
+        }
+        Returns: Json
+      }
       account_members: { Args: { p_account_id: string }; Returns: Json }
       account_usage: { Args: { p_account_id: string }; Returns: Json }
       add_domain: {
@@ -1684,8 +1944,30 @@ export type Database = {
         Returns: Json
       }
       address_of: { Args: { p_mailbox: string }; Returns: string }
+      advance_warmup: { Args: never; Returns: number }
+      alert_conditions: {
+        Args: never
+        Returns: {
+          key: string
+          kind: string
+          severity: string
+          summary: string
+        }[]
+      }
       api_add_domain: {
         Args: { p_account_id: string; p_actor_key_id: string; p_name: string }
+        Returns: Json
+      }
+      api_create_key: {
+        Args: {
+          p_account_id: string
+          p_actor_key_id: string
+          p_domain_id?: string
+          p_key_hash: string
+          p_name: string
+          p_permission: string
+          p_prefix: string
+        }
         Returns: Json
       }
       api_get_domain: {
@@ -1700,6 +1982,7 @@ export type Database = {
         Args: { p_account_id: string; p_actor_key_id: string }
         Returns: Json
       }
+      api_list_keys: { Args: { p_account_id: string }; Returns: Json }
       api_remove_domain: {
         Args: {
           p_account_id: string
@@ -1708,6 +1991,12 @@ export type Database = {
         }
         Returns: Json
       }
+      api_revoke_key: {
+        Args: { p_account_id: string; p_actor_key_id: string; p_key_id: string }
+        Returns: Json
+      }
+      as_timestamptz: { Args: { p_value: string }; Returns: string }
+      asked_ses_to_pause: { Args: { p_account_id: string }; Returns: boolean }
       authenticate_key: { Args: { p_key_hash: string }; Returns: Json }
       begin_ses_jobs: { Args: { p_token: string }; Returns: Json }
       billing_issue_invoice: {
@@ -1768,6 +2057,10 @@ export type Database = {
         Returns: undefined
       }
       caller_role: { Args: { p_account_id: string }; Returns: string }
+      cancel_email: {
+        Args: { p_account_id: string; p_public_id: string }
+        Returns: Json
+      }
       change_member_role: {
         Args: { p_account_id: string; p_role: string; p_user_id: string }
         Returns: Json
@@ -1809,6 +2102,10 @@ export type Database = {
           p_paid_only?: boolean
           p_worker: string
         }
+        Returns: Json
+      }
+      claim_tenant_actions: {
+        Args: { p_limit?: number; p_worker: string }
         Returns: Json
       }
       claim_webhook_deliveries: {
@@ -1866,9 +2163,19 @@ export type Database = {
         Args: { p_domain: Database["mail"]["Tables"]["domains"]["Row"] }
         Returns: Json
       }
+      e2e_evaluate: { Args: { p_account_id: string }; Returns: Json }
       e2e_purge_account: { Args: { p_account_id: string }; Returns: Json }
       e2e_ready_account: {
         Args: { p_account_id: string; p_domain: string }
+        Returns: Json
+      }
+      e2e_seed_usage: {
+        Args: {
+          p_account_id: string
+          p_bounced: number
+          p_complained: number
+          p_sent: number
+        }
         Returns: Json
       }
       e2e_set_plan: {
@@ -1882,10 +2189,34 @@ export type Database = {
           monthly: number
         }[]
       }
+      email_page: {
+        Args: {
+          p_account_id: string
+          p_cursor_at: string
+          p_cursor_id: string
+          p_filters: Json
+          p_limit: number
+        }
+        Returns: Json
+      }
+      email_view: {
+        Args: { p_email: Database["mail"]["Tables"]["emails"]["Row"] }
+        Returns: Json
+      }
       email_webhook_data: {
         Args: {
           p_email: Database["mail"]["Tables"]["emails"]["Row"]
           p_extra?: Json
+        }
+        Returns: Json
+      }
+      enqueue_batch: {
+        Args: {
+          p_account_id: string
+          p_api_key_id: string
+          p_emails: Json
+          p_idempotency_key?: string
+          p_request_hash?: string
         }
         Returns: Json
       }
@@ -1900,6 +2231,7 @@ export type Database = {
         }
         Returns: Json
       }
+      evaluate_account: { Args: { p_account_id: string }; Returns: Json }
       flutterwave_plan_for: {
         Args: { p_api_host: string; p_plan_code: string; p_test_mode: boolean }
         Returns: Json
@@ -1914,6 +2246,10 @@ export type Database = {
       }
       invite_preview: { Args: { p_token_hash: string }; Returns: Json }
       is_e2e_account: { Args: { p_account_id: string }; Returns: boolean }
+      is_full_key: {
+        Args: { p_account_id: string; p_key_id: string }
+        Returns: boolean
+      }
       is_invite_email: { Args: { p_email: string }; Returns: boolean }
       is_mailbox: { Args: { p_mailbox: string }; Returns: boolean }
       is_reserved_domain: { Args: { p_name: string }; Returns: boolean }
@@ -1928,6 +2264,27 @@ export type Database = {
       kick_ses_jobs: { Args: { p_account_id?: string }; Returns: number }
       lagos_day: { Args: { p_at: string }; Returns: string }
       leave_account: { Args: { p_account_id: string }; Returns: Json }
+      list_emails: {
+        Args: {
+          p_account_id: string
+          p_cursor_at?: string
+          p_cursor_id?: string
+          p_filters?: Json
+          p_limit?: number
+        }
+        Returns: Json
+      }
+      note_cap_use: {
+        Args: {
+          p_account_id: string
+          p_cap: number
+          p_period: string
+          p_refused: boolean
+          p_scope: string
+          p_used: number
+        }
+        Returns: undefined
+      }
       note_provider_active: {
         Args: { p_account_id: string; p_first_transaction_id: string }
         Returns: Json
@@ -1940,9 +2297,36 @@ export type Database = {
         Args: { p_account_id: string; p_e2e: boolean }
         Returns: boolean
       }
+      open_finding: {
+        Args: {
+          p_account_id: string
+          p_detail: Json
+          p_kind: string
+          p_severity: string
+          p_source: string
+        }
+        Returns: number
+      }
+      ppm_text: { Args: { p_ppm: number }; Returns: string }
+      profile_complete: {
+        Args: { p_account: Database["mail"]["Tables"]["accounts"]["Row"] }
+        Returns: boolean
+      }
+      purge_old_emails: { Args: never; Returns: number }
       purge_payloads: { Args: never; Returns: number }
+      purge_safety_records: { Args: never; Returns: number }
       purge_send_budget: { Args: never; Returns: number }
       purge_webhook_deliveries: { Args: never; Returns: number }
+      queue_tenant_action: {
+        Args: {
+          p_account: Database["mail"]["Tables"]["accounts"]["Row"]
+          p_by: string
+          p_finding_id: number
+          p_status: string
+          p_why: string
+        }
+        Returns: number
+      }
       queue_webhook_event: {
         Args: {
           p_account_id: string
@@ -1952,6 +2336,11 @@ export type Database = {
           p_type: string
         }
         Returns: number
+      }
+      rate_ppm: { Args: { p_n: number; p_sent: number }; Returns: number }
+      recipient_addresses: {
+        Args: { p_bcc: string[]; p_cc: string[]; p_to: string[] }
+        Returns: string[]
       }
       record_billing_charge: {
         Args: {
@@ -2056,6 +2445,15 @@ export type Database = {
         }
         Returns: Json
       }
+      record_tenant_action: {
+        Args: {
+          p_action_id: number
+          p_error?: string
+          p_outcome: string
+          p_worker: string
+        }
+        Returns: Json
+      }
       record_tenant_event: {
         Args: {
           p_event_id: string
@@ -2110,6 +2508,14 @@ export type Database = {
         }
         Returns: Json
       }
+      reschedule_email: {
+        Args: {
+          p_account_id: string
+          p_public_id: string
+          p_scheduled_at: string
+        }
+        Returns: Json
+      }
       resend_webhook_delivery: {
         Args: { p_delivery_id: number }
         Returns: Json
@@ -2134,6 +2540,15 @@ export type Database = {
         }
         Returns: Json
       }
+      run_safety_checks: {
+        Args: {
+          p_bounce_ppm?: number
+          p_complaint_ppm?: number
+          p_metric_at?: string
+          p_outcome: string
+        }
+        Returns: Json
+      }
       sandbox_domain_for: {
         Args: { p_account_id: string; p_from: string }
         Returns: string
@@ -2154,6 +2569,7 @@ export type Database = {
           status: string
         }[]
       }
+      ses_findings_of: { Args: { p_account_id: string }; Returns: Json }
       set_webhook_enabled: {
         Args: { p_enabled: boolean; p_webhook_id: string }
         Returns: Json
@@ -2196,6 +2612,7 @@ export type Database = {
         }
         Returns: Json
       }
+      utc_text: { Args: { p_at: string }; Returns: string }
       webhook_event_list: { Args: { p_events: string[] }; Returns: string[] }
       webhook_for_caller: {
         Args: { p_webhook_id: string }
@@ -2204,6 +2621,10 @@ export type Database = {
           role: string
           webhook: Database["mail"]["Tables"]["webhooks"]["Row"]
         }[]
+      }
+      window_usage: {
+        Args: { p_account_id: string; p_days: number }
+        Returns: Record<string, unknown>
       }
     }
     Enums: {
@@ -5678,6 +6099,63 @@ export type Database = {
         Args: { p_admin_id: string }
         Returns: boolean
       }
+      admin_mail_account: { Args: { p_account_id: string }; Returns: Json }
+      admin_mail_accounts: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_state?: string
+        }
+        Returns: Json
+      }
+      admin_mail_approve_account: {
+        Args: { p_account_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_mail_audit: {
+        Args: { p_action?: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      admin_mail_domains: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      admin_mail_override_caps: {
+        Args: {
+          p_account_id: string
+          p_daily_cap: number
+          p_monthly_cap: number
+          p_reason: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_mail_overview: { Args: never; Returns: Json }
+      admin_mail_pause_account: {
+        Args: { p_account_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_mail_reject_account: {
+        Args: { p_account_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_mail_resume_account: {
+        Args: {
+          p_account_id: string
+          p_finding_id: number
+          p_reason: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_mail_review_queue: { Args: never; Returns: Json }
+      admin_mail_ses_health: { Args: never; Returns: Json }
       admin_margin: {
         Args: { p_from: string; p_test_mode: boolean; p_to: string }
         Returns: {

@@ -631,7 +631,7 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–46 and 50), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–47 and 50), granted to exactly the role it names.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -654,7 +654,20 @@ begin
     "keep_current_plan":"authenticated", "flutterwave_plan_for":"service_role",
     "register_flutterwave_plan":"service_role", "billing_provider_state":"service_role",
     "note_provider_canceled":"service_role", "note_provider_active":"service_role",
-    "record_billing_incident":"service_role", "record_billing_charge":"service_role"
+    "record_billing_incident":"service_role", "record_billing_charge":"service_role",
+    "domain_name_ok":"none", "is_reserved_domain":"none", "clean_error":"none", "is_test_account":"none",
+    "on_jobs_side":"none", "kick_ses_jobs":"none", "provisioning_on_account":"none", "sandbox_on_state":"none",
+    "sandbox_domain_for":"none",
+    "add_domain":"authenticated", "retry_domain":"authenticated", "remove_domain":"authenticated",
+    "begin_ses_jobs":"service_role", "record_sandbox_identity":"service_role",
+    "claim_provisioning_work":"service_role", "record_provisioning":"service_role",
+    "record_provisioning_error":"service_role", "claim_domain_work":"service_role",
+    "record_domain_step":"service_role", "record_domain_check":"service_role",
+    "record_domain_failed":"service_role", "record_domain_released":"service_role",
+    "record_domain_error":"service_role",
+    "domain_view":"none", "domain_api_key":"none", "claim_domain_name":"none", "request_domain_removal":"none",
+    "api_list_domains":"service_role", "api_get_domain":"service_role", "api_add_domain":"service_role",
+    "api_remove_domain":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
