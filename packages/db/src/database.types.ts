@@ -67,9 +67,11 @@ export type Database = {
           monthly_cap_override: number | null
           name: string
           plan_code: string
+          pre_pause_state: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           ses_status: string
+          ses_status_at: string | null
           ses_tenant: string
           short_id: string
           state: string
@@ -77,6 +79,7 @@ export type Database = {
           tenant_ready_at: string | null
           updated_at: string
           use_case: string | null
+          warmup_checked_on: string | null
           warmup_day: number | null
           website: string | null
         }
@@ -91,9 +94,11 @@ export type Database = {
           monthly_cap_override?: number | null
           name: string
           plan_code?: string
+          pre_pause_state?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           ses_status?: string
+          ses_status_at?: string | null
           ses_tenant: string
           short_id: string
           state?: string
@@ -101,6 +106,7 @@ export type Database = {
           tenant_ready_at?: string | null
           updated_at?: string
           use_case?: string | null
+          warmup_checked_on?: string | null
           warmup_day?: number | null
           website?: string | null
         }
@@ -115,9 +121,11 @@ export type Database = {
           monthly_cap_override?: number | null
           name?: string
           plan_code?: string
+          pre_pause_state?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           ses_status?: string
+          ses_status_at?: string | null
           ses_tenant?: string
           short_id?: string
           state?: string
@@ -125,6 +133,7 @@ export type Database = {
           tenant_ready_at?: string | null
           updated_at?: string
           use_case?: string | null
+          warmup_checked_on?: string | null
           warmup_day?: number | null
           website?: string | null
         }
@@ -204,52 +213,309 @@ export type Database = {
           },
         ]
       }
+      billing_incidents: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          detail: Json
+          id: number
+          kind: string
+          provider_reference: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          test_mode: boolean
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          detail?: Json
+          id?: never
+          kind: string
+          provider_reference?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          test_mode: boolean
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          detail?: Json
+          id?: never
+          kind?: string
+          provider_reference?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          test_mode?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_incidents_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_settings: {
+        Row: {
+          checkout_ttl_minutes: number
+          checkouts_per_hour: number
+          id: boolean
+          past_due_days: number
+          renewal_wait_hours: number
+          updated_at: string
+          vat_bps: number
+        }
+        Insert: {
+          checkout_ttl_minutes?: number
+          checkouts_per_hour?: number
+          id?: boolean
+          past_due_days?: number
+          renewal_wait_hours?: number
+          updated_at?: string
+          vat_bps?: number
+        }
+        Update: {
+          checkout_ttl_minutes?: number
+          checkouts_per_hour?: number
+          id?: boolean
+          past_due_days?: number
+          renewal_wait_hours?: number
+          updated_at?: string
+          vat_bps?: number
+        }
+        Relationships: []
+      }
+      cap_notices: {
+        Row: {
+          account_id: string
+          cap: number
+          created_at: string
+          level: number
+          period_start: string
+          scope: string
+          used: number
+        }
+        Insert: {
+          account_id: string
+          cap: number
+          created_at?: string
+          level: number
+          period_start: string
+          scope: string
+          used: number
+        }
+        Update: {
+          account_id?: string
+          cap?: number
+          created_at?: string
+          level?: number
+          period_start?: string
+          scope?: string
+          used?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cap_notices_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checkouts: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          credit_kobo: number
+          credit_until: string | null
+          flutterwave_plan_id: number
+          from_plan_code: string | null
+          id: string
+          kind: string
+          paid_at: string | null
+          paid_transaction_id: string | null
+          plan_code: string
+          price_kobo: number
+          recurring_kobo: number
+          status: string
+          subtotal_kobo: number
+          test_mode: boolean
+          total_kobo: number
+          tx_ref: string
+          vat_bps: number
+          vat_kobo: number
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          credit_kobo?: number
+          credit_until?: string | null
+          flutterwave_plan_id: number
+          from_plan_code?: string | null
+          id?: string
+          kind: string
+          paid_at?: string | null
+          paid_transaction_id?: string | null
+          plan_code: string
+          price_kobo: number
+          recurring_kobo: number
+          status?: string
+          subtotal_kobo: number
+          test_mode: boolean
+          total_kobo: number
+          tx_ref: string
+          vat_bps: number
+          vat_kobo: number
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          credit_kobo?: number
+          credit_until?: string | null
+          flutterwave_plan_id?: number
+          from_plan_code?: string | null
+          id?: string
+          kind?: string
+          paid_at?: string | null
+          paid_transaction_id?: string | null
+          plan_code?: string
+          price_kobo?: number
+          recurring_kobo?: number
+          status?: string
+          subtotal_kobo?: number
+          test_mode?: boolean
+          total_kobo?: number
+          tx_ref?: string
+          vat_bps?: number
+          vat_kobo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkouts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checkouts_from_plan_code_fkey"
+            columns: ["from_plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "checkouts_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       domains: {
         Row: {
           account_id: string
+          added_by: string | null
+          attempts: number
+          claimed_at: string
+          config_set_at: string | null
           created_at: string
           dkim_status: string | null
           dkim_tokens: string[]
           failed_reason: string | null
           id: string
           identity_arn: string | null
+          identity_created_at: string | null
+          kind: string
           last_checked_at: string | null
+          last_error: string | null
+          locked_by: string | null
+          locked_until: string | null
           mail_from_domain: string | null
+          mail_from_set_at: string | null
           mail_from_status: string | null
+          missing_record: string | null
           name: string
+          next_attempt_at: string
+          released_at: string | null
+          removal_requested_at: string | null
+          removal_requested_by: string | null
+          removed_at: string | null
           status: string
+          tenant_associated_at: string | null
           updated_at: string
           verified_at: string | null
         }
         Insert: {
           account_id: string
+          added_by?: string | null
+          attempts?: number
+          claimed_at?: string
+          config_set_at?: string | null
           created_at?: string
           dkim_status?: string | null
           dkim_tokens?: string[]
           failed_reason?: string | null
           id?: string
           identity_arn?: string | null
+          identity_created_at?: string | null
+          kind?: string
           last_checked_at?: string | null
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
           mail_from_domain?: string | null
+          mail_from_set_at?: string | null
           mail_from_status?: string | null
+          missing_record?: string | null
           name: string
+          next_attempt_at?: string
+          released_at?: string | null
+          removal_requested_at?: string | null
+          removal_requested_by?: string | null
+          removed_at?: string | null
           status?: string
+          tenant_associated_at?: string | null
           updated_at?: string
           verified_at?: string | null
         }
         Update: {
           account_id?: string
+          added_by?: string | null
+          attempts?: number
+          claimed_at?: string
+          config_set_at?: string | null
           created_at?: string
           dkim_status?: string | null
           dkim_tokens?: string[]
           failed_reason?: string | null
           id?: string
           identity_arn?: string | null
+          identity_created_at?: string | null
+          kind?: string
           last_checked_at?: string | null
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
           mail_from_domain?: string | null
+          mail_from_set_at?: string | null
           mail_from_status?: string | null
+          missing_record?: string | null
           name?: string
+          next_attempt_at?: string
+          released_at?: string | null
+          removal_requested_at?: string | null
+          removal_requested_by?: string | null
+          removed_at?: string | null
           status?: string
+          tenant_associated_at?: string | null
           updated_at?: string
           verified_at?: string | null
         }
@@ -259,6 +525,51 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_batches: {
+        Row: {
+          account_id: string
+          api_key_id: string | null
+          created_at: string
+          email_ids: string[]
+          id: number
+          idempotency_key: string
+          request_hash: string
+        }
+        Insert: {
+          account_id: string
+          api_key_id?: string | null
+          created_at?: string
+          email_ids: string[]
+          id?: never
+          idempotency_key: string
+          request_hash: string
+        }
+        Update: {
+          account_id?: string
+          api_key_id?: string | null
+          created_at?: string
+          email_ids?: string[]
+          id?: never
+          idempotency_key?: string
+          request_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_batches_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_batches_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
             referencedColumns: ["id"]
           },
         ]
@@ -485,6 +796,115 @@ export type Database = {
           },
         ]
       }
+      findings: {
+        Row: {
+          account_id: string
+          created_at: string
+          detail: Json
+          id: number
+          impact: string | null
+          kind: string
+          last_event: string | null
+          last_seen_at: string | null
+          open_event: string | null
+          opened_at: string
+          resolve_event: string | null
+          resolved_at: string | null
+          resource_arn: string | null
+          source: string
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          detail?: Json
+          id?: never
+          impact?: string | null
+          kind: string
+          last_event?: string | null
+          last_seen_at?: string | null
+          open_event?: string | null
+          opened_at: string
+          resolve_event?: string | null
+          resolved_at?: string | null
+          resource_arn?: string | null
+          source: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          detail?: Json
+          id?: never
+          impact?: string | null
+          kind?: string
+          last_event?: string | null
+          last_seen_at?: string | null
+          open_event?: string | null
+          opened_at?: string
+          resolve_event?: string | null
+          resolved_at?: string | null
+          resource_arn?: string | null
+          source?: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "findings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flutterwave_plans: {
+        Row: {
+          amount_kobo: number
+          api_host: string
+          created_at: string
+          flutterwave_plan_id: number
+          id: number
+          plan_code: string
+          price_kobo: number
+          test_mode: boolean
+          vat_bps: number
+        }
+        Insert: {
+          amount_kobo: number
+          api_host: string
+          created_at?: string
+          flutterwave_plan_id: number
+          id?: never
+          plan_code: string
+          price_kobo: number
+          test_mode: boolean
+          vat_bps: number
+        }
+        Update: {
+          amount_kobo?: number
+          api_host?: string
+          created_at?: string
+          flutterwave_plan_id?: number
+          id?: never
+          plan_code?: string
+          price_kobo?: number
+          test_mode?: boolean
+          vat_bps?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flutterwave_plans_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       invites: {
         Row: {
           accepted_at: string | null
@@ -532,6 +952,97 @@ export type Database = {
           },
         ]
       }
+      invoices: {
+        Row: {
+          account_id: string
+          billed_to: Json
+          id: string
+          issued_at: string
+          lines: Json
+          method: string | null
+          number: string
+          paid_kobo: number
+          payment_id: string
+          period_end: string
+          period_start: string
+          plan_code: string
+          plan_name: string
+          provider_reference: string
+          subtotal_kobo: number
+          test_mode: boolean
+          total_kobo: number
+          tx_ref: string
+          vat_bps: number
+          vat_kobo: number
+        }
+        Insert: {
+          account_id: string
+          billed_to: Json
+          id?: string
+          issued_at?: string
+          lines: Json
+          method?: string | null
+          number: string
+          paid_kobo: number
+          payment_id: string
+          period_end: string
+          period_start: string
+          plan_code: string
+          plan_name: string
+          provider_reference: string
+          subtotal_kobo: number
+          test_mode: boolean
+          total_kobo: number
+          tx_ref: string
+          vat_bps: number
+          vat_kobo: number
+        }
+        Update: {
+          account_id?: string
+          billed_to?: Json
+          id?: string
+          issued_at?: string
+          lines?: Json
+          method?: string | null
+          number?: string
+          paid_kobo?: number
+          payment_id?: string
+          period_end?: string
+          period_start?: string
+          plan_code?: string
+          plan_name?: string
+          provider_reference?: string
+          subtotal_kobo?: number
+          test_mode?: boolean
+          total_kobo?: number
+          tx_ref?: string
+          vat_bps?: number
+          vat_kobo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       members: {
         Row: {
           account_id: string
@@ -560,6 +1071,98 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          account_id: string
+          amount_kobo: number
+          applied: boolean
+          checkout_id: string | null
+          created_at: string
+          currency: string
+          id: string
+          kind: string
+          method: string | null
+          period_end: string | null
+          period_start: string | null
+          plan_code: string
+          provider: string
+          provider_reference: string
+          raw: Json
+          subscription_id: string | null
+          test_mode: boolean
+          tx_ref: string
+        }
+        Insert: {
+          account_id: string
+          amount_kobo: number
+          applied: boolean
+          checkout_id?: string | null
+          created_at?: string
+          currency: string
+          id?: string
+          kind: string
+          method?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          plan_code: string
+          provider?: string
+          provider_reference: string
+          raw?: Json
+          subscription_id?: string | null
+          test_mode: boolean
+          tx_ref: string
+        }
+        Update: {
+          account_id?: string
+          amount_kobo?: number
+          applied?: boolean
+          checkout_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          kind?: string
+          method?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          plan_code?: string
+          provider?: string
+          provider_reference?: string
+          raw?: Json
+          subscription_id?: string | null
+          test_mode?: boolean
+          tx_ref?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_checkout_id_fkey"
+            columns: ["checkout_id"]
+            isOneToOne: false
+            referencedRelation: "checkouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "payments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -609,6 +1212,119 @@ export type Database = {
         }
         Relationships: []
       }
+      reputation_readings: {
+        Row: {
+          bounce_ppm: number | null
+          complaint_ppm: number | null
+          id: number
+          metric_at: string | null
+          outcome: string
+          read_at: string
+        }
+        Insert: {
+          bounce_ppm?: number | null
+          complaint_ppm?: number | null
+          id?: never
+          metric_at?: string | null
+          outcome: string
+          read_at?: string
+        }
+        Update: {
+          bounce_ppm?: number | null
+          complaint_ppm?: number | null
+          id?: never
+          metric_at?: string | null
+          outcome?: string
+          read_at?: string
+        }
+        Relationships: []
+      }
+      safety_findings: {
+        Row: {
+          account_id: string
+          detail: Json
+          id: number
+          kind: string
+          opened_at: string
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          source: string
+        }
+        Insert: {
+          account_id: string
+          detail?: Json
+          id?: never
+          kind: string
+          opened_at?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+          source: string
+        }
+        Update: {
+          account_id?: string
+          detail?: Json
+          id?: never
+          kind?: string
+          opened_at?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_findings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sandbox_identity: {
+        Row: {
+          dkim_tokens: string[]
+          from_address: string
+          id: boolean
+          identity_arn: string | null
+          last_checked_at: string | null
+          mail_from_status: string | null
+          name: string
+          status: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          dkim_tokens?: string[]
+          from_address?: string
+          id?: boolean
+          identity_arn?: string | null
+          last_checked_at?: string | null
+          mail_from_status?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          dkim_tokens?: string[]
+          from_address?: string
+          id?: boolean
+          identity_arn?: string | null
+          last_checked_at?: string | null
+          mail_from_status?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       send_budget_hourly: {
         Row: {
           account_id: string
@@ -638,38 +1354,181 @@ export type Database = {
       settings: {
         Row: {
           account_daily_budget: number
+          bounce_pause_ppm: number
+          bounce_warn_ppm: number
+          complaint_pause_ppm: number
+          complaint_warn_ppm: number
           id: boolean
           key_burst: number
           key_rate_per_second: number
           max_send_attempts: number
           owned_accounts_max: number
+          quota_alert_pct: number
           sandbox_daily_cap: number
+          threshold_min_sends: number
+          threshold_window_days: number
           updated_at: string
           warmup_start_cap: number
+          webhook_disable_after_days: number
+          webhook_endpoints_max: number
+          webhook_retry_hours: number
         }
         Insert: {
           account_daily_budget?: number
+          bounce_pause_ppm?: number
+          bounce_warn_ppm?: number
+          complaint_pause_ppm?: number
+          complaint_warn_ppm?: number
           id?: boolean
           key_burst?: number
           key_rate_per_second?: number
           max_send_attempts?: number
           owned_accounts_max?: number
+          quota_alert_pct?: number
           sandbox_daily_cap?: number
+          threshold_min_sends?: number
+          threshold_window_days?: number
           updated_at?: string
           warmup_start_cap?: number
+          webhook_disable_after_days?: number
+          webhook_endpoints_max?: number
+          webhook_retry_hours?: number
         }
         Update: {
           account_daily_budget?: number
+          bounce_pause_ppm?: number
+          bounce_warn_ppm?: number
+          complaint_pause_ppm?: number
+          complaint_warn_ppm?: number
           id?: boolean
           key_burst?: number
           key_rate_per_second?: number
           max_send_attempts?: number
           owned_accounts_max?: number
+          quota_alert_pct?: number
           sandbox_daily_cap?: number
+          threshold_min_sends?: number
+          threshold_window_days?: number
           updated_at?: string
           warmup_start_cap?: number
+          webhook_disable_after_days?: number
+          webhook_endpoints_max?: number
+          webhook_retry_hours?: number
         }
         Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          account_id: string
+          amount_kobo: number
+          card_brand: string | null
+          card_last4: string | null
+          checkout_id: string | null
+          created_at: string
+          current_period_end: string
+          current_period_start: string
+          ended_at: string | null
+          ended_reason: string | null
+          first_transaction_id: string | null
+          flutterwave_plan_id: number | null
+          id: string
+          past_due_reason: string | null
+          past_due_since: string | null
+          past_due_until: string | null
+          plan_code: string
+          price_kobo: number
+          provider_canceled_at: string | null
+          scheduled_at: string | null
+          scheduled_plan_code: string | null
+          status: string
+          test_mode: boolean
+          updated_at: string
+          vat_bps: number
+        }
+        Insert: {
+          account_id: string
+          amount_kobo: number
+          card_brand?: string | null
+          card_last4?: string | null
+          checkout_id?: string | null
+          created_at?: string
+          current_period_end: string
+          current_period_start: string
+          ended_at?: string | null
+          ended_reason?: string | null
+          first_transaction_id?: string | null
+          flutterwave_plan_id?: number | null
+          id?: string
+          past_due_reason?: string | null
+          past_due_since?: string | null
+          past_due_until?: string | null
+          plan_code: string
+          price_kobo: number
+          provider_canceled_at?: string | null
+          scheduled_at?: string | null
+          scheduled_plan_code?: string | null
+          status: string
+          test_mode: boolean
+          updated_at?: string
+          vat_bps: number
+        }
+        Update: {
+          account_id?: string
+          amount_kobo?: number
+          card_brand?: string | null
+          card_last4?: string | null
+          checkout_id?: string | null
+          created_at?: string
+          current_period_end?: string
+          current_period_start?: string
+          ended_at?: string | null
+          ended_reason?: string | null
+          first_transaction_id?: string | null
+          flutterwave_plan_id?: number | null
+          id?: string
+          past_due_reason?: string | null
+          past_due_since?: string | null
+          past_due_until?: string | null
+          plan_code?: string
+          price_kobo?: number
+          provider_canceled_at?: string | null
+          scheduled_at?: string | null
+          scheduled_plan_code?: string | null
+          status?: string
+          test_mode?: boolean
+          updated_at?: string
+          vat_bps?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_checkout_id_fkey"
+            columns: ["checkout_id"]
+            isOneToOne: false
+            referencedRelation: "checkouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "subscriptions_scheduled_plan_code_fkey"
+            columns: ["scheduled_plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+        ]
       }
       suppressions: {
         Row: {
@@ -678,6 +1537,7 @@ export type Database = {
           created_at: string
           id: number
           reason: string
+          ses_address: string | null
           source: string
         }
         Insert: {
@@ -686,6 +1546,7 @@ export type Database = {
           created_at?: string
           id?: never
           reason: string
+          ses_address?: string | null
           source: string
         }
         Update: {
@@ -694,6 +1555,7 @@ export type Database = {
           created_at?: string
           id?: never
           reason?: string
+          ses_address?: string | null
           source?: string
         }
         Relationships: [
@@ -701,6 +1563,143 @@ export type Database = {
             foreignKeyName: "suppressions_account_id_fkey"
             columns: ["account_id"]
             isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_actions: {
+        Row: {
+          account_id: string
+          applied_at: string | null
+          attempts: number
+          claimed_at: string | null
+          claimed_by: string | null
+          finding_id: number | null
+          id: number
+          last_error: string | null
+          next_attempt_at: string
+          requested_at: string
+          requested_by: string
+          sending_status: string
+          state: string
+          why: string
+        }
+        Insert: {
+          account_id: string
+          applied_at?: string | null
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          finding_id?: number | null
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          requested_at?: string
+          requested_by: string
+          sending_status: string
+          state?: string
+          why: string
+        }
+        Update: {
+          account_id?: string
+          applied_at?: string | null
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          finding_id?: number | null
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          requested_at?: string
+          requested_by?: string
+          sending_status?: string
+          state?: string
+          why?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_actions_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "safety_findings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_provisioning: {
+        Row: {
+          account_id: string
+          attempts: number
+          config_set_associated_at: string | null
+          config_set_at: string | null
+          created_at: string
+          event_destination_at: string | null
+          last_error: string | null
+          locked_by: string | null
+          locked_until: string | null
+          next_attempt_at: string
+          sandbox_associated_at: string | null
+          sending_status: string | null
+          standard_policy_at: string | null
+          strict_policy_at: string | null
+          suppression_at: string | null
+          tenant_arn: string | null
+          tenant_created_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          config_set_associated_at?: string | null
+          config_set_at?: string | null
+          created_at?: string
+          event_destination_at?: string | null
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          next_attempt_at?: string
+          sandbox_associated_at?: string | null
+          sending_status?: string | null
+          standard_policy_at?: string | null
+          strict_policy_at?: string | null
+          suppression_at?: string | null
+          tenant_arn?: string | null
+          tenant_created_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          config_set_associated_at?: string | null
+          config_set_at?: string | null
+          created_at?: string
+          event_destination_at?: string | null
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          next_attempt_at?: string
+          sandbox_associated_at?: string | null
+          sending_status?: string | null
+          standard_policy_at?: string | null
+          strict_policy_at?: string | null
+          suppression_at?: string | null
+          tenant_arn?: string | null
+          tenant_created_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_provisioning_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
@@ -747,16 +1746,307 @@ export type Database = {
           },
         ]
       }
+      webhook_deliveries: {
+        Row: {
+          account_id: string
+          attempts: number
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          delivered_at: string | null
+          email_id: number | null
+          event_type: string
+          give_up_at: string
+          history: Json
+          id: number
+          last_attempt_at: string | null
+          last_duration_ms: number | null
+          last_error: string | null
+          last_response: string | null
+          last_status_code: number | null
+          message_id: string
+          next_attempt_at: string
+          payload: Json
+          resend_of: number | null
+          status: string
+          status_reason: string | null
+          updated_at: string
+          webhook_id: string
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email_id?: number | null
+          event_type: string
+          give_up_at: string
+          history?: Json
+          id?: never
+          last_attempt_at?: string | null
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_response?: string | null
+          last_status_code?: number | null
+          message_id: string
+          next_attempt_at?: string
+          payload: Json
+          resend_of?: number | null
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+          webhook_id: string
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          email_id?: number | null
+          event_type?: string
+          give_up_at?: string
+          history?: Json
+          id?: never
+          last_attempt_at?: string | null
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_response?: string | null
+          last_status_code?: number | null
+          message_id?: string
+          next_attempt_at?: string
+          payload?: Json
+          resend_of?: number | null
+          status?: string
+          status_reason?: string | null
+          updated_at?: string
+          webhook_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_deliveries_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_deliveries_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "emails"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_deliveries_resend_of_fkey"
+            columns: ["resend_of"]
+            isOneToOne: false
+            referencedRelation: "webhook_deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_deliveries_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhooks: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          disabled_at: string | null
+          disabled_reason: string | null
+          events: string[]
+          failing_since: string | null
+          id: string
+          last_success_at: string | null
+          owner_notice_due: boolean
+          secret_hint: string
+          secret_sealed: string
+          status: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          disabled_at?: string | null
+          disabled_reason?: string | null
+          events: string[]
+          failing_since?: string | null
+          id?: string
+          last_success_at?: string | null
+          owner_notice_due?: boolean
+          secret_hint: string
+          secret_sealed: string
+          status?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          disabled_at?: string | null
+          disabled_reason?: string | null
+          events?: string[]
+          failing_since?: string | null
+          id?: string
+          last_success_at?: string | null
+          owner_notice_due?: boolean
+          secret_hint?: string
+          secret_sealed?: string
+          status?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhooks_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       accept_invite: { Args: { p_token_hash: string }; Returns: Json }
+      account_emails: {
+        Args: {
+          p_account_id: string
+          p_cursor_at?: string
+          p_cursor_id?: string
+          p_filters?: Json
+          p_limit?: number
+        }
+        Returns: Json
+      }
       account_members: { Args: { p_account_id: string }; Returns: Json }
       account_usage: { Args: { p_account_id: string }; Returns: Json }
+      add_domain: {
+        Args: { p_account_id: string; p_name: string }
+        Returns: Json
+      }
       address_of: { Args: { p_mailbox: string }; Returns: string }
+      advance_warmup: { Args: never; Returns: number }
+      alert_conditions: {
+        Args: never
+        Returns: {
+          key: string
+          kind: string
+          severity: string
+          summary: string
+        }[]
+      }
+      api_add_domain: {
+        Args: { p_account_id: string; p_actor_key_id: string; p_name: string }
+        Returns: Json
+      }
+      api_create_key: {
+        Args: {
+          p_account_id: string
+          p_actor_key_id: string
+          p_domain_id?: string
+          p_key_hash: string
+          p_name: string
+          p_permission: string
+          p_prefix: string
+        }
+        Returns: Json
+      }
+      api_get_domain: {
+        Args: {
+          p_account_id: string
+          p_actor_key_id: string
+          p_domain_id: string
+        }
+        Returns: Json
+      }
+      api_list_domains: {
+        Args: { p_account_id: string; p_actor_key_id: string }
+        Returns: Json
+      }
+      api_list_keys: { Args: { p_account_id: string }; Returns: Json }
+      api_remove_domain: {
+        Args: {
+          p_account_id: string
+          p_actor_key_id: string
+          p_domain_id: string
+        }
+        Returns: Json
+      }
+      api_revoke_key: {
+        Args: { p_account_id: string; p_actor_key_id: string; p_key_id: string }
+        Returns: Json
+      }
+      as_timestamptz: { Args: { p_value: string }; Returns: string }
+      asked_ses_to_pause: { Args: { p_account_id: string }; Returns: boolean }
       authenticate_key: { Args: { p_key_hash: string }; Returns: Json }
+      begin_ses_jobs: { Args: { p_token: string }; Returns: Json }
+      billing_issue_invoice: {
+        Args: {
+          p_lines: Json
+          p_payment_id: string
+          p_subtotal_kobo: number
+          p_vat_bps: number
+        }
+        Returns: string
+      }
+      billing_note: {
+        Args: {
+          p_account_id: string
+          p_action: string
+          p_actor: string
+          p_detail: Json
+        }
+        Returns: undefined
+      }
+      billing_overview: { Args: { p_account_id: string }; Returns: Json }
+      billing_payment_record: { Args: { p_raw: Json }; Returns: Json }
+      billing_period_end: { Args: { p_start: string }; Returns: string }
+      billing_provider_state: { Args: { p_account_id: string }; Returns: Json }
+      billing_quote: {
+        Args: { p_account_id: string; p_plan_code: string }
+        Returns: Json
+      }
+      billing_sweep: { Args: never; Returns: Json }
+      billing_unapplied: {
+        Args: {
+          p_account_id: string
+          p_amount_kobo: number
+          p_checkout_id: string
+          p_kind: string
+          p_method: string
+          p_plan_code: string
+          p_raw: Json
+          p_reason: string
+          p_subscription_id: string
+          p_test_mode: boolean
+          p_transaction_id: string
+          p_tx_ref: string
+        }
+        Returns: undefined
+      }
+      billing_vat: {
+        Args: { p_amount_kobo: number; p_vat_bps: number }
+        Returns: number
+      }
       bump_usage: {
         Args: {
           p_account_id: string
@@ -767,8 +2057,42 @@ export type Database = {
         Returns: undefined
       }
       caller_role: { Args: { p_account_id: string }; Returns: string }
+      cancel_email: {
+        Args: { p_account_id: string; p_public_id: string }
+        Returns: Json
+      }
       change_member_role: {
         Args: { p_account_id: string; p_role: string; p_user_id: string }
+        Returns: Json
+      }
+      claim_domain_name: {
+        Args: {
+          p_account_id: string
+          p_actor: string
+          p_key_id: string
+          p_key_prefix: string
+          p_name: string
+          p_user: string
+        }
+        Returns: Json
+      }
+      claim_domain_work: {
+        Args: {
+          p_account_id?: string
+          p_domain_id?: string
+          p_e2e: boolean
+          p_limit: number
+          p_worker: string
+        }
+        Returns: Json
+      }
+      claim_provisioning_work: {
+        Args: {
+          p_account_id?: string
+          p_e2e: boolean
+          p_limit: number
+          p_worker: string
+        }
         Returns: Json
       }
       claim_sends: {
@@ -780,6 +2104,15 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_tenant_actions: {
+        Args: { p_limit?: number; p_worker: string }
+        Returns: Json
+      }
+      claim_webhook_deliveries: {
+        Args: { p_account_id?: string; p_limit: number; p_worker: string }
+        Returns: Json
+      }
+      clean_error: { Args: { p_error: string }; Returns: string }
       create_account: {
         Args: {
           p_expected_monthly_volume?: number
@@ -809,9 +2142,40 @@ export type Database = {
         }
         Returns: Json
       }
+      create_webhook: {
+        Args: {
+          p_account_id: string
+          p_description?: string
+          p_events: string[]
+          p_secret_hint: string
+          p_secret_sealed: string
+          p_url: string
+        }
+        Returns: Json
+      }
+      delete_webhook: { Args: { p_webhook_id: string }; Returns: Json }
+      domain_api_key: {
+        Args: { p_account_id: string; p_key_id: string }
+        Returns: string
+      }
+      domain_name_ok: { Args: { p_name: string }; Returns: boolean }
+      domain_view: {
+        Args: { p_domain: Database["mail"]["Tables"]["domains"]["Row"] }
+        Returns: Json
+      }
+      e2e_evaluate: { Args: { p_account_id: string }; Returns: Json }
       e2e_purge_account: { Args: { p_account_id: string }; Returns: Json }
       e2e_ready_account: {
         Args: { p_account_id: string; p_domain: string }
+        Returns: Json
+      }
+      e2e_seed_usage: {
+        Args: {
+          p_account_id: string
+          p_bounced: number
+          p_complained: number
+          p_sent: number
+        }
         Returns: Json
       }
       e2e_set_plan: {
@@ -825,6 +2189,37 @@ export type Database = {
           monthly: number
         }[]
       }
+      email_page: {
+        Args: {
+          p_account_id: string
+          p_cursor_at: string
+          p_cursor_id: string
+          p_filters: Json
+          p_limit: number
+        }
+        Returns: Json
+      }
+      email_view: {
+        Args: { p_email: Database["mail"]["Tables"]["emails"]["Row"] }
+        Returns: Json
+      }
+      email_webhook_data: {
+        Args: {
+          p_email: Database["mail"]["Tables"]["emails"]["Row"]
+          p_extra?: Json
+        }
+        Returns: Json
+      }
+      enqueue_batch: {
+        Args: {
+          p_account_id: string
+          p_api_key_id: string
+          p_emails: Json
+          p_idempotency_key?: string
+          p_request_hash?: string
+        }
+        Returns: Json
+      }
       enqueue_email: {
         Args: {
           p_account_id: string
@@ -834,6 +2229,11 @@ export type Database = {
           p_payload: Json
           p_request_hash?: string
         }
+        Returns: Json
+      }
+      evaluate_account: { Args: { p_account_id: string }; Returns: Json }
+      flutterwave_plan_for: {
+        Args: { p_api_host: string; p_plan_code: string; p_test_mode: boolean }
         Returns: Json
       }
       get_email: {
@@ -846,12 +2246,181 @@ export type Database = {
       }
       invite_preview: { Args: { p_token_hash: string }; Returns: Json }
       is_e2e_account: { Args: { p_account_id: string }; Returns: boolean }
+      is_full_key: {
+        Args: { p_account_id: string; p_key_id: string }
+        Returns: boolean
+      }
       is_invite_email: { Args: { p_email: string }; Returns: boolean }
       is_mailbox: { Args: { p_mailbox: string }; Returns: boolean }
+      is_reserved_domain: { Args: { p_name: string }; Returns: boolean }
+      is_sealed_secret: {
+        Args: { p_hint: string; p_sealed: string }
+        Returns: boolean
+      }
+      is_test_account: { Args: { p_account_id: string }; Returns: boolean }
+      is_webhook_url: { Args: { p_url: string }; Returns: boolean }
+      iso_time: { Args: { p_at: string }; Returns: string }
+      keep_current_plan: { Args: { p_account_id: string }; Returns: Json }
+      kick_ses_jobs: { Args: { p_account_id?: string }; Returns: number }
       lagos_day: { Args: { p_at: string }; Returns: string }
       leave_account: { Args: { p_account_id: string }; Returns: Json }
+      list_emails: {
+        Args: {
+          p_account_id: string
+          p_cursor_at?: string
+          p_cursor_id?: string
+          p_filters?: Json
+          p_limit?: number
+        }
+        Returns: Json
+      }
+      note_cap_use: {
+        Args: {
+          p_account_id: string
+          p_cap: number
+          p_period: string
+          p_refused: boolean
+          p_scope: string
+          p_used: number
+        }
+        Returns: undefined
+      }
+      note_provider_active: {
+        Args: { p_account_id: string; p_first_transaction_id: string }
+        Returns: Json
+      }
+      note_provider_canceled: {
+        Args: { p_account_id: string; p_first_transaction_id: string }
+        Returns: Json
+      }
+      on_jobs_side: {
+        Args: { p_account_id: string; p_e2e: boolean }
+        Returns: boolean
+      }
+      open_finding: {
+        Args: {
+          p_account_id: string
+          p_detail: Json
+          p_kind: string
+          p_severity: string
+          p_source: string
+        }
+        Returns: number
+      }
+      ppm_text: { Args: { p_ppm: number }; Returns: string }
+      profile_complete: {
+        Args: { p_account: Database["mail"]["Tables"]["accounts"]["Row"] }
+        Returns: boolean
+      }
+      purge_old_emails: { Args: never; Returns: number }
       purge_payloads: { Args: never; Returns: number }
+      purge_safety_records: { Args: never; Returns: number }
       purge_send_budget: { Args: never; Returns: number }
+      purge_webhook_deliveries: { Args: never; Returns: number }
+      queue_tenant_action: {
+        Args: {
+          p_account: Database["mail"]["Tables"]["accounts"]["Row"]
+          p_by: string
+          p_finding_id: number
+          p_status: string
+          p_why: string
+        }
+        Returns: number
+      }
+      queue_webhook_event: {
+        Args: {
+          p_account_id: string
+          p_data: Json
+          p_email_id?: number
+          p_occurred_at?: string
+          p_type: string
+        }
+        Returns: number
+      }
+      rate_ppm: { Args: { p_n: number; p_sent: number }; Returns: number }
+      recipient_addresses: {
+        Args: { p_bcc: string[]; p_cc: string[]; p_to: string[] }
+        Returns: string[]
+      }
+      record_billing_charge: {
+        Args: {
+          p_amount_kobo: number
+          p_card_brand: string
+          p_card_last4: string
+          p_currency: string
+          p_method: string
+          p_raw: Json
+          p_status: string
+          p_test_mode: boolean
+          p_transaction_id: string
+          p_tx_ref: string
+        }
+        Returns: Json
+      }
+      record_billing_incident: {
+        Args: {
+          p_account_id: string
+          p_detail: Json
+          p_kind: string
+          p_provider_reference: string
+          p_test_mode: boolean
+        }
+        Returns: undefined
+      }
+      record_domain_check: {
+        Args: { p_domain_id: string; p_state: Json; p_worker: string }
+        Returns: Json
+      }
+      record_domain_error: {
+        Args: {
+          p_domain_id: string
+          p_error: string
+          p_retry_after: number
+          p_worker: string
+        }
+        Returns: Json
+      }
+      record_domain_failed: {
+        Args: {
+          p_domain_id: string
+          p_missing_record?: string
+          p_reason: string
+          p_worker: string
+        }
+        Returns: Json
+      }
+      record_domain_released: {
+        Args: { p_domain_id: string; p_worker: string }
+        Returns: Json
+      }
+      record_domain_step: {
+        Args: {
+          p_detail?: Json
+          p_domain_id: string
+          p_step: string
+          p_worker: string
+        }
+        Returns: Json
+      }
+      record_provisioning: {
+        Args: {
+          p_account_id: string
+          p_detail?: Json
+          p_step: string
+          p_worker: string
+        }
+        Returns: Json
+      }
+      record_provisioning_error: {
+        Args: {
+          p_account_id: string
+          p_error: string
+          p_retry_after: number
+          p_worker: string
+        }
+        Returns: Json
+      }
+      record_sandbox_identity: { Args: { p_state: Json }; Returns: Json }
       record_send_event: {
         Args: {
           p_detail?: Json
@@ -876,9 +2445,79 @@ export type Database = {
         }
         Returns: Json
       }
+      record_tenant_action: {
+        Args: {
+          p_action_id: number
+          p_error?: string
+          p_outcome: string
+          p_worker: string
+        }
+        Returns: Json
+      }
+      record_tenant_event: {
+        Args: {
+          p_event_id: string
+          p_finding?: string
+          p_identity?: string
+          p_impact?: string
+          p_occurred_at?: string
+          p_origin?: string
+          p_resource_arn?: string
+          p_status?: string
+          p_summary?: string
+          p_tenant?: string
+          p_type: string
+        }
+        Returns: Json
+      }
+      record_webhook_attempt: {
+        Args: {
+          p_delivery_id: number
+          p_duration_ms?: number
+          p_error?: string
+          p_response?: string
+          p_status_code?: number
+          p_worker: string
+        }
+        Returns: Json
+      }
+      register_flutterwave_plan: {
+        Args: {
+          p_amount_kobo: number
+          p_api_host: string
+          p_flutterwave_plan_id: number
+          p_plan_code: string
+          p_test_mode: boolean
+        }
+        Returns: Json
+      }
       release_reservation: { Args: { p_email_id: number }; Returns: undefined }
+      remove_domain: { Args: { p_domain_id: string }; Returns: Json }
       remove_member: {
         Args: { p_account_id: string; p_user_id: string }
+        Returns: Json
+      }
+      remove_suppression: { Args: { p_suppression_id: number }; Returns: Json }
+      request_domain_removal: {
+        Args: {
+          p_actor: string
+          p_domain_id: string
+          p_key_id: string
+          p_key_prefix: string
+          p_user: string
+        }
+        Returns: Json
+      }
+      reschedule_email: {
+        Args: {
+          p_account_id: string
+          p_public_id: string
+          p_scheduled_at: string
+        }
+        Returns: Json
+      }
+      resend_webhook_delivery: {
+        Args: { p_delivery_id: number }
         Returns: Json
       }
       reserve_send: {
@@ -890,9 +2529,35 @@ export type Database = {
         }
         Returns: Json
       }
+      retry_domain: { Args: { p_domain_id: string }; Returns: Json }
       revoke_api_key: { Args: { p_key_id: string }; Returns: Json }
       revoke_invite: { Args: { p_invite_id: string }; Returns: Json }
+      rotate_webhook_secret: {
+        Args: {
+          p_secret_hint: string
+          p_secret_sealed: string
+          p_webhook_id: string
+        }
+        Returns: Json
+      }
+      run_safety_checks: {
+        Args: {
+          p_bounce_ppm?: number
+          p_complaint_ppm?: number
+          p_metric_at?: string
+          p_outcome: string
+        }
+        Returns: Json
+      }
+      sandbox_domain_for: {
+        Args: { p_account_id: string; p_from: string }
+        Returns: string
+      }
       sanitise_detail: { Args: { p_detail: Json }; Returns: Json }
+      schedule_plan_change: {
+        Args: { p_account_id: string; p_plan_code: string }
+        Returns: Json
+      }
       seats_taken: {
         Args: { p_account_id: string; p_with_invites: boolean }
         Returns: number
@@ -904,9 +2569,24 @@ export type Database = {
           status: string
         }[]
       }
+      ses_findings_of: { Args: { p_account_id: string }; Returns: Json }
+      set_webhook_enabled: {
+        Args: { p_enabled: boolean; p_webhook_id: string }
+        Returns: Json
+      }
       settle_unsent: {
         Args: { p_email_id: number; p_reason: string; p_status: string }
         Returns: undefined
+      }
+      start_checkout: {
+        Args: {
+          p_account_id: string
+          p_expected_total_kobo: number
+          p_flutterwave_plan_id: number
+          p_plan_code: string
+          p_test_mode: boolean
+        }
+        Returns: Json
       }
       text_array: { Args: { p_value: Json }; Returns: string[] }
       transfer_ownership: {
@@ -922,6 +2602,29 @@ export type Database = {
           p_website?: string
         }
         Returns: Json
+      }
+      update_webhook: {
+        Args: {
+          p_description?: string
+          p_events: string[]
+          p_url: string
+          p_webhook_id: string
+        }
+        Returns: Json
+      }
+      utc_text: { Args: { p_at: string }; Returns: string }
+      webhook_event_list: { Args: { p_events: string[] }; Returns: string[] }
+      webhook_for_caller: {
+        Args: { p_webhook_id: string }
+        Returns: {
+          account_state: string
+          role: string
+          webhook: Database["mail"]["Tables"]["webhooks"]["Row"]
+        }[]
+      }
+      window_usage: {
+        Args: { p_account_id: string; p_days: number }
+        Returns: Record<string, unknown>
       }
     }
     Enums: {
@@ -4396,6 +6099,63 @@ export type Database = {
         Args: { p_admin_id: string }
         Returns: boolean
       }
+      admin_mail_account: { Args: { p_account_id: string }; Returns: Json }
+      admin_mail_accounts: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_state?: string
+        }
+        Returns: Json
+      }
+      admin_mail_approve_account: {
+        Args: { p_account_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_mail_audit: {
+        Args: { p_action?: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      admin_mail_domains: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      admin_mail_override_caps: {
+        Args: {
+          p_account_id: string
+          p_daily_cap: number
+          p_monthly_cap: number
+          p_reason: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_mail_overview: { Args: never; Returns: Json }
+      admin_mail_pause_account: {
+        Args: { p_account_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_mail_reject_account: {
+        Args: { p_account_id: string; p_reason: string; p_request_key: string }
+        Returns: Json
+      }
+      admin_mail_resume_account: {
+        Args: {
+          p_account_id: string
+          p_finding_id: number
+          p_reason: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
+      admin_mail_review_queue: { Args: never; Returns: Json }
+      admin_mail_ses_health: { Args: never; Returns: Json }
       admin_margin: {
         Args: { p_from: string; p_test_mode: boolean; p_to: string }
         Returns: {
