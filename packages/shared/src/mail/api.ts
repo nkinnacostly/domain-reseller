@@ -32,6 +32,15 @@ export const EMAIL_LIMITS = {
   /** `POST /emails/batch` (§6). */
   maxBatch: 100,
   maxIdempotencyKeyChars: 256,
+  /**
+   * How far ahead `scheduled_at` may be (§3.1). A queued body waits in the
+   * database until it is sent, so the wait is short; SQL holds the line
+   * (enqueue_email, reschedule_email, migration 48).
+   */
+  maxScheduleHours: 72,
+  /** `GET /emails`: a page holds 1 to 100, 20 unless asked. */
+  maxPage: 100,
+  defaultPage: 20,
 } as const
 
 // ── Mailboxes ────────────────────────────────────────────────────────────────
@@ -199,19 +208,59 @@ const subject = z
   .max(EMAIL_LIMITS.maxSubjectChars)
   .refine((value) => !/[\r\n]/.test(value), 'The subject is one line')
 
+/**
+ * An ISO 8601 date and time with its zone (`Z` or `+01:00`): a time without
+ * one would mean a different moment on every server.
+ */
+export const timestampSchema = z.iso.datetime({ offset: true })
+
+/**
+ * When to send (§3.1): a moment at most `maxScheduleHours` ahead — SQL
+ * checks the distance against its own clock. A moment already past sends
+ * at once, so a retried request whose time has gone by still sends.
+ */
+const scheduledAt = timestampSchema.describe(
+  `When to send it: an ISO 8601 date and time with its zone, at most ${EMAIL_LIMITS.maxScheduleHours} hours ahead. A time already past sends it at once. Leave it out to send now.`,
+)
+
 export const sendEmailSchema = z
   .strictObject({
-    from: mailbox,
-    to: mailboxes(EMAIL_LIMITS.maxRecipients),
-    cc: mailboxes(EMAIL_LIMITS.maxRecipients).optional(),
-    bcc: mailboxes(EMAIL_LIMITS.maxRecipients).optional(),
-    reply_to: mailboxes(EMAIL_LIMITS.maxReplyTo).optional(),
-    subject,
-    html: z.string().optional(),
-    text: z.string().optional(),
-    headers: headers.optional(),
-    attachments: z.array(attachment).max(EMAIL_LIMITS.maxAttachments).optional(),
-    tags: z.array(tag).max(EMAIL_LIMITS.maxTags).optional(),
+    from: mailbox.describe(
+      'The sender: "Name <address>" or a bare address, at a domain verified on your account.',
+    ),
+    to: mailboxes(EMAIL_LIMITS.maxRecipients).describe(
+      'One address or a list. To, cc and bcc together hold at most 50 recipients, each once.',
+    ),
+    cc: mailboxes(EMAIL_LIMITS.maxRecipients).optional().describe('One address or a list.'),
+    bcc: mailboxes(EMAIL_LIMITS.maxRecipients)
+      .optional()
+      .describe('One address or a list. Never shown in the message’s headers.'),
+    reply_to: mailboxes(EMAIL_LIMITS.maxReplyTo)
+      .optional()
+      .describe('One address or a list, for the Reply-To header.'),
+    subject: subject.describe('One line, 1 to 998 characters.'),
+    html: z.string().optional().describe('The HTML body. Give html, text or both.'),
+    text: z.string().optional().describe('The plain-text body. Give html, text or both.'),
+    headers: headers
+      .optional()
+      .describe(
+        'Extra headers: X-* (not X-SES-*), List-Unsubscribe, List-Unsubscribe-Post, List-Id, In-Reply-To, References and Auto-Submitted. At most 20.',
+      ),
+    attachments: z
+      .array(attachment)
+      .max(EMAIL_LIMITS.maxAttachments)
+      .optional()
+      .describe(
+        'Up to 20 files, each base64 in `content`. The whole request stays under 4 MB. Executable file types are refused.',
+      ),
+    tags: z
+      .array(tag)
+      .max(EMAIL_LIMITS.maxTags)
+      .optional()
+      .describe(
+        'Up to 10 name and value pairs (letters, digits, _ and -), each name once, for finding the email later.',
+      ),
+    scheduled_at: scheduledAt.optional(),
   })
   .superRefine((email, ctx) => {
     if (!email.html && !email.text) {
@@ -279,6 +328,8 @@ export type EnqueueInput = {
     reply_to: string[]
     subject: string
     tags: { name: string; value: string }[]
+    /** UTC, to the millisecond; absent to send now (not null, so the fingerprint of an unscheduled email stays what it was). */
+    scheduled_at?: string
   }
   payload: {
     html: string | null
@@ -287,6 +338,9 @@ export type EnqueueInput = {
     attachments: { filename: string; content: string; content_type: string }[]
   }
 }
+
+/** One moment, one spelling: `+01:00` and `Z` forms of the same time hash and compare equal. */
+export const toUtc = (timestamp: string): string => new Date(timestamp).toISOString()
 
 export function toEnqueueInput(email: SendEmail): EnqueueInput {
   return {
@@ -298,6 +352,7 @@ export function toEnqueueInput(email: SendEmail): EnqueueInput {
       reply_to: email.reply_to ?? [],
       subject: email.subject,
       tags: email.tags ?? [],
+      ...(email.scheduled_at ? { scheduled_at: toUtc(email.scheduled_at) } : {}),
     },
     payload: {
       html: email.html || null,
@@ -324,5 +379,9 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(value ?? null)
 }
 
-/** The request's fingerprint for Idempotency-Key replays: sha256 of its canonical JSON, hex. */
-export const requestHash = (input: EnqueueInput): Promise<string> => sha256Hex(canonicalJson(input))
+/**
+ * The request's fingerprint for Idempotency-Key replays: sha256 of its
+ * canonical JSON, hex — of one email, or of a batch in its order.
+ */
+export const requestHash = (input: EnqueueInput | readonly EnqueueInput[]): Promise<string> =>
+  sha256Hex(canonicalJson(input))

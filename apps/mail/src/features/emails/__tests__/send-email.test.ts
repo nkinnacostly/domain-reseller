@@ -167,6 +167,27 @@ describe('POST /api/v1/emails — the key door', () => {
   })
 })
 
+describe('POST /api/v1/emails — the content check (§7.6)', () => {
+  it.each([
+    ['a From that imitates a bank', { from: 'GTBank Alerts <alerts@acme.example>' }, 'imitates'],
+    ['a link through a shortener', { html: '<a href="https://bit.ly/x">pay</a>' }, 'shortener'],
+    [
+      'a program attached',
+      { attachments: [{ filename: 'invoice.apk', content: 'QQ==' }] },
+      'program',
+    ],
+  ])('refuses %s with 422 before anything is queued or reserved', async (_, over, words) => {
+    const calls = mockRpc({ authenticate_key: () => KEY_OK })
+    const response = await post({ ...EMAIL, ...over })
+    expect(response.status).toBe(422)
+    const body = await response.json()
+    expect(body.name).toBe('validation_error')
+    expect(body.message).toContain(words)
+    expect(calls.map((call) => call.fn)).toEqual(['authenticate_key'])
+    expect(JSON.stringify(info.mock.calls)).not.toContain('acme.example')
+  })
+})
+
 describe('POST /api/v1/emails — validation', () => {
   it('refuses a bad Idempotency-Key before reading the body', async () => {
     const calls = mockRpc({ authenticate_key: () => KEY_OK })

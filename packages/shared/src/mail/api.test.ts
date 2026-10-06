@@ -13,6 +13,7 @@ import {
   requestHash,
   sendEmailSchema,
   toEnqueueInput,
+  toUtc,
 } from './api'
 
 const EMAIL = {
@@ -103,9 +104,8 @@ describe('sendEmailSchema (§6)', () => {
   })
 
   it('refuses fields it does not act on (N9b), and bad addresses', () => {
-    expect(issues({ ...EMAIL, scheduled_at: '2026-10-07T09:00:00Z' }).join()).toContain(
-      'scheduled_at',
-    )
+    // Open tracking is out of scope for v1 (§1): asked for, it is refused, not ignored.
+    expect(issues({ ...EMAIL, track_opens: true }).join()).toContain('track_opens')
     expect(issues({ ...EMAIL, from: 'nobody' })).toContain(
       'from: Not an email address, or "Name <address>"',
     )
@@ -198,6 +198,14 @@ describe('sendEmailSchema (§6)', () => {
     ).toContain('once')
   })
 
+  it('takes scheduled_at as an ISO 8601 moment with its zone, and nothing vaguer', () => {
+    expect(issues({ ...EMAIL, scheduled_at: '2026-10-07T09:00:00Z' })).toEqual([])
+    expect(issues({ ...EMAIL, scheduled_at: '2026-10-07T10:00:00.250+01:00' })).toEqual([])
+    for (const bad of ['2026-10-07T09:00:00', 'tomorrow', '2026-10-07', 1767225600]) {
+      expect(issues({ ...EMAIL, scheduled_at: bad }).join()).toContain('scheduled_at')
+    }
+  })
+
   it('a batch is 1 to 100 emails', () => {
     expect(batchSchema.safeParse([EMAIL]).success).toBe(true)
     expect(batchSchema.safeParse([]).success).toBe(false)
@@ -241,6 +249,28 @@ describe('what SQL receives, and the replay fingerprint', () => {
         ],
       },
     })
+  })
+
+  it('passes scheduled_at in UTC, and leaves it out of an email sent now', () => {
+    const later = toEnqueueInput(
+      sendEmailSchema.parse({ ...EMAIL, scheduled_at: '2026-10-07T10:00:00+01:00' }),
+    )
+    expect(later.email.scheduled_at).toBe('2026-10-07T09:00:00.000Z')
+    expect(toEnqueueInput(sendEmailSchema.parse(EMAIL)).email).not.toHaveProperty('scheduled_at')
+    expect(toUtc('2026-10-07T09:00:00Z')).toBe('2026-10-07T09:00:00.000Z')
+  })
+
+  it('fingerprints a moment the same in any zone, and a batch by its order', async () => {
+    const z = toEnqueueInput(
+      sendEmailSchema.parse({ ...EMAIL, scheduled_at: '2026-10-07T09:00:00Z' }),
+    )
+    const lagos = toEnqueueInput(
+      sendEmailSchema.parse({ ...EMAIL, scheduled_at: '2026-10-07T10:00:00+01:00' }),
+    )
+    const other = toEnqueueInput(sendEmailSchema.parse({ ...EMAIL, subject: 'Other' }))
+    expect(await requestHash(z)).toBe(await requestHash(lagos))
+    expect(await requestHash([z, other])).toBe(await requestHash([lagos, other]))
+    expect(await requestHash([z, other])).not.toBe(await requestHash([other, z]))
   })
 
   it('hashes equal requests equally, whatever their key order', async () => {

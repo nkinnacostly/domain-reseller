@@ -33,6 +33,7 @@ const VIEW = {
   bounced_at: null,
   complained_at: null,
   failed_at: null,
+  canceled_at: null,
   last_event: 'delivery',
   last_event_at: '2026-10-06T09:30:04+00:00',
 }

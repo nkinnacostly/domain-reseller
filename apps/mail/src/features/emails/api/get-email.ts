@@ -1,6 +1,6 @@
 import { apiError, emailIdSchema } from '@dr/shared/mail'
 import type { ApiDeps } from '@/features/api/deps'
-import { authenticate } from '@/features/api/lib/authenticate'
+import { authenticateFull, FULL_KEY_ONLY } from '@/features/api/lib/authenticate'
 import { apiErrorResponse, apiJson } from '@/features/api/lib/respond'
 
 /**
@@ -12,10 +12,7 @@ import { apiErrorResponse, apiJson } from '@/features/api/lib/respond'
  */
 
 export const NOT_FOUND = apiError('not_found', 'No email with that id belongs to this account.')
-export const SENDING_KEY = apiError(
-  'forbidden',
-  'This API key may only send. Reading an email takes a full-access key.',
-)
+export const SENDING_KEY = FULL_KEY_ONLY
 
 export async function getEmail(
   request: Request,
@@ -23,9 +20,8 @@ export async function getEmail(
   deps: ApiDeps,
   requestId: string,
 ): Promise<Response> {
-  const auth = await authenticate(request, deps)
+  const auth = await authenticateFull(request, deps)
   if (!auth.ok) return apiErrorResponse(auth.error, requestId)
-  if (auth.key.permission !== 'full') return apiErrorResponse(SENDING_KEY, requestId)
 
   const emailId = emailIdSchema.safeParse(id)
   if (!emailId.success) return apiErrorResponse(NOT_FOUND, requestId)

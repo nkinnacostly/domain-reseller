@@ -34,3 +34,46 @@ export async function runApi<Deps>(
     return apiErrorResponse(INTERNAL, requestId)
   }
 }
+
+const METHODS = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] as const
+type Method = (typeof METHODS)[number]
+type Handler = (request: Request) => Promise<Response>
+
+/**
+ * The methods a path does not take, answered in the API's shape — JSON with
+ * `x-request-id` and an `allow` header — rather than Next's empty 405.
+ *
+ * ```ts
+ * export const { PATCH, PUT, DELETE } = otherMethods(['GET', 'POST'])
+ * ```
+ */
+export function otherMethods(allowed: readonly Method[]): Record<Method, Handler> {
+  const words = allowed.join(' and ')
+  const handler: Handler = async () => {
+    const requestId = newRequestId()
+    const response = apiErrorResponse(
+      {
+        ...apiError(
+          'not_found',
+          `This path takes ${words} only. The reference lists every path: /docs/api.`,
+        ),
+        status: 405,
+      },
+      requestId,
+    )
+    response.headers.set('allow', allowed.join(', '))
+    return response
+  }
+  return Object.fromEntries(METHODS.map((method) => [method, handler])) as Record<Method, Handler>
+}
+
+/** Any path under /api/v1 that does not exist: a JSON 404, as every other answer. */
+export async function noSuchPath(): Promise<Response> {
+  return apiErrorResponse(
+    apiError(
+      'not_found',
+      'There is no such path in the v1 API. The reference lists every path: /docs/api.',
+    ),
+    newRequestId(),
+  )
+}
