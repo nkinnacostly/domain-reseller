@@ -59,7 +59,7 @@ async function Onboarding() {
         <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-pretty text-sm/6 text-muted-foreground">
           <li>A verified domain to send from.</li>
           <li>A complete profile — this form completes it.</li>
-          <li>Approval by our team, who read the profile. Reviews open before launch.</li>
+          <li>Approval by our team, who read the profile.</li>
         </ol>
       </aside>
     </div>

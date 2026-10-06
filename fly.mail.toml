@@ -5,7 +5,9 @@
 # and this worker paces itself as if it had Mail's whole share of it.
 # Secrets are set with `fly secrets set -c fly.mail.toml`:
 #   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY,
-#   MAIL_SES_SENDER_ACCESS_KEY_ID, MAIL_SES_SENDER_SECRET_ACCESS_KEY
+#   MAIL_SES_SENDER_ACCESS_KEY_ID, MAIL_SES_SENDER_SECRET_ACCESS_KEY,
+#   MAIL_SAFETY_SECRET (the same value as the Mail Vercel project's: the ping
+#   that asks apps/mail to apply a queued SES pause, §7.4)
 app = "mydomainshub-mail-worker"
 primary_region = "lhr"
 
@@ -19,6 +21,8 @@ primary_region = "lhr"
   MAIL_SES_REGION = "eu-west-2"
   # MR8: Mail's share of the account's 14 a second; the shop keeps 4 (§4.4).
   MAIL_MAX_SEND_RATE = "10"
+  # §7.4: apps/mail holds the manager key and applies the SES pauses this worker queues.
+  MAIL_APP_URL = "https://emails.mydomainshub.com"
 
 [http_service]
   internal_port = 8080

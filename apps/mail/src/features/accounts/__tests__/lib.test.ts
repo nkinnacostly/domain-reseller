@@ -326,6 +326,7 @@ describe('memberships and the current account (§10: the switcher)', () => {
     name: `Account ${id}`,
     state,
     ses_status: 'pending',
+    state_reason: null as string | null,
     plan_code: 'free',
     website: null,
     use_case: 'Receipts',
@@ -348,6 +349,7 @@ describe('memberships and the current account (§10: the switcher)', () => {
           name: 'Account a',
           state: 'sandbox',
           sesStatus: 'pending',
+          stateReason: null,
           planCode: 'free',
           website: null,
           useCase: 'Receipts',
@@ -357,6 +359,11 @@ describe('memberships and the current account (§10: the switcher)', () => {
       },
     ])
     expect(readMemberships('nope')).toEqual([])
+    // Migration 51: why a paused or closed account is so, as a code the banner words.
+    const paused = readMemberships([
+      { role: 'owner', accounts: { ...account('p', 'paused'), state_reason: 'paused_by_admin' } },
+    ])
+    expect(paused[0]?.account.stateReason).toBe('paused_by_admin')
   })
 
   it('shows the remembered account while the person is its member, else the first open one', () => {

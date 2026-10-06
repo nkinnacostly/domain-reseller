@@ -63,7 +63,7 @@ export function nextSteps(input: {
       id: 'review',
       title: 'Approval by our team',
       detail:
-        'Once the two steps above are done, a person at MyDomainsHub reviews the account before it can send to anyone. Reviews open before launch.',
+        'Once the two steps above are done, a person at MyDomainsHub reviews the account before it can send to anyone.',
       href: null,
       done: false,
     })

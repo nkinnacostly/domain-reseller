@@ -681,7 +681,7 @@ begin
   end if;
   v_passed := v_passed + 1;
 
-  -- ── 14. Grants: the loop, the views, and the cost table (§3.0).
+  -- ── 14. Grants: the loop (Mail's admin_mail_* of migration 51 too), the views, and the cost table (§3.0).
   v_expected := '{
     "admins_factor_is_theirs":"none", "admins_log_change":"none", "admin_changes_final":"none",
     "admin_audit_is_final":"none", "append_only_final":"none", "admin_tier":"none", "admin_session":"none",
@@ -719,7 +719,13 @@ begin
     "admin_stuck_order_minutes":"authenticated", "admin_job_ledger":"authenticated", "admin_ssl_job_certificate":"authenticated",
     "record_supplier_ledger":"service_role", "bump_funnel":"service_role", "seed_test_failed_email":"service_role",
     "hold_test_refund":"service_role", "purge_test_ledger_entries":"service_role",
-    "current_alert_conditions":"service_role", "activate_fx_rate":"service_role"
+    "current_alert_conditions":"service_role", "activate_fx_rate":"service_role",
+    "admin_mail_approve_account":"authenticated", "admin_mail_reject_account":"authenticated",
+    "admin_mail_pause_account":"authenticated", "admin_mail_resume_account":"authenticated",
+    "admin_mail_override_caps":"authenticated", "admin_mail_overview":"authenticated",
+    "admin_mail_review_queue":"authenticated", "admin_mail_accounts":"authenticated",
+    "admin_mail_account":"authenticated", "admin_mail_domains":"authenticated",
+    "admin_mail_ses_health":"authenticated", "admin_mail_audit":"authenticated"
   }';
   for v_row in select p.oid, p.proname from pg_proc p
                 where p.pronamespace = 'public'::regnamespace
