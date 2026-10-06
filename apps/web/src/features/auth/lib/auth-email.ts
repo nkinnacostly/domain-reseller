@@ -1,6 +1,7 @@
 import { renderEmail } from '@dr/shared/email'
 import { z } from 'zod'
 import type { OutgoingEmail } from '@/lib/email/types'
+import { env } from '@/lib/env'
 
 /**
  * The emails Supabase Auth asks us to send (its Send Email hook, L1): the
@@ -188,9 +189,12 @@ export function planAuthEmail(payload: AuthEmailPayload, appUrl: string): AuthEm
  * never taken from the payload; every other email is the shop's, unchanged.
  */
 export const MAIL_PRODUCT = 'MyDomainsHub Mail'
+// Never localhost in production: an email from the hosted project must not
+// carry a sign-in token to a link on the reader's own machine.
+const LOCAL_SERVER = env.NODE_ENV !== 'production'
 const MAIL_ORIGINS: Readonly<Record<string, string>> = {
   'emails.mydomainshub.com': 'https://emails.mydomainshub.com',
-  'localhost:3001': 'http://localhost:3001',
+  ...(LOCAL_SERVER ? { 'localhost:3001': 'http://localhost:3001' } : {}),
 }
 
 export function mailOrigin(address: string): string | null {

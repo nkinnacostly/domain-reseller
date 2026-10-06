@@ -23,8 +23,10 @@ export function safeNext(
   }
 
   if (url.origin !== new URL(origin).origin) return fallback
-  // `//evil.com` and `/\evil.com` are protocol-relative in some browsers.
-  if (/^\/[/\\]/.test(next)) return fallback
+  // `//evil.com` and `/\evil.com` are protocol-relative in some browsers. Test
+  // both what was sent and what the parser made of it: `/.//evil.com`,
+  // `/x/..//evil.com` and `/%2e%2e//evil.com` normalise to `//evil.com`.
+  if (/^\/[/\\]/.test(next) || /^\/[/\\]/.test(url.pathname)) return fallback
 
   const path = `${url.pathname}${url.search}${url.hash}`
   // Never bounce back into the auth pages themselves.

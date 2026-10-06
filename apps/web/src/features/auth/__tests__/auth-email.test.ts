@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   type AuthEmailPayload,
   authEmailPayloadSchema,
@@ -282,5 +282,18 @@ describe('planAuthEmail for MyDomainsHub Mail (MAIL-SPEC M5)', () => {
     expect(mailOrigin('http://localhost:3001')).toBe('http://localhost:3001')
     expect(mailOrigin('http://localhost:3000')).toBeNull()
     expect(mailOrigin('')).toBeNull()
+  })
+
+  it('never sends a production email to a link on localhost', async () => {
+    vi.resetModules()
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      const fresh = await import('../lib/auth-email')
+      expect(fresh.mailOrigin('http://localhost:3001')).toBeNull()
+      expect(fresh.mailOrigin('https://emails.mydomainshub.com')).toBe(MAIL)
+    } finally {
+      vi.unstubAllEnvs()
+      vi.resetModules()
+    }
   })
 })

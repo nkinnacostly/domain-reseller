@@ -8,6 +8,9 @@ describe('safeNext — refusing to be an open redirect', () => {
     ['another site', 'https://evil.example/steal'],
     ['a protocol-relative URL', '//evil.example'],
     ['a backslash trick', '/\\evil.example'],
+    ['a dot segment that normalises to //', '/.//evil.example'],
+    ['a parent segment that normalises to //', '/x/..//evil.example'],
+    ['an encoded parent segment that normalises to //', '/%2e%2e//evil.example'],
     ['a script URL', 'javascript:alert(1)'],
     ['garbage', 'http://'],
   ])('falls back for %s', (_, next) => {
