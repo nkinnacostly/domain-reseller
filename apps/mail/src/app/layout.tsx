@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
 import { PRODUCT_NAME } from '@/components/layout/brand'
-import { SiteFooter } from '@/components/layout/site-footer'
-import { SiteHeader } from '@/components/layout/site-header'
 import { ThemeProvider } from '@/components/layout/theme-provider'
 import { env } from '@/lib/env'
 import './globals.css'
@@ -50,13 +48,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           >
             Skip to content
           </a>
-          <div className="flex min-h-dvh flex-col">
-            <SiteHeader />
-            <main id="main" className="flex-1">
-              {children}
-            </main>
-            <SiteFooter />
-          </div>
+          {/* Each area's layout draws its own chrome and its <main id="main">. */}
+          {children}
         </ThemeProvider>
       </body>
     </html>

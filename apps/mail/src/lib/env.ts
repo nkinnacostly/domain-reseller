@@ -36,16 +36,24 @@ export const env = createEnv({
       .regex(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/, 'Not an SNS topic ARN')
       .optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
+    /**
+     * Cloudflare Turnstile (§7.1, the shop's SEC-9), checked on our server
+     * before any form that sends an email. Both keys or neither: unset,
+     * nothing is drawn or checked (lib/turnstile.ts).
+     */
+    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_MAIL_URL: z.url().default('http://localhost:3001'),
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().min(1).optional(),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_MAIL_URL: process.env.NEXT_PUBLIC_MAIL_URL,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
   },
   // Lets `pnpm build` run in CI without a full secret set.
   skipValidation: process.env.SKIP_ENV_VALIDATION === 'true',

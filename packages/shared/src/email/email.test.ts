@@ -108,6 +108,14 @@ describe('renderEmail', () => {
     expect(text).toContain('Your code: 123456')
     expect(text.trimEnd().endsWith(`write to ${EMAIL_BRAND.supportEmail}.`)).toBe(true)
   })
+
+  it('heads a product’s email with the product’s name, escaped, and the company’s by default', () => {
+    const product = renderEmail({ product: 'MyDomainsHub <Mail>', heading: 'H', blocks: [] })
+    expect(product.html).toMatch(/alt=""[^>]*>MyDomainsHub &lt;Mail&gt;</)
+    expect(product.text.startsWith('MyDomainsHub <Mail>\n\nH\n')).toBe(true)
+    const plain = renderEmail({ heading: 'H', blocks: [] })
+    expect(plain.html).toMatch(/alt=""[^>]*>MyDomainsHub</)
+  })
 })
 
 describe('renderNotice', () => {

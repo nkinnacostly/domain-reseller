@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { Brand, BrandMark, MARK_PATH, PRODUCT_NAME } from './brand'
+import { Brand, BrandMark, MARK_PATH } from './brand'
 import { Container } from './container'
+import { DASHBOARD_NAV, DashboardNav } from './dashboard-nav'
 import { isCurrentPath } from './nav-link'
 import { SiteFooter } from './site-footer'
-import { NAV, SiteHeader } from './site-header'
 import { ThemeProvider } from './theme-provider'
 import { ThemeToggle } from './theme-toggle'
 
@@ -31,20 +31,39 @@ describe('Brand (.claude/skills/mydomainshub-brand)', () => {
 })
 
 describe('the shell', () => {
-  it('the header links home by name and marks the page you are on (S13)', () => {
-    pathname.current = '/dashboard'
-    render(<SiteHeader />)
-    expect(screen.getByRole('link', { name: `${PRODUCT_NAME}, home` })).toHaveAttribute('href', '/')
-    const nav = screen.getByRole('navigation', { name: 'Main' })
-    expect(nav).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page')
-    expect(NAV.map((item) => item.href)).toEqual(['/dashboard'])
+  it('the dashboard lists every page of MAIL-SPEC §10, in its order', () => {
+    expect(DASHBOARD_NAV.map((item) => item.label)).toEqual([
+      'Overview',
+      'Emails',
+      'Domains',
+      'API keys',
+      'Webhooks',
+      'Suppressions',
+      'Billing',
+      'Settings',
+    ])
   })
 
-  it('a link elsewhere is not current', () => {
-    pathname.current = '/'
-    render(<SiteHeader />)
-    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
+  it('marks the page you are on, and its sections, with aria-current and a bar (S13)', () => {
+    pathname.current = '/dashboard/settings/members'
+    const navigated = vi.fn()
+    render(<DashboardNav onNavigate={navigated} />)
+    const nav = screen.getByRole('navigation', { name: 'Dashboard' })
+    const settings = screen.getByRole('link', { name: 'Settings' })
+    expect(settings).toHaveAttribute('aria-current', 'page')
+    expect(settings).toHaveAttribute('data-current', 'true')
+    expect(settings.className).toContain('data-[current=true]:before:w-1')
+    // Overview is the dashboard itself, never every page under it.
+    expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+    expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
+    fireEvent.click(settings)
+    expect(navigated).toHaveBeenCalled()
+  })
+
+  it('marks Overview on the dashboard itself', () => {
+    pathname.current = '/dashboard'
+    render(<DashboardNav />)
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('the footer names the operator and links back to the shop', () => {

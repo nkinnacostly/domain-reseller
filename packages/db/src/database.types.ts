@@ -752,6 +752,9 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invite: { Args: { p_token_hash: string }; Returns: Json }
+      account_members: { Args: { p_account_id: string }; Returns: Json }
+      account_usage: { Args: { p_account_id: string }; Returns: Json }
       address_of: { Args: { p_mailbox: string }; Returns: string }
       authenticate_key: { Args: { p_key_hash: string }; Returns: Json }
       bump_usage: {
@@ -762,6 +765,11 @@ export type Database = {
           p_n: number
         }
         Returns: undefined
+      }
+      caller_role: { Args: { p_account_id: string }; Returns: string }
+      change_member_role: {
+        Args: { p_account_id: string; p_role: string; p_user_id: string }
+        Returns: Json
       }
       claim_sends: {
         Args: {
@@ -792,9 +800,22 @@ export type Database = {
         }
         Returns: Json
       }
+      create_invite: {
+        Args: {
+          p_account_id: string
+          p_email: string
+          p_role: string
+          p_token_hash: string
+        }
+        Returns: Json
+      }
       e2e_purge_account: { Args: { p_account_id: string }; Returns: Json }
       e2e_ready_account: {
         Args: { p_account_id: string; p_domain: string }
+        Returns: Json
+      }
+      e2e_set_plan: {
+        Args: { p_account_id: string; p_plan_code: string }
         Returns: Json
       }
       effective_caps: {
@@ -823,9 +844,12 @@ export type Database = {
         Args: { p_account_id: string; p_roles?: string[] }
         Returns: boolean
       }
+      invite_preview: { Args: { p_token_hash: string }; Returns: Json }
       is_e2e_account: { Args: { p_account_id: string }; Returns: boolean }
+      is_invite_email: { Args: { p_email: string }; Returns: boolean }
       is_mailbox: { Args: { p_mailbox: string }; Returns: boolean }
       lagos_day: { Args: { p_at: string }; Returns: string }
+      leave_account: { Args: { p_account_id: string }; Returns: Json }
       purge_payloads: { Args: never; Returns: number }
       purge_send_budget: { Args: never; Returns: number }
       record_send_event: {
@@ -853,6 +877,10 @@ export type Database = {
         Returns: Json
       }
       release_reservation: { Args: { p_email_id: number }; Returns: undefined }
+      remove_member: {
+        Args: { p_account_id: string; p_user_id: string }
+        Returns: Json
+      }
       reserve_send: {
         Args: {
           p_account_id: string
@@ -863,7 +891,12 @@ export type Database = {
         Returns: Json
       }
       revoke_api_key: { Args: { p_key_id: string }; Returns: Json }
+      revoke_invite: { Args: { p_invite_id: string }; Returns: Json }
       sanitise_detail: { Args: { p_detail: Json }; Returns: Json }
+      seats_taken: {
+        Args: { p_account_id: string; p_with_invites: boolean }
+        Returns: number
+      }
       send_gate: {
         Args: { p_email_id: number }
         Returns: {
@@ -876,6 +909,20 @@ export type Database = {
         Returns: undefined
       }
       text_array: { Args: { p_value: Json }; Returns: string[] }
+      transfer_ownership: {
+        Args: { p_account_id: string; p_user_id: string }
+        Returns: Json
+      }
+      update_account_profile: {
+        Args: {
+          p_account_id: string
+          p_expected_monthly_volume?: number
+          p_name: string
+          p_use_case?: string
+          p_website?: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

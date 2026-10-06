@@ -50,6 +50,18 @@ describe('POST /api/auth/send-email (L1)', () => {
     )
   })
 
+  it('sends a Mail page’s email worded as Mail’s, linking to Mail (MAIL-SPEC M5)', async () => {
+    const body = JSON.stringify({
+      ...PAYLOAD,
+      email_data: { ...PAYLOAD.email_data, redirect_to: 'https://emails.mydomainshub.com/x' },
+    })
+    const response = await POST(request(body))
+    expect(response.status).toBe(200)
+    const email = vi.mocked(sendEmail).mock.calls[0]?.[0]
+    expect(email?.text.startsWith('MyDomainsHub Mail\n')).toBe(true)
+    expect(email?.html).toContain('href="https://emails.mydomainshub.com/auth/confirm?')
+  })
+
   it('refuses a request Supabase did not sign, and sends nothing', async () => {
     const response = await POST(request(JSON.stringify(PAYLOAD), false))
     expect(response.status).toBe(401)

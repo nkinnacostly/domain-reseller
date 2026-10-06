@@ -1,22 +1,46 @@
 import type { Metadata } from 'next'
-import { Container } from '@/components/layout/container'
+import Link from 'next/link'
+import { Suspense } from 'react'
+import { AuthCard, AuthCardSkeleton } from '@/features/auth/components/auth-card'
+import { GoogleSignIn } from '@/features/auth/components/google-sign-in'
+import { SignInForm } from '@/features/auth/components/sign-in-form'
+import { googleSignInAvailable } from '@/features/auth/queries/providers'
 
 export const metadata: Metadata = { title: 'Sign in' }
 
-/**
- * Where the proxy sends a signed-out visitor to /dashboard. Sign-in and
- * sign-up (MAIL-SPEC §7.1) come with the accounts package; until then this
- * page says so, and offers nothing that does not work (N9b).
- */
-export default function SignInPage() {
+type Params = Promise<{ next?: string; notice?: string; error?: string }>
+
+/** MAIL-SPEC §7.1: email and password, or Google when Supabase has it on. */
+async function SignIn({ searchParams }: { searchParams: Params }) {
+  const { next, notice, error } = await searchParams
+  const google = await googleSignInAvailable()
+  const signUpHref = next ? `/sign-up?next=${encodeURIComponent(next)}` : '/sign-up'
   return (
-    <Container className="py-12 sm:py-20">
-      <div className="mx-auto max-w-md rounded-3xl border border-brand-subtle-border bg-card p-6 sm:p-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-        <p className="mt-3 text-sm/6 text-muted-foreground">
-          Signing in to MyDomainsHub Mail is not open yet. It opens with sign-up, before launch.
-        </p>
-      </div>
-    </Container>
+    <AuthCard
+      title="Sign in"
+      description="To MyDomainsHub Mail. Your MyDomainsHub domain shop sign-in works here too."
+      footer={
+        <>
+          New here?{' '}
+          <Link
+            href={signUpHref}
+            className="rounded-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      {google ? <GoogleSignIn next={next} failed={error === 'oauth'} /> : null}
+      <SignInForm next={next} notice={notice ?? error} />
+    </AuthCard>
+  )
+}
+
+export default function SignInPage({ searchParams }: { searchParams: Params }) {
+  return (
+    <Suspense fallback={<AuthCardSkeleton />}>
+      <SignIn searchParams={searchParams} />
+    </Suspense>
   )
 }
