@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "MailEventsTopic",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:ListSubscriptionsByTopic"
+      ],
+      "Resource": "arn:aws:sns:eu-west-2:085568227110:mail-*"
+    },
+    {
+      "Sid": "MailTenantEventsRule",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutRule",
+        "events:PutTargets",
+        "events:DescribeRule",
+        "events:ListTargetsByRule"
+      ],
+      "Resource": "arn:aws:events:eu-west-2:085568227110:rule/mail-*"
+    },
+    {
+      "Sid": "MailIamUsers",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateUser",
+        "iam:GetUser",
+        "iam:PutUserPolicy",
+        "iam:GetUserPolicy",
+        "iam:CreateAccessKey",
+        "iam:ListAccessKeys"
+      ],
+      "Resource": "arn:aws:iam::085568227110:user/mdm-*"
+    }
+  ]
+}
