@@ -631,7 +631,7 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–46 and 48), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–46, 48 and 50), granted to exactly the role it names.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -650,7 +650,15 @@ begin
     "recipient_addresses":"none", "as_timestamptz":"none", "utc_text":"none", "email_view":"none",
     "email_page":"none", "is_full_key":"none", "enqueue_batch":"service_role", "list_emails":"service_role",
     "account_emails":"authenticated", "reschedule_email":"service_role", "cancel_email":"service_role",
-    "api_list_keys":"service_role", "api_create_key":"service_role", "api_revoke_key":"service_role"
+    "api_list_keys":"service_role", "api_create_key":"service_role", "api_revoke_key":"service_role",
+    "billing_settings_stay":"none", "billing_rows_are_final":"none", "billing_payment_record":"none",
+    "billing_keep_record_only":"none", "billing_vat":"none", "billing_period_end":"none", "billing_note":"none",
+    "billing_quote":"none", "billing_issue_invoice":"none", "billing_unapplied":"none", "billing_sweep":"none",
+    "billing_overview":"authenticated", "start_checkout":"authenticated", "schedule_plan_change":"authenticated",
+    "keep_current_plan":"authenticated", "flutterwave_plan_for":"service_role",
+    "register_flutterwave_plan":"service_role", "billing_provider_state":"service_role",
+    "note_provider_canceled":"service_role", "note_provider_active":"service_role",
+    "record_billing_incident":"service_role", "record_billing_charge":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop

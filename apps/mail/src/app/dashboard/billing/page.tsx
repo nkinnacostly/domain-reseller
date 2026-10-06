@@ -1,15 +1,31 @@
 import type { Metadata } from 'next'
-import { ComingSoon } from '@/features/accounts/components/coming-soon'
+import { Suspense } from 'react'
+import { Container } from '@/components/layout/container'
+import { PageSkeleton } from '@/features/accounts/components/dashboard-skeleton'
+import { getCurrentAccount } from '@/features/accounts/queries/accounts'
+import { BillingPage } from '@/features/billing/components/billing-page'
 
 export const metadata: Metadata = { title: 'Billing' }
 
-/** MAIL-SPEC §10, Billing: a placeholder until its package builds it (N9b). */
-export default function BillingPage() {
+type Params = Promise<{ payment?: string }>
+
+/** MAIL-SPEC §8, §10: plan, period, use of the caps, changing plan, tax invoices. */
+async function Billing({ searchParams }: { searchParams: Params }) {
+  const [data, { payment }] = await Promise.all([getCurrentAccount(), searchParams])
+  if (!data) return null
+  return <BillingPage data={data} payment={payment} />
+}
+
+export default function Page({ searchParams }: { searchParams: Params }) {
   return (
-    <ComingSoon
-      title="Billing"
-      will="This account’s plan and period, its tax invoices, changing plan, and the card on file — its last four digits only — will be here."
-      arrives="before launch"
-    />
+    <Suspense
+      fallback={
+        <Container className="py-6 sm:py-8">
+          <PageSkeleton />
+        </Container>
+      }
+    >
+      <Billing searchParams={searchParams} />
+    </Suspense>
   )
 }

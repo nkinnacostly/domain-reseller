@@ -7,6 +7,8 @@ import { StateBanner } from '@/features/accounts/components/state-banner'
 import { accountBanner } from '@/features/accounts/lib/state'
 import { getCurrentAccount } from '@/features/accounts/queries/accounts'
 import { getUsage } from '@/features/accounts/queries/overview'
+import { billingStanding } from '@/features/billing/lib/standing'
+import { getBillingOverview } from '@/features/billing/queries/billing'
 
 /**
  * The signed-in area (MAIL-SPEC §10). The proxy sends anyone signed out to
@@ -26,10 +28,14 @@ async function Dashboard({ children }: { children: React.ReactNode }) {
   if (!data) redirect('/onboarding')
   const { account } = data.current
   // The sandbox's cap is mail.settings' (N5b), as SQL applies it; never a number here.
-  const sandboxCap =
-    account.state === 'sandbox' ? ((await getUsage(account.id))?.caps.daily ?? null) : null
-  // Billing standing arrives with the billing package; until then nothing is past due.
-  const banner = accountBanner(account, null, sandboxCap)
+  const [sandboxCap, billing] = await Promise.all([
+    account.state === 'sandbox'
+      ? getUsage(account.id).then((usage) => usage?.caps.daily ?? null)
+      : Promise.resolve(null),
+    // §8: past due shows above every page. An unreadable standing shows nothing.
+    getBillingOverview(account.id).then(billingStanding),
+  ])
+  const banner = accountBanner(account, billing, sandboxCap)
 
   return (
     <DashboardFrame
@@ -43,7 +49,7 @@ async function Dashboard({ children }: { children: React.ReactNode }) {
       email={data.user.email ?? null}
     >
       {banner ? (
-        <Container className="pt-6 sm:pt-8">
+        <Container className="pt-6 sm:pt-8 print:hidden">
           <StateBanner banner={banner} />
         </Container>
       ) : null}
