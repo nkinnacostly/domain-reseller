@@ -639,7 +639,8 @@ begin
     "sanitise_detail":"none", "effective_caps":"none", "release_reservation":"none", "reserve_send":"none",
     "settle_unsent":"none", "send_gate":"none", "purge_payloads":"none", "purge_send_budget":"none",
     "enqueue_email":"service_role", "authenticate_key":"service_role", "get_email":"service_role",
-    "claim_sends":"service_role", "record_send_result":"service_role", "record_send_event":"service_role"
+    "claim_sends":"service_role", "record_send_result":"service_role", "record_send_event":"service_role",
+    "is_e2e_account":"none", "e2e_ready_account":"service_role", "e2e_purge_account":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
