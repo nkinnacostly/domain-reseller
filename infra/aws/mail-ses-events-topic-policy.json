@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SesPublish",
+      "Effect": "Allow",
+      "Principal": { "Service": "ses.amazonaws.com" },
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:eu-west-2:085568227110:mail-ses-events",
+      "Condition": { "StringEquals": { "AWS:SourceAccount": "085568227110" } }
+    },
+    {
+      "Sid": "EventBridgePublish",
+      "Effect": "Allow",
+      "Principal": { "Service": "events.amazonaws.com" },
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:eu-west-2:085568227110:mail-ses-events",
+      "Condition": { "StringEquals": { "AWS:SourceAccount": "085568227110" } }
+    },
+    {
+      "Sid": "OwnerManage",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::085568227110:root" },
+      "Action": [
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:ListSubscriptionsByTopic",
+        "sns:Publish"
+      ],
+      "Resource": "arn:aws:sns:eu-west-2:085568227110:mail-ses-events"
+    }
+  ]
+}

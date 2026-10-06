@@ -1,0 +1,32 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SendForMailTenants",
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Resource": [
+        "arn:aws:ses:eu-west-2:085568227110:identity/*",
+        "arn:aws:ses:eu-west-2:085568227110:configuration-set/mdm-*",
+        "arn:aws:ses:eu-west-2:085568227110:tenant/mdm-*"
+      ]
+    },
+    {
+      "Sid": "ReadQuotaAndReputation",
+      "Effect": "Allow",
+      "Action": ["ses:GetAccount", "cloudwatch:GetMetricData"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverTheShop",
+      "Effect": "Deny",
+      "Action": "ses:*",
+      "Resource": [
+        "arn:aws:ses:eu-west-2:085568227110:identity/mydomainshub.com",
+        "arn:aws:ses:eu-west-2:085568227110:identity/notify.mydomainshub.com",
+        "arn:aws:ses:eu-west-2:085568227110:identity/hello@mydomainshub.com",
+        "arn:aws:ses:eu-west-2:085568227110:configuration-set/mydomainshub"
+      ]
+    }
+  ]
+}

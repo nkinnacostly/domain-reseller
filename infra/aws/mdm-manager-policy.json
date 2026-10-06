@@ -1,0 +1,69 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageMailTenantsAndIdentities",
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateEmailIdentity",
+        "ses:GetEmailIdentity",
+        "ses:DeleteEmailIdentity",
+        "ses:ListEmailIdentities",
+        "ses:PutEmailIdentityMailFromAttributes",
+        "ses:PutEmailIdentityConfigurationSetAttributes",
+        "ses:PutEmailIdentityDkimSigningAttributes",
+        "ses:TagResource",
+        "ses:CreateTenant",
+        "ses:GetTenant",
+        "ses:DeleteTenant",
+        "ses:ListTenants",
+        "ses:CreateTenantResourceAssociation",
+        "ses:DeleteTenantResourceAssociation",
+        "ses:ListTenantResources",
+        "ses:ListResourceTenants",
+        "ses:CreateConfigurationSet",
+        "ses:GetConfigurationSet",
+        "ses:DeleteConfigurationSet",
+        "ses:CreateConfigurationSetEventDestination",
+        "ses:GetConfigurationSetEventDestinations",
+        "ses:UpdateConfigurationSetEventDestination",
+        "ses:PutConfigurationSetSuppressionOptions",
+        "ses:PutConfigurationSetReputationOptions",
+        "ses:UpdateReputationEntityPolicy",
+        "ses:UpdateReputationEntityCustomerManagedStatus",
+        "ses:GetReputationEntity",
+        "ses:ListReputationEntities",
+        "ses:ListRecommendations",
+        "ses:PutSuppressedDestination",
+        "ses:DeleteSuppressedDestination",
+        "ses:GetSuppressedDestination",
+        "ses:ListSuppressedDestinations",
+        "ses:GetAccount"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverSend",
+      "Effect": "Deny",
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail",
+        "ses:SendBulkEmail",
+        "ses:SendTemplatedEmail",
+        "ses:SendBulkTemplatedEmail"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NeverTheShop",
+      "Effect": "Deny",
+      "Action": "ses:*",
+      "Resource": [
+        "arn:aws:ses:eu-west-2:085568227110:identity/mydomainshub.com",
+        "arn:aws:ses:eu-west-2:085568227110:identity/notify.mydomainshub.com",
+        "arn:aws:ses:eu-west-2:085568227110:identity/hello@mydomainshub.com",
+        "arn:aws:ses:eu-west-2:085568227110:configuration-set/mydomainshub"
+      ]
+    }
+  ]
+}
