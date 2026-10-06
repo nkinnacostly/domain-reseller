@@ -1,14 +1,13 @@
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
-import { Container } from '@/components/layout/container'
 import { DashboardFrame } from '@/features/accounts/components/dashboard-frame'
 import { DashboardSkeleton } from '@/features/accounts/components/dashboard-skeleton'
-import { StateBanner } from '@/features/accounts/components/state-banner'
 import { accountBanner } from '@/features/accounts/lib/state'
 import { getCurrentAccount } from '@/features/accounts/queries/accounts'
 import { getUsage } from '@/features/accounts/queries/overview'
 import { billingStanding } from '@/features/billing/lib/standing'
 import { getBillingOverview } from '@/features/billing/queries/billing'
+import { AccountBannerWithCaps, BannerSlot } from '@/features/safety/components/account-banner'
 
 /**
  * The signed-in area (MAIL-SPEC §10). The proxy sends anyone signed out to
@@ -48,11 +47,10 @@ async function Dashboard({ children }: { children: React.ReactNode }) {
       currentId={account.id}
       email={data.user.email ?? null}
     >
-      {banner ? (
-        <Container className="pt-6 sm:pt-8 print:hidden">
-          <StateBanner banner={banner} />
-        </Container>
-      ) : null}
+      {/* §8: the cap notice streams in on its own; until then, the banner without it. */}
+      <Suspense fallback={<BannerSlot banner={banner} />}>
+        <AccountBannerWithCaps account={account} billing={billing} sandboxCap={sandboxCap} />
+      </Suspense>
       {children}
     </DashboardFrame>
   )

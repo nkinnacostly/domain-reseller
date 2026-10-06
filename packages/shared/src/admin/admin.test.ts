@@ -143,6 +143,24 @@ describe('adminHrefForAlertKey', () => {
     expect(adminHrefForAlertKey(key)).toBe(href)
   })
 
+  it.each([
+    [`mail_tenant_paused:${id}`, `https://emails.mydomainshub.com/admin/accounts/${id}`],
+    [
+      `mail_threshold_pause:${id.toUpperCase()}`,
+      `https://emails.mydomainshub.com/admin/accounts/${id}`,
+    ],
+    [`mail_threshold_warning:${id}`, `https://emails.mydomainshub.com/admin/accounts/${id}`],
+    ['mail_threshold_pause:../x', 'https://emails.mydomainshub.com/admin/accounts'],
+    ['mail_reputation:bounce', 'https://emails.mydomainshub.com/admin/health'],
+    ['mail_quota:24h', 'https://emails.mydomainshub.com/admin/health'],
+    ['mail_silent:mail-worker:send', 'https://emails.mydomainshub.com/admin/health'],
+    ['mail_events_silent', 'https://emails.mydomainshub.com/admin/health'],
+    ['mail_tenant_action:12', 'https://emails.mydomainshub.com/admin/health'],
+    ['mail_something_new:1', 'https://emails.mydomainshub.com/admin'],
+  ])('a Mail alert %s opens Mail’s own admin: %s', (key, href) => {
+    expect(adminHrefForAlertKey(key)).toBe(href)
+  })
+
   it('falls back when the id is not the shape its family uses', () => {
     expect(adminHrefForAlertKey('job:../../etc')).toBe('/admin/alerts')
     expect(adminHrefForAlertKey('incident:<script>')).toBe('/admin/refunds/incidents')

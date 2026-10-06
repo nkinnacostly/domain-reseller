@@ -20,7 +20,7 @@ export const CAP_RULES = [
   {
     level: '80% of a cap',
     title: 'We tell you',
-    body: 'When an account has used 80% of its daily or monthly cap, we email its owners and show a banner in the dashboard. Sending carries on.',
+    body: 'When an account has used 80% of its daily or monthly cap, its dashboard shows a notice on every page. Sending carries on.',
   },
   {
     level: '100% of a cap',
@@ -49,7 +49,7 @@ export function pricingFaqs(catalogue: PlanCatalogue | null): Faq[] {
     },
     {
       q: 'What happens when I reach a cap?',
-      a: `At 80% of either cap we email the account’s owners and show a banner in the dashboard. At 100%, the API refuses further emails with quota_exceeded (HTTP 429) until the cap resets. ${CAP_RESETS} There is no overage billing.`,
+      a: `At 80% of either cap the account’s dashboard shows a notice on every page. At 100%, the API refuses further emails with quota_exceeded (HTTP 429) until the cap resets. ${CAP_RESETS} There is no overage billing.`,
     },
     {
       q: 'Why can I send fewer emails a day than my plan allows?',

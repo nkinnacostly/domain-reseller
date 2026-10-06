@@ -12,6 +12,32 @@ const LABEL = /^[a-z][a-z0-9_-]{1,30}$/
 
 const ALERTS = '/admin/alerts'
 
+/**
+ * MyDomainsHub Mail's admin (docs/MAIL-SPEC.md §10, §11): its alerts join
+ * the shop's list on the live side (migration 51) but are worked on Mail's
+ * own host, so their links are absolute. Every Mail key starts `mail_`.
+ */
+export const MAIL_ADMIN_URL = 'https://emails.mydomainshub.com/admin'
+
+function mailAdminHref(family: string, id: string): string {
+  switch (family) {
+    case 'mail_tenant_paused':
+    case 'mail_threshold_pause':
+    case 'mail_threshold_warning':
+      return UUID.test(id)
+        ? `${MAIL_ADMIN_URL}/accounts/${id.toLowerCase()}`
+        : `${MAIL_ADMIN_URL}/accounts`
+    case 'mail_reputation':
+    case 'mail_quota':
+    case 'mail_silent':
+    case 'mail_events_silent':
+    case 'mail_tenant_action':
+      return `${MAIL_ADMIN_URL}/health`
+    default:
+      return MAIL_ADMIN_URL
+  }
+}
+
 function split(key: string): [string, string] {
   const at = key.indexOf(':')
   return at < 0 ? [key, ''] : [key.slice(0, at), key.slice(at + 1)]
@@ -20,8 +46,10 @@ function split(key: string): [string, string] {
 const byUuid = (base: string, id: string) =>
   UUID.test(id) ? `${base}/${id.toLowerCase()}` : ALERTS
 
+/** A path on the shop's admin — or, for a Mail alert, an absolute address on Mail's. */
 export function adminHrefForAlertKey(key: string): string {
   const [family, id] = split(key)
+  if (family.startsWith('mail_')) return mailAdminHref(family, id)
   switch (family) {
     case 'job':
       return byUuid('/admin/queue/jobs', id)

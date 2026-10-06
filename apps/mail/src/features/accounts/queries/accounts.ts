@@ -25,7 +25,7 @@ export const getMemberships = cache(
     const { data, error } = await supabase
       .from('members')
       .select(
-        'role, created_at, accounts(id, name, state, ses_status, plan_code, website, use_case, expected_monthly_volume, created_at)',
+        'role, created_at, accounts(id, name, state, state_reason, ses_status, plan_code, website, use_case, expected_monthly_volume, created_at)',
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })

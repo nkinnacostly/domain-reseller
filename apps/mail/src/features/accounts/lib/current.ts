@@ -18,6 +18,8 @@ export type AccountSummary = {
   name: string
   state: AccountState
   sesStatus: string
+  /** Why it is paused or closed: a code (migration 51), worded by the banner. */
+  stateReason?: string | null
   planCode: string
   website: string | null
   useCase: string | null
@@ -44,6 +46,7 @@ export function readMemberships(rows: unknown): Membership[] {
           name: String(a.name ?? ''),
           state: a.state,
           sesStatus: String(a.ses_status ?? 'pending'),
+          stateReason: typeof a.state_reason === 'string' ? a.state_reason : null,
           planCode: String(a.plan_code ?? 'free'),
           website: typeof a.website === 'string' ? a.website : null,
           useCase: typeof a.use_case === 'string' ? a.use_case : null,

@@ -1,4 +1,4 @@
-import { CircleAlert, FlaskConical, Lock, PauseCircle } from 'lucide-react'
+import { CircleAlert, FlaskConical, Gauge, Lock, PauseCircle } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import type { AccountBanner } from '../lib/state'
@@ -8,6 +8,7 @@ const ICON = {
   paused: PauseCircle,
   past_due: CircleAlert,
   closed: Lock,
+  cap: Gauge,
 } as const
 
 const TONE_CLASS = {
@@ -50,6 +51,14 @@ export function StateBanner({ banner }: { banner: AccountBanner | null }) {
               className="rounded-sm font-medium underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               Go to Billing
+            </Link>
+          ) : null}
+          {banner.kind === 'cap' ? (
+            <Link
+              href="/dashboard#usage-heading"
+              className="rounded-sm font-medium underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              See the usage
             </Link>
           ) : null}
         </p>

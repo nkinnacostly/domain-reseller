@@ -22,10 +22,17 @@ const lagosTime = new Intl.DateTimeFormat('en-GB', {
   minute: '2-digit',
 })
 
-/** Where to work an alert in the admin dashboard (ADMIN-SPEC §4.5), when the site is known. */
+/**
+ * Where to work an alert in the admin dashboard (ADMIN-SPEC §4.5), when the
+ * site is known. A Mail alert's link is already absolute: Mail's own admin
+ * (MAIL-SPEC §11).
+ */
 function link(alert: DueAlert, appUrl: string | undefined): string {
-  if (!appUrl || !alert.key) return ''
-  return ` — ${appUrl.replace(/\/+$/, '')}${adminHrefForAlertKey(alert.key)}`
+  if (!alert.key) return ''
+  const href = adminHrefForAlertKey(alert.key)
+  if (href.startsWith('https://')) return ` — ${href}`
+  if (!appUrl) return ''
+  return ` — ${appUrl.replace(/\/+$/, '')}${href}`
 }
 
 function line(alert: DueAlert, appUrl: string | undefined): string {

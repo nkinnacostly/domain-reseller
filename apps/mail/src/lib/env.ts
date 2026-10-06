@@ -65,6 +65,12 @@ export const env = createEnv({
      * endpoint's secret (each must be rotated).
      */
     MAIL_WEBHOOK_SECRET_KEY: z.string().min(40).optional(),
+    /**
+     * §7.4: the worker's ping to apply queued SES-side pauses
+     * (`/api/safety/apply`); the same value is the worker's. It only asks this
+     * app to apply what SQL has queued. `openssl rand -hex 32`.
+     */
+    MAIL_SAFETY_SECRET: z.string().min(32).optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
     /**
      * Cloudflare Turnstile (§7.1, the shop's SEC-9), checked on our server

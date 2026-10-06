@@ -34,6 +34,15 @@ const schema = z.object({
   MAIL_QUOTA_CHECK_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
   /** §4.4: past this share of the 24-hour quota, free and sandbox accounts wait for paid ones. */
   MAIL_QUOTA_HOLD_FREE_AT: z.coerce.number().min(0.1).max(1).default(0.8),
+  /** §7.4, §7.8: how often the safety run reads CloudWatch and judges every account. */
+  MAIL_SAFETY_CHECK_MINUTES: z.coerce.number().int().min(5).max(60).default(15),
+  /**
+   * §7.4: where apps/mail answers the ping to apply queued SES pauses (it
+   * holds the manager key; this worker never does), and the secret both share.
+   * Unset, pauses still stop our own gate at once and wait, alerted on.
+   */
+  MAIL_APP_URL: z.url().optional(),
+  MAIL_SAFETY_SECRET: z.string().min(32).optional(),
   /** Names this worker in each claim; one machine runs (MR8), so the host name will do. */
   MAIL_WORKER_ID: z
     .string()

@@ -6,6 +6,8 @@ import { healthStatus, startHealthServer } from './health'
 import { createLogger } from './logger'
 import { createPacer } from './pacing'
 import { createQuotaWatch, QUOTA_HEARTBEAT } from './quota'
+import { readAccountReputation } from './safety/cloudwatch'
+import { createApplyPing, createSafetyJob, createSafetyStore } from './safety/job'
 import { createSender } from './sender'
 import { createMailStore } from './store'
 import { webhookLoop } from './webhooks'
@@ -49,12 +51,22 @@ const sender = createSender({
 })
 const webhooks = webhookLoop(env, db, log, (name, detail) => store.heartbeat(name, detail))
 
+// §7.4, §7.8: thresholds and the account-wide watch, every 15 minutes.
+const safety = createSafetyJob({
+  read: () => readAccountReputation(credentials),
+  store: createSafetyStore(db),
+  ping: createApplyPing({ appUrl: env.MAIL_APP_URL, secret: env.MAIL_SAFETY_SECRET }),
+  everyMs: env.MAIL_SAFETY_CHECK_MINUTES * 60_000,
+  log,
+})
+
 // Silent for a minute (sixty empty polls at the default) is a stuck loop.
 const health = startHealthServer(env.PORT, () =>
   healthStatus(sender.lastRunAt(), Date.now(), Math.max(60_000, env.MAIL_POLL_MS * 10)),
 )
 
 quota.start()
+safety.start()
 sender.start()
 webhooks?.start()
 log.info(
@@ -65,6 +77,7 @@ log.info(
 async function shutdown(signal: string) {
   log.info({ signal }, 'mail worker stopping')
   quota.stop()
+  safety.stop()
   await Promise.all([sender.stop(), webhooks?.stop()])
   health.close()
   process.exit(0)
