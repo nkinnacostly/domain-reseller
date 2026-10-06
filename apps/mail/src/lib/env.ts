@@ -35,6 +35,12 @@ export const env = createEnv({
       .string()
       .regex(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/, 'Not an SNS topic ARN')
       .optional(),
+    /**
+     * §7.4: the worker's ping to apply queued SES-side pauses
+     * (`/api/safety/apply`); the same value is the worker's. It only asks this
+     * app to apply what SQL has queued. `openssl rand -hex 32`.
+     */
+    MAIL_SAFETY_SECRET: z.string().min(32).optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
     /**
      * Cloudflare Turnstile (§7.1, the shop's SEC-9), checked on our server
