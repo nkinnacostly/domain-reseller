@@ -12,23 +12,856 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
+  mail: {
     Tables: {
-      [_ in never]: never
+      account_audit_log: {
+        Row: {
+          account_id: string
+          action: string
+          actor: string
+          actor_user_id: string | null
+          at: string
+          detail: Json
+          id: number
+          target: string | null
+        }
+        Insert: {
+          account_id: string
+          action: string
+          actor: string
+          actor_user_id?: string | null
+          at?: string
+          detail?: Json
+          id?: never
+          target?: string | null
+        }
+        Update: {
+          account_id?: string
+          action?: string
+          actor?: string
+          actor_user_id?: string | null
+          at?: string
+          detail?: Json
+          id?: never
+          target?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_audit_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts: {
+        Row: {
+          config_set: string
+          created_at: string
+          created_by: string | null
+          daily_cap_override: number | null
+          expected_monthly_volume: number | null
+          id: string
+          monthly_cap_override: number | null
+          name: string
+          plan_code: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          ses_status: string
+          ses_tenant: string
+          short_id: string
+          state: string
+          state_reason: string | null
+          tenant_ready_at: string | null
+          updated_at: string
+          use_case: string | null
+          warmup_day: number | null
+          website: string | null
+        }
+        Insert: {
+          config_set: string
+          created_at?: string
+          created_by?: string | null
+          daily_cap_override?: number | null
+          expected_monthly_volume?: number | null
+          id?: string
+          monthly_cap_override?: number | null
+          name: string
+          plan_code?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          ses_status?: string
+          ses_tenant: string
+          short_id: string
+          state?: string
+          state_reason?: string | null
+          tenant_ready_at?: string | null
+          updated_at?: string
+          use_case?: string | null
+          warmup_day?: number | null
+          website?: string | null
+        }
+        Update: {
+          config_set?: string
+          created_at?: string
+          created_by?: string | null
+          daily_cap_override?: number | null
+          expected_monthly_volume?: number | null
+          id?: string
+          monthly_cap_override?: number | null
+          name?: string
+          plan_code?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          ses_status?: string
+          ses_tenant?: string
+          short_id?: string
+          state?: string
+          state_reason?: string | null
+          tenant_ready_at?: string | null
+          updated_at?: string
+          use_case?: string | null
+          warmup_day?: number | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_plan_code_fkey"
+            columns: ["plan_code"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          domain_id: string | null
+          id: string
+          key_hash: string
+          last_used_at: string | null
+          name: string
+          permission: string
+          prefix: string
+          revoked_at: string | null
+          revoked_by: string | null
+          rl_tokens: number
+          rl_updated_at: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          domain_id?: string | null
+          id?: string
+          key_hash: string
+          last_used_at?: string | null
+          name: string
+          permission: string
+          prefix: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          rl_tokens?: number
+          rl_updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          domain_id?: string | null
+          id?: string
+          key_hash?: string
+          last_used_at?: string | null
+          name?: string
+          permission?: string
+          prefix?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          rl_tokens?: number
+          rl_updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_keys_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      domains: {
+        Row: {
+          account_id: string
+          created_at: string
+          dkim_status: string | null
+          dkim_tokens: string[]
+          failed_reason: string | null
+          id: string
+          identity_arn: string | null
+          last_checked_at: string | null
+          mail_from_domain: string | null
+          mail_from_status: string | null
+          name: string
+          status: string
+          updated_at: string
+          verified_at: string | null
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          dkim_status?: string | null
+          dkim_tokens?: string[]
+          failed_reason?: string | null
+          id?: string
+          identity_arn?: string | null
+          last_checked_at?: string | null
+          mail_from_domain?: string | null
+          mail_from_status?: string | null
+          name: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          dkim_status?: string | null
+          dkim_tokens?: string[]
+          failed_reason?: string | null
+          id?: string
+          identity_arn?: string | null
+          last_checked_at?: string | null
+          mail_from_domain?: string | null
+          mail_from_status?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domains_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_events: {
+        Row: {
+          account_id: string
+          detail: Json
+          email_id: number
+          event_key: string | null
+          id: number
+          occurred_at: string
+          received_at: string
+          type: string
+        }
+        Insert: {
+          account_id: string
+          detail?: Json
+          email_id: number
+          event_key?: string | null
+          id?: never
+          occurred_at: string
+          received_at?: string
+          type: string
+        }
+        Update: {
+          account_id?: string
+          detail?: Json
+          email_id?: number
+          event_key?: string | null
+          id?: never
+          occurred_at?: string
+          received_at?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "emails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_payloads: {
+        Row: {
+          attachments: Json
+          created_at: string
+          email_id: number
+          headers: Json
+          html: string | null
+          size_bytes: number
+          text: string | null
+        }
+        Insert: {
+          attachments?: Json
+          created_at?: string
+          email_id: number
+          headers?: Json
+          html?: string | null
+          size_bytes: number
+          text?: string | null
+        }
+        Update: {
+          attachments?: Json
+          created_at?: string
+          email_id?: number
+          headers?: Json
+          html?: string | null
+          size_bytes?: number
+          text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_payloads_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: true
+            referencedRelation: "emails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      emails: {
+        Row: {
+          account_id: string
+          api_key_id: string | null
+          attempts: number
+          bcc_addresses: string[]
+          bounced_at: string | null
+          canceled_at: string | null
+          cc_addresses: string[]
+          claimed_at: string | null
+          claimed_by: string | null
+          complained_at: string | null
+          created_at: string
+          delivered_at: string | null
+          domain_id: string
+          failed_at: string | null
+          from_address: string
+          id: number
+          idempotency_key: string | null
+          last_event: string | null
+          last_event_at: string | null
+          next_attempt_at: string
+          public_id: string
+          recipient_count: number | null
+          reply_to: string[]
+          request_hash: string | null
+          reserved_hour: string | null
+          reserved_on: string | null
+          scheduled_at: string
+          sent_at: string | null
+          ses_message_id: string | null
+          status: string
+          status_reason: string | null
+          subject: string
+          tags: Json
+          to_addresses: string[]
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          api_key_id?: string | null
+          attempts?: number
+          bcc_addresses?: string[]
+          bounced_at?: string | null
+          canceled_at?: string | null
+          cc_addresses?: string[]
+          claimed_at?: string | null
+          claimed_by?: string | null
+          complained_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          domain_id: string
+          failed_at?: string | null
+          from_address: string
+          id?: never
+          idempotency_key?: string | null
+          last_event?: string | null
+          last_event_at?: string | null
+          next_attempt_at?: string
+          public_id?: string
+          recipient_count?: number | null
+          reply_to?: string[]
+          request_hash?: string | null
+          reserved_hour?: string | null
+          reserved_on?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          ses_message_id?: string | null
+          status?: string
+          status_reason?: string | null
+          subject: string
+          tags?: Json
+          to_addresses: string[]
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          api_key_id?: string | null
+          attempts?: number
+          bcc_addresses?: string[]
+          bounced_at?: string | null
+          canceled_at?: string | null
+          cc_addresses?: string[]
+          claimed_at?: string | null
+          claimed_by?: string | null
+          complained_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          domain_id?: string
+          failed_at?: string | null
+          from_address?: string
+          id?: never
+          idempotency_key?: string | null
+          last_event?: string | null
+          last_event_at?: string | null
+          next_attempt_at?: string
+          public_id?: string
+          recipient_count?: number | null
+          reply_to?: string[]
+          request_hash?: string | null
+          reserved_hour?: string | null
+          reserved_on?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          ses_message_id?: string | null
+          status?: string
+          status_reason?: string | null
+          subject?: string
+          tags?: Json
+          to_addresses?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emails_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emails_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emails_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invites: {
+        Row: {
+          accepted_at: string | null
+          account_id: string
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          revoked_at: string | null
+          role: string
+          token_hash: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          account_id: string
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          revoked_at?: string | null
+          role: string
+          token_hash: string
+        }
+        Update: {
+          accepted_at?: string | null
+          account_id?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          revoked_at?: string | null
+          role?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invites_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      members: {
+        Row: {
+          account_id: string
+          created_at: string
+          invited_by: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          invited_by?: string | null
+          role: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          invited_by?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "members_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          code: string
+          created_at: string
+          daily_cap: number
+          is_offered: boolean
+          log_retention_days: number
+          max_domains: number
+          max_members: number
+          monthly_cap: number
+          name: string
+          price_kobo: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          daily_cap: number
+          is_offered?: boolean
+          log_retention_days: number
+          max_domains: number
+          max_members: number
+          monthly_cap: number
+          name: string
+          price_kobo: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          daily_cap?: number
+          is_offered?: boolean
+          log_retention_days?: number
+          max_domains?: number
+          max_members?: number
+          monthly_cap?: number
+          name?: string
+          price_kobo?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      send_budget_hourly: {
+        Row: {
+          account_id: string
+          hour: string
+          recipients: number
+        }
+        Insert: {
+          account_id: string
+          hour: string
+          recipients?: number
+        }
+        Update: {
+          account_id?: string
+          hour?: string
+          recipients?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "send_budget_hourly_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          account_daily_budget: number
+          id: boolean
+          key_burst: number
+          key_rate_per_second: number
+          max_send_attempts: number
+          owned_accounts_max: number
+          sandbox_daily_cap: number
+          updated_at: string
+          warmup_start_cap: number
+        }
+        Insert: {
+          account_daily_budget?: number
+          id?: boolean
+          key_burst?: number
+          key_rate_per_second?: number
+          max_send_attempts?: number
+          owned_accounts_max?: number
+          sandbox_daily_cap?: number
+          updated_at?: string
+          warmup_start_cap?: number
+        }
+        Update: {
+          account_daily_budget?: number
+          id?: boolean
+          key_burst?: number
+          key_rate_per_second?: number
+          max_send_attempts?: number
+          owned_accounts_max?: number
+          sandbox_daily_cap?: number
+          updated_at?: string
+          warmup_start_cap?: number
+        }
+        Relationships: []
+      }
+      suppressions: {
+        Row: {
+          account_id: string
+          address: string
+          created_at: string
+          id: number
+          reason: string
+          source: string
+        }
+        Insert: {
+          account_id: string
+          address: string
+          created_at?: string
+          id?: never
+          reason: string
+          source: string
+        }
+        Update: {
+          account_id?: string
+          address?: string
+          created_at?: string
+          id?: never
+          reason?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppressions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_daily: {
+        Row: {
+          account_id: string
+          bounced: number
+          complained: number
+          day: string
+          delivered: number
+          failed: number
+          queued: number
+          sent: number
+        }
+        Insert: {
+          account_id: string
+          bounced?: number
+          complained?: number
+          day: string
+          delivered?: number
+          failed?: number
+          queued?: number
+          sent?: number
+        }
+        Update: {
+          account_id?: string
+          bounced?: number
+          complained?: number
+          day?: string
+          delivered?: number
+          failed?: number
+          queued?: number
+          sent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_daily_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      graphql: {
+      address_of: { Args: { p_mailbox: string }; Returns: string }
+      authenticate_key: { Args: { p_key_hash: string }; Returns: Json }
+      bump_usage: {
         Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
+          p_account_id: string
+          p_column: string
+          p_day: string
+          p_n: number
+        }
+        Returns: undefined
+      }
+      claim_sends: {
+        Args: { p_limit: number; p_paid_only?: boolean; p_worker: string }
+        Returns: Json
+      }
+      create_account: {
+        Args: {
+          p_expected_monthly_volume?: number
+          p_name: string
+          p_use_case?: string
+          p_website?: string
         }
         Returns: Json
       }
+      create_api_key: {
+        Args: {
+          p_account_id: string
+          p_domain_id?: string
+          p_key_hash: string
+          p_name: string
+          p_permission: string
+          p_prefix: string
+        }
+        Returns: Json
+      }
+      effective_caps: {
+        Args: { p_account: Database["mail"]["Tables"]["accounts"]["Row"] }
+        Returns: {
+          daily: number
+          monthly: number
+        }[]
+      }
+      enqueue_email: {
+        Args: {
+          p_account_id: string
+          p_api_key_id: string
+          p_email: Json
+          p_idempotency_key?: string
+          p_payload: Json
+          p_request_hash?: string
+        }
+        Returns: Json
+      }
+      get_email: {
+        Args: { p_account_id: string; p_public_id: string }
+        Returns: Json
+      }
+      has_role: {
+        Args: { p_account_id: string; p_roles?: string[] }
+        Returns: boolean
+      }
+      is_mailbox: { Args: { p_mailbox: string }; Returns: boolean }
+      lagos_day: { Args: { p_at: string }; Returns: string }
+      purge_payloads: { Args: never; Returns: number }
+      purge_send_budget: { Args: never; Returns: number }
+      record_send_event: {
+        Args: {
+          p_detail?: Json
+          p_email_public_id?: string
+          p_event: string
+          p_event_key?: string
+          p_message_id?: string
+          p_occurred_at?: string
+          p_recipients?: number
+          p_suppress?: string[]
+        }
+        Returns: boolean
+      }
+      record_send_result: {
+        Args: {
+          p_email_id: number
+          p_error_code?: string
+          p_message_id?: string
+          p_outcome: string
+          p_retry_after_seconds?: number
+          p_worker: string
+        }
+        Returns: Json
+      }
+      release_reservation: { Args: { p_email_id: number }; Returns: undefined }
+      reserve_send: {
+        Args: {
+          p_account_id: string
+          p_api_key_id: string
+          p_from_address: string
+          p_recipients: string[]
+        }
+        Returns: Json
+      }
+      revoke_api_key: { Args: { p_key_id: string }; Returns: Json }
+      sanitise_detail: { Args: { p_detail: Json }; Returns: Json }
+      send_gate: {
+        Args: { p_email_id: number }
+        Returns: {
+          reason: string
+          status: string
+        }[]
+      }
+      settle_unsent: {
+        Args: { p_email_id: number; p_reason: string; p_status: string }
+        Returns: undefined
+      }
+      text_array: { Args: { p_value: Json }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never
@@ -4688,7 +5521,7 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
+  mail: {
     Enums: {},
   },
   public: {
