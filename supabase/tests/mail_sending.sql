@@ -631,7 +631,7 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–46), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–46 and 51), granted to exactly the role it names.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -646,7 +646,12 @@ begin
     "update_account_profile":"authenticated", "create_invite":"authenticated",
     "revoke_invite":"authenticated", "invite_preview":"authenticated", "accept_invite":"authenticated",
     "change_member_role":"authenticated", "remove_member":"authenticated", "leave_account":"authenticated",
-    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role"
+    "transfer_ownership":"authenticated", "e2e_set_plan":"service_role",
+    "rate_ppm":"none", "ppm_text":"none", "window_usage":"none", "profile_complete":"none", "open_finding":"none",
+    "queue_tenant_action":"none", "asked_ses_to_pause":"none", "note_cap_use":"none", "evaluate_account":"none", "advance_warmup":"none",
+    "purge_old_emails":"none", "purge_safety_records":"none", "alert_conditions":"none",
+    "run_safety_checks":"service_role", "claim_tenant_actions":"service_role", "record_tenant_action":"service_role",
+    "ses_findings_of":"none", "e2e_seed_usage":"service_role", "e2e_evaluate":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
