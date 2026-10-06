@@ -65,7 +65,9 @@ describe('what happens at a cap', () => {
     expect(screen.getByRole('heading', { name: 'What happens at a cap' })).toBeInTheDocument()
     expect(CAP_RULES.map((rule) => rule.level)).toEqual(['80% of a cap', '100% of a cap'])
     const text = document.body.textContent ?? ''
-    expect(text).toContain('we email its owners and show a banner in the dashboard')
+    // N9b: a notice in the dashboard, recorded by reserve_send (migration 51); no email is sent.
+    expect(text).toContain('its dashboard shows a notice on every page')
+    expect(text).not.toMatch(/we email/i)
     expect(text).toContain('quota_exceeded (HTTP 429)')
     expect(text).toContain('midnight, Lagos time')
     expect(text).toContain('There is no overage')
