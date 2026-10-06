@@ -9,6 +9,9 @@ import { defineConfig, devices } from '@playwright/test'
  */
 const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3301)
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`
+// https://developers.cloudflare.com/turnstile/troubleshooting/testing/
+const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
+const TURNSTILE_TEST_SECRET_KEY = '1x0000000000000000000000000000000AA'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -45,6 +48,11 @@ export default defineConfig({
       // No SES key of any kind in the e2e server: nothing here may send.
       MAIL_SES_MANAGER_ACCESS_KEY_ID: '',
       MAIL_SES_MANAGER_SECRET_ACCESS_KEY: '',
+      // Cloudflare's documented always-pass Turnstile test keys, as the shop's
+      // e2e uses (CLAUDE.md §15): the real widget and a real siteverify call,
+      // answering yes without a click. A live secret would refuse their tokens.
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_TEST_SITE_KEY,
+      TURNSTILE_SECRET_KEY: TURNSTILE_TEST_SECRET_KEY,
     },
   },
 })
