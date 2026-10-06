@@ -1,5 +1,11 @@
 import { StatusPill } from '@/components/common/status-pill'
-import { DELIVERY_STATUS, describeAnswer, describeReason, EVENT_WORDS } from '../lib/words'
+import {
+  DELIVERY_QUEUED,
+  DELIVERY_STATUS,
+  describeAnswer,
+  describeReason,
+  EVENT_WORDS,
+} from '../lib/words'
 import type { Delivery, Webhook } from '../queries/webhooks'
 import { ResendButton } from './resend-button'
 
@@ -63,7 +69,10 @@ export function DeliveriesTable({
         <tbody className="divide-y divide-border">
           {deliveries.map((delivery) => {
             const webhook = byId.get(delivery.webhookId)
-            const state = DELIVERY_STATUS[delivery.status]
+            const state =
+              delivery.status === 'pending' && delivery.attempts === 0
+                ? DELIVERY_QUEUED
+                : DELIVERY_STATUS[delivery.status]
             const reason = describeReason(delivery.statusReason)
             const at = when.format(new Date(delivery.createdAt))
             const finished = delivery.status === 'delivered' || delivery.status === 'failed'

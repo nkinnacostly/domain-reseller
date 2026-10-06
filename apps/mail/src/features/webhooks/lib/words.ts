@@ -53,6 +53,9 @@ export const DELIVERY_STATUS: Record<DeliveryStatus, { label: string; tone: Tone
   failed: { label: 'Failed', tone: 'danger' },
 }
 
+/** A delivery not tried yet: a new event, or a resend. */
+export const DELIVERY_QUEUED = { label: 'Queued', tone: 'info' as Tone }
+
 const ERROR_WORDS: Record<string, string> = {
   timeout: 'No answer within 10 seconds',
   connection_failed: 'Could not connect',

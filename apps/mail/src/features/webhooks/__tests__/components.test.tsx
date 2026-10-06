@@ -251,6 +251,8 @@ describe('DeliveriesTable and ResendButton', () => {
             statusReason: 'gave_up',
             resendOf: 41,
           },
+          { ...delivery, id: 43, status: 'pending', attempts: 0, history: [] },
+          { ...delivery, id: 44, status: 'pending', attempts: 1, history: [] },
         ]}
         webhooks={[webhook]}
         canManage
@@ -258,7 +260,11 @@ describe('DeliveriesTable and ResendButton', () => {
     )
     const table = screen.getByRole('table', { name: /Recent webhook deliveries/ })
     const rows = within(table).getAllByRole('row')
-    expect(rows).toHaveLength(3)
+    expect(rows).toHaveLength(5)
+    expect(within(rows[3] as HTMLElement).getByText('Queued')).toBeInTheDocument()
+    expect(within(rows[3] as HTMLElement).getByText('Not tried yet')).toBeInTheDocument()
+    expect(within(rows[4] as HTMLElement).getByText('Waiting to retry')).toBeInTheDocument()
+    expect(within(rows[4] as HTMLElement).queryByRole('button')).not.toBeInTheDocument()
     expect(within(rows[1] as HTMLElement).getByText('HTTP 200 in 120 ms')).toBeInTheDocument()
     expect(within(rows[1] as HTMLElement).getByText('thanks')).toBeInTheDocument()
     expect(within(rows[1] as HTMLElement).getByText('2 attempts')).toBeInTheDocument()
