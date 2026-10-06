@@ -1,4 +1,13 @@
 import { generateKeyPairSync } from 'node:crypto'
+import {
+  CertificateUnreachable,
+  clearCertificateCache,
+  confirmSubscription,
+  isOnHost,
+  snsHostFor,
+  snsStringToSign,
+  verifySnsMessage,
+} from '@dr/shared/sns'
 import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../../../../tests/mocks/server'
@@ -12,15 +21,6 @@ import {
   snsNotification,
   snsPublicKeyPem,
 } from '../../../../tests/mocks/sns'
-import {
-  CertificateUnreachable,
-  clearCertificateCache,
-  confirmSubscription,
-  isOnHost,
-  snsHostFor,
-  snsStringToSign,
-  verifySnsMessage,
-} from '../sns'
 
 const verify = (raw: unknown, fetchCertificate?: (url: string) => Promise<string>) =>
   verifySnsMessage(raw, {

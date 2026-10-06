@@ -1,6 +1,6 @@
+import { confirmSubscription, type SnsRefusal, verifySnsMessage } from '@dr/shared/sns'
 import { type NextRequest, NextResponse } from 'next/server'
 import { parseSesEvent, recordSesEvent } from '@/lib/email/ses-events'
-import { confirmSubscription, type SnsRefusal, verifySnsMessage } from '@/lib/email/sns'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 

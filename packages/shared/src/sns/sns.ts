@@ -1,11 +1,13 @@
-import 'server-only'
-
-import { createPublicKey, type KeyObject, verify } from 'node:crypto'
+import { fromBase64 } from '../ses/base64'
+import { timeoutSignal, utf8 } from '../ses/platform'
+import { spkiFromPem } from './certificate'
 
 /**
- * Amazon SNS message signatures (L1): how /api/email/ses-events knows a
- * delivery report really came from our SES events topic. Anyone can POST to
- * the route; only a message AWS signed for that exact topic is acted on.
+ * Amazon SNS message signatures: how an endpoint knows a pushed message
+ * really came from its own topic — the shop's SES delivery events
+ * (/api/email/ses-events, L1) and Mail's SES events and tenant status
+ * (/api/ses/events, MAIL-SPEC §4.2). Anyone can POST to either; only a
+ * message AWS signed for that exact topic is acted on.
  *
  *   - `TopicArn` must be the configured topic (it is covered by the signature);
  *   - `SigningCertURL` must be https on `sns.<topic's region>.amazonaws.com`,
@@ -13,9 +15,11 @@ import { createPublicKey, type KeyObject, verify } from 'node:crypto'
  *   - the signature (v1 SHA1withRSA, v2 SHA256withRSA) must verify over the
  *     documented fields, in order, for the message's type.
  *
- * Certificates are fetched once per URL and kept for the life of the
- * process. The fetch is injectable so tests sign with their own key pair
- * (`createPublicKey` takes a certificate or a bare public key alike).
+ * Moved here from the shop (apps/web) for Mail's second use, unchanged in
+ * behaviour; Web Crypto instead of Node's `crypto`, as the rest of this
+ * package. Certificates are fetched once per URL and kept for the life of
+ * the process. The fetch is injectable so tests sign with their own key pair
+ * (a certificate or a bare public key are read alike).
  */
 
 export type SnsType = 'Notification' | 'SubscriptionConfirmation' | 'UnsubscribeConfirmation'
@@ -61,6 +65,46 @@ export class CertificateUnreachable extends Error {
   }
 }
 
+/** The few Web Platform globals used here, typed without the DOM library. */
+type RsaKey = { readonly type: string }
+type RsaAlgorithm = { name: 'RSASSA-PKCS1-v1_5'; hash: 'SHA-1' | 'SHA-256' }
+type Web = {
+  crypto: {
+    subtle: {
+      importKey(
+        format: 'spki',
+        key: Uint8Array,
+        algorithm: RsaAlgorithm,
+        extractable: false,
+        usages: ['verify'],
+      ): Promise<RsaKey>
+      verify(
+        algorithm: 'RSASSA-PKCS1-v1_5',
+        key: RsaKey,
+        signature: Uint8Array,
+        data: Uint8Array,
+      ): Promise<boolean>
+    }
+  }
+  URL: new (
+    url: string,
+  ) => {
+    protocol: string
+    hostname: string
+    port: string
+    username: string
+    password: string
+    pathname: string
+    search: string
+    hash: string
+  }
+  fetch(
+    url: string,
+    init: { signal: unknown },
+  ): Promise<{ ok: boolean; status: number; text(): Promise<string> }>
+}
+const web = globalThis as unknown as Web
+
 /** The fields each type signs, in the order AWS documents. */
 const SIGNED_FIELDS: Record<SnsType, readonly (keyof SnsMessage)[]> = {
   Notification: ['Message', 'MessageId', 'Subject', 'Timestamp', 'TopicArn', 'Type'],
@@ -104,9 +148,9 @@ export function snsHostFor(topicArn: string): string | null {
 
 /** An https URL on exactly `host`, default port, no credentials. */
 export function isOnHost(value: string, host: string, path?: RegExp): boolean {
-  let url: URL
+  let url: InstanceType<Web['URL']>
   try {
-    url = new URL(value)
+    url = new web.URL(value)
   } catch {
     return false
   }
@@ -161,9 +205,9 @@ function parseMessage(raw: unknown): SnsMessage | null {
 }
 
 export const fetchCertificate: CertificateFetch = async (url) => {
-  let response: Response
+  let response: Awaited<ReturnType<Web['fetch']>>
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(CERT_TIMEOUT_MS) })
+    response = await web.fetch(url, { signal: timeoutSignal(CERT_TIMEOUT_MS) })
   } catch {
     throw new CertificateUnreachable()
   }
@@ -172,17 +216,28 @@ export const fetchCertificate: CertificateFetch = async (url) => {
   return response.text()
 }
 
-const certificates = new Map<string, KeyObject>()
+/** Each certificate's public key (SubjectPublicKeyInfo, DER), by URL. */
+const certificates = new Map<string, Uint8Array>()
 
 /** Forgets cached certificates (tests). */
 export function clearCertificateCache() {
   certificates.clear()
 }
 
+const rsa = (hash: RsaAlgorithm['hash']): RsaAlgorithm => ({ name: 'RSASSA-PKCS1-v1_5', hash })
+
+async function importRsa(spki: Uint8Array, hash: RsaAlgorithm['hash']): Promise<RsaKey | null> {
+  try {
+    return await web.crypto.subtle.importKey('spki', spki, rsa(hash), false, ['verify'])
+  } catch {
+    return null
+  }
+}
+
 async function publicKeyAt(
   url: string,
   fetchPem: CertificateFetch,
-): Promise<KeyObject | 'unreachable' | 'bad'> {
+): Promise<Uint8Array | 'unreachable' | 'bad'> {
   const cached = certificates.get(url)
   if (cached) return cached
   let pem: string
@@ -191,16 +246,12 @@ async function publicKeyAt(
   } catch (error) {
     return error instanceof CertificateUnreachable ? 'unreachable' : 'bad'
   }
-  let key: KeyObject
-  try {
-    key = createPublicKey(pem)
-  } catch {
-    return 'bad'
-  }
-  if (key.asymmetricKeyType !== 'rsa') return 'bad'
+  const spki = spkiFromPem(pem)
+  // Only an RSA key imports as RSASSA-PKCS1-v1_5: anything else is no SNS certificate.
+  if (!spki || !(await importRsa(spki, 'SHA-256'))) return 'bad'
   if (certificates.size >= MAX_CACHED) certificates.clear()
-  certificates.set(url, key)
-  return key
+  certificates.set(url, spki)
+  return spki
 }
 
 export async function verifySnsMessage(
@@ -215,24 +266,27 @@ export async function verifySnsMessage(
     return { ok: false, reason: 'bad_certificate_url' }
   }
 
-  const key = await publicKeyAt(
+  const spki = await publicKeyAt(
     message.SigningCertURL,
     options.fetchCertificate ?? fetchCertificate,
   )
-  if (key === 'unreachable') return { ok: false, reason: 'certificate_unreachable' }
-  if (key === 'bad') return { ok: false, reason: 'bad_certificate' }
+  if (spki === 'unreachable') return { ok: false, reason: 'certificate_unreachable' }
+  if (spki === 'bad') return { ok: false, reason: 'bad_certificate' }
 
-  const signature = Buffer.from(message.Signature, 'base64')
+  const key = await importRsa(spki, message.SignatureVersion === '1' ? 'SHA-1' : 'SHA-256')
+  const signature = fromBase64(message.Signature)
   let valid = false
-  try {
-    valid = verify(
-      message.SignatureVersion === '1' ? 'sha1' : 'sha256',
-      Buffer.from(snsStringToSign(message), 'utf8'),
-      key,
-      signature,
-    )
-  } catch {
-    valid = false
+  if (key && signature) {
+    try {
+      valid = await web.crypto.subtle.verify(
+        'RSASSA-PKCS1-v1_5',
+        key,
+        signature,
+        utf8(snsStringToSign(message)),
+      )
+    } catch {
+      valid = false
+    }
   }
   return valid ? { ok: true, message, snsHost } : { ok: false, reason: 'bad_signature' }
 }
@@ -248,7 +302,7 @@ export async function confirmSubscription(
   const url = message.SubscribeURL
   if (!url || !isOnHost(url, snsHost)) return 'refused'
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(CERT_TIMEOUT_MS) })
+    const response = await web.fetch(url, { signal: timeoutSignal(CERT_TIMEOUT_MS) })
     return response.ok ? 'confirmed' : 'failed'
   } catch {
     return 'failed'

@@ -8,6 +8,7 @@ import { createPacer } from './pacing'
 import { createQuotaWatch, QUOTA_HEARTBEAT } from './quota'
 import { createSender } from './sender'
 import { createMailStore } from './store'
+import { webhookLoop } from './webhooks'
 
 /**
  * MyDomainsHub Mail's worker (MAIL-SPEC §3): the only process that calls
@@ -46,6 +47,7 @@ const sender = createSender({
   log,
   paidOnly: quota.holdFree,
 })
+const webhooks = webhookLoop(env, db, log, (name, detail) => store.heartbeat(name, detail))
 
 // Silent for a minute (sixty empty polls at the default) is a stuck loop.
 const health = startHealthServer(env.PORT, () =>
@@ -54,6 +56,7 @@ const health = startHealthServer(env.PORT, () =>
 
 quota.start()
 sender.start()
+webhooks?.start()
 log.info(
   { worker: env.MAIL_WORKER_ID, rate: env.MAIL_MAX_SEND_RATE, region: env.MAIL_SES_REGION },
   'mail worker started',
@@ -62,7 +65,7 @@ log.info(
 async function shutdown(signal: string) {
   log.info({ signal }, 'mail worker stopping')
   quota.stop()
-  await sender.stop()
+  await Promise.all([sender.stop(), webhooks?.stop()])
   health.close()
   process.exit(0)
 }

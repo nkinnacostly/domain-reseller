@@ -210,8 +210,8 @@ test.describe('the account journey', () => {
     for (const name of ['Emails', 'Domains', 'API keys', 'Webhooks', 'Suppressions', 'Billing']) {
       await openPage(page, name)
       await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible()
-      // Billing is built (billing.spec.ts covers it); the rest are still placeholders.
-      if (name !== 'Billing') {
+      // Built pages (their own specs cover them); the rest are placeholders still.
+      if (!['Billing', 'Domains', 'Webhooks', 'Suppressions'].includes(name)) {
         await expect(page.getByRole('heading', { name: 'This page is coming' })).toBeVisible()
       }
       const current = page

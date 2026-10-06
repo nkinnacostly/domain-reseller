@@ -12,6 +12,12 @@ pre-commit:
           echo "✖ Possible secret in staged changes. Remove it or use .env (never committed)."
           exit 1
         fi
+        # Mail's webhook sealing key (MR6): 32 bytes of base64, so a value of 40 or more
+        # base64 characters; a variable name or a test placeholder is not one.
+        if git diff --cached -U0 | grep '^+' | grep -v '^+++ ' | grep -nE 'MAIL_WEBHOOK_SECRET_KEY[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9+/]{40,}'; then
+          echo "✖ Possible MAIL_WEBHOOK_SECRET_KEY in staged changes. Keep it in .env (never committed)."
+          exit 1
+        fi
 
 pre-push:
   parallel: true

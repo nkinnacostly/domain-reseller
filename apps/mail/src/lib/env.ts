@@ -58,6 +58,13 @@ export const env = createEnv({
     MAIL_DOH_URL: loopbackUrl.optional(),
     /** Set by Vercel on each deployment; `production` refuses the test endpoints. */
     VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
+    /**
+     * MR6, §9: seals each webhook endpoint's signing secret (AES-256-GCM);
+     * the mail worker holds the same key to open it and sign. 32 random
+     * bytes, base64: `openssl rand -base64 32`. Changing it orphans every
+     * endpoint's secret (each must be rotated).
+     */
+    MAIL_WEBHOOK_SECRET_KEY: z.string().min(40).optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
     /**
      * Cloudflare Turnstile (§7.1, the shop's SEC-9), checked on our server
