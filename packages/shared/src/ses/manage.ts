@@ -35,9 +35,49 @@ export const MAIL_EVENT_TYPES = [
 export type ReputationPolicy = 'strict' | 'standard' | 'none'
 export type CustomerManagedStatus = 'ENABLED' | 'DISABLED' | 'REINSTATED'
 
+/** §4.2: the one event destination each account's configuration set has. */
+export const MAIL_EVENT_DESTINATION = 'mail-ses-events'
+
+export type TenantResourceType = 'EMAIL_IDENTITY' | 'CONFIGURATION_SET' | 'EMAIL_TEMPLATE'
+
 const DOMAIN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/
 const NAME = /^[A-Za-z0-9_-]{1,64}$/
 const ARN = /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:\S+$/
+const ACCOUNT_ID = /^\d{12}$/
+
+/** The AWS account an ARN belongs to (`arn:aws:sns:eu-west-2:123456789012:…`), or null. */
+export function awsAccountOf(arn: string): string | null {
+  const account = arn.split(':')[4]
+  return ARN.test(arn) && account !== undefined && ACCOUNT_ID.test(account) ? account : null
+}
+
+/**
+ * SES gives no ARN for an identity or a configuration set; a tenant
+ * association needs one. Built as the SES developer guide writes them:
+ * `arn:aws:ses:<region>:<account>:identity/<domain>` and `…:configuration-set/<name>`.
+ */
+export function sesResourceArn(
+  region: string,
+  account: string,
+  kind: 'identity' | 'configuration-set',
+  name: string,
+): string {
+  check(ACCOUNT_ID.test(account), 'the AWS account')
+  check(kind === 'identity' ? DOMAIN.test(name) : NAME.test(name), `the ${kind} name`)
+  return `arn:aws:ses:${region}:${account}:${kind}/${name}`
+}
+
+/** SES's own reputation policies (developer guide, Tenants). */
+export const reputationPolicyArn = (region: string, policy: ReputationPolicy): string =>
+  `arn:aws:ses:${region}:aws:reputation-policy/${policy}`
+
+/** SES answered that the thing is not there (404, NotFoundException). */
+export const isSesNotFound = (answer: SesResult): boolean =>
+  !answer.ok && (answer.status === 404 || answer.code === 'NotFoundException')
+
+/** SES answered that it is there already (AlreadyExistsException). */
+export const isSesAlreadyThere = (answer: SesResult): boolean =>
+  !answer.ok && answer.code === 'AlreadyExistsException'
 
 function check(condition: boolean, what: string): void {
   if (!condition) throw new Error(`SES: ${what} is not valid`)
@@ -75,6 +115,44 @@ function identityState(json: unknown): IdentityState {
     mailFromStatus: asString(mailFrom.MailFromDomainStatus),
     configurationSetName: asString(body.ConfigurationSetName),
   }
+}
+
+export type TenantState = {
+  tenantArn: string | null
+  tenantId: string | null
+  /** ENABLED, DISABLED or REINSTATED. */
+  sendingStatus: string | null
+  /** TENANT for its own list (§4.1.5); ACCOUNT or null for the account's. */
+  suppressionScope: string | null
+  suppressedReasons: string[]
+}
+
+function tenantState(body: Fields): TenantState {
+  const suppression = asRecord(body.SuppressionAttributes)
+  return {
+    tenantArn: asString(body.TenantArn),
+    tenantId: asString(body.TenantId),
+    sendingStatus: asString(body.SendingStatus),
+    suppressionScope: asString(suppression.SuppressionScope),
+    suppressedReasons: Array.isArray(suppression.SuppressedReasons)
+      ? suppression.SuppressedReasons.filter((r): r is string => typeof r === 'string')
+      : [],
+  }
+}
+
+export type EventDestinationState = {
+  name: string | null
+  enabled: boolean
+  matchingEventTypes: string[]
+  topicArn: string | null
+}
+
+export type ReputationState = {
+  /** The policy's ARN, `…:reputation-policy/strict`. */
+  policy: string | null
+  customerManagedStatus: string | null
+  awsManagedStatus: string | null
+  sendingStatus: string | null
 }
 
 export type SesQuota = {
@@ -180,11 +258,7 @@ export function createSesManager(settings: SesCredentials) {
     },
 
     /** §4.1.1 and .5: the account's tenant, with its own suppression list for bounces and complaints. */
-    async createTenant(
-      tenantName: string,
-    ): Promise<
-      SesResult<{ tenantArn: string | null; tenantId: string | null; sendingStatus: string | null }>
-    > {
+    async createTenant(tenantName: string): Promise<SesResult<TenantState>> {
       check(NAME.test(tenantName), 'the tenant name')
       const answer = await call('POST', '/tenants', {
         TenantName: tenantName,
@@ -193,13 +267,146 @@ export function createSesManager(settings: SesCredentials) {
           SuppressionScope: 'TENANT',
         },
       })
+      return answer.ok ? { ok: true, ...tenantState(asRecord(answer.json)) } : answer
+    },
+
+    /** GetTenant: is it there, its ARN (the reputation policy's target) and its suppression. */
+    async getTenant(tenantName: string): Promise<SesResult<TenantState>> {
+      check(NAME.test(tenantName), 'the tenant name')
+      const answer = await call('POST', '/tenants/get', { TenantName: tenantName })
+      return answer.ok
+        ? { ok: true, ...tenantState(asRecord(asRecord(answer.json).Tenant)) }
+        : answer
+    },
+
+    /** §4.1.5 for a tenant made without it: its own list, for bounces and complaints. */
+    async putTenantSuppressionAttributes(tenantName: string): Promise<SesResult> {
+      check(NAME.test(tenantName), 'the tenant name')
+      return done(
+        await call('POST', '/tenant/suppression', {
+          TenantName: tenantName,
+          SuppressionScope: 'TENANT',
+          SuppressedReasons: ['BOUNCE', 'COMPLAINT'],
+        }),
+      )
+    },
+
+    /** ListTenantResources, every page (at most 20): what the tenant may send with. */
+    async listTenantResources(
+      tenantName: string,
+      resourceType?: TenantResourceType,
+    ): Promise<SesResult<{ resources: { resourceArn: string; resourceType: string | null }[] }>> {
+      check(NAME.test(tenantName), 'the tenant name')
+      const resources: { resourceArn: string; resourceType: string | null }[] = []
+      let nextToken: string | null = null
+      for (let page = 0; page < 20; page++) {
+        const answer = await call('POST', '/tenants/resources/list', {
+          TenantName: tenantName,
+          PageSize: 100,
+          ...(resourceType ? { Filter: { RESOURCE_TYPE: resourceType } } : {}),
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        })
+        if (!answer.ok) return answer
+        const body = asRecord(answer.json)
+        for (const item of Array.isArray(body.TenantResources) ? body.TenantResources : []) {
+          const resourceArn = asString(asRecord(item).ResourceArn)
+          if (resourceArn)
+            resources.push({ resourceArn, resourceType: asString(asRecord(item).ResourceType) })
+        }
+        nextToken = asString(body.NextToken)
+        if (!nextToken) break
+      }
+      return { ok: true, resources }
+    },
+
+    /** §5 removal: the identity leaves the tenant (it cannot be deleted while it belongs to one). */
+    async deleteTenantResourceAssociation(
+      tenantName: string,
+      resourceArn: string,
+    ): Promise<SesResult> {
+      check(NAME.test(tenantName), 'the tenant name')
+      check(ARN.test(resourceArn), 'the resource ARN')
+      return done(
+        await call('POST', '/tenants/resources/delete', {
+          TenantName: tenantName,
+          ResourceArn: resourceArn,
+        }),
+      )
+    },
+
+    /** GetConfigurationSet: only whether it is there is read. */
+    async getConfigurationSet(configurationSetName: string): Promise<SesResult> {
+      check(NAME.test(configurationSetName), 'the configuration set')
+      return done(await call('GET', sesPath('configuration-sets', configurationSetName)))
+    },
+
+    async getConfigurationSetEventDestinations(
+      configurationSetName: string,
+    ): Promise<SesResult<{ destinations: EventDestinationState[] }>> {
+      check(NAME.test(configurationSetName), 'the configuration set')
+      const answer = await call(
+        'GET',
+        `${sesPath('configuration-sets', configurationSetName)}/event-destinations`,
+      )
       if (!answer.ok) return answer
-      const body = asRecord(answer.json)
+      const list = asRecord(answer.json).EventDestinations
       return {
         ok: true,
-        tenantArn: asString(body.TenantArn),
-        tenantId: asString(body.TenantId),
-        sendingStatus: asString(body.SendingStatus),
+        destinations: (Array.isArray(list) ? list : []).map((item) => {
+          const record = asRecord(item)
+          return {
+            name: asString(record.Name),
+            enabled: record.Enabled === true,
+            matchingEventTypes: Array.isArray(record.MatchingEventTypes)
+              ? record.MatchingEventTypes.filter((t): t is string => typeof t === 'string')
+              : [],
+            topicArn: asString(asRecord(record.SnsDestination).TopicArn),
+          }
+        }),
+      }
+    },
+
+    /** Puts a destination back to §4.2's seven events on the topic, enabled. */
+    async updateConfigurationSetEventDestination(
+      configurationSetName: string,
+      destinationName: string,
+      topicArn: string,
+    ): Promise<SesResult> {
+      check(NAME.test(configurationSetName), 'the configuration set')
+      check(NAME.test(destinationName), 'the destination name')
+      check(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/.test(topicArn), 'the topic ARN')
+      return done(
+        await call(
+          'PUT',
+          sesPath(
+            'configuration-sets',
+            configurationSetName,
+            'event-destinations',
+            destinationName,
+          ),
+          {
+            EventDestination: {
+              Enabled: true,
+              MatchingEventTypes: [...MAIL_EVENT_TYPES],
+              SnsDestination: { TopicArn: topicArn },
+            },
+          },
+        ),
+      )
+    },
+
+    /** GetReputationEntity: the policy a tenant is on, and who has paused it. */
+    async getReputationEntity(resourceArn: string): Promise<SesResult<ReputationState>> {
+      check(ARN.test(resourceArn), 'the resource ARN')
+      const answer = await call('GET', sesPath('reputation', 'entities', 'RESOURCE', resourceArn))
+      if (!answer.ok) return answer
+      const entity = asRecord(asRecord(answer.json).ReputationEntity)
+      return {
+        ok: true,
+        policy: asString(entity.ReputationManagementPolicy),
+        customerManagedStatus: asString(asRecord(entity.CustomerManagedStatus).Status),
+        awsManagedStatus: asString(asRecord(entity.AwsSesManagedStatus).Status),
+        sendingStatus: asString(entity.SendingStatusAggregate),
       }
     },
 

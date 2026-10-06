@@ -1,15 +1,25 @@
 import type { Metadata } from 'next'
-import { ComingSoon } from '@/features/accounts/components/coming-soon'
+import { Suspense } from 'react'
+import { Container } from '@/components/layout/container'
+import { PageSkeleton } from '@/features/accounts/components/dashboard-skeleton'
+import { DomainsPage } from '@/features/domains/components/domains-page'
 
 export const metadata: Metadata = { title: 'Domains' }
 
-/** MAIL-SPEC §10, Domains: a placeholder until its package builds it (N9b). */
-export default function DomainsPage() {
+/** MAIL-SPEC §5, §10 Domains: each domain's state, and adding one. */
+export default function Page() {
   return (
-    <ComingSoon
-      title="Domains"
-      will="The domains this account sends from will be here, each with its state, the DNS records to add — each with a copy button — and a live check of them in public DNS."
-      arrives="before launch"
-    />
+    <Suspense
+      fallback={
+        <Container className="py-6 sm:py-8">
+          <p className="sr-only" role="status">
+            Loading your domains
+          </p>
+          <PageSkeleton />
+        </Container>
+      }
+    >
+      <DomainsPage />
+    </Suspense>
   )
 }
