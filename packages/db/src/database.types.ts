@@ -63,6 +63,7 @@ export type Database = {
           daily_cap_override: number | null
           expected_monthly_volume: number | null
           id: string
+          is_e2e: boolean
           monthly_cap_override: number | null
           name: string
           plan_code: string
@@ -86,6 +87,7 @@ export type Database = {
           daily_cap_override?: number | null
           expected_monthly_volume?: number | null
           id?: string
+          is_e2e?: boolean
           monthly_cap_override?: number | null
           name: string
           plan_code?: string
@@ -109,6 +111,7 @@ export type Database = {
           daily_cap_override?: number | null
           expected_monthly_volume?: number | null
           id?: string
+          is_e2e?: boolean
           monthly_cap_override?: number | null
           name?: string
           plan_code?: string
@@ -761,7 +764,12 @@ export type Database = {
         Returns: undefined
       }
       claim_sends: {
-        Args: { p_limit: number; p_paid_only?: boolean; p_worker: string }
+        Args: {
+          p_account_id?: string
+          p_limit: number
+          p_paid_only?: boolean
+          p_worker: string
+        }
         Returns: Json
       }
       create_account: {
@@ -782,6 +790,11 @@ export type Database = {
           p_permission: string
           p_prefix: string
         }
+        Returns: Json
+      }
+      e2e_purge_account: { Args: { p_account_id: string }; Returns: Json }
+      e2e_ready_account: {
+        Args: { p_account_id: string; p_domain: string }
         Returns: Json
       }
       effective_caps: {
@@ -810,6 +823,7 @@ export type Database = {
         Args: { p_account_id: string; p_roles?: string[] }
         Returns: boolean
       }
+      is_e2e_account: { Args: { p_account_id: string }; Returns: boolean }
       is_mailbox: { Args: { p_mailbox: string }; Returns: boolean }
       lagos_day: { Args: { p_at: string }; Returns: string }
       purge_payloads: { Args: never; Returns: number }
