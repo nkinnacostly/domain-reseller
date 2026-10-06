@@ -16,6 +16,12 @@ export type PortfolioDomain = {
   delegationStatus: DelegationStatus
   nameservers: string[] | null
   pendingNameservers: string[] | null
+  /**
+   * The registrar has put the name on hold, so it does not resolve
+   * (`isRegistryHold` on the reconcile's `registry_status`). Only ever set on
+   * a domain we still hold; absent means not on hold.
+   */
+  onHold?: boolean
   /** FR-P3 — the account's own labels on this domain, by name. */
   labels: DomainLabel[]
 }

@@ -84,6 +84,7 @@ const PORTFOLIO_ROW = {
   delegationStatus: 'verified',
   nameservers: ['ns1.vercel-dns.com', 'ns2.vercel-dns.com'],
   pendingNameservers: null,
+  onHold: false,
   labels: [],
 }
 

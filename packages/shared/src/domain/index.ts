@@ -50,6 +50,20 @@ export function assertTransition(from: LocalStatus, to: LocalStatus): void {
   }
 }
 
+/**
+ * Whether the registrar has put the name on hold: the registry takes it out of
+ * the zone, so websites and email on it stop working. The supplier reports it
+ * as status 12, `PendingHold` (the SDK's DOMAIN_STATUS_MAP); seen on a live
+ * .com on 6 Oct 2026 while Verisign's RDAP showed `client hold` and public DNS
+ * answered NXDOMAIN. It is a registry fact, copied hourly into
+ * `domains.registry_status` by the reconcile — not a lifecycle state, so
+ * `local_status` stays as it is (the reconcile also opens a `status_mismatch`
+ * drift for a person).
+ */
+export function isRegistryHold(registryStatus: string | null | undefined): boolean {
+  return /hold/i.test(registryStatus ?? '')
+}
+
 /** Urgency banding drives the visual treatment required by UX-8. */
 export type ExpiryUrgency = 'safe' | 'soon' | 'urgent' | 'critical' | 'expired'
 

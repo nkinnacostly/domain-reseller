@@ -28,6 +28,20 @@ describe('DomainStatusPill', () => {
     expect(screen.getByText('Active')).toBeInTheDocument()
   })
 
+  it('says "On hold" when the registrar has held the name, over expiry urgency', () => {
+    render(<DomainStatusPill status="active" daysUntilExpiry={5} onHold />)
+    const pill = screen.getByTestId('domain-status-pill')
+    expect(pill.textContent?.trim()).toBe('On hold')
+    expect(pill).toHaveAttribute('data-on-hold', 'true')
+    expect(pill.textContent).not.toMatch(/Expires in/)
+  })
+
+  it('shows the lifecycle label when the name is not on hold', () => {
+    render(<DomainStatusPill status="active" onHold={false} />)
+    expect(screen.getByTestId('domain-status-pill')).not.toHaveAttribute('data-on-hold')
+    expect(screen.getByText('Active')).toBeInTheDocument()
+  })
+
   it('does not let expiry urgency override a non-active state', () => {
     render(<DomainStatusPill status="redemption" daysUntilExpiry={2} />)
     expect(screen.getByText('Redemption')).toBeInTheDocument()

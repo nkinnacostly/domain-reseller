@@ -61,25 +61,45 @@ export type DomainStatusPillProps = {
   status: LocalStatus
   /** When supplied on an active domain, expiry urgency overrides the neutral "Active" tone. */
   daysUntilExpiry?: number
+  /**
+   * The registrar has put the name on hold (`isRegistryHold`): it does not
+   * resolve, so that outranks the lifecycle label and any expiry urgency.
+   */
+  onHold?: boolean
   className?: string
 }
 
-export function DomainStatusPill({ status, daysUntilExpiry, className }: DomainStatusPillProps) {
+const ON_HOLD_TONE =
+  'bg-status-expired/15 text-foreground border-status-expired/30 [--dot:var(--status-expired)]'
+
+export function DomainStatusPill({
+  status,
+  daysUntilExpiry,
+  onHold = false,
+  className,
+}: DomainStatusPillProps) {
   const urgency = daysUntilExpiry === undefined ? null : expiryUrgency(daysUntilExpiry)
 
-  const showsUrgency = status === 'active' && urgency !== null && urgency !== 'safe'
-  const label = showsUrgency ? `Expires in ${daysUntilExpiry} days` : STATUS_LABEL[status]
+  const showsUrgency = !onHold && status === 'active' && urgency !== null && urgency !== 'safe'
+  const label = onHold
+    ? 'On hold'
+    : showsUrgency
+      ? `Expires in ${daysUntilExpiry} days`
+      : STATUS_LABEL[status]
 
-  const tone = showsUrgency
-    ? urgency === 'soon'
-      ? 'bg-status-expiring/15 text-foreground border-status-expiring/30 [--dot:var(--status-expiring)]'
-      : 'bg-status-expired/15 text-foreground border-status-expired/30 [--dot:var(--status-expired)]'
-    : STATUS_TONE[status]
+  const tone = onHold
+    ? ON_HOLD_TONE
+    : showsUrgency
+      ? urgency === 'soon'
+        ? 'bg-status-expiring/15 text-foreground border-status-expiring/30 [--dot:var(--status-expiring)]'
+        : 'bg-status-expired/15 text-foreground border-status-expired/30 [--dot:var(--status-expired)]'
+      : STATUS_TONE[status]
 
   return (
     <span
       data-testid="domain-status-pill"
       data-status={status}
+      data-on-hold={onHold || undefined}
       data-urgency={urgency ?? undefined}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5',

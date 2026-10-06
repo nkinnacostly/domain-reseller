@@ -1,4 +1,4 @@
-import type { LocalStatus } from '@dr/shared'
+import { isRegistryHold, type LocalStatus } from '@dr/shared'
 import Link from 'next/link'
 import { DomainName } from '@/components/common/domain-name'
 import { DomainStatusPill } from '@/components/common/domain-status-pill'
@@ -120,7 +120,14 @@ function summary(detail: DomainDetail, now: Date): DlItem[] {
   const items: DlItem[] = [
     {
       label: 'Status',
-      value: domain.status ? <DomainStatusPill status={domain.status as LocalStatus} /> : '—',
+      value: domain.status ? (
+        <DomainStatusPill
+          status={domain.status as LocalStatus}
+          onHold={isRegistryHold(domain.registryStatus)}
+        />
+      ) : (
+        '—'
+      ),
     },
     {
       label: 'Expires',
@@ -347,7 +354,12 @@ export function DomainDetailBody({
         }
         titleAside={
           <span className="inline-flex flex-wrap items-center gap-2">
-            {domain.status ? <DomainStatusPill status={domain.status as LocalStatus} /> : null}
+            {domain.status ? (
+              <DomainStatusPill
+                status={domain.status as LocalStatus}
+                onHold={isRegistryHold(domain.registryStatus)}
+              />
+            ) : null}
             {domain.testMode ? <TestBadge /> : null}
             {domain.source === 'demo' ? <DemoBadge /> : null}
           </span>

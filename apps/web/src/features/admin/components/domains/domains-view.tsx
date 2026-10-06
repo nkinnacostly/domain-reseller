@@ -1,4 +1,4 @@
-import type { LocalStatus } from '@dr/shared'
+import { isRegistryHold, type LocalStatus } from '@dr/shared'
 import { Info } from 'lucide-react'
 import Link from 'next/link'
 import { QUIET_BUTTON } from '@/components/common/action-parts'
@@ -127,7 +127,15 @@ export function domainColumns(now: Date): Column<DomainListRow, DomainSort>[] {
     {
       key: 'status',
       header: 'Status',
-      cell: (row) => (row.status ? <DomainStatusPill status={row.status as LocalStatus} /> : '—'),
+      cell: (row) =>
+        row.status ? (
+          <DomainStatusPill
+            status={row.status as LocalStatus}
+            onHold={isRegistryHold(row.registryStatus)}
+          />
+        ) : (
+          '—'
+        ),
     },
     {
       key: 'expires',

@@ -103,6 +103,64 @@ describe('getPortfolio labels (FR-P3)', () => {
       { id: 'l1', name: 'Acme', color: 'blue' },
       { id: 'l2', name: 'Zed', color: 'red' },
     ])
+    expect(domain?.onHold).toBe(false)
+  })
+
+  it('marks a held domain the registrar has put on hold, and nothing we no longer hold', async () => {
+    const row = {
+      tld: 'com',
+      source: 'registration',
+      test_mode: false,
+      expires_at: null,
+      auto_renew: true,
+      privacy_enabled: true,
+      transfer_lock: true,
+      delegation_status: 'verified',
+      nameservers: null,
+      pending_nameservers: null,
+      domain_label_links: [],
+    }
+    signedIn({
+      domains: {
+        data: [
+          {
+            ...row,
+            id: 'd1',
+            domain_name: 'held.com',
+            local_status: 'active',
+            registry_status: 'PendingHold',
+          },
+          {
+            ...row,
+            id: 'd2',
+            domain_name: 'fine.com',
+            local_status: 'active',
+            registry_status: 'Active',
+          },
+          {
+            ...row,
+            id: 'd3',
+            domain_name: 'gone.com',
+            local_status: 'transferred_away',
+            registry_status: 'PendingHold',
+          },
+          {
+            ...row,
+            id: 'd4',
+            domain_name: 'unread.com',
+            local_status: 'active',
+            registry_status: null,
+          },
+        ],
+      },
+    })
+    const onHold = Object.fromEntries((await getPortfolio()).map((d) => [d.domainName, d.onHold]))
+    expect(onHold).toEqual({
+      'held.com': true,
+      'fine.com': false,
+      'gone.com': false,
+      'unread.com': false,
+    })
   })
 })
 

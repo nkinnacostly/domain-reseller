@@ -60,6 +60,12 @@ describe('summarize (FR-P1)', () => {
     expect(summary.active).toBe(3)
   })
 
+  it('does not count a domain on hold at the registry as active', () => {
+    const held = summarize([domain('up.com'), domain('held.com', { onHold: true })], [], NOW)
+    expect(held.active).toBe(1)
+    expect(held.total).toBe(2)
+  })
+
   it('counts what is due exactly as the expiry view lists it, expired included', () => {
     expect(summary.dueWithin30).toBe(3)
     expect(summary.dueWithin7).toBe(2)

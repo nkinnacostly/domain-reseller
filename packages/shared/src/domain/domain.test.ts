@@ -4,6 +4,7 @@ import {
   canTransition,
   errpNoticeDue,
   expiryUrgency,
+  isRegistryHold,
   isTransferEligible,
   transferEligibleAt,
 } from './index'
@@ -36,6 +37,22 @@ describe('domain state machine', () => {
 
   it('throws on an illegal transition rather than silently allowing it', () => {
     expect(() => assertTransition('active', 'released')).toThrow(/Illegal domain transition/)
+  })
+})
+
+describe('isRegistryHold', () => {
+  it('reads the supplier’s PendingHold as a hold, whatever the case', () => {
+    expect(isRegistryHold('PendingHold')).toBe(true)
+    expect(isRegistryHold('pendinghold')).toBe(true)
+    expect(isRegistryHold('clientHold')).toBe(true)
+  })
+
+  it('does not call an active, unknown or unread status a hold', () => {
+    expect(isRegistryHold('Active')).toBe(false)
+    expect(isRegistryHold('ok')).toBe(false)
+    expect(isRegistryHold('ModificationPending')).toBe(false)
+    expect(isRegistryHold(null)).toBe(false)
+    expect(isRegistryHold(undefined)).toBe(false)
   })
 })
 

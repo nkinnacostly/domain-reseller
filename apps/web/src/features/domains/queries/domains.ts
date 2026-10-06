@@ -1,6 +1,6 @@
 import 'server-only'
 
-import type { DelegationStatus, LocalStatus } from '@dr/shared'
+import { type DelegationStatus, isRegistryHold, type LocalStatus } from '@dr/shared'
 import { cacheLife, cacheTag } from 'next/cache'
 import { cache } from 'react'
 import { logger } from '@/lib/logger'
@@ -16,7 +16,7 @@ import type { RegistrarSide } from '../lib/registrar-default'
 // FR-P3: a domain's labels come through the link table. RLS shows only
 // links to the account's own labels (migration 32).
 const COLUMNS =
-  'id, domain_name, tld, source, test_mode, local_status, expires_at, registered_at, auto_renew, privacy_enabled, transfer_lock, delegation_status, nameservers, pending_nameservers, nameserver_preset_id, registrant, created_at, domain_label_links(domain_labels(id, name, color))'
+  'id, domain_name, tld, source, test_mode, local_status, expires_at, registered_at, auto_renew, privacy_enabled, transfer_lock, delegation_status, nameservers, pending_nameservers, nameserver_preset_id, registrant, registry_status, created_at, domain_label_links(domain_labels(id, name, color))'
 
 type Row = {
   id: string
@@ -32,8 +32,18 @@ type Row = {
   delegation_status: string
   nameservers: string[] | null
   pending_nameservers: string[] | null
+  registry_status?: string | null
   domain_label_links?: { domain_labels: { id: string; name: string; color: string } | null }[]
 }
+
+/** Statuses in which we still hold the name at the registry, so a hold there is ours to show. */
+const HELD_AT_REGISTRY: ReadonlySet<string> = new Set([
+  'active',
+  'expired_grace',
+  'redemption',
+  'pending_delete',
+  'pending_verification',
+])
 
 function toPortfolio(row: Row): PortfolioDomain {
   return {
@@ -50,6 +60,7 @@ function toPortfolio(row: Row): PortfolioDomain {
     delegationStatus: row.delegation_status as DelegationStatus,
     nameservers: row.nameservers,
     pendingNameservers: row.pending_nameservers,
+    onHold: HELD_AT_REGISTRY.has(row.local_status) && isRegistryHold(row.registry_status),
     labels: sortLabels(
       (row.domain_label_links ?? []).flatMap((link) =>
         link.domain_labels ? [toLabel(link.domain_labels)] : [],

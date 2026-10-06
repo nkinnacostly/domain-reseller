@@ -212,6 +212,7 @@ export function Portfolio({
                       <DomainStatusPill
                         status={domain.status}
                         daysUntilExpiry={days ?? undefined}
+                        onHold={domain.onHold}
                       />
                       <span>
                         {domain.expiresAt
@@ -292,6 +293,7 @@ export function Portfolio({
                         <DomainStatusPill
                           status={domain.status}
                           daysUntilExpiry={days ?? undefined}
+                          onHold={domain.onHold}
                         />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground tabular-nums">

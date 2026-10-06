@@ -95,7 +95,8 @@ export function summarize(
 
   return {
     total: domains.length,
-    active: domains.filter((domain) => domain.status === 'active').length,
+    // A domain on hold at the registry does not work, so it is not counted as active.
+    active: domains.filter((domain) => domain.status === 'active' && !domain.onHold).length,
     dueWithin30: within(30),
     dueWithin7: within(7),
     held: held.length,
