@@ -67,6 +67,29 @@ jobs:
           done
           exit $bad
 
+      # MAIL-SPEC §4.3, N6 — in apps/mail the secret key, the API key pepper,
+      # the SES manager key and the SES client are read only by modules that
+      # import 'server-only'.
+      - name: Mail's secrets are server-only
+        run: |
+          bad=0
+          for file in $(grep -rlE "SUPABASE_SECRET_KEY|MAIL_API_KEY_PEPPER|MAIL_SES_MANAGER_|requireApiKeyPepper|requireSesManagerEnv|@dr/shared/ses|@/lib/supabase/service" apps/mail/src --include='*.ts' --include='*.tsx' \
+                        | grep -v "/__tests__/" | grep -v "\.test\.tsx\?$" | grep -v "apps/mail/src/lib/env.ts"); do
+            if ! grep -q "^import 'server-only'" "$file"; then
+              echo "::error file=$file::reads a Mail secret without import 'server-only'"
+              bad=1
+            fi
+          done
+          exit $bad
+
+      # MAIL-SPEC §4.3 — only the mail worker holds the key that can send.
+      - name: Mail's sending key stays in the worker
+        run: |
+          if grep -rn "MAIL_SES_SENDER_" apps/mail apps/web --include='*.ts' --include='*.tsx'; then
+            echo "::error::MAIL_SES_SENDER_* belongs to apps/mail-worker alone"
+            exit 1
+          fi
+
       # SEC-5 — supplier credentials belong to the gateway alone.
       - name: Supplier credentials stay in the gateway
         run: |
@@ -129,6 +152,10 @@ jobs:
       # Vercel builds the web app on every push; the gateway ships from here.
       - name: Gateway bundle
         run: pnpm --filter @dr/gateway build
+
+      # MyDomainsHub Mail's worker ships from here too (fly.mail.toml).
+      - name: Mail worker bundle
+        run: pnpm --filter @dr/mail-worker build
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high

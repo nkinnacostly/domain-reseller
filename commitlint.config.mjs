@@ -23,6 +23,7 @@ export default {
         'billing',
         'auth',
         'admin',
+        'mail',
         'ci',
         'deps',
         'docs',

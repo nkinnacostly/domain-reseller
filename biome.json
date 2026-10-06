@@ -16,10 +16,12 @@
       "!**/database.types.ts",
       "!apps/web/src/components/ui",
       "!apps/web/src/components/kibo-ui",
+      "!apps/mail/src/components/ui",
       "!**/playwright-report",
       "!**/test-results",
       "!pnpm-lock.yaml",
-      "!apps/web/src/app/globals.css"
+      "!apps/web/src/app/globals.css",
+      "!apps/mail/src/app/globals.css"
     ]
   },
   "formatter": {
