@@ -18,6 +18,7 @@
   "dependencies": {
     "@dr/db": "workspace:*",
     "@dr/shared": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "@t3-oss/env-nextjs": "^0.13.0",
