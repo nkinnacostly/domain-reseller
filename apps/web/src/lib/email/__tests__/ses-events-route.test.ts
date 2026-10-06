@@ -1,3 +1,4 @@
+import { clearCertificateCache } from '@dr/shared/sns'
 import { HttpResponse, http } from 'msw'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +12,6 @@ import {
   signSns,
   snsNotification,
 } from '../../../../tests/mocks/sns'
-import { clearCertificateCache } from '../sns'
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
 

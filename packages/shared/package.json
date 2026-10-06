@@ -19,7 +19,8 @@
     "./ssl": "./src/ssl/index.ts",
     "./admin": "./src/admin/index.ts",
     "./mail": "./src/mail/index.ts",
-    "./webhooks": "./src/webhooks/index.ts"
+    "./webhooks": "./src/webhooks/index.ts",
+    "./sns": "./src/sns/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
