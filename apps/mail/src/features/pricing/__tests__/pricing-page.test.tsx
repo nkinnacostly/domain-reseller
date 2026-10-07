@@ -30,15 +30,15 @@ describe('the plan cards (MAIL-SPEC §8; N8 for Mail)', () => {
     expect(document.body).toHaveTextContent('VAT 7.5% is added at checkout.')
   })
 
-  it('offers the Free plan now, and says paid plans are not on sale yet', () => {
-    render(<PlanCards catalogue={catalogue} />)
+  it('offers the Free plan, and says paid plans are not on sale while they are not', () => {
+    render(<PlanCards catalogue={catalogue} paidPlansOnSale={false} />)
     expect(screen.getByRole('link', { name: 'Start free' })).toHaveAttribute('href', '/sign-up')
     expect(screen.getAllByText('Not on sale yet')).toHaveLength(2)
     expect(screen.queryByRole('link', { name: /^Choose / })).toBeNull()
   })
 
-  it('offers each paid plan once paid plans are on sale', () => {
-    render(<PlanCards catalogue={catalogue} paidPlansOnSale />)
+  it('offers each paid plan now paid plans are on sale (the default since 7 Oct 2026)', () => {
+    render(<PlanCards catalogue={catalogue} />)
     expect(screen.getByRole('link', { name: 'Choose Starter' })).toBeInTheDocument()
     expect(screen.queryByText('Not on sale yet')).toBeNull()
   })

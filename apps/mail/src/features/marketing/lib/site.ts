@@ -11,9 +11,9 @@ export const LAUNCH = {
    * still being built. `pageMetadata` keeps every public page out of search
    * until this is true.
    */
-  isOpen: false,
+  isOpen: true,
   /** Billing (§8, P3): until it lands, nobody can buy a paid plan. */
-  paidPlansOnSale: false,
+  paidPlansOnSale: true,
 } as const
 
 export const ROUTES = {

@@ -52,7 +52,8 @@ for (const path of [...PUBLIC_PAGES, ...DOCS_GUIDES]) {
       'content',
       'MyDomainsHub Mail',
     )
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
+    // Mail is open (owner, 7 Oct 2026): public pages are indexed.
+    await expect(page.locator('meta[name="robots"]')).not.toHaveAttribute('content', /noindex/)
   })
 }
 

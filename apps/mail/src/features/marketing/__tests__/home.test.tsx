@@ -147,13 +147,15 @@ describe('the home page sections', () => {
   })
 
   it('says Mail is not open yet, until it is (N9b)', () => {
-    const { unmount } = render(<PreLaunchNotice />)
+    const { unmount } = render(<PreLaunchNotice isOpen={false} />)
     expect(screen.getByRole('complementary', { name: 'Not open yet' })).toHaveTextContent(
       'Paid plans are not on sale',
     )
     unmount()
     const { container } = render(<PreLaunchNotice isOpen />)
     expect(container).toBeEmptyDOMElement()
+    // Mail is open (owner, 7 Oct 2026): the default draws nothing.
+    expect(render(<PreLaunchNotice />).container).toBeEmptyDOMElement()
   })
 
   it('a page hero carries its eyebrow, intro and up to three icons', () => {

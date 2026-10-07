@@ -132,7 +132,8 @@ test.describe('the home page', () => {
     await expect(
       page.getByRole('heading', { name: 'What protects your sending reputation' }),
     ).toBeVisible()
-    await expect(page.getByRole('complementary', { name: 'Not open yet' })).toBeVisible()
+    // Mail is open (owner, 7 Oct 2026): no pre-launch notice.
+    await expect(page.getByRole('complementary', { name: 'Not open yet' })).toHaveCount(0)
   })
 
   test('the code scrolls inside its own box on a phone, never the page', async ({ page }) => {

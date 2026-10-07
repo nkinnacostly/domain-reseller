@@ -27,7 +27,7 @@ import {
 const SITE = 'https://emails.mydomainshub.com'
 
 describe('pageMetadata', () => {
-  it('gives a canonical address, a complete share card, and keeps pages out of search until launch', () => {
+  it('gives a canonical address, a complete share card, and opens pages to search now Mail is open', () => {
     const meta = pageMetadata({ title: 'Pricing', description: 'Plans.', path: '/pricing' })
     expect(meta.title).toBe('Pricing')
     expect(meta.alternates).toEqual({ canonical: '/pricing' })
@@ -39,7 +39,7 @@ describe('pageMetadata', () => {
       images: [SHARE_IMAGE],
     })
     expect(meta.twitter).toMatchObject({ card: 'summary_large_image' })
-    expect(meta.robots).toEqual(NOT_YET_INDEXED)
+    expect(meta.robots).toEqual(INDEXABLE)
   })
 
   it('takes an absolute title for the home page', () => {
