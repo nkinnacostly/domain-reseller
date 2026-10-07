@@ -5,7 +5,7 @@ import { paymentsConfigured, requireBillingEnv } from '../server/env'
 import {
   createPaymentLink,
   createPaymentPlan,
-  findSubscription,
+  findSubscriptions,
   setSubscription,
   verifyTransaction,
   webhookHashMatches,
@@ -149,16 +149,17 @@ describe('Flutterwave calls', () => {
         body: { status: 'success', data: { id: 77, status: 'active' } },
       },
     })
-    expect(await findSubscription(settings(), '9100001')).toMatchObject({
+    expect(await findSubscriptions(settings(), '9100001')).toMatchObject({
       kind: 'found',
-      subscription: { id: 77 },
+      subscriptions: [{ id: 77 }],
     })
     expect(calls[0]?.path).toBe('/subscriptions?transaction_id=9100001')
     expect(await setSubscription(settings(), 77, 'cancel')).toBe(true)
     expect(await setSubscription(settings(), 77, 'activate')).toBe(true)
-    expect(await findSubscription(settings(), 'x')).toEqual({ kind: 'missing' })
+    expect(await findSubscriptions(settings(), 'x')).toEqual({ kind: 'missing' })
     mockFlutterwave({ 'GET /subscriptions': { body: { status: 'success', data: [] } } })
-    expect(await findSubscription(settings(), '1')).toEqual({ kind: 'missing' })
+    expect(await findSubscriptions(settings(), '1')).toEqual({ kind: 'missing' })
+    // Two for one charge (7 Oct 2026) is an answer now: both, by id when undated.
     mockFlutterwave({
       'GET /subscriptions': {
         body: {
@@ -170,7 +171,13 @@ describe('Flutterwave calls', () => {
         },
       },
     })
-    expect(await findSubscription(settings(), '1')).toEqual({ kind: 'unreachable' })
+    expect(await findSubscriptions(settings(), '1')).toEqual({
+      kind: 'found',
+      subscriptions: [
+        { id: 1, status: 'active', plan: null, createdAt: null },
+        { id: 2, status: 'active', plan: null, createdAt: null },
+      ],
+    })
     mockFlutterwave({ 'PUT /subscriptions/9/cancel': { body: { status: 'success', data: {} } } })
     expect(await setSubscription(settings(), 9, 'cancel')).toBe(false)
   })

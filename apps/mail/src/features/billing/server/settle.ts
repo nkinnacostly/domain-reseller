@@ -2,7 +2,8 @@ import 'server-only'
 
 import { logger } from '@/lib/logger'
 import { createServiceClient } from '@/lib/supabase/service'
-import { MAIL_TX_REF_PREFIX } from '../lib/flutterwave'
+import { MAIL_TX_REF_PREFIX, TRANSACTION_ID } from '../lib/flutterwave'
+import { cancelDuplicateSubscriptions } from './duplicates'
 import { requireBillingEnv } from './env'
 import { verifyTransaction } from './flutterwave'
 import { recordIncident, stopReplaced } from './provider'
@@ -90,6 +91,8 @@ export async function settleCharge(
     outcome?: string
     reason?: string
     cancelTransactions?: unknown
+    accountId?: unknown
+    firstTransactionId?: unknown
   } | null
   if (error || answer?.ok !== true || !OUTCOMES.has(String(answer.outcome))) {
     // Confirmed at Flutterwave, not recorded here: the one state that must never go unnoticed.
@@ -118,6 +121,41 @@ export async function settleCharge(
     ? answer.cancelTransactions.filter((id): id is string => typeof id === 'string')
     : []
   if (cancel.length > 0) await stopReplaced(service, settings, expected?.accountId ?? null, cancel)
+  const look = duplicateLookFor(outcome, answer, charge.id, expected?.accountId)
+  if (look) {
+    try {
+      await cancelDuplicateSubscriptions(service, settings, look.accountId, look.firstTransactionId)
+    } catch {
+      // Recorded either way; the hourly run looks again.
+      logger.error({ transactionId: charge.id }, 'duplicate subscription look failed')
+    }
+  }
   logger.info({ outcome, transactionId: charge.id }, 'billing charge settled')
   return outcome
+}
+
+/**
+ * Migration 56: when to look for a second Flutterwave subscription at once —
+ * after a first charge is recorded (it may have started two), and after a
+ * second renewal in one month (one did). The hourly run covers the rest: the
+ * second subscription can appear minutes after the charge (7 Oct 2026).
+ */
+function duplicateLookFor(
+  outcome: SettleOutcome,
+  answer: { reason?: string; accountId?: unknown; firstTransactionId?: unknown },
+  transactionId: string,
+  expectedAccountId: string | undefined,
+): { accountId: string | null; firstTransactionId: string } | null {
+  const accountId =
+    typeof answer.accountId === 'string' ? answer.accountId : (expectedAccountId ?? null)
+  if (outcome === 'paid') return { accountId, firstTransactionId: transactionId }
+  if (
+    outcome === 'unapplied' &&
+    answer.reason === 'duplicate_charge' &&
+    typeof answer.firstTransactionId === 'string' &&
+    TRANSACTION_ID.test(answer.firstTransactionId)
+  ) {
+    return { accountId, firstTransactionId: answer.firstTransactionId }
+  }
+  return null
 }

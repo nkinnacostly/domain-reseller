@@ -4,7 +4,9 @@ import { timingSafeEqual } from 'node:crypto'
 import { logger } from '@/lib/logger'
 import {
   type ChargeFacts,
+  hasMorePages,
   isStopped,
+  oldestFirst,
   type ProviderSubscription,
   readCharge,
   readSubscriptions,
@@ -150,23 +152,28 @@ export async function verifyTransaction(
   return body?.status === 'error' ? { kind: 'missing' } : { kind: 'unreachable' }
 }
 
-/** GET /v3/subscriptions?transaction_id=: the subscription a first charge started. */
-export type FoundSubscription =
-  | { kind: 'found'; subscription: ProviderSubscription }
+/**
+ * GET /v3/subscriptions?transaction_id=: every subscription a first charge
+ * started, earliest-made first. Usually one; a live test-mode run (7 Oct
+ * 2026) showed one charge starting two, so callers act on them all.
+ *   found       — Flutterwave listed at least one, on a single page;
+ *   missing     — it listed none for this charge;
+ *   unreachable — no answer, or one that leaves some out (more pages).
+ */
+export type FoundSubscriptions =
+  | { kind: 'found'; subscriptions: ProviderSubscription[] }
   | { kind: 'missing' }
   | { kind: 'unreachable' }
 
-export async function findSubscription(
+export async function findSubscriptions(
   settings: BillingSettings,
   firstTransactionId: string,
-): Promise<FoundSubscription> {
+): Promise<FoundSubscriptions> {
   if (!TRANSACTION_ID.test(firstTransactionId)) return { kind: 'missing' }
   const body = await call(settings, `/subscriptions?transaction_id=${firstTransactionId}`)
-  if (!body) return { kind: 'unreachable' }
-  const [first, ...rest] = readSubscriptions(body.data)
-  // More than one is not an answer we can act on.
-  if (rest.length > 0) return { kind: 'unreachable' }
-  return first ? { kind: 'found', subscription: first } : { kind: 'missing' }
+  if (!body || hasMorePages(body.meta)) return { kind: 'unreachable' }
+  const subscriptions = oldestFirst(readSubscriptions(body.data))
+  return subscriptions.length > 0 ? { kind: 'found', subscriptions } : { kind: 'missing' }
 }
 
 /** PUT /v3/subscriptions/:id/cancel or /activate; true once Flutterwave says it is done. */

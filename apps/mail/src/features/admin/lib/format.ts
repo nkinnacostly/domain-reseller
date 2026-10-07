@@ -115,7 +115,24 @@ export const INCIDENT_KIND: Record<string, { label: string; todo: string }> = {
     label: 'Failed charge out of turn',
     todo: 'A failed charge far from the period’s end: not taken as a failed renewal. Check who made it.',
   },
+  // Migration 56: one checkout charge started two Flutterwave subscriptions (7 Oct 2026).
+  duplicate_charge: {
+    label: 'Charged twice for one month',
+    todo: 'A second renewal arrived for a month already paid. It was recorded but not applied, and Mail has no refund flow, so nothing was refunded. Refund this charge in Flutterwave.',
+  },
+  duplicate_subscription: {
+    label: 'Duplicate subscription',
+    todo: 'One payment started more than one Flutterwave subscription. Mail keeps the earliest and cancels the others, asking again every hour until Flutterwave confirms. Check in Flutterwave that only the kept one is active, and refund anything the others charged (each is its own “Charged twice for one month” incident).',
+  },
 }
+
+/**
+ * How an incident is closed. Mail's admin has no resolve action yet (a
+ * resolved incident is one with `resolved_at` set, migration 50), so the page
+ * says who closes it and how, and that its alert stops then (migration 54).
+ */
+export const INCIDENT_CLOSING =
+  'Closing an incident: there is no button for it yet. Once it is dealt with in Flutterwave (the charge refunded, or the subscription cancelled), ask the owner to close it in the database: in Supabase’s SQL editor they set resolved_at and resolved_by on its row in mail.billing_incidents. Its ops alert stops then.'
 
 export const incidentKindOf = (kind: string) =>
   INCIDENT_KIND[kind] ?? { label: kind.replaceAll('_', ' '), todo: 'Look it up in Flutterwave.' }
@@ -129,6 +146,38 @@ export function incidentDetailLine(detail: Record<string, unknown>): string {
         : `${key.replaceAll('_', ' ')} ${String(value)}`,
     )
     .join(', ')
+}
+
+const idText = (value: unknown) =>
+  typeof value === 'string' && /^[0-9][0-9, ]{0,99}$/.test(value) ? value : null
+
+/**
+ * An incident's facts in plain words, with Flutterwave's ids, for the kinds
+ * migration 56 records (its detail keys); the generic line for the rest, and
+ * for a detail without the keys it should have.
+ */
+export function incidentFacts(
+  kind: string,
+  detail: Record<string, unknown>,
+  providerReference: string | null,
+): string {
+  if (kind === 'duplicate_charge') {
+    const charge = idText(detail.transaction_id) ?? idText(providerReference)
+    const first = idText(detail.period_transaction_id)
+    const amount = detail.amount_kobo
+    if (charge && first && typeof amount === 'number' && Number.isSafeInteger(amount)) {
+      return `Charge ${charge} (${formatKobo(amount)}) came after charge ${first} had already paid for the month. Not refunded automatically: Mail has no refund flow.`
+    }
+  }
+  if (kind === 'duplicate_subscription') {
+    const kept = idText(detail.kept_subscription_id)
+    const others = idText(detail.duplicate_subscription_ids)
+    const charge = idText(providerReference)
+    if (kept && others && charge) {
+      return `Payment ${charge} started Flutterwave subscriptions ${kept} and ${others}. Kept ${kept}; Mail cancels ${others}, asking hourly until Flutterwave confirms.`
+    }
+  }
+  return incidentDetailLine(detail)
 }
 
 export const RESOLUTION: Record<string, string> = {

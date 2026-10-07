@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger'
 import type { MailServiceClient } from '@/lib/supabase/service'
 import { isStopped } from '../lib/flutterwave'
 import type { BillingSettings } from './env'
-import { findSubscription, setSubscription } from './flutterwave'
+import { findSubscriptions, setSubscription } from './flutterwave'
 
 /**
  * Keeping Flutterwave's subscriptions in step with ours (MAIL-SPEC §8). The
@@ -24,6 +24,8 @@ export type BillingIncident =
   | 'subscription_not_canceled'
   | 'unknown_reference'
   | 'unapplied_charge'
+  /** More than one live subscription for one first charge (migration 56). */
+  | 'duplicate_subscription'
 
 /**
  * Money that arrived but was not applied, or a subscription we could not
@@ -56,29 +58,45 @@ export async function recordIncident(
 }
 
 /**
- * Stops the Flutterwave subscription a first charge started. True only once
- * Flutterwave says it is stopped: a subscription it cannot find for that
- * charge is not taken as stopped — the card is never assumed safe.
+ * Stops every Flutterwave subscription a first charge started — a duplicate
+ * one included (one charge started two, 7 Oct 2026). True only once
+ * Flutterwave has confirmed each one stopped: a charge it lists nothing for
+ * is not taken as stopped — the card is never assumed safe.
+ *
+ * Newest first, and the earliest-made — the one a kept plan renews on — last:
+ * the first cancel Flutterwave does not confirm ends the run, so a refusal
+ * never leaves the plan's own subscription stopped while a duplicate charges
+ * on (the caller then says nothing was changed). A cancel that timed out is
+ * never sent again here; the next call lists first and asks only what is
+ * still running (N3's rule: settled by reading).
  */
 export async function stopFlutterwaveSubscription(
   settings: BillingSettings,
   firstTransactionId: string,
 ): Promise<boolean> {
-  const found = await findSubscription(settings, firstTransactionId)
+  const found = await findSubscriptions(settings, firstTransactionId)
   if (found.kind !== 'found') return false
-  if (isStopped(found.subscription.status)) return true
-  return setSubscription(settings, found.subscription.id, 'cancel')
+  for (const subscription of [...found.subscriptions].reverse()) {
+    if (isStopped(subscription.status)) continue
+    if (!(await setSubscription(settings, subscription.id, 'cancel'))) return false
+  }
+  return true
 }
 
-/** Starts it again (a scheduled change withdrawn). */
+/**
+ * Starts the earliest-made subscription again (a scheduled change
+ * withdrawn). Never a later one: a duplicate stays stopped.
+ */
 export async function restartFlutterwaveSubscription(
   settings: BillingSettings,
   firstTransactionId: string,
 ): Promise<boolean> {
-  const found = await findSubscription(settings, firstTransactionId)
+  const found = await findSubscriptions(settings, firstTransactionId)
   if (found.kind !== 'found') return false
-  if (/^active$/i.test(found.subscription.status)) return true
-  return setSubscription(settings, found.subscription.id, 'activate')
+  const [earliest] = found.subscriptions
+  if (!earliest) return false
+  if (/^active$/i.test(earliest.status)) return true
+  return setSubscription(settings, earliest.id, 'activate')
 }
 
 /** What billing_provider_state says about the account's subscription. */
