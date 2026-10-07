@@ -7,9 +7,10 @@ import { DomainPage } from '@/features/domains/components/domain-page'
 export const metadata: Metadata = { title: 'Domain' }
 
 type Params = Promise<{ id: string }>
+type Query = Promise<Record<string, string | string[] | undefined>>
 
 /** MAIL-SPEC §5: one domain — its DNS records with copy buttons, a live check, "Check now". */
-export default function Page({ params }: { params: Params }) {
+export default function Page({ params, searchParams }: { params: Params; searchParams: Query }) {
   return (
     <Suspense
       fallback={
@@ -21,7 +22,7 @@ export default function Page({ params }: { params: Params }) {
         </Container>
       }
     >
-      <DomainPage params={params} />
+      <DomainPage params={params} searchParams={searchParams} />
     </Suspense>
   )
 }

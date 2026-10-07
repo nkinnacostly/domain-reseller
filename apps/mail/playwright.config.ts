@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
+import { dcKeyFiles } from './tests/e2e/support/dc-keys'
 import { E2E_SNS_TOPIC_ARN, E2E_WEBHOOK_KEY, snsKeyFiles } from './tests/e2e/support/sns-keys'
 
 /**
@@ -49,6 +50,10 @@ const mockSesEnv: Record<string, string> = {
   MAIL_SES_MANAGER_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
   MAIL_SES_MANAGER_SECRET_ACCESS_KEY: 'e2e only, not a key: signs nothing',
   MAIL_SES_EVENTS_TOPIC_ARN: 'arn:aws:sns:eu-west-2:111122223333:mail-ses-events',
+  // §5.3: "Add to Cloudflare" against the same mock's Cloudflare API, signing
+  // Domain Connect requests with this run's own key, never production's.
+  MAIL_CLOUDFLARE_API_URL: `${MOCK_SES_URL}/client/v4`,
+  MAIL_DOMAIN_CONNECT_PRIVATE_KEY: dcKeyFiles(PORT).privateBase64(),
 }
 // ── end MB2 ──
 

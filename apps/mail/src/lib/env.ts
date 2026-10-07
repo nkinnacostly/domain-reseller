@@ -56,6 +56,12 @@ export const env = createEnv({
      */
     MAIL_SES_ENDPOINT: loopbackUrl.optional(),
     MAIL_DOH_URL: loopbackUrl.optional(),
+    /**
+     * TEST ONLY: a mock Cloudflare API (client/v4) for the domains page's
+     * "Add to Cloudflare" (§5.3), in place of api.cloudflare.com. Loopback
+     * only, refused in production, like the two above.
+     */
+    MAIL_CLOUDFLARE_API_URL: loopbackUrl.optional(),
     /** Set by Vercel on each deployment; `production` refuses the test endpoints. */
     VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
     /**
@@ -71,6 +77,13 @@ export const env = createEnv({
      * app to apply what SQL has queued. `openssl rand -hex 32`.
      */
     MAIL_SAFETY_SECRET: z.string().min(32).optional(),
+    /**
+     * §5.3: signs Domain Connect requests to Cloudflare. Base64 of an RSA
+     * 2048 private key's PKCS #8 DER, one line; its public key is published
+     * at _dck1.mydomainshub.com (docs/DEPLOY.md). Unset, the one-click button
+     * is not offered and customers on Cloudflare use the token way.
+     */
+    MAIL_DOMAIN_CONNECT_PRIVATE_KEY: z.string().min(1000).optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'silent']).default('info'),
     /**
      * Cloudflare Turnstile (§7.1, the shop's SEC-9), checked on our server
@@ -110,20 +123,30 @@ export function requireApiKeyPepper(): string {
  * never stand in for SES where real customers are.
  */
 export function testEndpoints(
-  source: { MAIL_SES_ENDPOINT?: string; MAIL_DOH_URL?: string; VERCEL_ENV?: string } = env,
-): { ses: string | null; doh: string | null } {
+  source: {
+    MAIL_SES_ENDPOINT?: string
+    MAIL_DOH_URL?: string
+    MAIL_CLOUDFLARE_API_URL?: string
+    VERCEL_ENV?: string
+  } = env,
+): { ses: string | null; doh: string | null; cloudflare: string | null } {
   const ses = source.MAIL_SES_ENDPOINT || null
   const doh = source.MAIL_DOH_URL || null
-  if (!ses && !doh) return { ses: null, doh: null }
+  const cloudflare = source.MAIL_CLOUDFLARE_API_URL || null
+  if (!ses && !doh && !cloudflare) return { ses: null, doh: null, cloudflare: null }
   if (source.VERCEL_ENV === 'production') {
-    throw new Error('MAIL_SES_ENDPOINT and MAIL_DOH_URL are for tests: production refuses them.')
+    throw new Error(
+      'MAIL_SES_ENDPOINT, MAIL_DOH_URL and MAIL_CLOUDFLARE_API_URL are for tests: production refuses them.',
+    )
   }
-  for (const value of [ses, doh]) {
+  for (const value of [ses, doh, cloudflare]) {
     if (value !== null && !loopbackUrl.safeParse(value).success) {
-      throw new Error('MAIL_SES_ENDPOINT and MAIL_DOH_URL must be on this machine.')
+      throw new Error(
+        'MAIL_SES_ENDPOINT, MAIL_DOH_URL and MAIL_CLOUDFLARE_API_URL must be on this machine.',
+      )
     }
   }
-  return { ses, doh }
+  return { ses, doh, cloudflare }
 }
 
 /** §4.3: the manager key — identities, tenants, configuration sets, reputation; never a send. */

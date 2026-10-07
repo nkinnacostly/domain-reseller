@@ -10,6 +10,7 @@ import { env } from '@/lib/env'
 import { domainRecords } from '../lib/records'
 import { domainPhase, failureWords, formatWhen, PHASE_WORDS } from '../lib/status'
 import { type Domain, getDomain } from '../queries/domains'
+import { CloudflareCard } from './cloudflare-card'
 import { CheckNowButton, RemoveDomainButton, RetryButton } from './domain-actions'
 import { DomainStatusPill } from './domain-status'
 import { HostGuides } from './host-guides'
@@ -22,10 +23,21 @@ const MANAGERS = new Set(['owner', 'admin', 'developer'])
 /**
  * One domain (MAIL-SPEC §5, §10): its state in words, the records to add with
  * copy buttons and what public DNS says of each (live, in Suspense), "Check
- * now", where to add the records at the common hosts, and removing it.
+ * now", adding them at Cloudflare for the customer (§5.3), where to add them
+ * at the common hosts, and removing it.
  */
-export async function DomainPage({ params }: { params: Promise<{ id: string }> }) {
-  const [data, { id }] = await Promise.all([getCurrentAccount(), params])
+export async function DomainPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const [data, { id }, query] = await Promise.all([
+    getCurrentAccount(),
+    params,
+    searchParams ?? Promise.resolve({} as Record<string, string | string[] | undefined>),
+  ])
   if (!data) return null
   const { account, role } = data.current
   let domain: Domain | null
@@ -114,6 +126,19 @@ export async function DomainPage({ params }: { params: Promise<{ id: string }> }
         </div>
       </section>
 
+      {query.from === 'cloudflare' ? <BackFromCloudflare error={query.error} /> : null}
+
+      {records.length > 0 && (domain.status === 'pending' || domain.status === 'verified') ? (
+        <Suspense fallback={null}>
+          <CloudflareCard
+            accountId={account.id}
+            domain={domain}
+            canManage={canManage}
+            records={records}
+          />
+        </Suspense>
+      ) : null}
+
       {records.length > 0 ? (
         <section aria-labelledby="records-heading" className="space-y-3">
           <div>
@@ -162,5 +187,35 @@ export async function DomainPage({ params }: { params: Promise<{ id: string }> }
         </section>
       ) : null}
     </Container>
+  )
+}
+
+/**
+ * Domain Connect sends the customer back here (§5.3), with `error` if they
+ * did not approve. Cloudflare's own description is not shown: the address is
+ * anyone's to write, so only our words appear.
+ */
+function BackFromCloudflare({ error }: { error: string | string[] | undefined }) {
+  if (error) {
+    return (
+      <FormMessage tone="error">
+        <p className="font-medium">Nothing was added in Cloudflare</p>
+        <p>
+          {error === 'access_denied'
+            ? 'You cancelled in Cloudflare, so your DNS is as it was.'
+            : 'Cloudflare did not finish adding the records, so your DNS is as it was.'}{' '}
+          Try again below, or use the API token way.
+        </p>
+      </FormMessage>
+    )
+  }
+  return (
+    <FormMessage tone="success">
+      <p className="font-medium">Back from Cloudflare</p>
+      <p>
+        If you approved there, the records are in your DNS now. Amazon SES usually sees them within
+        minutes: use Check now, or wait for our next check.
+      </p>
+    </FormMessage>
   )
 }
