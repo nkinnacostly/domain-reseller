@@ -296,6 +296,15 @@ the admin shows each plan's margin at today's rate and alerts when one falls und
 - The Flutterwave account is shared and its webhook goes through **Paidly**: Paidly must forward
   `tx_ref`s starting `MDM-` to `/api/billing/flutterwave` (owner task in the `solostack` repo).
   Every payment is re-read from Flutterwave before it counts, as in the shop (SEC-7).
+- **One payment can start two Flutterwave subscriptions** (a live test-mode run, 7 Oct 2026: charge
+  10534506 started 53194 and, three minutes later, 53195; both renewed on its `tx_ref`). After a first
+  charge is recorded, after a second renewal in one month, and every hour (pg_cron →
+  `/api/jobs/billing`), the subscriptions of the account's first charge are listed: the earliest-made
+  is kept and the others cancelled, asked again each hour until Flutterwave confirms (a
+  `duplicate_subscription` incident). A cancellation or downgrade stops every one of them. A second
+  successful renewal within `billing_settings.duplicate_renewal_window_hours` (72) of the one that
+  began the period is recorded once and never applied, as a `duplicate_charge` incident: Mail has no
+  refund flow, so a person refunds it in Flutterwave (migration 56).
 - A failed renewal gives 7 days `past_due` (sending continues, a banner and emails), then the account
   drops to the Free plan's caps. Upgrades take effect at once (prorated); downgrades and
   cancellations at the period's end. No refunds of part-months unless the service failed us.
@@ -365,7 +374,8 @@ bounce and complaint), the audit log.
 
 - **Alerts** (Telegram, as the shop's): a tenant paused by SES, our threshold pause, account-wide
   reputation near AWS's levels, the daily quota at 80%, the worker or the event endpoint silent for
-  15 minutes, a webhook backlog over an hour.
+  15 minutes, a webhook backlog over an hour, an open live billing incident, and the hourly
+  duplicate-subscription check silent for three hours.
 - **Heartbeats** for the worker's send loop, webhook loop, quota reader and pending-domain checker.
 - **Logs:** ids and counts only; never an address, a subject or a key (N13, MR4).
 - **Deploys:** apps/mail on Vercel (Root Directory `apps/mail`), the worker with

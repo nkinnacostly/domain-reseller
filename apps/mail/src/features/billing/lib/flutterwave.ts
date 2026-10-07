@@ -12,15 +12,21 @@ import { nairaToKobo, transactionRecord } from '@dr/shared/payments'
  *     subsequent payments"; a failed renewal is tried 3 more times, 30
  *     minutes apart, then the subscription is cancelled.
  *   subscriptions  https://developer.flutterwave.com/v3.0/reference/get-all-subscriptions
- *     GET /v3/subscriptions?transaction_id=… → data[] {id, plan, status};
+ *     GET /v3/subscriptions?transaction_id=… → data[] {id, plan, status, created_at},
+ *     meta.page_info {total, current_page, total_pages};
  *     PUT /v3/subscriptions/:id/cancel and /activate (Flutterwave's Node-v3
  *     SDK, documentation/subscription.md, services/subscriptions/).
  *   webhooks       https://developer.flutterwave.com/v3.0/docs/webhooks
  *     `verif-hash` is the account's secret hash; only a 200 is delivered.
  *
- * [UNVERIFIED] Which tx_ref Flutterwave's own renewal charges carry. We take
- * a later charge on a paid checkout's reference for its renewal; the owner
- * tests it with a test-mode hourly plan before paid plans go on sale.
+ * Seen in a live test-mode run on an hourly plan (7 Oct 2026): Flutterwave's
+ * renewal charges carry the first charge's tx_ref, so a later charge on a paid
+ * checkout's reference is its renewal. The same run showed one checkout charge
+ * (10534506) starting two subscriptions for one customer and plan (53194,
+ * then 53195 three minutes later), both renewing; `?transaction_id=` lists
+ * both. So a first charge may have several subscriptions: all are stopped
+ * when a plan must stop renewing, and otherwise only the earliest-made is
+ * kept (../server/provider.ts, ../server/duplicates.ts; migration 56).
  */
 
 /** Every Mail checkout's reference starts with this; Paidly forwards these here (§8). */
@@ -83,16 +89,57 @@ export function readCharge(data: unknown): ChargeFacts | null {
   }
 }
 
-export type ProviderSubscription = { id: number; status: string; plan: number | null }
+export type ProviderSubscription = {
+  id: number
+  status: string
+  plan: number | null
+  /** When Flutterwave made it, as it says (ISO 8601); null when it does not say. */
+  createdAt: string | null
+}
 
 /** GET /v3/subscriptions' `data`, read; odd rows are dropped. */
 export function readSubscriptions(data: unknown): ProviderSubscription[] {
   if (!Array.isArray(data)) return []
   return data.flatMap((row) => {
     if (!isObject(row) || typeof row.id !== 'number' || typeof row.status !== 'string') return []
+    const createdAt =
+      typeof row.created_at === 'string' && Number.isFinite(Date.parse(row.created_at))
+        ? row.created_at
+        : null
     return [
-      { id: row.id, status: row.status, plan: typeof row.plan === 'number' ? row.plan : null },
+      {
+        id: row.id,
+        status: row.status,
+        plan: typeof row.plan === 'number' ? row.plan : null,
+        createdAt,
+      },
     ]
+  })
+}
+
+/**
+ * Whether a listing says it has more pages than the one read. Every
+ * subscription of a first charge must be seen to stop them all, so an answer
+ * that leaves some out is no answer.
+ */
+export function hasMorePages(meta: unknown): boolean {
+  const info = isObject(meta) && isObject(meta.page_info) ? meta.page_info : null
+  return typeof info?.total_pages === 'number' && info.total_pages > 1
+}
+
+/**
+ * Earliest-made first: the order in which a first charge's subscriptions are
+ * kept (the earliest) and stopped (the rest, newest first). By Flutterwave's
+ * `created_at`, then its id; by id alone when any date is missing, so the
+ * order is the same however the list arrives.
+ */
+export function oldestFirst(
+  subscriptions: readonly ProviderSubscription[],
+): ProviderSubscription[] {
+  const dated = subscriptions.every((subscription) => subscription.createdAt !== null)
+  return [...subscriptions].sort((a, b) => {
+    const byDate = dated ? Date.parse(a.createdAt ?? '') - Date.parse(b.createdAt ?? '') : 0
+    return byDate !== 0 ? byDate : a.id - b.id
   })
 }
 

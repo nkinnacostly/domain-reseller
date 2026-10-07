@@ -29,8 +29,10 @@ import {
   formatPpm,
   formatWhen,
   heartbeatLabel,
+  INCIDENT_CLOSING,
   INCIDENT_KIND,
   incidentDetailLine,
+  incidentFacts,
   incidentKindOf,
   sesStatusOf,
   stateOf,
@@ -59,8 +61,12 @@ const MIGRATION = readFileSync(
   'utf8',
 )
 
-const MIGRATION_54 = readFileSync(
-  join(__dirname, '../../../../../../supabase/migrations/00000000000054_mail_followups.sql'),
+// The incident kinds as the latest migration to set them holds them (56).
+const MIGRATION_56 = readFileSync(
+  join(
+    __dirname,
+    '../../../../../../supabase/migrations/00000000000056_mail_billing_duplicates.sql',
+  ),
   'utf8',
 )
 
@@ -269,10 +275,10 @@ describe('words for what SQL answers', () => {
     expect(findingKindOf('ses_paused')).toContain('until an owner resumes it')
   })
 
-  it('words every billing incident with what to do, and its amounts in naira (migration 54)', () => {
-    const kinds = MIGRATION_54.match(/check \(kind in \(([\s\S]*?)\)\);/)?.[1] ?? ''
+  it('words every billing incident with what to do, and its amounts in naira (migrations 54, 56)', () => {
+    const kinds = MIGRATION_56.match(/check \(kind in \(([\s\S]*?)\)\);/)?.[1] ?? ''
     const sqlKinds = [...kinds.matchAll(/'([a-z_]+)'/g)].map((match) => match[1])
-    expect(sqlKinds).toHaveLength(8)
+    expect(sqlKinds).toHaveLength(10)
     expect(Object.keys(INCIDENT_KIND).sort()).toEqual([...sqlKinds].sort())
     expect(incidentKindOf('unapplied_charge').todo).toContain('Refund it')
     expect(incidentKindOf('something_new')).toEqual({
@@ -284,6 +290,43 @@ describe('words for what SQL answers', () => {
     )
     expect(incidentDetailLine({ amount_kobo: 100.5 })).toBe('amount kobo 100.5')
     expect(incidentDetailLine({})).toBe('')
+  })
+
+  it('says what to do about a duplicate charge or subscription, with Flutterwave’s ids (migration 56)', () => {
+    // As SQL and the app record them for the live test-mode run of 7 Oct 2026.
+    const charge = {
+      amount_kobo: 2150000,
+      transaction_id: '10534536',
+      period_transaction_id: '10534534',
+      refund: 'Not refunded automatically: Mail has no refund flow. Refund it in Flutterwave.',
+    }
+    expect(incidentFacts('duplicate_charge', charge, '10534536')).toBe(
+      'Charge 10534536 (₦21,500) came after charge 10534534 had already paid for the month. Not refunded automatically: Mail has no refund flow.',
+    )
+    expect(incidentKindOf('duplicate_charge').label).toBe('Charged twice for one month')
+    expect(incidentKindOf('duplicate_charge').todo).toContain('Refund this charge in Flutterwave')
+    expect(incidentKindOf('duplicate_charge').todo).toContain('Mail has no refund flow')
+    const subscription = { kept_subscription_id: '53194', duplicate_subscription_ids: '53195' }
+    expect(incidentFacts('duplicate_subscription', subscription, '10534506')).toBe(
+      'Payment 10534506 started Flutterwave subscriptions 53194 and 53195. Kept 53194; Mail cancels 53195, asking hourly until Flutterwave confirms.',
+    )
+    expect(incidentKindOf('duplicate_subscription').todo).toContain('keeps the earliest')
+    // Missing or odd facts fall back to the plain line, never a sentence with gaps.
+    expect(incidentFacts('duplicate_charge', { amount_kobo: 2150000 }, '1')).toBe('amount ₦21,500')
+    expect(incidentFacts('duplicate_subscription', subscription, null)).toBe(
+      'kept subscription id 53194, duplicate subscription ids 53195',
+    )
+    expect(
+      incidentFacts(
+        'duplicate_subscription',
+        { ...subscription, kept_subscription_id: 'x<b>' },
+        '1',
+      ),
+    ).toContain('kept subscription id x<b>')
+    expect(incidentFacts('unapplied_charge', { reason: 'underpaid' }, '9')).toBe('reason underpaid')
+    // The page says how an incident is closed while no button does it.
+    expect(INCIDENT_CLOSING).toContain('resolved_at')
+    expect(INCIDENT_CLOSING).toContain('mail.billing_incidents')
   })
 })
 

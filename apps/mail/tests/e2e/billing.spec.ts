@@ -1,14 +1,26 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect as baseExpect, type Page, test } from '@playwright/test'
 import { createTestUser, deleteTestUser, type TestUser } from './support/accounts'
-import { createTestAccount, renewOnMock, setPeriodEnd } from './support/billing'
+import {
+  addDuplicateSubscription,
+  createTestAccount,
+  duplicateNextPayment,
+  hasDuplicatesSchema,
+  renewAllOnMock,
+  renewOnMock,
+  setPeriodEnd,
+  subscriptionsOnMock,
+} from './support/billing'
 
 /**
  * MAIL-SPEC §8 billing against the real Supabase project and a mock
  * Flutterwave (N12): subscribe to Starter, the plan active with a test
  * invoice, a cancellation scheduled for the period's end and withdrawn, then
  * a failed renewal from Flutterwave's webhook putting the account past due —
- * with axe in both themes and no sideways scroll from 320 to 1920 px.
+ * with axe in both themes and no sideways scroll from 320 to 1920 px. Then a
+ * payment that starts two subscriptions, as a live test-mode run did (7 Oct
+ * 2026; migration 56): the second cancelled, both stopped by a cancellation,
+ * and a second renewal in one month never applied.
  *
  * The test person is made confirmed through the admin API, so nothing sends
  * an email. Journeys that sign in run on two projects: Supabase limits
@@ -182,5 +194,101 @@ test.describe('billing, on a mock Flutterwave', () => {
       plan(page, 'starter').getByRole('button', { name: 'Pay ₦21,500 for Starter' }),
     ).toBeVisible()
     await checkPage(page)
+  })
+})
+
+test.describe('a duplicate subscription, on a mock Flutterwave (§8, migration 56)', () => {
+  test.describe.configure({ mode: 'serial' })
+  let owner: TestUser
+
+  test.beforeAll(async () => {
+    test.skip(!SIGN_IN_PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
+    owner = await createTestUser('billing-dup', 'Dupe Billing')
+    await createTestAccount(owner, `Billing dup e2e ${Date.now()}`)
+  })
+
+  test.afterAll(async () => {
+    if (owner) await deleteTestUser(owner)
+  })
+
+  test.beforeEach(() => {
+    test.skip(!SIGN_IN_PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
+  })
+
+  test('one payment, two subscriptions: the later is cancelled as the payment settles', async ({
+    page,
+  }) => {
+    // Flutterwave started two on one charge (10534506 → 53194, 53195).
+    await duplicateNextPayment(owner.email)
+    await signIn(page, owner)
+    await plan(page, 'starter')
+      .getByRole('button', { name: 'Pay ₦21,500 and start Starter' })
+      .click()
+    await expect(page.getByRole('heading', { name: 'Mock Flutterwave' })).toBeVisible()
+    await page.getByRole('link', { name: 'Pay (test)' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/billing\?payment=paid$/)
+    await expect(currentPlan(page).locator('[data-current-plan]')).toHaveText('Starter')
+    await expect(currentPlan(page)).toContainText('Active')
+
+    const [kept, duplicate, ...rest] = await subscriptionsOnMock(owner.email)
+    expect(rest).toEqual([])
+    expect(duplicate?.firstTransactionId).toBe(kept?.firstTransactionId)
+    // The earliest-made is the plan's; the later one charges nothing more.
+    expect([kept?.status, duplicate?.status]).toEqual(['active', 'cancelled'])
+  })
+
+  test('a cancellation stops every subscription of the payment, and keeping the plan restarts only its own', async ({
+    page,
+  }) => {
+    // Another turns up after the payment settled: before, two made the cancel fail.
+    await addDuplicateSubscription(owner.email)
+    expect((await subscriptionsOnMock(owner.email)).map((s) => s.status)).toEqual([
+      'active',
+      'cancelled',
+      'active',
+    ])
+    await signIn(page, owner)
+    await plan(page, 'free')
+      .getByRole('button', { name: /^Cancel and move to Free on / })
+      .click()
+    const dialog = page.getByRole('alertdialog')
+    await dialog.getByRole('button', { name: /^Cancel and move to Free on / }).click()
+    await expect(dialog).toBeHidden()
+    await expect(currentPlan(page)).toContainText('Change scheduled')
+    expect((await subscriptionsOnMock(owner.email)).map((s) => s.status)).toEqual([
+      'cancelled',
+      'cancelled',
+      'cancelled',
+    ])
+
+    await currentPlan(page).getByRole('button', { name: 'Keep Starter' }).click()
+    await expect(currentPlan(page)).toContainText('Active')
+    await expect(currentPlan(page).getByRole('button', { name: 'Keep Starter' })).toHaveCount(0)
+    expect((await subscriptionsOnMock(owner.email)).map((s) => s.status)).toEqual([
+      'active',
+      'cancelled',
+      'cancelled',
+    ])
+  })
+
+  test('two renewals in one month: the second is not applied, and its subscription is cancelled', async ({
+    page,
+  }) => {
+    test.skip(!(await hasDuplicatesSchema()), 'migration 56 is not applied to this database')
+    await addDuplicateSubscription(owner.email)
+    // Both renew on the first charge's reference (10534534, then 10534536); both settle (200).
+    expect(await renewAllOnMock(owner.email, 'successful')).toEqual([200, 200])
+    expect((await subscriptionsOnMock(owner.email)).map((s) => s.status)).toEqual([
+      'active',
+      'cancelled',
+      'cancelled',
+      'cancelled',
+    ])
+
+    await signIn(page, owner)
+    await expect(currentPlan(page)).toContainText('Active')
+    // The first payment and one renewal: the second charge is kept for a refund, not invoiced.
+    const invoices = page.getByRole('region', { name: 'Invoices' })
+    await expect(invoices.locator('[data-invoice^="MDM-TEST-INV-"]')).toHaveCount(2)
   })
 })

@@ -6,9 +6,12 @@
 -- Flutterwave confirmed it (SEC-7), renewals, a failed renewal, upgrades with
 -- their credit, downgrades and cancellations at the period's end, the sweep,
 -- tax invoices from the test series, the raw allowlist, money rows that are
--- final, RLS by role, and every billing function's grant. People are made up
--- with e2e-*@example.com addresses; only test payments are recorded, so the
--- live invoice series is never touched. Rolled back.
+-- final, RLS by role, and every billing function's grant. Check 17 is
+-- migration 56's: a second renewal in one month recorded once and never
+-- applied, the hourly look's door for duplicate subscriptions, and their
+-- alerts. People are made up with e2e-*@example.com addresses; only test
+-- payments are recorded, so the live invoice series is never touched; pg_net
+-- sends nothing from a transaction that rolls back. Rolled back.
 --
 --   supabase db query --linked -f supabase/tests/mail_billing.sql
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -113,6 +116,12 @@ declare
   v_row      record;
   v_want     text;
   v_expected jsonb;
+  -- Migration 56 (check 17): an owner with two accounts, the Vault's job token.
+  u_d        uuid := gen_random_uuid();
+  d_acc      uuid;
+  d2_acc     uuid;
+  v_c3       jsonb;
+  v_token    text;
   v_passed   integer := 0;
 begin
   fw_pro := fw_starter + 1;
@@ -627,7 +636,7 @@ begin
     "flutterwave_plan_for":"service_role", "register_flutterwave_plan":"service_role",
     "billing_provider_state":"service_role", "note_provider_canceled":"service_role",
     "note_provider_active":"service_role", "record_billing_incident":"service_role",
-    "record_billing_charge":"service_role"
+    "record_billing_charge":"service_role", "begin_billing_jobs":"service_role", "kick_billing_jobs":"none"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p
@@ -677,6 +686,219 @@ begin
   if not exists (select 1 from mail.payments where provider_reference = (v_tx + 99)::text) then
     raise exception 'FAILED 16: the purge took a live payment';
   end if;
+  v_passed := v_passed + 1;
+
+  -- ── 17. Migration 56: one checkout charge started two Flutterwave subscriptions
+  -- and both renewed (live test mode, 7 Oct 2026: 10534506, then 10534534 and
+  -- 10534536 on its tx_ref). The second renewal in a month is recorded once and
+  -- never applied; the hourly look's door; both incidents are critical alerts.
+  insert into auth.users (id, aud, role, email, email_confirmed_at, raw_user_meta_data, created_at, updated_at)
+  values (u_d, 'authenticated', 'authenticated', 'e2e-m56-d-' || v_tag || '@example.com', now(), '{}', now(), now());
+  perform pg_temp.mb_as(u_d);
+  d_acc := (mail.create_account('m56 ' || v_tag) ->> 'accountId')::uuid;
+  d2_acc := (mail.create_account('m56 two ' || v_tag) ->> 'accountId')::uuid;
+  execute 'reset role';
+  if (select duplicate_renewal_window_hours from mail.billing_settings) <> 72 then
+    raise exception 'FAILED 17: the duplicate renewal window is not 72 hours';
+  end if;
+  begin
+    update mail.billing_settings set duplicate_renewal_window_hours = 0;
+    raise exception 'FAILED 17: a zero-hour duplicate window was taken';
+  exception when check_violation then null;
+  end;
+  v_c1 := pg_temp.mb_checkout(u_d, d_acc, 'starter', true, fw_starter, 2150000);
+  perform pg_temp.mb_ok(v_c1, 'FAILED 17: the checkout');
+  v_ref := v_c1 ->> 'txRef';
+  v_j := pg_temp.mb_charge(true, (v_tx + 20)::text, v_ref, 'successful', 2150000);
+  perform pg_temp.mb_outcome(v_j, 'paid', 'FAILED 17: the first payment');
+  if (v_j ->> 'accountId')::uuid is distinct from d_acc then
+    raise exception 'FAILED 17: the first payment''s answer does not name the account: %', v_j;
+  end if;
+  -- The first subscription renews: a month on, even straight after the first payment.
+  perform pg_temp.mb_outcome(pg_temp.mb_charge(true, (v_tx + 21)::text, v_ref, 'successful', 2150000),
+                             'renewed', 'FAILED 17: the first renewal');
+  select * into v_sub from mail.subscriptions where account_id = d_acc;
+  -- The second subscription renews too, on the same reference: recorded, not applied.
+  v_j := pg_temp.mb_charge(true, (v_tx + 22)::text, v_ref, 'successful', 2150000);
+  perform pg_temp.mb_outcome(v_j, 'unapplied', 'FAILED 17: the second renewal in one month');
+  if v_j ->> 'reason' is distinct from 'duplicate_charge' or v_j -> 'cancelTransactions' <> '[]'::jsonb
+     or (v_j ->> 'accountId')::uuid is distinct from d_acc
+     or v_j ->> 'firstTransactionId' is distinct from (v_tx + 20)::text then
+    raise exception 'FAILED 17: the second renewal''s answer is wrong: %', v_j;
+  end if;
+  if (select current_period_start from mail.subscriptions where account_id = d_acc) <> v_sub.current_period_start
+     or (select current_period_end from mail.subscriptions where account_id = d_acc) <> v_sub.current_period_end
+     or (select status from mail.subscriptions where account_id = d_acc) <> 'active'
+     or (select count(*) from mail.invoices where account_id = d_acc) <> 2 then
+    raise exception 'FAILED 17: the second renewal moved the period, or was invoiced';
+  end if;
+  select * into v_pay from mail.payments where provider_reference = (v_tx + 22)::text;
+  if v_pay.applied or v_pay.kind <> 'renewal' or v_pay.period_start is not null or v_pay.amount_kobo <> 2150000
+     or v_pay.account_id <> d_acc or v_pay.subscription_id <> v_sub.id or v_pay.raw ? 'customer'
+     or v_pay.raw::text like '%t1nk%' then
+    raise exception 'FAILED 17: the second renewal''s payment row is wrong: %', row_to_json(v_pay);
+  end if;
+  select i.detail into v_j from mail.billing_incidents i
+   where i.kind = 'duplicate_charge' and i.account_id = d_acc and i.provider_reference = (v_tx + 22)::text
+     and i.resolved_at is null and i.test_mode;
+  if v_j is null or (v_j ->> 'amount_kobo')::bigint <> 2150000 or v_j ->> 'transaction_id' <> (v_tx + 22)::text
+     or v_j ->> 'period_transaction_id' <> (v_tx + 21)::text or v_j ->> 'refund' not like '%no refund flow%' then
+    raise exception 'FAILED 17: the duplicate charge''s incident is wrong: %', v_j;
+  end if;
+  if exists (select 1 from mail.billing_incidents where kind = 'unapplied_charge'
+              and provider_reference = (v_tx + 22)::text) then
+    raise exception 'FAILED 17: the duplicate charge was also filed as an unapplied charge';
+  end if;
+  -- The redirect, the webhook and Flutterwave's retries: recorded once.
+  v_j := pg_temp.mb_charge(true, (v_tx + 22)::text, v_ref, 'successful', 2150000);
+  if v_j ->> 'outcome' is distinct from 'already' or (v_j ->> 'applied')::boolean then
+    raise exception 'FAILED 17: the second renewal sent again is not already recorded: %', v_j;
+  end if;
+  if (select count(*) from mail.payments where provider_reference = (v_tx + 22)::text) <> 1
+     or (select count(*) from mail.billing_incidents where provider_reference = (v_tx + 22)::text) <> 1 then
+    raise exception 'FAILED 17: the second renewal was recorded twice';
+  end if;
+  -- The window: a period a renewal began 70 hours ago is paid for (72); past the window it is not.
+  v_end := now() - interval '70 hours';
+  insert into mail.payments (account_id, subscription_id, checkout_id, kind, applied, plan_code, provider_reference,
+                             tx_ref, amount_kobo, currency, test_mode, period_start, period_end, created_at)
+  values (d_acc, v_sub.id, (v_c1 ->> 'checkoutId')::uuid, 'renewal', true, 'starter', (v_tx + 23)::text, v_ref,
+          2150000, 'NGN', true, v_end, mail.billing_period_end(v_end), v_end);
+  update mail.subscriptions set current_period_start = v_end, current_period_end = mail.billing_period_end(v_end)
+   where account_id = d_acc;
+  v_j := pg_temp.mb_charge(true, (v_tx + 24)::text, v_ref, 'successful', 2150000);
+  if v_j ->> 'reason' is distinct from 'duplicate_charge'
+     or (select i.detail ->> 'period_transaction_id' from mail.billing_incidents i
+          where i.kind = 'duplicate_charge' and i.provider_reference = (v_tx + 24)::text) <> (v_tx + 23)::text then
+    raise exception 'FAILED 17: a renewal 70 hours after the one that began the period is not a duplicate: %', v_j;
+  end if;
+  update mail.billing_settings set duplicate_renewal_window_hours = 48;
+  perform pg_temp.mb_outcome(pg_temp.mb_charge(true, (v_tx + 25)::text, v_ref, 'successful', 2150000),
+                             'renewed', 'FAILED 17: a renewal past the window');
+  if (select current_period_start from mail.subscriptions where account_id = d_acc) <> mail.billing_period_end(v_end) then
+    raise exception 'FAILED 17: the renewal past the window did not follow on from the last month';
+  end if;
+  update mail.billing_settings set duplicate_renewal_window_hours = 72;
+
+  -- The hourly look's door: the Vault's token only, then the subscriptions this key may ask about.
+  v_c3 := pg_temp.mb_checkout(u_d, d2_acc, 'starter', true, fw_starter, 2150000);
+  perform pg_temp.mb_outcome(pg_temp.mb_charge(true, (v_tx + 26)::text, v_c3 ->> 'txRef', 'successful', 2150000),
+                             'paid', 'FAILED 17: the second account''s first payment');
+  -- d_acc's first charge is the older one.
+  update mail.checkouts set paid_at = now() - interval '1 day' where id = (v_c1 ->> 'checkoutId')::uuid;
+  select s.decrypted_secret into v_token from vault.decrypted_secrets s where s.name = 'mail_jobs_token';
+  if coalesce(v_token, '') = '' then raise exception 'FAILED 17: no job token in the Vault'; end if;
+  perform pg_temp.mb_code(pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, true, %L, 50)',
+                                                    'not-the-token', 'mock.test:4315')),
+                          'unauthorized', 'FAILED 17: a wrong token opened the billing route');
+  perform pg_temp.mb_code(pg_temp.mb_service('select mail.begin_billing_jobs(null, true, ''mock.test:4315'', 50)'),
+                          'unauthorized', 'FAILED 17: no token opened the billing route');
+  perform pg_temp.mb_code(pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, true, %L, 0)',
+                                                    v_token, 'mock.test:4315')),
+                          'validation', 'FAILED 17: a limit of nothing');
+  perform pg_temp.mb_code(pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, null, %L, 50)',
+                                                    v_token, 'mock.test:4315')),
+                          'validation', 'FAILED 17: no side');
+  perform pg_temp.mb_code(pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, true, %L, 50)',
+                                                    v_token, 'https://mock.test')),
+                          'validation', 'FAILED 17: a host with a scheme');
+  v_j := pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, true, %L, 500)', v_token, 'mock.test:4315'));
+  perform pg_temp.mb_ok(v_j, 'FAILED 17: the token did not open the billing route');
+  if (v_j -> 'accounts' -> 0 ->> 'accountId') is distinct from d2_acc::text
+     or (v_j -> 'accounts' -> 1 ->> 'accountId') is distinct from d_acc::text
+     or (v_j -> 'accounts' -> 1 ->> 'firstTransactionId') is distinct from (v_tx + 20)::text
+     or not exists (select 1 from public.service_heartbeats h
+                     where h.name = 'mail:billing-jobs:test' and h.test_mode and h.beat_at = now()) then
+    raise exception 'FAILED 17: the hourly look''s list (newest first charge first) or heartbeat is wrong: %', v_j;
+  end if;
+  -- A cancel not yet confirmed (an open duplicate_subscription incident) comes first.
+  perform mail.record_billing_incident(true, 'duplicate_subscription', d_acc, (v_tx + 20)::text,
+                                       '{"kept_subscription_id":"53194","duplicate_subscription_ids":"53195"}');
+  v_j := pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, true, %L, 1)', v_token, 'mock.test:4315'));
+  if jsonb_array_length(v_j -> 'accounts') <> 1 or (v_j -> 'accounts' -> 0 ->> 'accountId') is distinct from d_acc::text then
+    raise exception 'FAILED 17: an unconfirmed cancel is not looked at first: %', v_j;
+  end if;
+  -- Another API's plan objects, the other side's key, or a subscription Flutterwave has stopped: not asked about.
+  v_j := pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, true, %L, 500)', v_token, 'api.flutterwave.com'));
+  if exists (select 1 from jsonb_array_elements(v_j -> 'accounts') r where r ->> 'accountId' in (d_acc::text, d2_acc::text)) then
+    raise exception 'FAILED 17: another API''s subscription was named: %', v_j;
+  end if;
+  v_j := pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, false, %L, 500)', v_token, 'mock.test:4315'));
+  if exists (select 1 from jsonb_array_elements(v_j -> 'accounts') r where r ->> 'accountId' in (d_acc::text, d2_acc::text)) then
+    raise exception 'FAILED 17: a test subscription was named to live keys: %', v_j;
+  end if;
+  perform pg_temp.mb_ok(pg_temp.mb_service(format('select mail.note_provider_canceled(%L, %L)', d_acc, (v_tx + 20)::text)),
+                        'FAILED 17: Flutterwave''s cancel noted');
+  v_j := pg_temp.mb_service(format('select mail.begin_billing_jobs(%L, true, %L, 500)', v_token, 'mock.test:4315'));
+  if exists (select 1 from jsonb_array_elements(v_j -> 'accounts') r where r ->> 'accountId' = d_acc::text) then
+    raise exception 'FAILED 17: a subscription Flutterwave stopped was named: %', v_j;
+  end if;
+  begin
+    perform pg_temp.mb_as(u_d);
+    perform mail.begin_billing_jobs(v_token, true, 'mock.test:4315', 1);
+    raise exception 'FAILED 17: a signed-in person opened the billing route';
+  exception when insufficient_privilege then null;
+  end;
+  execute 'reset role';
+  if not exists (select 1 from cron.job j where j.jobname = 'mail-billing-duplicates' and j.schedule = '47 * * * *'
+                    and j.command = 'select mail.kick_billing_jobs()') then
+    raise exception 'FAILED 17: the hourly look is not scheduled';
+  end if;
+  if mail.kick_billing_jobs() is null then raise exception 'FAILED 17: the billing route could not be asked'; end if;
+  perform vault.update_secret((select id from vault.secrets where name = 'mail_billing_jobs_url'),
+                              'http://localhost:3001/api/jobs/billing');
+  if mail.kick_billing_jobs() is not null then
+    raise exception 'FAILED 17: the billing route was asked over plain http';
+  end if;
+
+  -- Alerts: both new kinds critical on the live side; a silent hourly look is a warning.
+  perform mail.record_billing_incident(false, 'duplicate_charge', b_acc, 'm56-c-' || v_tag, '{"amount_kobo":2150000}');
+  perform mail.record_billing_incident(false, 'duplicate_subscription', b_acc, 'm56-s-' || v_tag, '{}');
+  if (select count(*) from mail.alert_conditions() c
+        join mail.billing_incidents i on c.key = 'mail_billing_incident:' || i.id
+       where i.provider_reference in ('m56-c-' || v_tag, 'm56-s-' || v_tag) and c.severity = 'critical'
+         and (c.summary like '%duplicate charge%' or c.summary like '%duplicate subscription%')) <> 2 then
+    raise exception 'FAILED 17: a duplicate incident is not a critical alert';
+  end if;
+  insert into public.service_heartbeats (name, test_mode, beat_at)
+  values ('mail:billing-jobs', false, now() - interval '4 hours')
+  on conflict (name) do update set test_mode = false, beat_at = excluded.beat_at;
+  if not exists (select 1 from mail.alert_conditions() c
+                  where c.key = 'mail_billing_jobs_silent' and c.severity = 'warning'
+                    and c.summary like '%not run for 4 hours%') then
+    raise exception 'FAILED 17: a silent hourly look raised no alert';
+  end if;
+  perform public.record_heartbeat('mail:billing-jobs', false, '{}'::jsonb);
+  if exists (select 1 from mail.alert_conditions() c where c.key = 'mail_billing_jobs_silent') then
+    raise exception 'FAILED 17: the hourly look alerts though it just ran';
+  end if;
+
+  -- Every function migration 56 makes or replaces: one signature, its grant exactly, no search path.
+  foreach v_text in array array[
+    'mail.record_billing_charge(boolean, text, text, text, bigint, text, text, text, text, jsonb)=service_role',
+    'mail.begin_billing_jobs(text, boolean, text, integer)=service_role',
+    'mail.kick_billing_jobs()=none', 'mail.alert_conditions()=none'] loop
+    declare
+      v_sig  text := split_part(v_text, '=', 1);
+      v_want text := split_part(v_text, '=', 2);
+      v_oid  oid := to_regprocedure(split_part(v_text, '=', 1));
+    begin
+      if v_oid is null then raise exception 'FAILED 17: % is missing', v_sig; end if;
+      if (select count(*) from pg_proc p where p.pronamespace = 'mail'::regnamespace
+            and p.proname = (select proname from pg_proc where oid = v_oid)) <> 1 then
+        raise exception 'FAILED 17: % has more than one signature', v_sig;
+      end if;
+      if has_function_privilege('anon', v_oid, 'execute')
+         or has_function_privilege('public', v_oid, 'execute')
+         or has_function_privilege('authenticated', v_oid, 'execute') is distinct from (v_want = 'authenticated')
+         or has_function_privilege('service_role', v_oid, 'execute') is distinct from (v_want = 'service_role') then
+        raise exception 'FAILED 17: % has the wrong grants (want %)', v_sig, v_want;
+      end if;
+      if (select array_to_string(proconfig, ',') from pg_proc where oid = v_oid) is distinct from 'search_path=""' then
+        raise exception 'FAILED 17: % runs with another search path', v_sig;
+      end if;
+    end;
+  end loop;
   v_passed := v_passed + 1;
 
   raise notice 'migration 50: % checks passed', v_passed;

@@ -71,11 +71,77 @@ export async function renewOnMock(email: string, status: 'successful' | 'failed'
  * end (migration 54, item 22), so the past-due journey sets the end first.
  */
 export async function setPeriodEnd(accountId: string, at: Date): Promise<void> {
-  const client = createClient(env('NEXT_PUBLIC_SUPABASE_URL'), env('SUPABASE_SECRET_KEY'), {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const { error } = await client
+  const { error } = await serviceClient()
     .schema('mail')
     .rpc('e2e_set_period_end', { p_account_id: accountId, p_period_end: at.toISOString() })
   if (error) throw error
+}
+
+function serviceClient() {
+  return createClient(env('NEXT_PUBLIC_SUPABASE_URL'), env('SUPABASE_SECRET_KEY'), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
+/**
+ * Whether migration 56 is applied (a second renewal in one month recorded,
+ * not applied): begin_billing_jobs refuses a made-up token, and is missing
+ * before it. Nothing is recorded for a refused token.
+ */
+export async function hasDuplicatesSchema(): Promise<boolean> {
+  const { data, error } = await serviceClient().schema('mail').rpc('begin_billing_jobs', {
+    p_token: 'e2e-probe-not-the-token',
+    p_test_mode: true,
+    p_api_host: '127.0.0.1',
+    p_limit: 1,
+  })
+  return !error && (data as { code?: string } | null)?.code === 'unauthorized'
+}
+
+async function mock(path: string, body?: Record<string, unknown>) {
+  const response = await fetch(`${MOCK_FLUTTERWAVE}${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'content-type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const answer = (await response.json()) as Record<string, unknown>
+  if (!response.ok || answer.ok !== true) {
+    throw new Error(`mock Flutterwave ${path} failed: ${response.status}`)
+  }
+  return answer
+}
+
+/**
+ * The person's next payment starts two subscriptions on its one charge, as a
+ * live test-mode run did (7 Oct 2026: charge 10534506, subscriptions 53194
+ * and 53195 three minutes apart).
+ */
+export async function duplicateNextPayment(email: string): Promise<void> {
+  await mock('/flw/test/duplicate-next-payment', { customer_email: email })
+}
+
+/** A second subscription on the person's first charge, turning up after it was settled. */
+export async function addDuplicateSubscription(email: string): Promise<number> {
+  return Number((await mock('/flw/test/duplicate-subscription', { customer_email: email })).id)
+}
+
+export type MockSubscription = { id: number; status: string; firstTransactionId: number }
+
+/** The person's subscriptions at the mock, earliest-made first. */
+export async function subscriptionsOnMock(email: string): Promise<MockSubscription[]> {
+  const answer = await mock(`/flw/test/subscriptions?customer_email=${encodeURIComponent(email)}`)
+  return answer.subscriptions as MockSubscription[]
+}
+
+/**
+ * Flutterwave's renewal run for every active subscription of the person,
+ * earliest-made first, each webhook answered before the next charge. Answers
+ * the app's status for each.
+ */
+export async function renewAllOnMock(
+  email: string,
+  status: 'successful' | 'failed',
+): Promise<number[]> {
+  const answer = await mock('/flw/test/renewal', { customer_email: email, status, all: true })
+  return answer.webhookStatuses as number[]
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { accountBanner } from '@/features/accounts/lib/state'
 import {
+  hasMorePages,
   isStopped,
+  oldestFirst,
   planObjectName,
   readCharge,
   readSubscriptions,
@@ -286,9 +288,38 @@ describe('reading Flutterwave', () => {
     expect(readCharge('nothing')).toBeNull()
   })
 
+  it('orders a first charge’s subscriptions earliest-made first, and spots a listing cut short (7 Oct 2026)', () => {
+    const dup = { id: 53195, status: 'active', plan: 1, createdAt: '2026-10-07T00:57:09.000Z' }
+    const kept = { id: 53194, status: 'active', plan: 1, createdAt: '2026-10-07T00:54:15.000Z' }
+    expect(oldestFirst([dup, kept]).map((s) => s.id)).toEqual([53194, 53195])
+    // The same moment, then by id; a missing date anywhere: by id alone.
+    const twin = { ...dup, id: 53190, createdAt: kept.createdAt }
+    expect(oldestFirst([kept, twin]).map((s) => s.id)).toEqual([53190, 53194])
+    expect(
+      oldestFirst([
+        { ...kept, id: 9 },
+        { ...dup, id: 8, createdAt: null },
+      ]).map((s) => s.id),
+    ).toEqual([8, 9])
+    expect(oldestFirst([])).toEqual([])
+    expect(hasMorePages({ page_info: { total: 2, current_page: 1, total_pages: 1 } })).toBe(false)
+    expect(hasMorePages({ page_info: { total: 25, current_page: 1, total_pages: 2 } })).toBe(true)
+    expect(hasMorePages(undefined)).toBe(false)
+    expect(hasMorePages({ page_info: 'x' })).toBe(false)
+  })
+
   it('reads subscriptions and webhook hints, dropping odd rows', () => {
     expect(readSubscriptions([{ id: 7, status: 'active', plan: 3 }, { id: 'x' }])).toEqual([
-      { id: 7, status: 'active', plan: 3 },
+      { id: 7, status: 'active', plan: 3, createdAt: null },
+    ])
+    expect(
+      readSubscriptions([
+        { id: 53194, status: 'active', created_at: '2026-10-07T00:54:15.000Z' },
+        { id: 53195, status: 'active', created_at: 'yesterday-ish' },
+      ]),
+    ).toEqual([
+      { id: 53194, status: 'active', plan: null, createdAt: '2026-10-07T00:54:15.000Z' },
+      { id: 53195, status: 'active', plan: null, createdAt: null },
     ])
     expect(readSubscriptions(null)).toEqual([])
     expect([isStopped('cancelled'), isStopped('deactivated'), isStopped('active')]).toEqual([

@@ -17,7 +17,8 @@ import {
 import {
   formatCount,
   formatWhen,
-  incidentDetailLine,
+  INCIDENT_CLOSING,
+  incidentFacts,
   incidentKindOf,
 } from '@/features/admin/lib/format'
 import { incidentShowOf, listHref, pageOf } from '@/features/admin/lib/params'
@@ -36,10 +37,11 @@ const SHOW = [
 ] as const
 
 /**
- * Billing incidents (MAIL-SPEC §8, §10; migration 54), read-only: charges
- * that need a person in Flutterwave — a refund, a cancel, a payment not
- * recorded. Each open live one is also an ops alert. Nothing here changes
- * money: the incident says what to do, and it is done in Flutterwave.
+ * Billing incidents (MAIL-SPEC §8, §10; migrations 54, 56), read-only:
+ * charges that need a person in Flutterwave — a refund, a cancel, a payment
+ * not recorded. Each open live one is also an ops alert. Nothing here changes
+ * money: the incident says what to do, and it is done in Flutterwave. There
+ * is no resolve action yet, so the page says how one is closed.
  */
 async function Incidents({ searchParams }: { searchParams: Params }) {
   const admin = await requireAdmin()
@@ -84,6 +86,9 @@ async function Incidents({ searchParams }: { searchParams: Params }) {
             {formatCount(read.data.total)} {read.data.total === 1 ? 'incident' : 'incidents'}
             {show !== 'open' ? `, ${formatCount(read.data.open)} open` : ''}
           </p>
+          <p className="max-w-3xl text-pretty text-sm text-muted-foreground" data-incident-closing>
+            {INCIDENT_CLOSING}
+          </p>
           <TableBox label="Billing incidents">
             <table className="w-full min-w-[56rem] border-collapse">
               <thead className="border-b border-border">
@@ -108,7 +113,7 @@ async function Incidents({ searchParams }: { searchParams: Params }) {
               <tbody className="divide-y divide-border">
                 {read.data.rows.map((row) => {
                   const kind = incidentKindOf(row.kind)
-                  const detail = incidentDetailLine(row.detail)
+                  const detail = incidentFacts(row.kind, row.detail, row.providerReference)
                   return (
                     <tr key={row.id} data-incident={row.id}>
                       <td className={cn(TD, 'whitespace-nowrap')}>
