@@ -29,6 +29,9 @@ import {
   formatPpm,
   formatWhen,
   heartbeatLabel,
+  INCIDENT_KIND,
+  incidentDetailLine,
+  incidentKindOf,
   sesStatusOf,
   stateOf,
   stateReasonOf,
@@ -45,6 +48,7 @@ import {
   accountStateOf,
   auditActionOf,
   domainStatusFilterOf,
+  incidentShowOf,
   listHref,
   pageOf,
   tenantQueryOf,
@@ -52,6 +56,11 @@ import {
 
 const MIGRATION = readFileSync(
   join(__dirname, '../../../../../../supabase/migrations/00000000000051_mail_safety.sql'),
+  'utf8',
+)
+
+const MIGRATION_54 = readFileSync(
+  join(__dirname, '../../../../../../supabase/migrations/00000000000054_mail_followups.sql'),
   'utf8',
 )
 
@@ -255,6 +264,26 @@ describe('words for what SQL answers', () => {
     expect(findingKindOf('complaint_pause')).toBe('Complaints over our pause level')
     expect(findingKindOf('reputation_bounce_rate')).toBe('reputation bounce rate')
     expect(heartbeatLabel('mail-worker:send')).toBe('send')
+    // Migration 54: SES's own pause is held here until an owner resumes the account.
+    expect(stateReasonOf('paused_by_ses')).toBe('Paused by SES (AWS)')
+    expect(findingKindOf('ses_paused')).toContain('until an owner resumes it')
+  })
+
+  it('words every billing incident with what to do, and its amounts in naira (migration 54)', () => {
+    const kinds = MIGRATION_54.match(/check \(kind in \(([\s\S]*?)\)\);/)?.[1] ?? ''
+    const sqlKinds = [...kinds.matchAll(/'([a-z_]+)'/g)].map((match) => match[1])
+    expect(sqlKinds).toHaveLength(8)
+    expect(Object.keys(INCIDENT_KIND).sort()).toEqual([...sqlKinds].sort())
+    expect(incidentKindOf('unapplied_charge').todo).toContain('Refund it')
+    expect(incidentKindOf('something_new')).toEqual({
+      label: 'something new',
+      todo: 'Look it up in Flutterwave.',
+    })
+    expect(incidentDetailLine({ reason: 'underpaid', amount_kobo: 2150000, kind: 'renewal' })).toBe(
+      'reason underpaid, amount ₦21,500, kind renewal',
+    )
+    expect(incidentDetailLine({ amount_kobo: 100.5 })).toBe('amount kobo 100.5')
+    expect(incidentDetailLine({})).toBe('')
   })
 })
 
@@ -270,6 +299,10 @@ describe('the lists’ filters, from the address', () => {
     expect(domainStatusFilterOf({})).toBeNull()
     expect(auditActionOf({ action: 'mail.resume' })).toBe('mail.resume')
     expect(auditActionOf({ action: 'refund.approve' })).toBeNull()
+    expect(incidentShowOf({})).toBe('open')
+    expect(incidentShowOf({ show: 'resolved' })).toBe('resolved')
+    expect(incidentShowOf({ show: 'all' })).toBe('all')
+    expect(incidentShowOf({ show: 'mine' })).toBe('open')
   })
 
   it('searches by tenant or account id only — never a name, which would sit in request logs', () => {

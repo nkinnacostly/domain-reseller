@@ -18,7 +18,9 @@ import {
  * admins and developers; SQL checks the role again on every call. A signing
  * secret is made here, sealed with MAIL_WEBHOOK_SECRET_KEY before it leaves
  * this server, and answered once to the person who asked — never stored
- * plain, never logged (MR6, N13).
+ * plain, never logged (MR6, N13). Every change names the account it is
+ * made in — the one the role was checked for, and the one a new secret is
+ * sealed for — and SQL refuses an endpoint of any other (migration 54).
  */
 
 const MANAGERS = ['owner', 'admin', 'developer'] as const
@@ -66,6 +68,7 @@ export const createWebhook = accountAction(createWebhookSchema, MANAGERS).action
 export const updateWebhook = accountAction(updateWebhookSchema, MANAGERS).action(
   async ({ parsedInput, ctx }): Promise<Failure | Done> => {
     const { data, error } = await ctx.supabase.rpc('update_webhook', {
+      p_account_id: ctx.account.id,
       p_webhook_id: parsedInput.webhookId,
       p_url: parsedInput.url,
       p_events: parsedInput.events,
@@ -82,6 +85,7 @@ export const updateWebhook = accountAction(updateWebhookSchema, MANAGERS).action
 export const setWebhookEnabled = accountAction(setEnabledSchema, MANAGERS).action(
   async ({ parsedInput, ctx }): Promise<Failure | Done> => {
     const { data, error } = await ctx.supabase.rpc('set_webhook_enabled', {
+      p_account_id: ctx.account.id,
       p_webhook_id: parsedInput.webhookId,
       p_enabled: parsedInput.enabled,
     })
@@ -98,6 +102,7 @@ export const rotateWebhookSecret = accountAction(webhookIdSchema, MANAGERS).acti
     const made = await sealedSecret(ctx.account.id)
     if (!made) return { error: NO_SEAL_KEY }
     const { data, error } = await ctx.supabase.rpc('rotate_webhook_secret', {
+      p_account_id: ctx.account.id,
       p_webhook_id: parsedInput.webhookId,
       p_secret_sealed: made.sealed,
       p_secret_hint: made.hint,
@@ -113,6 +118,7 @@ export const rotateWebhookSecret = accountAction(webhookIdSchema, MANAGERS).acti
 export const deleteWebhook = accountAction(webhookIdSchema, MANAGERS).action(
   async ({ parsedInput, ctx }): Promise<Failure | Done> => {
     const { data, error } = await ctx.supabase.rpc('delete_webhook', {
+      p_account_id: ctx.account.id,
       p_webhook_id: parsedInput.webhookId,
     })
     if (error) throw new Error(`delete_webhook failed: ${error.code ?? 'unknown'}`)
@@ -126,6 +132,7 @@ export const deleteWebhook = accountAction(webhookIdSchema, MANAGERS).action(
 export const resendDelivery = accountAction(resendSchema, MANAGERS).action(
   async ({ parsedInput, ctx }): Promise<Failure | Done> => {
     const { data, error } = await ctx.supabase.rpc('resend_webhook_delivery', {
+      p_account_id: ctx.account.id,
       p_delivery_id: parsedInput.deliveryId,
     })
     if (error) throw new Error(`resend_webhook_delivery failed: ${error.code ?? 'unknown'}`)

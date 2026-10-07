@@ -61,6 +61,7 @@ describe('words', () => {
     expect(describeAnswer({ ...base, lastStatusCode: 500 })).toBe('HTTP 500')
     expect(describeAnswer({ ...base, lastError: 'timeout' })).toBe('No answer within 10 seconds')
     expect(describeAnswer({ ...base, lastError: 'private_address' })).toMatch(/private address/)
+    expect(describeAnswer({ ...base, lastError: 'port_not_allowed' })).toMatch(/443 or 8443/)
     expect(describeAnswer({ ...base, lastError: 'something new' })).toBe('No answer')
     expect(describeReason('gave_up')).toMatch(/24 hours/)
     expect(describeReason('endpoint_disabled')).toMatch(/turned off/)

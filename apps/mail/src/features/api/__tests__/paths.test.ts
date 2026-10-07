@@ -20,8 +20,8 @@ import * as openapi from '@/app/api/v1/openapi.json/route'
 
 vi.mock('next/server', () => ({ connection: async () => undefined }))
 
-/** This package's routes: each answers the methods it does not take itself. */
-const OWN: Record<string, Record<string, unknown>> = {
+/** Every route the document lists; each answers the methods it does not take itself. */
+const ROUTES: Record<string, Record<string, unknown>> = {
   '/emails': emails,
   '/emails/batch': batch,
   '/emails/{id}': email,
@@ -29,11 +29,6 @@ const OWN: Record<string, Record<string, unknown>> = {
   '/api-keys': keys,
   '/api-keys/{id}': key,
   '/openapi.json': openapi,
-}
-
-/** Every route the document lists — the domains package's too (migration 47). */
-const ROUTES: Record<string, Record<string, unknown>> = {
-  ...OWN,
   '/domains': domains,
   '/domains/{id}': domain,
   '/domains/{id}/verify': domainCheck,
@@ -65,11 +60,12 @@ describe('the v1 paths', () => {
   })
 
   it('answers a method a path does not take with a JSON 405, its allow header and x-request-id', async () => {
-    for (const [path, route] of Object.entries(OWN)) {
+    for (const [path, route] of Object.entries(ROUTES)) {
       const listed = API_OPERATIONS.filter((op) => op.path === path).map((op) => op.method)
       for (const method of ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].filter(
         (m) => !listed.includes(m as never),
       )) {
+        expect(typeof route[method], `${method} ${path} is answered by this API`).toBe('function')
         const response = await call(route[method], path, method)
         expect(response.status, `${method} ${path}`).toBe(405)
         expect(response.headers.get('allow')?.split(', ').sort()).toEqual([...listed].sort())

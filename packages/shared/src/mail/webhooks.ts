@@ -26,6 +26,14 @@ export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]
 export const isWebhookEvent = (value: unknown): value is WebhookEvent =>
   typeof value === 'string' && (WEBHOOK_EVENTS as readonly string[]).includes(value)
 
+/**
+ * How a delivery arrives: the worker sends as this, and waits this long for
+ * the whole exchange. One place, so the webhooks guide states what the
+ * worker does (N9b).
+ */
+export const WEBHOOK_USER_AGENT = 'MyDomainsHub-Mail-Webhooks/1'
+export const WEBHOOK_TIMEOUT_SECONDS = 10
+
 export type WebhookUrlRefusal =
   | 'not_url'
   | 'not_https'
@@ -34,12 +42,14 @@ export type WebhookUrlRefusal =
   | 'ip_v6'
   | 'private_address'
   | 'internal_name'
+  | 'port'
 
 export type WebhookUrlCheck = { ok: true; url: string } | { ok: false; reason: WebhookUrlRefusal }
 
 type ParsedUrl = {
   protocol: string
   hostname: string
+  port: string
   username: string
   password: string
   hash: string
@@ -54,9 +64,24 @@ const INTERNAL =
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/
 
 /**
+ * The only ports an endpoint may use: https's own, and its usual alternative.
+ * Any port would let an endpoint aim the worker at a service that is not a
+ * web server, one port after another (a port scan run by us). SQL's
+ * `is_webhook_url` and the worker's transport hold the same two.
+ */
+export const WEBHOOK_PORTS = [443, 8443] as const
+
+/** Whether a URL's port (the parser's string; empty for https's default) is one we call. */
+export function isWebhookPort(port: string | number): boolean {
+  const value = port === '' ? 443 : Number(port)
+  return (WEBHOOK_PORTS as readonly number[]).includes(value)
+}
+
+/**
  * The endpoint as it will be stored — the URL parser's own form, without a
  * fragment — or why it is refused. An IPv4 literal must be public; an IPv6
- * literal is refused (SQL stores host names and IPv4 only).
+ * literal is refused (SQL stores host names and IPv4 only), and so is any
+ * port but 443 and 8443.
  */
 export function checkWebhookUrl(input: string): WebhookUrlCheck {
   const text = input.trim()
@@ -69,6 +94,7 @@ export function checkWebhookUrl(input: string): WebhookUrlCheck {
   }
   if (url.protocol !== 'https:') return { ok: false, reason: 'not_https' }
   if (url.username !== '' || url.password !== '') return { ok: false, reason: 'credentials' }
+  if (!isWebhookPort(url.port)) return { ok: false, reason: 'port' }
   const host = url.hostname
   if (host.startsWith('[')) return { ok: false, reason: 'ip_v6' }
   if (IPV4.test(host)) {

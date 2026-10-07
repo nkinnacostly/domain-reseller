@@ -64,7 +64,11 @@ export default function SchedulingPage() {
           goes — the domain still verified, the key not revoked, the account not paused, no
           recipient suppressed. If something changed, it is not sent, and its status says why.
         </p>
-        <p>It counts against your caps on the day you queue it, not the day it goes.</p>
+        <p>
+          It counts against your caps on the day it is to go (Lagos time), and is refused with{' '}
+          <code>429 quota_exceeded</code> if that day is already full — however many days ahead you
+          queue it.
+        </p>
       </DocsSection>
 
       <DocsSection id="move" title="Move it">
@@ -73,6 +77,10 @@ export default function SchedulingPage() {
           full-access key. The answer is the email’s id, status and new time.
         </p>
         <CodeSample className="mt-4" label="Moving an email" code={MOVE} />
+        <p>
+          Its recipients move to the new time’s day. If that day is full, the move is refused with{' '}
+          <code>429 quota_exceeded</code> and the email keeps its old time.
+        </p>
       </DocsSection>
 
       <DocsSection id="cancel" title="Cancel it">

@@ -1,4 +1,4 @@
-import { runApi } from '@/features/api/lib/handler'
+import { otherMethods, runApi } from '@/features/api/lib/handler'
 import { domainApiDeps } from '@/features/domains/api/deps'
 import { deleteDomainApi, getDomainApi } from '@/features/domains/api/handlers'
 
@@ -19,3 +19,5 @@ export async function DELETE(request: Request, context: Context) {
     deleteDomainApi(request, id, deps, requestId),
   )
 }
+
+export const { POST, PATCH, PUT } = otherMethods(['GET', 'DELETE'])

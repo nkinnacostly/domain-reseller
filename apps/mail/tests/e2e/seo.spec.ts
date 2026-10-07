@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { LEGAL_PAGES, PUBLIC_PAGES } from './support/public-pages'
+import { DOCS_GUIDES, LEGAL_PAGES, PUBLIC_PAGES } from './support/public-pages'
 
 /**
  * What crawlers see (CLAUDE.md §15): robots.txt closes the private paths,
@@ -29,9 +29,13 @@ test('the sitemap lists every public page, dated only where the date is true', a
   expect(entry('/legal/terms')).toContain('<lastmod>2026-10-05T23:00:00.000Z</lastmod>')
   expect(entry('/docs')).not.toContain('<lastmod>')
   expect(entry('/contact')).not.toContain('<lastmod>')
+  for (const path of DOCS_GUIDES) {
+    expect(entry(path), path).toContain(path)
+    expect(entry(path), path).not.toContain('<lastmod>')
+  }
 })
 
-for (const path of PUBLIC_PAGES) {
+for (const path of [...PUBLIC_PAGES, ...DOCS_GUIDES]) {
   test(`${path} has its canonical address and share card, and is not indexed before launch`, async ({
     page,
   }) => {

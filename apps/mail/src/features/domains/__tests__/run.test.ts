@@ -127,14 +127,43 @@ describe('setting a domain up (§5.1–5.4)', () => {
     expect(sql.args('record_domain_step', 'p_step')).toEqual(['config_set', 'tenant'])
   })
 
-  it('an identity made by a run that raced this one is read back', async () => {
-    setUpInSes()
+  it('an identity this claim made, gone missing from a read, is read back rather than made twice', async () => {
+    const tokens = setUpInSes()
     ses.failNext('GET', '/identities/acme.example', 404, 'NotFoundException')
     fakeJobsSql()
-    expect(await runDomainWork(item(), deps())).toBe('pending')
+    expect(
+      await runDomainWork(
+        item({ dkimTokens: tokens, steps: { ...DONE, configSet: false, tenant: false } }),
+        deps(),
+      ),
+    ).toBe('pending')
     expect(
       ses.calls.filter((call) => call.method === 'POST' && call.path === '/identities'),
     ).toHaveLength(1)
+  })
+
+  it('never adopts an identity SES holds that this claim did not make: fails, and leaves it be (review 12)', async () => {
+    setUpInSes()
+    const sql = fakeJobsSql()
+    expect(await runDomainWork(item(), deps())).toBe('failed')
+    expect(sql.args('record_domain_failed', 'p_reason')).toEqual(['ses_identity_exists'])
+    expect(sql.calls.some((call) => call.fn === 'record_domain_step')).toBe(false)
+    expect(sql.calls.some((call) => call.fn === 'record_domain_released')).toBe(true)
+    // Read, and nothing else: not made, not joined to the tenant, not deleted.
+    expect(ses.calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      'GET /identities/acme.example',
+    ])
+    expect(ses.identities.has('acme.example')).toBe(true)
+  })
+
+  it('an identity made by someone else between our read and our make is not adopted either', async () => {
+    setUpInSes()
+    ses.failNext('GET', '/identities/acme.example', 404, 'NotFoundException')
+    const sql = fakeJobsSql()
+    expect(await runDomainWork(item(), deps())).toBe('failed')
+    expect(sql.args('record_domain_failed', 'p_reason')).toEqual(['ses_identity_exists'])
+    expect(ses.calls.some((call) => call.method === 'DELETE')).toBe(false)
+    expect(ses.identities.has('acme.example')).toBe(true)
   })
 
   it('SES not answering is retried later; refusing four times fails the claim and lets it go', async () => {
@@ -261,9 +290,20 @@ describe('letting an identity go (§5 removal)', () => {
 
   it('an identity already gone is released all the same', async () => {
     const sql = fakeJobsSql()
+    expect(
+      await runDomainWork(item({ work: 'teardown', status: 'removing', steps: DONE }), deps()),
+    ).toBe('released')
+    expect(sql.calls.some((call) => call.fn === 'record_domain_released')).toBe(true)
+  })
+
+  it('a claim that never made an identity is released without asking SES to delete one', async () => {
+    setUpInSes()
+    const sql = fakeJobsSql()
     expect(await runDomainWork(item({ work: 'teardown', status: 'removing' }), deps())).toBe(
       'released',
     )
+    expect(ses.calls).toHaveLength(0)
+    expect(ses.identities.has('acme.example')).toBe(true)
     expect(sql.calls.some((call) => call.fn === 'record_domain_released')).toBe(true)
   })
 
@@ -271,9 +311,9 @@ describe('letting an identity go (§5 removal)', () => {
     setUpInSes()
     ses.failNext('DELETE', '/identities/acme.example', 503)
     const sql = fakeJobsSql()
-    expect(await runDomainWork(item({ work: 'teardown', status: 'removing' }), deps())).toBe(
-      'error',
-    )
+    expect(
+      await runDomainWork(item({ work: 'teardown', status: 'removing', steps: DONE }), deps()),
+    ).toBe('error')
     expect(sql.calls.some((call) => call.fn === 'record_domain_released')).toBe(false)
     expect(sql.args('record_domain_error', 'p_error')).toEqual(['HTTP 503'])
   })
@@ -282,7 +322,9 @@ describe('letting an identity go (§5 removal)', () => {
     setUpInSes()
     ses.failNext('POST', '/tenants/resources/delete', 429, 'TooManyRequestsException')
     fakeJobsSql()
-    expect(await runDomainWork(item({ work: 'teardown', status: 'failed' }), deps())).toBe('error')
+    expect(
+      await runDomainWork(item({ work: 'teardown', status: 'failed', steps: DONE }), deps()),
+    ).toBe('error')
     expect(ses.identities.has('acme.example')).toBe(true)
   })
 })

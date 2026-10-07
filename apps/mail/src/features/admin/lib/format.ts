@@ -1,4 +1,5 @@
 import type { Tone } from '@/components/common/status-pill'
+import { formatKobo } from '@/features/billing/lib/money'
 
 /**
  * How Mail's admin words what SQL answers (MAIL-SPEC §7, §10). Every label
@@ -61,6 +62,7 @@ export const STATE_REASON: Record<string, string> = {
   paused_bounce_rate: 'Paused by our threshold: bounces',
   paused_complaint_rate: 'Paused by our threshold: complaints',
   paused_by_admin: 'Paused by an admin',
+  paused_by_ses: 'Paused by SES (AWS)',
   rejected_at_review: 'Not approved at review',
 }
 
@@ -74,9 +76,60 @@ export const FINDING_KIND: Record<string, string> = {
   complaint_pause: 'Complaints over our pause level',
   admin_pause: 'Paused by an admin',
   sending_paused: 'SES paused sending',
+  ses_paused: 'SES paused the tenant; held here until an owner resumes it',
 }
 
 export const findingKindOf = (kind: string) => FINDING_KIND[kind] ?? kind.replaceAll('_', ' ')
+
+/** mail.billing_incidents kinds (migrations 50, 54), and what a person does about each. */
+export const INCIDENT_KIND: Record<string, { label: string; todo: string }> = {
+  unknown_reference: {
+    label: 'Unknown reference',
+    todo: 'A charge named an MDM- reference no checkout has. Find it in Flutterwave and refund it.',
+  },
+  tx_ref_mismatch: {
+    label: 'Charge for another checkout',
+    todo: 'A charge was presented for a checkout it is not for (a replayed or mistyped return). Nothing was applied from it there.',
+  },
+  mode_mismatch: {
+    label: 'Test and live crossed',
+    todo: 'A test charge met a live checkout, or the other way round. Nothing was applied; check the keys.',
+  },
+  currency_mismatch: {
+    label: 'Not in naira',
+    todo: 'A successful charge in another currency. Nothing was applied; refund it in Flutterwave.',
+  },
+  unapplied_charge: {
+    label: 'Paid for nothing',
+    todo: 'Recorded, but it paid for nothing. Refund it in Flutterwave.',
+  },
+  subscription_not_canceled: {
+    label: 'Subscription still charging',
+    todo: 'Flutterwave may charge this card again. Cancel the subscription in Flutterwave.',
+  },
+  unrecorded_payment: {
+    label: 'Payment not recorded',
+    todo: 'Flutterwave confirmed it, but it is not recorded here. Record it, or refund it.',
+  },
+  unexpected_failed_charge: {
+    label: 'Failed charge out of turn',
+    todo: 'A failed charge far from the period’s end: not taken as a failed renewal. Check who made it.',
+  },
+}
+
+export const incidentKindOf = (kind: string) =>
+  INCIDENT_KIND[kind] ?? { label: kind.replaceAll('_', ' '), todo: 'Look it up in Flutterwave.' }
+
+/** An incident's detail as a line: its scalar facts, kobo shown as naira (N5). */
+export function incidentDetailLine(detail: Record<string, unknown>): string {
+  return Object.entries(detail)
+    .map(([key, value]) =>
+      key.endsWith('_kobo') && typeof value === 'number' && Number.isSafeInteger(value)
+        ? `${key.replace(/_kobo$/, '').replaceAll('_', ' ')} ${formatKobo(value)}`
+        : `${key.replaceAll('_', ' ')} ${String(value)}`,
+    )
+    .join(', ')
+}
 
 export const RESOLUTION: Record<string, string> = {
   cleared: 'Cleared: the rates fell',

@@ -1,3 +1,4 @@
+import { WEBHOOK_USER_AGENT } from '@dr/shared/mail'
 import { openWebhookSecret, webhookHeaders } from '@dr/shared/webhooks'
 import type { HeartbeatDetail } from '../store'
 import type { Attempt, ClaimedDelivery, UnreadableDelivery, WebhookStore } from './store'
@@ -58,7 +59,7 @@ export type DeliveryRun = {
 }
 
 export const WEBHOOK_HEARTBEAT = 'mail-worker:webhooks'
-export const USER_AGENT = 'MyDomainsHub-Mail-Webhooks/1'
+export const USER_AGENT = WEBHOOK_USER_AGENT
 
 const isUnreadable = (claim: ClaimedDelivery | UnreadableDelivery): claim is UnreadableDelivery =>
   'unreadable' in claim

@@ -1,8 +1,7 @@
 /**
  * The docs (MAIL-SPEC §6 "Docs"), in reading order. `stub` marks a page whose
- * guide another package writes — webhooks (the events package) and DNS
- * set-up (the domains package): it says so plainly, and claims nothing the
- * product does not do yet (N9b).
+ * guide is still to be written — DNS set-up (the domains package): it says so
+ * plainly, and claims nothing the product does not do yet (N9b).
  */
 
 export type DocsPage = {
@@ -66,8 +65,7 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     slug: 'webhooks',
     href: '/docs/webhooks',
     title: 'Webhooks',
-    summary: 'Events sent to your own server. The guide is being written.',
-    stub: true,
+    summary: 'Events sent to your own server: the payload, checking the signature, and retries.',
   },
   {
     slug: 'domains',

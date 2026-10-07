@@ -88,6 +88,17 @@ describe('SQL refusals in the API’s words', () => {
     expect(refusalToApiError(refused({ code: 'budget_exceeded' })).retryAfter).toBe(3600)
   })
 
+  it('caps live keys, and refuses moving an email to a recipient suppressed since (migration 54)', () => {
+    const capped = refusalToApiError(refused({ code: 'key_limit', max: 50 }))
+    expect(capped).toMatchObject({ name: 'forbidden', status: 403 })
+    expect(capped.message).toContain('50 live API keys')
+    expect(refusalToApiError(refused({ code: 'key_limit' })).message).toContain('the most live')
+    expect(refusalToApiError(refused({ code: 'suppressed' }))).toMatchObject({
+      name: 'validation_error',
+      status: 409,
+    })
+  })
+
   it('says why an email can no longer change, naming its status', () => {
     expect(refusalToApiError(refused({ code: 'not_pending', status: 'sent' })).message).toContain(
       'its status is sent',

@@ -24,6 +24,12 @@ import { domainRecords } from './records'
  *   expire   — 72 hours unproven: a last read, then failed naming the DKIM
  *              record public DNS does not have, and released
  *   teardown — off the tenant, deleted from SES (a removal, or a failed claim)
+ *              — only an identity this claim recorded making
+ *
+ * Never adopt an identity someone else made (migration 54, review 12): one
+ * SES holds already, that this claim never recorded creating
+ * (identity_created_at), fails the claim as `ses_identity_exists` and is left
+ * exactly as it is — not joined to the tenant, not deleted on release.
  *
  * SES refusing or not answering is recorded with its status and type only,
  * and tried again later (`record_domain_error`); a lease another runner now
@@ -138,13 +144,17 @@ async function setUp(item: DomainWork, deps: DomainRunDeps): Promise<DomainOutco
   const { manager } = deps.ses
   const arn = identityArn(item, deps.ses)
 
-  // §5.1: the identity, or the one SES already holds for this claim.
+  // §5.1: the identity, or the one SES already holds for this claim — never
+  // one this claim did not make.
   let identity = await readIdentity(item, deps)
+  if (identity && !item.steps.identity) return notOurs(item, deps)
   if (!identity) {
     const made = await manager.createEmailIdentity(item.name)
     if (made.ok) identity = made
-    else if (isSesAlreadyThere(made)) identity = await readIdentity(item, deps)
-    else return failed(item, deps, made)
+    else if (isSesAlreadyThere(made)) {
+      if (!item.steps.identity) return notOurs(item, deps)
+      identity = await readIdentity(item, deps)
+    } else return failed(item, deps, made)
   }
   if (!identity?.ok || identity.dkimTokens.length === 0) {
     return failed(item, deps, {
@@ -206,6 +216,17 @@ async function setUp(item: DomainWork, deps: DomainRunDeps): Promise<DomainOutco
   return recordCheck(item, deps, await readIdentity(item, deps))
 }
 
+/**
+ * SES holds an identity for this name that this claim never recorded making:
+ * someone else's. The claim fails and the name is released without touching
+ * that identity (teardown deletes only what the claim made).
+ */
+async function notOurs(item: DomainWork, deps: DomainRunDeps): Promise<DomainOutcome> {
+  kept(await deps.store.recordDomainFailed(item.id, deps.worker, 'ses_identity_exists', null))
+  await tearDown({ ...item, steps: { ...item.steps, identity: false } }, deps)
+  return 'failed'
+}
+
 async function check(item: DomainWork, deps: DomainRunDeps): Promise<DomainOutcome> {
   return recordCheck(item, deps, await readIdentity(item, deps))
 }
@@ -246,11 +267,14 @@ async function expire(item: DomainWork, deps: DomainRunDeps): Promise<DomainOutc
 async function tearDown(item: DomainWork, deps: DomainRunDeps): Promise<DomainOutcome> {
   const { manager } = deps.ses
   const arn = identityArn(item, deps.ses)
-  // An identity in a tenant cannot be deleted: off the tenant first.
-  const left = await manager.deleteTenantResourceAssociation(item.tenant, arn)
-  if (!left.ok && !isSesNotFound(left)) return failed({ ...item, work: 'teardown' }, deps, left)
-  const gone = await manager.deleteEmailIdentity(item.name)
-  if (!gone.ok && !isSesNotFound(gone)) return failed({ ...item, work: 'teardown' }, deps, gone)
+  // Only an identity this claim made is ours to take off the tenant and delete.
+  if (item.steps.identity) {
+    // An identity in a tenant cannot be deleted: off the tenant first.
+    const left = await manager.deleteTenantResourceAssociation(item.tenant, arn)
+    if (!left.ok && !isSesNotFound(left)) return failed({ ...item, work: 'teardown' }, deps, left)
+    const gone = await manager.deleteEmailIdentity(item.name)
+    if (!gone.ok && !isSesNotFound(gone)) return failed({ ...item, work: 'teardown' }, deps, gone)
+  }
   kept(await deps.store.recordDomainReleased(item.id, deps.worker))
   return 'released'
 }

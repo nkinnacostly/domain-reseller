@@ -242,19 +242,19 @@ begin
                              pg_temp.mv_sealed(), 'whsec_abcd');
   perform pg_temp.mv_code(v_j, 'webhook_limit', 'FAILED 1: past the endpoint limit');
   if (v_j ->> 'max')::integer <> 3 then raise exception 'FAILED 1: the limit answered %', v_j; end if;
-  perform pg_temp.mv_ok(mail.set_webhook_enabled(w3, false), 'FAILED 1: an owner turns an endpoint off');
+  perform pg_temp.mv_ok(mail.set_webhook_enabled(a_acc, w3, false), 'FAILED 1: an owner turns an endpoint off');
   perform pg_temp.mv_as(u_b);
-  perform pg_temp.mv_code(mail.update_webhook(w1, 'https://evil.example/x', array['email.sent']), 'not_found',
+  perform pg_temp.mv_code(mail.update_webhook(b_acc, w1, 'https://evil.example/x', array['email.sent']), 'not_found',
                           'FAILED 1: another account''s owner edits an endpoint');
-  perform pg_temp.mv_code(mail.delete_webhook(w1), 'not_found', 'FAILED 1: another account''s owner deletes it');
-  perform pg_temp.mv_code(mail.update_webhook(gen_random_uuid(), 'https://hooks.acme.example/x', array['email.sent']),
+  perform pg_temp.mv_code(mail.delete_webhook(b_acc, w1), 'not_found', 'FAILED 1: another account''s owner deletes it');
+  perform pg_temp.mv_code(mail.update_webhook(b_acc, gen_random_uuid(), 'https://hooks.acme.example/x', array['email.sent']),
                           'not_found', 'FAILED 1: an endpoint that does not exist');
   wb := (mail.create_webhook(b_acc, 'https://hooks.b.example/in', array['email.delivered'],
                              pg_temp.mv_sealed('E'), 'whsec_bbbb') ->> 'webhookId')::uuid;
   perform pg_temp.mv_as(u_v);
-  perform pg_temp.mv_code(mail.update_webhook(w1, 'https://hooks.acme.example/one', array['email.sent']), 'forbidden',
+  perform pg_temp.mv_code(mail.update_webhook(a_acc, w1, 'https://hooks.acme.example/one', array['email.sent']), 'forbidden',
                           'FAILED 1: a viewer edits an endpoint');
-  perform pg_temp.mv_code(mail.rotate_webhook_secret(w1, pg_temp.mv_sealed('F'), 'whsec_ffff'), 'forbidden',
+  perform pg_temp.mv_code(mail.rotate_webhook_secret(a_acc, w1, pg_temp.mv_sealed('F'), 'whsec_ffff'), 'forbidden',
                           'FAILED 1: a viewer rotates a secret');
   begin
     select secret_sealed into v_text from mail.webhooks limit 1;
@@ -273,13 +273,13 @@ begin
   exception when insufficient_privilege then null;
   end;
   perform pg_temp.mv_as(u_d);
-  v_j := mail.update_webhook(w1, 'https://hooks.acme.example/one', array['email.delivered', 'email.bounced',
+  v_j := mail.update_webhook(a_acc, w1, 'https://hooks.acme.example/one', array['email.delivered', 'email.bounced',
                              'email.failed', 'domain.verified'], 'Production, eu');
   if v_j -> 'changed' <> '["description"]'::jsonb then raise exception 'FAILED 1: update answered %', v_j; end if;
-  perform pg_temp.mv_code(mail.update_webhook(w1, 'https://10.0.0.1/x', array['email.sent']), 'validation',
+  perform pg_temp.mv_code(mail.update_webhook(a_acc, w1, 'https://10.0.0.1/x', array['email.sent']), 'validation',
                           'FAILED 1: an update to a private address');
-  perform pg_temp.mv_ok(mail.rotate_webhook_secret(w1, pg_temp.mv_sealed('G'), 'whsec_gggg'), 'FAILED 1: rotate');
-  perform pg_temp.mv_code(mail.rotate_webhook_secret(w1, 'v1.short', 'whsec_gggg'), 'validation',
+  perform pg_temp.mv_ok(mail.rotate_webhook_secret(a_acc, w1, pg_temp.mv_sealed('G'), 'whsec_gggg'), 'FAILED 1: rotate');
+  perform pg_temp.mv_code(mail.rotate_webhook_secret(a_acc, w1, 'v1.short', 'whsec_gggg'), 'validation',
                           'FAILED 1: rotate to an unsealed secret');
   execute 'reset role';
   if (select events from mail.webhooks where id = w1)
@@ -527,16 +527,16 @@ begin
   -- tried, not to an endpoint that is off; owners, admins and developers.
   select id into v_id from mail.webhook_deliveries where webhook_id = w2 and status = 'delivered' limit 1;
   perform pg_temp.mv_as(u_v);
-  perform pg_temp.mv_code(mail.resend_webhook_delivery(v_id), 'forbidden', 'FAILED 6: a viewer resends');
+  perform pg_temp.mv_code(mail.resend_webhook_delivery(a_acc, v_id), 'forbidden', 'FAILED 6: a viewer resends');
   perform pg_temp.mv_as(u_n);
-  perform pg_temp.mv_code(mail.resend_webhook_delivery(v_id), 'not_found', 'FAILED 6: a stranger resends');
-  perform pg_temp.mv_code(mail.resend_webhook_delivery(-1), 'not_found', 'FAILED 6: no such delivery');
+  perform pg_temp.mv_code(mail.resend_webhook_delivery(a_acc, v_id), 'not_found', 'FAILED 6: a stranger resends');
+  perform pg_temp.mv_code(mail.resend_webhook_delivery(a_acc, -1), 'not_found', 'FAILED 6: no such delivery');
   perform pg_temp.mv_as(u_d);
-  v_j := mail.resend_webhook_delivery(v_id);
+  v_j := mail.resend_webhook_delivery(a_acc, v_id);
   perform pg_temp.mv_ok(v_j, 'FAILED 6: a developer resends');
   v_id2 := (v_j ->> 'deliveryId')::bigint;
-  perform pg_temp.mv_code(mail.resend_webhook_delivery(v_id), 'in_progress', 'FAILED 6: a second resend while one waits');
-  perform pg_temp.mv_code(mail.resend_webhook_delivery(v_id2), 'in_progress', 'FAILED 6: resending one that waits');
+  perform pg_temp.mv_code(mail.resend_webhook_delivery(a_acc, v_id), 'in_progress', 'FAILED 6: a second resend while one waits');
+  perform pg_temp.mv_code(mail.resend_webhook_delivery(a_acc, v_id2), 'in_progress', 'FAILED 6: resending one that waits');
   execute 'reset role';
   if (select message_id from mail.webhook_deliveries where id = v_id2)
        <> (select message_id from mail.webhook_deliveries where id = v_id)
@@ -545,16 +545,16 @@ begin
     raise exception 'FAILED 6: the resend was not the same message, waiting';
   end if;
   perform pg_temp.mv_as(u_d);
-  perform pg_temp.mv_ok(mail.set_webhook_enabled(w2, false), 'FAILED 6: a developer turns an endpoint off');
-  perform pg_temp.mv_code(mail.resend_webhook_delivery(v_id), 'webhook_disabled', 'FAILED 6: resend to an endpoint off');
+  perform pg_temp.mv_ok(mail.set_webhook_enabled(a_acc, w2, false), 'FAILED 6: a developer turns an endpoint off');
+  perform pg_temp.mv_code(mail.resend_webhook_delivery(a_acc, v_id), 'webhook_disabled', 'FAILED 6: resend to an endpoint off');
   execute 'reset role';
   if (select status || '/' || status_reason from mail.webhook_deliveries where id = v_id2) <> 'failed/endpoint_disabled' then
     raise exception 'FAILED 6: turning the endpoint off left its delivery waiting';
   end if;
   update mail.webhooks set failing_since = now() - interval '1 day' where id = w2;
   perform pg_temp.mv_as(u_d);
-  perform pg_temp.mv_ok(mail.set_webhook_enabled(w2, true), 'FAILED 6: back on');
-  v_j := mail.set_webhook_enabled(w2, true);
+  perform pg_temp.mv_ok(mail.set_webhook_enabled(a_acc, w2, true), 'FAILED 6: back on');
+  v_j := mail.set_webhook_enabled(a_acc, w2, true);
   if (v_j ->> 'already')::boolean is not true then raise exception 'FAILED 6: on twice answered %', v_j; end if;
   execute 'reset role';
   if (select status || '/' || coalesce(disabled_reason, '-') || '/' || coalesce(failing_since::text, '-')
@@ -591,7 +591,7 @@ begin
     raise exception 'FAILED 7: a disabled endpoint was queued';
   end if;
   perform pg_temp.mv_as(u_o);
-  perform pg_temp.mv_ok(mail.set_webhook_enabled(w2, true), 'FAILED 7: the owner turns it back on');
+  perform pg_temp.mv_ok(mail.set_webhook_enabled(a_acc, w2, true), 'FAILED 7: the owner turns it back on');
   execute 'reset role';
   if (select owner_notice_due from mail.webhooks where id = w2) then
     raise exception 'FAILED 7: the notice stayed due after the endpoint came back';
@@ -620,6 +620,13 @@ begin
                                                             'subject', 'paused?'), '{"text":"x"}');
   execute 'reset role';
   perform pg_temp.mv_code(v_j, 'account_paused', 'FAILED 8: a paused tenant still queued');
+  -- Migration 54 (review 18): AWS's pause pauses the account in our own gate too.
+  if (select state || '/' || pre_pause_state || '/' || state_reason from mail.accounts where id = a_acc)
+       <> 'paused/sandbox/paused_by_ses'
+     or not exists (select 1 from mail.safety_findings where account_id = a_acc and source = 'ses'
+                     and kind = 'ses_paused' and severity = 'pause' and resolved_at is null) then
+    raise exception 'FAILED 8: SES''s pause did not pause the account here';
+  end if;
   if (pg_temp.mv_tenant('ev-1-' || v_tag, 'sending_status', a_tenant, v_t0, 'DISABLED') ->> 'applied')::boolean
      or (pg_temp.mv_tenant('ev-0-' || v_tag, 'sending_status', a_tenant, v_t0 - interval '1 hour', 'ENABLED') ->> 'applied')::boolean
      or (pg_temp.mv_tenant('ev-0b-' || v_tag, 'sending_status', a_tenant, v_t0, 'ENABLED') ->> 'applied')::boolean
@@ -633,6 +640,10 @@ begin
      or (select resolve_event from mail.findings where account_id = a_acc and kind = 'sending_paused') <> 'ev-2-' || v_tag
      or not exists (select 1 from mail.account_audit_log where account_id = a_acc and action = 'ses.sending_resumed') then
     raise exception 'FAILED 8: sending enabled answered %', v_j;
+  end if;
+  -- MR5: SES's ENABLED never reopens our gate; only an owner's resume does.
+  if (select state from mail.accounts where id = a_acc) <> 'paused' then
+    raise exception 'FAILED 8: SES''s enabled reopened the account';
   end if;
   perform pg_temp.mv_tenant('ev-3-' || v_tag, 'sending_status', a_tenant, v_t0 + interval '2 hours', 'REINSTATED');
   if (select ses_status from mail.accounts where id = a_acc) <> 'reinstated' then
@@ -653,7 +664,11 @@ begin
     raise exception 'FAILED 8: not a tenant event';
   exception when invalid_parameter_value then execute 'reset role';
   end;
-  update mail.accounts set ses_status = 'enabled' where id = a_acc;
+  -- As an owner's resume would leave it, for the checks that follow.
+  update mail.accounts set ses_status = 'enabled', state = pre_pause_state, pre_pause_state = null, state_reason = null
+   where id = a_acc;
+  update mail.safety_findings set resolved_at = now(), resolved_by = 'm49-check', resolution = 'resumed'
+   where account_id = a_acc and resolved_at is null;
   v_passed := v_passed + 1;
 
   -- ── 9. Findings: opened and closed by SES's recommendations, once each, in
@@ -783,8 +798,8 @@ begin
 
   -- ── 13. Deleting an endpoint takes its deliveries; it is logged.
   perform pg_temp.mv_as(u_d);
-  perform pg_temp.mv_ok(mail.delete_webhook(w1), 'FAILED 13: a developer deletes an endpoint');
-  perform pg_temp.mv_code(mail.delete_webhook(w1), 'not_found', 'FAILED 13: deleted twice');
+  perform pg_temp.mv_ok(mail.delete_webhook(a_acc, w1), 'FAILED 13: a developer deletes an endpoint');
+  perform pg_temp.mv_code(mail.delete_webhook(a_acc, w1), 'not_found', 'FAILED 13: deleted twice');
   execute 'reset role';
   if exists (select 1 from mail.webhook_deliveries where webhook_id = w1)
      or not exists (select 1 from mail.account_audit_log where action = 'webhook.deleted' and target = w1::text) then

@@ -14,6 +14,7 @@ import { mailCsp, supabaseHostOf } from '@/lib/csp'
 import { env } from '@/lib/env'
 import { SESSION_COOKIE_OPTIONS } from '@/lib/supabase/cookies'
 import { forwardedAuthHeaders } from '@/lib/supabase/forwarded'
+import { retryingFetch } from '@/lib/supabase/retry'
 
 /**
  * Next 16's proxy (the old middleware): refresh the Supabase session cookie,
@@ -73,7 +74,8 @@ export async function proxy(request: NextRequest) {
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
       // A refresh rewrites the session's device and address: send the person's.
-      global: { headers: forwardedAuthHeaders(request.headers) },
+      // admin_status is asked once more if its connection dropped (lib/supabase/retry).
+      global: { headers: forwardedAuthHeaders(request.headers), fetch: retryingFetch() },
       cookieOptions: SESSION_COOKIE_OPTIONS,
       cookies: {
         getAll: () => request.cookies.getAll(),

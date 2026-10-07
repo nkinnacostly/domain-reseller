@@ -512,6 +512,12 @@ begin
   execute 'set local role service_role';
   perform mail.record_domain_released(d_b, 'mock-7');
   execute 'reset role';
+  -- Migration 54 (review 10): a claim that failed waits out the cool-down
+  -- before the same account may try the name again.
+  perform pg_temp.md_as(u_owner);
+  perform pg_temp.md_code(mail.retry_domain(d_two), 'claim_cooldown', 'FAILED 8: a retry inside the cool-down');
+  execute 'reset role';
+  update mail.domain_claim_failures set failed_at = now() - interval '8 days' where domain_id = d_two;
   perform pg_temp.md_as(u_owner);
   v_j := mail.retry_domain(d_two);
   perform pg_temp.md_ok(v_j, 'FAILED 8: a retry of a released claim');

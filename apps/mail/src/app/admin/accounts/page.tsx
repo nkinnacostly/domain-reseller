@@ -47,6 +47,14 @@ async function Accounts({ searchParams }: { searchParams: Params }) {
     <AdminPage
       title="Accounts"
       intro="Each account’s plan, state, SES tenant, sends and open findings."
+      actions={
+        <Link
+          href="/admin/accounts/incidents"
+          className={cn(LINK, 'inline-flex min-h-11 items-center text-sm')}
+        >
+          Billing incidents
+        </Link>
+      }
     >
       <div className="flex flex-wrap items-end justify-between gap-4">
         <FilterLinks

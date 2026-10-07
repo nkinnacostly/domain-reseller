@@ -4,6 +4,7 @@ import { createClient as createStandaloneClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { env } from '@/lib/env'
 import { authAction } from '@/lib/safe-action'
+import { retryingFetch } from '@/lib/supabase/retry'
 import { authMessage } from '../lib/messages'
 import { startedFromEmailLink } from '../lib/security'
 import { queueAccountNotice, recordResetHold } from '../queries/notices'
@@ -50,7 +51,11 @@ export const changePassword = authAction
     const verifier = createStandaloneClient(
       env.NEXT_PUBLIC_SUPABASE_URL,
       env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } },
+      {
+        auth: { persistSession: false, autoRefreshToken: false },
+        // Mail's one fetch for Supabase; it never sends an Auth call twice.
+        global: { fetch: retryingFetch() },
+      },
     )
     const { error: wrong } = await verifier.auth.signInWithPassword({
       email,

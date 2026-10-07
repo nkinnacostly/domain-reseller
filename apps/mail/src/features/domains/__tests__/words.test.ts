@@ -70,7 +70,10 @@ describe('states in words (§5)', () => {
     expect(failureWords('dkim_not_verified', null)).toContain('did not confirm them')
     expect(failureWords('not_set_up', null)).toContain('could not finish')
     expect(failureWords('ses_refused', null)).toContain('would not accept')
-    expect(failureWords(null, null)).toContain('try again')
+    expect(failureWords(null, null)).toContain('try again 7 days after it failed')
+    // Migration 54 (review 12): SES holds the name for someone else; no retry is offered.
+    expect(failureWords('ses_identity_exists', null)).toContain('already holds this domain')
+    expect(failureWords('ses_identity_exists', null)).not.toContain('try again')
   })
 
   it('moments in Lagos time', () => {
@@ -92,6 +95,9 @@ describe('refusals in words', () => {
     ['unauthorized', 'session has ended'],
     ['not_found', 'not found'],
     ['forbidden', 'Your role'],
+    ['related_in_use', 'above or below this one'],
+    ['claim_cooldown', 'can be added again in a few days'],
+    ['too_many_failed_claims', 'failed verification in the last 30 days'],
   ])('%s', (code, words) => {
     expect(domainMessage({ code })).toContain(words)
   })
@@ -105,6 +111,17 @@ describe('refusals in words', () => {
     expect(domainMessage({ code: 'in_use_pending', until: '2026-10-09T09:30:00Z' })).toMatch(
       /until .+, Lagos/,
     )
+    expect(domainMessage({ code: 'claim_cooldown', until: '2026-10-14T09:30:00Z' })).toMatch(
+      /added again from .+, Lagos/,
+    )
+    expect(
+      domainMessage({
+        code: 'too_many_failed_claims',
+        max: 5,
+        windowDays: 30,
+        until: '2026-11-06T09:30:00Z',
+      }),
+    ).toMatch(/^5 domains .+ until .+, Lagos/)
     expect(domainMessage({ code: 'forbidden', reason: 'sandbox' })).toContain(
       'sandbox sending address',
     )
@@ -131,6 +148,17 @@ describe('refusals in words', () => {
     })
     expect(domainApiError({ code: 'validation' })).toMatchObject({ status: 422 })
     expect(domainApiError({ code: 'odd' })).toMatchObject({ name: 'internal_error', status: 500 })
+    // Migration 54: a name above or below another account's is a conflict; a cool-down says when.
+    expect(domainApiError({ code: 'related_in_use' })).toMatchObject({ status: 409 })
+    const until = new Date(Date.now() + 3600_000).toISOString()
+    const cooldown = domainApiError({ code: 'claim_cooldown', until })
+    expect(cooldown).toMatchObject({ name: 'rate_limited', status: 429 })
+    expect(cooldown.retryAfter).toBeGreaterThan(3500)
+    expect(cooldown.retryAfter).toBeLessThanOrEqual(3600)
+    expect(domainApiError({ code: 'too_many_failed_claims', max: 5 })).toMatchObject({
+      name: 'rate_limited',
+    })
+    expect(domainApiError({ code: 'too_many_failed_claims' }).retryAfter).toBeUndefined()
   })
 })
 

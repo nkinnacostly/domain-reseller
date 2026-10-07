@@ -118,6 +118,7 @@ export type DomainFailure =
   | 'dkim_not_verified'
   | 'not_set_up'
   | 'ses_refused'
+  | 'ses_identity_exists'
 
 export function createJobsStore(db: MailServiceClient) {
   async function call(operation: string, run: PromiseLike<{ data: unknown; error: unknown }>) {

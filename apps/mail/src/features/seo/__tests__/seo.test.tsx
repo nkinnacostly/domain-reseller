@@ -1,5 +1,6 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { DOCS_PAGES } from '@/features/api/docs/pages'
 import { ROWS } from '@/features/pricing/__tests__/fixtures'
 import { toCatalogue } from '@/features/pricing/lib/plans'
 import { JsonLd, PageJsonLd } from '../components/json-ld'
@@ -72,6 +73,18 @@ describe('sitemap.xml (dates only where true)', () => {
     )
     expect(urls).toContain(`${SITE}/legal/sub-processors`)
     expect(urls.some((url) => /dashboard|sign-in|sign-up|\/api\//.test(url))).toBe(false)
+  })
+
+  it('lists every docs page once, undated: nothing records when a guide changed', () => {
+    const entries = buildSitemap(SITE, { plansUpdatedAt: '2026-10-06T11:00:00.000Z' })
+    for (const page of DOCS_PAGES) {
+      const found = entries.filter((entry) => entry.url === `${SITE}${page.href}`)
+      expect(found, page.href).toHaveLength(1)
+      expect(found[0], page.href).not.toHaveProperty('lastModified')
+    }
+    expect(entries.map((entry) => entry.url)).toEqual(
+      expect.arrayContaining([`${SITE}/docs/webhooks`, `${SITE}/docs/quickstart`]),
+    )
   })
 
   it('dates legal pages by the drafts, plan pages by the plan rows, the rest not at all', () => {

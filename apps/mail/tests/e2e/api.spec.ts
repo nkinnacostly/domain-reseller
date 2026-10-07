@@ -245,6 +245,19 @@ test.describe('the v1 API, from a key to the log', () => {
     const unknown = await api(page).get('/nothing-here')
     expect(unknown.status()).toBe(404)
     expect(unknown.headers()['x-request-id']).toBeTruthy()
+    for (const [path, allow] of [
+      ['/domains', 'GET, POST'],
+      ['/domains/00000000-0000-0000-0000-000000000000', 'GET, DELETE'],
+      ['/domains/00000000-0000-0000-0000-000000000000/verify', 'POST'],
+    ] as const) {
+      const wrong = await page.request.put(`/api/v1${path}`, {
+        headers: { authorization: `Bearer ${key}` },
+      })
+      expect(wrong.status(), path).toBe(405)
+      expect(wrong.headers().allow, path).toBe(allow)
+      expect(wrong.headers()['x-request-id'], path).toBeTruthy()
+      expect(await wrong.json()).toMatchObject({ name: 'not_found' })
+    }
     const doc = await page.request.get('/api/v1/openapi.json')
     expect(doc.status()).toBe(200)
     expect(await doc.json()).toMatchObject({ openapi: '3.1.0' })

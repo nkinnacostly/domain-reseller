@@ -40,6 +40,12 @@ export function tenantQueryOf(params: Params): string | null {
   return value.startsWith('mdm-') ? value : `mdm-${value}`
 }
 
+/** Which billing incidents to show: open (the default), resolved or all. */
+export function incidentShowOf(params: Params): 'open' | 'resolved' | 'all' {
+  const value = one(params.show)
+  return value === 'resolved' || value === 'all' ? value : 'open'
+}
+
 export function auditActionOf(params: Params): string | null {
   const value = one(params.action)
   return value && Object.hasOwn(AUDIT_ACTION, value) ? value : null

@@ -91,6 +91,14 @@ describe('createWebhook', () => {
     expect(local.validationErrors).toMatchObject({
       url: { _errors: [expect.stringContaining('private')] },
     })
+    const port = await createWebhook({
+      ...input,
+      url: 'https://hooks.acme.example:8080/x',
+      events: ['email.sent'],
+    })
+    expect(port.validationErrors).toMatchObject({
+      url: { _errors: [expect.stringContaining('443')] },
+    })
     const none = await createWebhook({ ...input, events: [] })
     expect(none.validationErrors).toMatchObject({
       events: { _errors: ['Choose at least one event.'] },
@@ -143,6 +151,7 @@ describe('changing an endpoint', () => {
     expect(fake.rpcCalls[0]).toEqual({
       fn: 'update_webhook',
       args: {
+        p_account_id: ACCOUNT,
         p_webhook_id: WEBHOOK,
         p_url: 'https://hooks.acme.example/mail',
         p_events: ['email.failed'],
@@ -157,7 +166,11 @@ describe('changing an endpoint', () => {
   it('setWebhookEnabled turns it off and on', async () => {
     const fake = use({ role: 'developer', rpc: { set_webhook_enabled: ok() } })
     await setWebhookEnabled({ accountId: ACCOUNT, webhookId: WEBHOOK, enabled: false })
-    expect(fake.rpcCalls[0]?.args).toEqual({ p_webhook_id: WEBHOOK, p_enabled: false })
+    expect(fake.rpcCalls[0]?.args).toEqual({
+      p_account_id: ACCOUNT,
+      p_webhook_id: WEBHOOK,
+      p_enabled: false,
+    })
     use({ role: 'developer', rpc: { set_webhook_enabled: refuse('account_closed') } })
     expect(
       (await setWebhookEnabled({ accountId: ACCOUNT, webhookId: WEBHOOK, enabled: true })).data,
@@ -169,7 +182,11 @@ describe('changing an endpoint', () => {
     const result = await rotateWebhookSecret({ accountId: ACCOUNT, webhookId: WEBHOOK })
     const secret = (result.data as { secret: string }).secret
     const args = fake.rpcCalls[0]?.args as Record<string, string>
-    expect(await openWebhookSecret(KEY, args.p_secret_sealed ?? '', ACCOUNT)).toBe(secret)
+    // The secret is sealed for the account SQL is told the endpoint belongs to (migration 54).
+    expect(args.p_account_id).toBe(ACCOUNT)
+    expect(await openWebhookSecret(KEY, args.p_secret_sealed ?? '', args.p_account_id ?? '')).toBe(
+      secret,
+    )
     use({ role: 'owner', rpc: { rotate_webhook_secret: refuse('not_found') } })
     expect((await rotateWebhookSecret({ accountId: ACCOUNT, webhookId: WEBHOOK })).data).toEqual({
       error: expect.stringContaining('not found'),
@@ -192,8 +209,8 @@ describe('changing an endpoint', () => {
       ok: true,
     })
     expect(fake.rpcCalls.map((call) => call.args)).toEqual([
-      { p_webhook_id: WEBHOOK },
-      { p_delivery_id: 41 },
+      { p_account_id: ACCOUNT, p_webhook_id: WEBHOOK },
+      { p_account_id: ACCOUNT, p_delivery_id: 41 },
     ])
     use({
       role: 'owner',

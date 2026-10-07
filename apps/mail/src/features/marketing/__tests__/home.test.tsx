@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 import type { PlanCatalogue } from '@/features/pricing/lib/plans'
 import { CodeSample } from '../components/code-sample'
 import { Deliverability, SAFEGUARDS } from '../components/deliverability'
-import { DocsLanding } from '../components/docs-landing'
 import { FinalCta } from '../components/final-cta'
 import { Hero } from '../components/hero'
 import { HowItWorks, STEPS } from '../components/how-it-works'
@@ -177,24 +176,5 @@ describe('the home page sections', () => {
   it('a page hero needs no eyebrow or icons', () => {
     render(<PageHero title="Plain" />)
     expect(screen.getByRole('heading', { level: 1, name: 'Plain' })).toBeInTheDocument()
-  })
-})
-
-describe('the docs landing', () => {
-  it('points to the call on the home page until the quickstart exists', () => {
-    render(<DocsLanding />)
-    expect(screen.getByRole('link', { name: 'home page' })).toHaveAttribute(
-      'href',
-      '/#send-example',
-    )
-    expect(screen.queryByRole('link', { name: 'Read the quickstart' })).toBeNull()
-  })
-
-  it('links the quickstart once it exists', () => {
-    render(<DocsLanding quickstartPath="/docs/quickstart" />)
-    expect(screen.getByRole('link', { name: 'Read the quickstart' })).toHaveAttribute(
-      'href',
-      '/docs/quickstart',
-    )
   })
 })

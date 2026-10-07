@@ -1,4 +1,4 @@
-import { runApi } from '@/features/api/lib/handler'
+import { otherMethods, runApi } from '@/features/api/lib/handler'
 import { domainApiDeps } from '@/features/domains/api/deps'
 import { verifyDomainApi } from '@/features/domains/api/handlers'
 
@@ -9,3 +9,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     verifyDomainApi(request, id, deps, requestId),
   )
 }
+
+export const { GET, PATCH, PUT, DELETE } = otherMethods(['POST'])

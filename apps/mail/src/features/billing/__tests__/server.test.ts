@@ -343,10 +343,12 @@ describe('settling a charge (SEC-7)', () => {
     })
   })
 
-  it('a charge for another checkout is a mismatch and an incident; another app’s is not ours', async () => {
+  it('a charge for another checkout is the wrong checkout and an incident; another app’s is not ours', async () => {
     mockFlutterwave({ 'GET /transactions/9100003/verify': verified(9100003) })
     const rpc = mockRpc({ record_billing_incident: () => ({ body: null }) })
-    expect(await settleCharge('9100003', { txRef: 'MDM-other', accountId: 'acc' })).toBe('mismatch')
+    expect(await settleCharge('9100003', { txRef: 'MDM-other', accountId: 'acc' })).toBe(
+      'wrong_checkout',
+    )
     expect(rpc[0]).toMatchObject({ body: { p_kind: 'tx_ref_mismatch', p_account_id: 'acc' } })
     mockFlutterwave({
       'GET /transactions/9100004/verify': verified(9100004, { tx_ref: 'MDH-shop' }),
@@ -439,10 +441,17 @@ describe('the return from Flutterwave’s checkout', () => {
 
   it('settles the charge the redirect names, against its own checkout', async () => {
     mockFlutterwave({ 'GET /transactions/9100010/verify': verified(9100010) })
-    mockRpc({ record_billing_charge: () => ({ ok: true, outcome: 'paid' }) })
+    const calls = mockRpc({
+      billing_return_allowed: () => true,
+      record_billing_charge: () => ({ ok: true, outcome: 'paid' }),
+    })
     expect(
       await returnFromCheckout(checkout, { status: 'successful', transactionId: '9100010' }),
     ).toBe('paid')
+    expect(calls[0]).toMatchObject({
+      fn: 'billing_return_allowed',
+      body: { p_checkout_id: 'c', p_account_id: 'acc' },
+    })
     mockFlutterwave({
       'GET /transactions/9100011/verify': { status: 404, body: { status: 'error' } },
     })
@@ -450,9 +459,38 @@ describe('the return from Flutterwave’s checkout', () => {
       await returnFromCheckout(checkout, { status: 'successful', transactionId: '9100011' }),
     ).toBe('pending')
     mockFlutterwave({ 'GET /transactions/9100012/verify': verified(9100012) })
-    mockRpc({ record_billing_charge: () => ({ ok: true, outcome: 'renewal_failed' }) })
+    mockRpc({
+      billing_return_allowed: () => true,
+      record_billing_charge: () => ({ ok: true, outcome: 'renewal_failed' }),
+    })
     expect(
       await returnFromCheckout(checkout, { status: 'successful', transactionId: '9100012' }),
     ).toBe('mismatch')
+  })
+
+  it('answers pending, asking Flutterwave nothing, past the return limits (review 21)', async () => {
+    const flw = mockFlutterwave({ 'GET /transactions/9100013/verify': verified(9100013) })
+    const calls = mockRpc({ billing_return_allowed: () => false })
+    expect(
+      await returnFromCheckout(checkout, { status: 'successful', transactionId: '9100013' }),
+    ).toBe('pending')
+    expect(calls.map((call) => call.fn)).toEqual(['billing_return_allowed'])
+    expect(flw).toHaveLength(0)
+    // The limiter unreachable: the same, never a Flutterwave call on a guess.
+    mockRpc({ billing_return_allowed: () => ({ status: 500, body: { code: '08006' } }) })
+    expect(
+      await returnFromCheckout(checkout, { status: 'successful', transactionId: '9100013' }),
+    ).toBe('pending')
+  })
+
+  it('answers pending, not mismatch, for a charge of another checkout', async () => {
+    mockFlutterwave({ 'GET /transactions/9100014/verify': verified(9100014) })
+    mockRpc({ billing_return_allowed: () => true, record_billing_incident: () => ({ body: null }) })
+    expect(
+      await returnFromCheckout(
+        { ...checkout, txRef: 'MDM-99999999-2222-4333-8444-555555555555' },
+        { status: 'successful', transactionId: '9100014' },
+      ),
+    ).toBe('pending')
   })
 })

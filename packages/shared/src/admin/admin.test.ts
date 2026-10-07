@@ -156,6 +156,8 @@ describe('adminHrefForAlertKey', () => {
     ['mail_silent:mail-worker:send', 'https://emails.mydomainshub.com/admin/health'],
     ['mail_events_silent', 'https://emails.mydomainshub.com/admin/health'],
     ['mail_tenant_action:12', 'https://emails.mydomainshub.com/admin/health'],
+    ['mail_webhook_backlog', 'https://emails.mydomainshub.com/admin/health'],
+    ['mail_billing_incident:42', 'https://emails.mydomainshub.com/admin/accounts/incidents'],
     ['mail_something_new:1', 'https://emails.mydomainshub.com/admin'],
   ])('a Mail alert %s opens Mail’s own admin: %s', (key, href) => {
     expect(adminHrefForAlertKey(key)).toBe(href)

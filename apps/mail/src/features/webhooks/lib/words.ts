@@ -42,6 +42,7 @@ export const URL_REFUSAL: Record<WebhookUrlRefusal, string> = {
   private_address: 'That address is private or reserved. Use one the public internet can reach.',
   internal_name:
     'That name only works inside a network. Use a public host name, like hooks.example.com.',
+  port: 'Use port 443 (the https default) or 8443: we call no other port.',
 }
 
 export type DeliveryStatus = 'pending' | 'delivering' | 'delivered' | 'failed'
@@ -61,6 +62,7 @@ const ERROR_WORDS: Record<string, string> = {
   connection_failed: 'Could not connect',
   dns_failed: 'The host name did not resolve',
   private_address: 'The host resolved to a private address, so we did not connect',
+  port_not_allowed: 'The address uses a port we do not call; use 443 or 8443',
   tls_failed: 'The https certificate was not accepted',
   http_status: 'Answered with an error',
   no_answer: 'No answer',

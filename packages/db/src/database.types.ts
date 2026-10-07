@@ -261,27 +261,39 @@ export type Database = {
         Row: {
           checkout_ttl_minutes: number
           checkouts_per_hour: number
+          failed_renewal_window_hours: number
           id: boolean
           past_due_days: number
           renewal_wait_hours: number
+          return_check_window_minutes: number
+          return_checks_per_account: number
+          return_checks_per_checkout: number
           updated_at: string
           vat_bps: number
         }
         Insert: {
           checkout_ttl_minutes?: number
           checkouts_per_hour?: number
+          failed_renewal_window_hours?: number
           id?: boolean
           past_due_days?: number
           renewal_wait_hours?: number
+          return_check_window_minutes?: number
+          return_checks_per_account?: number
+          return_checks_per_checkout?: number
           updated_at?: string
           vat_bps?: number
         }
         Update: {
           checkout_ttl_minutes?: number
           checkouts_per_hour?: number
+          failed_renewal_window_hours?: number
           id?: boolean
           past_due_days?: number
           renewal_wait_hours?: number
+          return_check_window_minutes?: number
+          return_checks_per_account?: number
+          return_checks_per_checkout?: number
           updated_at?: string
           vat_bps?: number
         }
@@ -416,6 +428,48 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "plans"
             referencedColumns: ["code"]
+          },
+        ]
+      }
+      domain_claim_failures: {
+        Row: {
+          account_id: string
+          domain_id: string | null
+          failed_at: string
+          id: number
+          name: string
+          reason: string
+        }
+        Insert: {
+          account_id: string
+          domain_id?: string | null
+          failed_at?: string
+          id?: never
+          name: string
+          reason: string
+        }
+        Update: {
+          account_id?: string
+          domain_id?: string | null
+          failed_at?: string
+          id?: never
+          name?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_claim_failures_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domain_claim_failures_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1354,10 +1408,14 @@ export type Database = {
       settings: {
         Row: {
           account_daily_budget: number
+          api_keys_max: number
           bounce_pause_ppm: number
           bounce_warn_ppm: number
           complaint_pause_ppm: number
           complaint_warn_ppm: number
+          domain_claim_cooldown_days: number
+          domain_failed_claims_max: number
+          domain_failed_claims_window_days: number
           id: boolean
           key_burst: number
           key_rate_per_second: number
@@ -1369,16 +1427,21 @@ export type Database = {
           threshold_window_days: number
           updated_at: string
           warmup_start_cap: number
+          webhook_backlog_minutes: number
           webhook_disable_after_days: number
           webhook_endpoints_max: number
           webhook_retry_hours: number
         }
         Insert: {
           account_daily_budget?: number
+          api_keys_max?: number
           bounce_pause_ppm?: number
           bounce_warn_ppm?: number
           complaint_pause_ppm?: number
           complaint_warn_ppm?: number
+          domain_claim_cooldown_days?: number
+          domain_failed_claims_max?: number
+          domain_failed_claims_window_days?: number
           id?: boolean
           key_burst?: number
           key_rate_per_second?: number
@@ -1390,16 +1453,21 @@ export type Database = {
           threshold_window_days?: number
           updated_at?: string
           warmup_start_cap?: number
+          webhook_backlog_minutes?: number
           webhook_disable_after_days?: number
           webhook_endpoints_max?: number
           webhook_retry_hours?: number
         }
         Update: {
           account_daily_budget?: number
+          api_keys_max?: number
           bounce_pause_ppm?: number
           bounce_warn_ppm?: number
           complaint_pause_ppm?: number
           complaint_warn_ppm?: number
+          domain_claim_cooldown_days?: number
+          domain_failed_claims_max?: number
+          domain_failed_claims_window_days?: number
           id?: boolean
           key_burst?: number
           key_rate_per_second?: number
@@ -1411,6 +1479,7 @@ export type Database = {
           threshold_window_days?: number
           updated_at?: string
           warmup_start_cap?: number
+          webhook_backlog_minutes?: number
           webhook_disable_after_days?: number
           webhook_endpoints_max?: number
           webhook_retry_hours?: number
@@ -2025,6 +2094,10 @@ export type Database = {
         Args: { p_account_id: string; p_plan_code: string }
         Returns: Json
       }
+      billing_return_allowed: {
+        Args: { p_account_id: string; p_checkout_id: string }
+        Returns: boolean
+      }
       billing_sweep: { Args: never; Returns: Json }
       billing_unapplied: {
         Args: {
@@ -2153,7 +2226,10 @@ export type Database = {
         }
         Returns: Json
       }
-      delete_webhook: { Args: { p_webhook_id: string }; Returns: Json }
+      delete_webhook: {
+        Args: { p_account_id: string; p_webhook_id: string }
+        Returns: Json
+      }
       domain_api_key: {
         Args: { p_account_id: string; p_key_id: string }
         Returns: string
@@ -2517,7 +2593,7 @@ export type Database = {
         Returns: Json
       }
       resend_webhook_delivery: {
-        Args: { p_delivery_id: number }
+        Args: { p_account_id: string; p_delivery_id: number }
         Returns: Json
       }
       reserve_send: {
@@ -2526,6 +2602,7 @@ export type Database = {
           p_api_key_id: string
           p_from_address: string
           p_recipients: string[]
+          p_send_at?: string
         }
         Returns: Json
       }
@@ -2534,6 +2611,7 @@ export type Database = {
       revoke_invite: { Args: { p_invite_id: string }; Returns: Json }
       rotate_webhook_secret: {
         Args: {
+          p_account_id: string
           p_secret_hint: string
           p_secret_sealed: string
           p_webhook_id: string
@@ -2571,7 +2649,7 @@ export type Database = {
       }
       ses_findings_of: { Args: { p_account_id: string }; Returns: Json }
       set_webhook_enabled: {
-        Args: { p_enabled: boolean; p_webhook_id: string }
+        Args: { p_account_id: string; p_enabled: boolean; p_webhook_id: string }
         Returns: Json
       }
       settle_unsent: {
@@ -2605,6 +2683,7 @@ export type Database = {
       }
       update_webhook: {
         Args: {
+          p_account_id: string
           p_description?: string
           p_events: string[]
           p_url: string
@@ -2615,7 +2694,7 @@ export type Database = {
       utc_text: { Args: { p_at: string }; Returns: string }
       webhook_event_list: { Args: { p_events: string[] }; Returns: string[] }
       webhook_for_caller: {
-        Args: { p_webhook_id: string }
+        Args: { p_account_id: string; p_webhook_id: string }
         Returns: {
           account_state: string
           role: string
@@ -6115,6 +6194,10 @@ export type Database = {
       }
       admin_mail_audit: {
         Args: { p_action?: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      admin_mail_billing_incidents: {
+        Args: { p_limit?: number; p_offset?: number; p_open?: boolean }
         Returns: Json
       }
       admin_mail_domains: {
