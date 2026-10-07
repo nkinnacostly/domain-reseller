@@ -61,6 +61,8 @@ export const sqlRefusalSchema = z.looseObject({
   reason: z.string().optional(),
   scope: z.enum(['day', 'month']).optional(),
   cap: z.number().optional(),
+  /** `key_limit` (migration 54): the most live keys an account may hold. */
+  max: z.number().optional(),
   retryAfter: z.number().optional(),
   retryAfterMs: z.number().optional(),
   /** `not_pending`: the email's status now (cancel_email, reschedule_email). */
@@ -172,6 +174,20 @@ export function refusalToApiError(refusal: SqlRefusal): ApiError {
       }
     case 'account_closed':
       return apiError('forbidden', 'This account is closed, so nothing on it can be changed.')
+    case 'key_limit':
+      return apiError(
+        'forbidden',
+        `This account has ${refusal.max === undefined ? 'the most' : `${refusal.max}`} live API keys, the most it may hold. Revoke one it no longer uses, then make the new one.`,
+      )
+    case 'suppressed':
+      // Rescheduling (migration 54) asks the gate again; a recipient suppressed since is refused.
+      return {
+        ...apiError(
+          'validation_error',
+          'A recipient of this email is on this account’s suppression list now, so it cannot be moved. Cancel it, or remove the address from the list in the dashboard first.',
+        ),
+        status: 409,
+      }
     default:
       return apiError('internal_error', 'Something went wrong on our side. Try again in a moment.')
   }

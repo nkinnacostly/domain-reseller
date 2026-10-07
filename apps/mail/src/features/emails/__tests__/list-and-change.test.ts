@@ -194,6 +194,23 @@ describe('PATCH /api/v1/emails/{id}', () => {
     expect((await response.json()).message).toContain('its status is sent')
   })
 
+  it('answers 429 when the new moment’s day is full: the email keeps its old one (migration 54)', async () => {
+    mockRpc({
+      authenticate_key: () => FULL,
+      reschedule_email: () => ({
+        ok: false,
+        code: 'quota_exceeded',
+        scope: 'day',
+        cap: 100,
+        retryAfter: 3600,
+      }),
+    })
+    const response = await patch(EMAIL_ID, { scheduled_at: '2026-10-08T09:00:00Z' })
+    expect(response.status).toBe(429)
+    expect(response.headers.get('retry-after')).toBe('3600')
+    expect(await response.json()).toMatchObject({ name: 'quota_exceeded' })
+  })
+
   it('answers 404 for another account’s email, and 422 for a moment too far', async () => {
     mockRpc({
       authenticate_key: () => FULL,

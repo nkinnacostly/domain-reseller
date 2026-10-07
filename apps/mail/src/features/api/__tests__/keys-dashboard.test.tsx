@@ -87,6 +87,9 @@ describe('who may do what with keys', () => {
     expect(keyRefusal({ code: 'validation', field: 'domain' })).toContain('not in this account')
     expect(keyRefusal({ code: 'validation', field: 'odd' })).toContain('Nothing was changed')
     expect(keyRefusal({ code: 'xx' })).toContain('Nothing was changed')
+    // Migration 54 (review 13): the account's live keys are capped.
+    expect(keyRefusal({ code: 'key_limit', max: 50 })).toContain('has 50 live keys')
+    expect(keyRefusal({ code: 'key_limit' })).toContain('the most live keys')
     expect(keyRefusal(null)).toContain('Nothing was changed')
   })
 })

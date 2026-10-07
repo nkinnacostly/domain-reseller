@@ -50,10 +50,17 @@ const FIELD_WORDS: Record<string, string> = {
 
 export const KEY_FALLBACK = 'Something went wrong on our end. Nothing was changed. Try again.'
 
-export function keyRefusal(answer: { code?: unknown; field?: unknown } | null): string {
+export function keyRefusal(
+  answer: { code?: unknown; field?: unknown; max?: unknown } | null,
+): string {
   const code = typeof answer?.code === 'string' ? answer.code : ''
   if (code === 'validation') {
     return (typeof answer?.field === 'string' && FIELD_WORDS[answer.field]) || KEY_FALLBACK
+  }
+  if (code === 'key_limit') {
+    // Migration 54 (review 13): settings.api_keys_max live keys an account.
+    const max = typeof answer?.max === 'number' ? answer.max : null
+    return `This account has ${max ?? 'the most'} live keys, the most it may hold. Revoke one you no longer use, then make the new one.`
   }
   return KEY_WORDS[code] ?? KEY_FALLBACK
 }

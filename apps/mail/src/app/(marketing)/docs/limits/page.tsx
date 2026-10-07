@@ -109,8 +109,9 @@ export default function LimitsPage() {
         <p>
           Each plan has a cap a day and a cap a month — see <Link href="/pricing">pricing</Link>.
           Caps count recipients, not requests: an email to three people counts three. Days and
-          months run on Lagos time. An email counts when it is queued, so a scheduled email counts
-          on the day you schedule it, and a canceled one is given back.
+          months run on Lagos time. An email counts on the day it is to go, so a scheduled email
+          counts on the day it is scheduled for, a moved one moves with it, and a canceled one is
+          given back.
         </p>
         <p>
           A new account is in the sandbox: it sends only to its own members’ confirmed addresses, at
