@@ -275,6 +275,24 @@ const auditRowSchema = z.object({
 })
 export type AuditRow = z.infer<typeof auditRowSchema>
 
+const incidentRowSchema = z.object({
+  id: z.number().int(),
+  createdAt: when,
+  testMode: z.boolean(),
+  kind: z.string(),
+  accountId: z.uuid().nullable(),
+  tenant: z.string().nullable(),
+  accountName: z.string().nullable(),
+  providerReference: z.string().nullable(),
+  detail: z.record(z.string(), z.unknown()),
+  resolvedAt: when.nullable(),
+  resolvedBy: z.string().nullable(),
+})
+export type IncidentRow = z.infer<typeof incidentRowSchema>
+
+const incidentsSchema = z.object({ rows: z.array(incidentRowSchema), total: count, open: count })
+export type Incidents = z.infer<typeof incidentsSchema>
+
 type ReadFunction =
   | 'admin_mail_overview'
   | 'admin_mail_review_queue'
@@ -283,6 +301,7 @@ type ReadFunction =
   | 'admin_mail_domains'
   | 'admin_mail_ses_health'
   | 'admin_mail_audit'
+  | 'admin_mail_billing_incidents'
 
 async function read<S extends z.ZodType>(
   fn: ReadFunction,
@@ -359,4 +378,19 @@ export const getAudit = (filter: { action: string | null; page: number }) =>
     'admin_mail_audit',
     { p_action: filter.action, p_offset: (filter.page - 1) * PAGE_SIZE, p_limit: PAGE_SIZE },
     page(auditRowSchema),
+  )
+
+/**
+ * Billing incidents (MAIL-SPEC §8, migration 54), read-only: money that needs
+ * a person — a refund, a cancel, a charge not recorded. Open ones by default.
+ */
+export const getBillingIncidents = (filter: { show: 'open' | 'resolved' | 'all'; page: number }) =>
+  read(
+    'admin_mail_billing_incidents',
+    {
+      p_open: filter.show === 'all' ? null : filter.show === 'open',
+      p_offset: (filter.page - 1) * PAGE_SIZE,
+      p_limit: PAGE_SIZE,
+    },
+    incidentsSchema,
   )

@@ -5,6 +5,7 @@ import {
   getAccount,
   getAccounts,
   getAudit,
+  getBillingIncidents,
   getDomains,
   getOverview,
   getReviewQueue,
@@ -159,6 +160,42 @@ describe('the admin reads (D4)', () => {
       rpc: { admin_mail_overview: () => ({ data: { ...overview, reviewReady: -1 }, error: null }) },
     })
     expect(await getOverview()).toEqual({ ok: false, code: 'unexpected_answer' })
+  })
+
+  it('reads the billing incidents, open by default, with their accounts (migration 54)', async () => {
+    const incident = {
+      id: 7,
+      createdAt: '2026-10-06T12:00:00Z',
+      testMode: false,
+      kind: 'unapplied_charge',
+      accountId: ACCOUNT,
+      tenant: 'mdm-0123456789',
+      accountName: 'Acme',
+      providerReference: '9100001',
+      detail: { reason: 'underpaid', amount_kobo: 100 },
+      resolvedAt: null,
+      resolvedBy: null,
+    }
+    const fake = use({
+      rpc: {
+        admin_mail_billing_incidents: () => ({
+          data: { rows: [incident], total: 1, open: 1 },
+          error: null,
+        }),
+      },
+    })
+    expect(await getBillingIncidents({ show: 'open', page: 1 })).toEqual({
+      ok: true,
+      data: { rows: [incident], total: 1, open: 1 },
+    })
+    await getBillingIncidents({ show: 'resolved', page: 2 })
+    await getBillingIncidents({ show: 'all', page: 1 })
+    expect(fake.calls.map((call) => call.args)).toEqual([
+      { p_open: true, p_offset: 0, p_limit: 50 },
+      { p_open: false, p_offset: 50, p_limit: 50 },
+      { p_open: null, p_offset: 0, p_limit: 50 },
+    ])
+    expect(fake.calls.every((call) => call.schema === 'public')).toBe(true)
   })
 
   it('reads the SES health whole, and a quota heartbeat with odd numbers as unknown', async () => {

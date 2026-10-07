@@ -7,6 +7,7 @@ import {
   createAdminTestUser,
   createReadyAccount,
   expect,
+  hasFollowupsSchema,
   hasSafetySchema,
   SIGN_IN_PROJECTS,
   seedThresholdPause,
@@ -296,5 +297,28 @@ test.describe('a test admin', () => {
         page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Accounts' }),
       ).toHaveAttribute('aria-current', 'page')
     }
+  })
+
+  test('reads the billing incidents from the accounts list, test ones only (migration 54)', async ({
+    page,
+  }) => {
+    test.skip(!(await hasFollowupsSchema()), 'migration 54 is not applied to this database')
+    test.setTimeout(120_000)
+    if (!admin) throw new Error('no admin')
+    await signInAsAdmin(page, admin, '/admin/accounts')
+    await page.getByRole('link', { name: 'Billing incidents' }).click()
+    await expect(page).toHaveURL(/\/admin\/accounts\/incidents$/, slow)
+    await expect(page.getByRole('heading', { level: 1, name: 'Billing incidents' })).toBeVisible(
+      slow,
+    )
+    await expect(page.getByText('Live incidents are not shown to you.')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Open', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    await checkPage(page)
+    await page.getByRole('link', { name: 'All', exact: true }).click()
+    await expect(page).toHaveURL(/show=all$/, slow)
+    await checkPage(page)
   })
 })

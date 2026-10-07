@@ -32,7 +32,10 @@ function mailAdminHref(family: string, id: string): string {
     case 'mail_silent':
     case 'mail_events_silent':
     case 'mail_tenant_action':
+    case 'mail_webhook_backlog':
       return `${MAIL_ADMIN_URL}/health`
+    case 'mail_billing_incident':
+      return `${MAIL_ADMIN_URL}/accounts/incidents`
     default:
       return MAIL_ADMIN_URL
   }

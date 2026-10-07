@@ -106,6 +106,19 @@ export async function hasSafetySchema(): Promise<boolean> {
   return !error
 }
 
+/**
+ * Whether migration 54 is applied: billing_return_allowed answers false for
+ * a checkout that does not exist, and is missing before it.
+ */
+export async function hasFollowupsSchema(): Promise<boolean> {
+  const none = '00000000-0000-0000-0000-000000000000'
+  const { error } = await service().schema('mail').rpc('billing_return_allowed', {
+    p_checkout_id: none,
+    p_account_id: none,
+  })
+  return !error
+}
+
 /** An e2e user with an authenticator, made a test-only operator (ADMIN-SPEC §2.7). */
 export async function createAdminTestUser(): Promise<AdminUser> {
   const user = await createTestUser('admin', 'Test Admin')
