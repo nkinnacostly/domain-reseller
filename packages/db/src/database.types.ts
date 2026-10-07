@@ -2090,13 +2090,13 @@ export type Database = {
       billing_payment_record: { Args: { p_raw: Json }; Returns: Json }
       billing_period_end: { Args: { p_start: string }; Returns: string }
       billing_provider_state: { Args: { p_account_id: string }; Returns: Json }
-      billing_return_allowed: {
-        Args: { p_account_id: string; p_checkout_id: string }
-        Returns: boolean
-      }
       billing_quote: {
         Args: { p_account_id: string; p_plan_code: string }
         Returns: Json
+      }
+      billing_return_allowed: {
+        Args: { p_account_id: string; p_checkout_id: string }
+        Returns: boolean
       }
       billing_sweep: { Args: never; Returns: Json }
       billing_unapplied: {
