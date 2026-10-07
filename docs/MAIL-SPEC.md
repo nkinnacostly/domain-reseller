@@ -299,7 +299,8 @@ the admin shows each plan's margin at today's rate and alerts when one falls und
 - A failed renewal gives 7 days `past_due` (sending continues, a banner and emails), then the account
   drops to the Free plan's caps. Upgrades take effect at once (prorated); downgrades and
   cancellations at the period's end. No refunds of part-months unless the service failed us.
-- No overage in v1: at 80% of a cap, an email and a banner; at 100%, `quota_exceeded`.
+- No overage in v1: at 80% of a cap, a dashboard notice; at 100%, `quota_exceeded` (and the notice says
+  the cap is reached). The notice emails are not built yet (§15).
 
 ---
 
@@ -419,3 +420,16 @@ As `CLAUDE.md` §10, plus:
 | Q4 | ~~Body retention~~ | **Decided:** 72 hours (MR3) |
 | Q5 | Say "works with the X SDK" in the docs (§1)? | No, until tested and approved |
 | Q6 | ~~Send-rate split~~ | **Decided:** shop 4/s, Mail 10/s until AWS raises the quota |
+
+### Not yet built: the Mail notifications package
+
+The emails this spec promises to customers are not sent yet; the dashboard shows each state
+instead. Copy must not promise them (N9b) until this package ships:
+
+- **Invites:** the invitation email (an invite is a link the inviter copies and shares today).
+- **Cap notices:** the emails at 80% and 100% of a cap (§8; the dashboard notice is built).
+- **Past due:** the emails while a renewal is past due (§8; the banner is built).
+- **Webhook disabled:** the owner's email when an endpoint is turned off for failing (§6; the
+  Webhooks page and the account log show it).
+- **Findings:** the owner's email when SES or our threshold opens a finding or pauses the account
+  (§4.2, §7.4; the dashboard banner and Mail's admin show it).
