@@ -202,6 +202,31 @@ prove. `mydomainshub.com` and its subdomains are reserved.
 **Sending addresses.** Any address at a verified domain. A sending key may be limited to one
 domain (MR7 table `api_keys.domain_id`).
 
+### 5.3 Adding the records at Cloudflare for the customer (owner, 8 Oct 2026)
+
+When public DNS says the domain's zone is on Cloudflare (all its nameservers are
+`*.ns.cloudflare.com`; the nearest name with NS records is the zone), the domain page offers to add
+the records there, so nobody copies values back and forth. Owners, admins and developers only.
+Each try first asks `mail.start_dns_setup` (migration 57): the role, a customer domain with its
+records, at most ten tries an hour per domain, logged in the account's security log with the host
+and method. The records are made from what SQL answers.
+
+- **One click (Domain Connect).** Our template `mydomainshub.com` / `mail`
+  (`infra/domain-connect/mydomainshub.com.mail.json`: the three DKIM CNAMEs, and MX and SPF (merged,
+  `SPFM`) on `send`) sends the customer to Cloudflare's own page, where they sign in, see the
+  records, and approve. The address is signed (RS256) with `MAIL_DOMAIN_CONNECT_PRIVATE_KEY`; the
+  public key is in TXT records at `_dck1.mydomainshub.com`. DMARC is left out: Domain Connect would
+  replace a policy the customer already has. Offered only once Cloudflare's template check answers
+  200 (404 until Cloudflare takes the template on), the key is set, and the MAIL FROM is `send.`.
+- **A pasted token.** Until then, and always as a choice: a Cloudflare token page with Zone Read
+  and DNS Edit filled in; the customer picks the zone, creates the token and pastes it once. It is
+  used for that run and kept nowhere — not stored, logged or returned. Records the zone already
+  has are left alone: the same record is "already there", a DMARC of theirs is kept, anything else
+  on the name is reported for the customer to decide, never overwritten. The one change made: a
+  proxied DKIM CNAME is set to DNS only, since a proxied one cannot be read.
+
+Other hosts keep the copy buttons and the host guides.
+
 ---
 
 ## 6. The API (v1)
@@ -419,6 +444,11 @@ As `CLAUDE.md` §10, plus:
 4. **Flutterwave and Paidly:** payment plans for each paid tier; Paidly forwards `MDM-` references.
 5. **Legal:** Terms, Acceptable Use Policy, DPA and privacy notice for a processor of recipients'
    data (NDPA), reviewed by your lawyer before paid launch.
+6. **Cloudflare Domain Connect (§5.3):** open a pull request adding
+   `infra/domain-connect/mydomainshub.com.mail.json` to github.com/Domain-Connect/Templates, then
+   email domain-connect@cloudflare.com with its link, `_dck1.mydomainshub.com` as the key's place,
+   the logo, and "DNS only" as the proxy status for its CNAMEs. One click turns on by itself once
+   Cloudflare's template check answers 200.
 
 ## 15. Open questions
 

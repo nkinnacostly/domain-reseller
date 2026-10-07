@@ -2683,6 +2683,10 @@ export type Database = {
         }
         Returns: Json
       }
+      start_dns_setup: {
+        Args: { p_domain_id: string; p_method: string; p_provider: string }
+        Returns: Json
+      }
       text_array: { Args: { p_value: Json }; Returns: string[] }
       transfer_ownership: {
         Args: { p_account_id: string; p_user_id: string }

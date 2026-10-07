@@ -9,13 +9,22 @@
  *   POST /__control/verify?domain=   SES verifies it, and its records are in DNS
  *   POST /__control/publish?domain=  its records are in DNS, SES has not looked
  *   GET  /__control/identity?domain= 200 with SES's view of it, or 404
+ *   POST /__control/cloudflare?domain=&token=
+ *                                    its zone is on Cloudflare, and the token reaches it
  *   GET  /__health                   200
+ *
+ * It is also Cloudflare's API (client/v4, MAIL_CLOUDFLARE_API_URL; MAIL-SPEC
+ * §5.3), from tests/e2e/support/fake-cloudflare.mjs. Our Domain Connect
+ * template is always taken on here, so the page offers both ways.
  */
 import { createServer } from 'node:http'
+import { createFakeCloudflare } from './fake-cloudflare.mjs'
 import { createFakeSes } from './fake-ses.mjs'
 
 const port = Number(process.env.MOCK_SES_PORT ?? 4312)
 const fake = createFakeSes()
+const cloudflare = createFakeCloudflare({ dns: fake })
+cloudflare.supportTemplate()
 
 /** @param {import('node:http').IncomingMessage} request */
 function readBody(request) {
@@ -64,6 +73,21 @@ const server = createServer(async (request, response) => {
   if (url.pathname === '/__control/publish' && request.method === 'POST') {
     fake.publishRecords(domain)
     return send(response, 200, { ok: true })
+  }
+  if (url.pathname === '/__control/cloudflare' && request.method === 'POST') {
+    if (!cloudflare.zones.has(domain)) cloudflare.addZone(domain)
+    cloudflare.addToken(url.searchParams.get('token') ?? '', [domain])
+    return send(response, 200, { ok: true })
+  }
+  if (url.pathname.startsWith('/client/v4/')) {
+    const answer = cloudflare.handle(
+      request.method ?? 'GET',
+      url.pathname,
+      url.searchParams,
+      await readBody(request),
+      String(request.headers.authorization ?? ''),
+    )
+    return send(response, answer.status, answer.body)
   }
   if (url.pathname === '/__control/identity') {
     const identity = fake.identities.get(domain)

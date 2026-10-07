@@ -33,7 +33,8 @@ function why(record: DnsRecord, zone: string): string {
   }
 }
 
-function title(record: DnsRecord, records: DnsRecord[]): string {
+/** "DKIM record 2 of 3", "MAIL FROM: MX": how the page and the Cloudflare results name a record. */
+export function recordTitle(record: DnsRecord, records: readonly DnsRecord[]): string {
   if (record.purpose !== 'dkim') return TITLE[record.purpose]
   const dkim = records.filter((r) => r.purpose === 'dkim')
   return `DKIM record ${dkim.indexOf(record) + 1} of ${dkim.length}`
@@ -72,7 +73,7 @@ export function RecordsTable({
       {records.map((record) => {
         const host = hostLabel(record.name, zone)
         const check = Array.isArray(live) ? live.find((item) => item.id === record.id) : undefined
-        const recordTitle = title(record, records)
+        const name = recordTitle(record, records)
         return (
           <li
             key={record.id}
@@ -81,7 +82,7 @@ export function RecordsTable({
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <h3 className="font-medium">
-                {recordTitle}{' '}
+                {name}{' '}
                 <span className="ml-1 rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
                   {record.type}
                 </span>
@@ -96,7 +97,7 @@ export function RecordsTable({
                 <dt className="font-medium">Name</dt>
                 <dd className="mt-1 flex items-center gap-2">
                   <code className={codeClass}>{host}</code>
-                  <CopyButton value={host} label={`Copy the name of ${recordTitle}`} />
+                  <CopyButton value={host} label={`Copy the name of ${name}`} />
                 </dd>
                 {host !== record.name ? (
                   <dd className="mt-1 text-xs/5 break-all text-muted-foreground">
@@ -114,7 +115,7 @@ export function RecordsTable({
                 <dt className="font-medium">{record.type === 'MX' ? 'Mail server' : 'Value'}</dt>
                 <dd className="mt-1 flex items-center gap-2">
                   <code className={codeClass}>{record.value}</code>
-                  <CopyButton value={record.value} label={`Copy the value of ${recordTitle}`} />
+                  <CopyButton value={record.value} label={`Copy the value of ${name}`} />
                 </dd>
               </div>
             </dl>

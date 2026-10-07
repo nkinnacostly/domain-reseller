@@ -20,3 +20,20 @@ export const domainActionSchema = z.object({
 export const createDomainBodySchema = z.object({
   name: z.string().trim().min(1).max(260),
 })
+
+/**
+ * "Add to Cloudflare" with a pasted token (§5.3): checked for shape only,
+ * then used for one run and dropped. The words never repeat the value.
+ */
+export const cloudflareTokenSchema = z.object({
+  accountId: z.uuid(),
+  domainId: z.uuid(),
+  token: z
+    .string()
+    .trim()
+    .min(1, 'Paste the token Cloudflare showed you.')
+    .regex(
+      /^[A-Za-z0-9_-]{30,200}$/,
+      'That does not look like a Cloudflare API token. Copy the whole token Cloudflare shows after Create Token — not the Global API Key.',
+    ),
+})

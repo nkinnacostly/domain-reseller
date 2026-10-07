@@ -253,9 +253,11 @@ export function createFakeSes({ region = 'eu-west-2' } = {}) {
   function resolve(name, type) {
     const host = name.toLowerCase().replace(/\.+$/, '')
     const zone = dns.get(host)
-    const kind = /^\d+$/.test(type) ? { 5: 'CNAME', 15: 'MX', 16: 'TXT' }[Number(type)] : type
+    const kind = /^\d+$/.test(type)
+      ? { 2: 'NS', 5: 'CNAME', 15: 'MX', 16: 'TXT' }[Number(type)]
+      : type
     if (!zone) return { Status: 3, Answer: [] }
-    const code = { CNAME: 5, MX: 15, TXT: 16 }[kind ?? ''] ?? 0
+    const code = { NS: 2, CNAME: 5, MX: 15, TXT: 16 }[kind ?? ''] ?? 0
     return {
       Status: 0,
       Answer: (zone.get(kind ?? '') ?? []).map((data) => ({

@@ -63,3 +63,10 @@ export async function mockSesHas(domain: string): Promise<boolean> {
   )
   return response.ok
 }
+
+/** §5.3: the domain's zone is on the mock Cloudflare, and `token` reaches it. */
+export async function putOnCloudflare(domain: string, token: string): Promise<void> {
+  const query = new URLSearchParams({ domain, token })
+  const response = await fetch(`${MOCK_SES_URL}/__control/cloudflare?${query}`, { method: 'POST' })
+  if (!response.ok) throw new Error(`the mock Cloudflare refused the zone (${response.status})`)
+}

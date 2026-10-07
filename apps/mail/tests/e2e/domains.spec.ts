@@ -1,7 +1,9 @@
+import { createPublicKey, createVerify } from 'node:crypto'
 import AxeBuilder from '@axe-core/playwright'
 import { expect as baseExpect, type Page, test } from '@playwright/test'
 import { createTestUser, deleteTestUser, type TestUser } from './support/accounts'
-import { createAccountFor, mockSesHas, verifyInMockSes } from './support/domains'
+import { dcKeyFiles } from './support/dc-keys'
+import { createAccountFor, mockSesHas, putOnCloudflare, verifyInMockSes } from './support/domains'
 
 /**
  * MAIL-SPEC §5 against the real Supabase project and a mock SES and DNS
@@ -147,5 +149,101 @@ test.describe('domains (§5)', () => {
     await expect(page).toHaveURL(/\/dashboard\/domains$/)
     await expect(page.getByText('No domains yet')).toBeVisible()
     expect(await mockSesHas(domain)).toBe(false)
+  })
+
+  test('add to Cloudflare: one click (Domain Connect) and a pasted token (§5.3)', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000)
+    // A name of its own: the first test removes `domain`, and SES may still hold it.
+    const name = `cf-${domain}`
+    const token = `e2e-cf-${Date.now()}-token-not-a-secret-0123456789`
+    await signIn(page, owner)
+    const form = page.getByRole('form', { name: 'Add a domain' })
+    await form.getByLabel('Domain').fill(name)
+    await form.getByRole('button', { name: 'Add domain' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/domains\/[0-9a-f-]{36}$/)
+    const detail = page.url()
+    const records = page.getByRole('list', { name: 'DNS records' })
+    await expect(records.getByRole('listitem')).toHaveCount(6)
+    // Not on Cloudflare yet: no card, the guides as before.
+    await expect(page.getByRole('heading', { name: 'Add them to Cloudflare for you' })).toHaveCount(
+      0,
+    )
+
+    await putOnCloudflare(name, token)
+    await page.reload()
+    const card = page.locator('section', {
+      has: page.getByRole('heading', { name: 'Add them to Cloudflare for you' }),
+    })
+    await expect(card.getByText(`${name}’s DNS is on Cloudflare.`)).toBeVisible()
+    await checkPage(page)
+
+    // One click: Cloudflare's own apply page (stubbed here: no e2e test
+    // reaches Cloudflare), signed so Cloudflare can check it with our key.
+    await page.route('https://dash.cloudflare.com/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><title>Cloudflare (e2e stub)</title><h1>Cloudflare (e2e stub)</h1>',
+      }),
+    )
+    await card.getByRole('button', { name: 'Add records in Cloudflare' }).click()
+    await expect(page).toHaveURL(/^https:\/\/dash\.cloudflare\.com\/domainconnect\//)
+    const apply = new URL(page.url())
+    expect(apply.pathname).toBe(
+      '/domainconnect/v2/domainTemplates/providers/mydomainshub.com/services/mail/apply',
+    )
+    expect(apply.searchParams.get('domain')).toBe(name)
+    expect(apply.searchParams.get('region')).toBe('eu-west-2')
+    expect(apply.searchParams.get('redirect_uri')).toBe(`${detail}?from=cloudflare`)
+    expect(apply.searchParams.get('key')).toBe('_dck1')
+    const query = apply.search.slice(1)
+    const signed = query.replace(/&key=[^&]*&sig=[^&]*$/, '')
+    const signature = decodeURIComponent(/&sig=([^&]*)$/.exec(query)?.[1] ?? '')
+    const publicKey = createPublicKey({
+      key: Buffer.from(dcKeyFiles(new URL(detail).port || 3301).publicBase64(), 'base64'),
+      format: 'der',
+      type: 'spki',
+    })
+    expect(createVerify('RSA-SHA256').update(signed).verify(publicKey, signature, 'base64')).toBe(
+      true,
+    )
+    await page.goto(detail)
+    for (const n of [1, 2, 3]) {
+      await expect(
+        records.getByText(`${apply.searchParams.get(`dkim${n}`)}._domainkey`, { exact: true }),
+      ).toBeVisible()
+    }
+
+    // Back from Cloudflare, approved or not.
+    await page.goto(`${detail}?from=cloudflare`)
+    await expect(page.getByText('Back from Cloudflare')).toBeVisible()
+    await page.goto(`${detail}?from=cloudflare&error=access_denied`)
+    await expect(
+      page.getByText('You cancelled in Cloudflare, so your DNS is as it was.'),
+    ).toBeVisible()
+
+    // The token way: a wrong token is refused in words, the right one adds all six.
+    await card.getByRole('button', { name: 'Use a Cloudflare API token instead' }).click()
+    const tokenForm = card.getByRole('form', { name: 'Add records to Cloudflare' })
+    await expect(card.getByRole('link', { name: /Create a token in Cloudflare/ })).toHaveAttribute(
+      'href',
+      /^https:\/\/dash\.cloudflare\.com\/profile\/api-tokens\?/,
+    )
+    await tokenForm.getByLabel('Cloudflare API token').fill(`e2e-wrong-${token}`)
+    await tokenForm.getByRole('button', { name: 'Add the records' }).click()
+    await expect(tokenForm.getByText(/Cloudflare did not accept that token/)).toBeVisible()
+    await tokenForm.getByLabel('Cloudflare API token').fill(token)
+    await tokenForm.getByRole('button', { name: 'Add the records' }).click()
+    const done = card.getByRole('list', { name: 'What was done in Cloudflare' })
+    await expect(done.getByText('Added', { exact: true })).toHaveCount(6)
+    await expect(card.getByText(`Done in ${name}: 6 records added or fixed.`)).toBeVisible()
+    await expect(tokenForm.getByLabel('Cloudflare API token')).toHaveValue('')
+    await checkPage(page)
+
+    // Public DNS (the mock's) now has every record, the suggested DMARC too.
+    await page.reload()
+    await expect(records.getByText('Found', { exact: true })).toHaveCount(6)
   })
 })
