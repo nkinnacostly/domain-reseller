@@ -188,8 +188,9 @@ begin
     (b_acc, 'b', 'mdh_live_bbbb', encode(extensions.digest(v_tag || 'b', 'sha256'), 'hex'), 'full')
     returning id into k_b;
 
-  -- ── 1. scheduled_at (§3.1): queued for later, counted today, claimed only
-  -- when due; a moment past is now; 72 hours ahead at most; malformed refused.
+  -- ── 1. scheduled_at (§3.1): queued for later, counted (on its own day since
+  -- migration 54), claimed only when due; a moment past is now; 72 hours
+  -- ahead at most; malformed refused.
   v_n := pg_temp.mv_used(a_acc);
   v_j := pg_temp.mv_send(a_acc, k_full, 'hello@' || n1, array['later@example.com'],
                          jsonb_build_object('scheduled_at', to_char(now() + interval '1 hour', 'YYYY-MM-DD"T"HH24:MI:SS.USOF')));
@@ -198,7 +199,7 @@ begin
   if (select abs(extract(epoch from scheduled_at - (now() + interval '1 hour'))) from mail.emails where public_id = v_id) > 1
      or (select next_attempt_at <> scheduled_at or status <> 'queued' from mail.emails where public_id = v_id)
      or pg_temp.mv_used(a_acc) <> v_n + 1 then
-    raise exception 'FAILED 1: the scheduled row is wrong, or was not counted today';
+    raise exception 'FAILED 1: the scheduled row is wrong, or was not counted';
   end if;
   if jsonb_array_length(pg_temp.mv_claim(a_acc)) <> 0 then
     raise exception 'FAILED 1: an email was claimed before it was due';
@@ -284,7 +285,9 @@ begin
                          jsonb_build_object('scheduled_at', to_char(now() + interval '1 hour', 'YYYY-MM-DD"T"HH24:MI:SS.USOF')));
   v_id := (v_j ->> 'id')::uuid;
   v_n := pg_temp.mv_used(a_acc);
-  v_m := (select recipients from mail.send_budget_hourly where account_id = a_acc and hour = date_trunc('hour', now()));
+  -- Migration 54 (review 17): the budget is held in the hour it is to go.
+  v_m := (select recipients from mail.send_budget_hourly
+           where account_id = a_acc and hour = date_trunc('hour', now() + interval '1 hour'));
   perform pg_temp.mv_code(pg_temp.mv_cancel(b_acc, v_id), 'not_found', 'FAILED 3: another account canceled it');
   v_j := pg_temp.mv_cancel(a_acc, v_id);
   perform pg_temp.mv_ok(v_j, 'FAILED 3: a cancel');
@@ -294,7 +297,8 @@ begin
      or (select reserved_on from mail.emails where public_id = v_id) is not null
      or exists (select 1 from mail.email_payloads p join mail.emails e on e.id = p.email_id where e.public_id = v_id)
      or pg_temp.mv_used(a_acc) <> v_n - 2
-     or (select recipients from mail.send_budget_hourly where account_id = a_acc and hour = date_trunc('hour', now())) <> v_m - 2 then
+     or (select recipients from mail.send_budget_hourly
+          where account_id = a_acc and hour = date_trunc('hour', now() + interval '1 hour')) <> v_m - 2 then
     raise exception 'FAILED 3: the cancel left something behind: %', v_j;
   end if;
   v_j := pg_temp.mv_cancel(a_acc, v_id);

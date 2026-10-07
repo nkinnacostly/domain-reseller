@@ -530,6 +530,9 @@ begin
   v_ref := v_c1 ->> 'txRef';
   perform pg_temp.mb_outcome(pg_temp.mb_charge(true, (v_tx + 6)::text, v_ref, 'successful', 2150000),
                              'paid', 'FAILED 12: subscribing again');
+  -- Migration 54 (review 22): a failed charge counts as the renewal failing only
+  -- near the period's end, as Flutterwave's own renewal attempt would be.
+  update mail.subscriptions set current_period_end = now() + interval '2 hours' where account_id = a_acc;
   v_j := pg_temp.mb_charge(true, (v_tx + 7)::text, v_ref, 'failed', 2150000);
   perform pg_temp.mb_outcome(v_j, 'renewal_failed', 'FAILED 12: a failed renewal');
   select * into v_sub from mail.subscriptions where account_id = a_acc;

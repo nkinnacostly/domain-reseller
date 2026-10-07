@@ -1017,7 +1017,8 @@ begin
     "admin_mail_override_caps":"authenticated", "admin_mail_overview":"authenticated",
     "admin_mail_review_queue":"authenticated", "admin_mail_accounts":"authenticated",
     "admin_mail_account":"authenticated", "admin_mail_domains":"authenticated",
-    "admin_mail_ses_health":"authenticated", "admin_mail_audit":"authenticated"
+    "admin_mail_ses_health":"authenticated", "admin_mail_audit":"authenticated",
+    "admin_mail_billing_incidents":"authenticated"
   }';
   for v_row in select p.oid, p.proname from pg_proc p
             where p.pronamespace = 'public'::regnamespace
