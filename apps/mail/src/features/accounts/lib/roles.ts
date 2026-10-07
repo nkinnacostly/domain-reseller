@@ -1,14 +1,17 @@
 import type { MemberRole } from '@/lib/safe-action'
 
 /**
- * Who may do what in a Mail account (MAIL-SPEC §9 `members`; migration 46).
- * SQL decides every change; these mirror it so the dashboard offers only
- * what will be allowed, and words the rest.
+ * Who may do what in a Mail account (MAIL-SPEC §9 `members`). SQL decides
+ * every change; these mirror it so the dashboard offers only what will be
+ * allowed, and words the rest. The migration that decides each is named.
  *
- *   owner     — everything, and the one person who manages admins
- *   admin     — the profile, developers and viewers, keys and domains
- *   developer — keys, domains and the log
- *   viewer    — reads
+ *   owner     — everything, and the one person who manages admins (46)
+ *   admin     — a developer's rights, plus the profile, developers and
+ *               viewers (46), full-access keys (43), the plan (50),
+ *               removing suppressions (49) and the account log (43)
+ *   developer — domains (47), sending keys (43), webhooks (49) and sent
+ *               emails' bodies while they are kept (44)
+ *   viewer    — reads; not bodies, invoices, invites or the account log
  */
 
 export const ROLE_LABEL: Record<MemberRole, string> = {
@@ -18,13 +21,15 @@ export const ROLE_LABEL: Record<MemberRole, string> = {
   viewer: 'Viewer',
 }
 
-/** What each role may do, as SQL allows it today (migrations 43, 44, 46). */
+/** What each role may do, as SQL allows it today (migrations 43, 44, 46, 47, 49, 50). */
 export const ROLE_SUMMARY: Record<MemberRole, string> = {
   owner: 'Everything an admin can, and also manages admins and can hand the account over.',
   admin:
-    'Edits the profile, invites developers and viewers, makes full-access keys and reads the account log.',
-  developer: 'Makes and revokes sending keys, and reads sent emails’ bodies while they are kept.',
-  viewer: 'Reads the dashboard; changes nothing.',
+    'Everything a developer can, and also edits the profile, invites developers and viewers, makes full-access keys, changes the plan, removes suppressions and reads the account log.',
+  developer:
+    'Adds and removes domains, makes and revokes sending keys, manages webhooks, and reads sent emails’ bodies while they are kept.',
+  viewer:
+    'Reads the dashboard, but not email bodies, invoices or the account log; changes nothing.',
 }
 
 /** Roles an invitation or a role change can give: never owner (that is a transfer). */

@@ -40,7 +40,7 @@ export type AccountBanner = {
 const WRITE_TO_US = 'Write to hello@mydomainshub.com and a person will look into it with you.'
 
 /**
- * Why sending stopped, in words (migration 51's state_reason codes; never an
+ * Why sending stopped, in words (migrations 51 and 54's state_reason codes; never an
  * admin's own words, which stay in our audit log). The rates' limits live in
  * the database, so no number is written here (N5b).
  */
@@ -48,6 +48,8 @@ const PAUSE_WORDS: Record<string, string> = {
   paused_bounce_rate: `Too many of this account’s recent emails bounced, so sending stopped to protect your sender reputation. While it is paused the API refuses new emails and queued ones are not sent. ${WRITE_TO_US}`,
   paused_complaint_rate: `Too many recipients reported this account’s recent emails as spam, so sending stopped to protect your sender reputation. While it is paused the API refuses new emails and queued ones are not sent. ${WRITE_TO_US}`,
   paused_by_admin: `Our team paused sending on this account. While it is paused the API refuses new emails and queued ones are not sent. ${WRITE_TO_US}`,
+  // Migration 54 (MR5): AWS paused the account's sending; it stays paused here until a person has looked.
+  paused_by_ses: `Amazon SES paused sending on this account, usually over its bounce or complaint rates. While it is paused the API refuses new emails and queued ones are not sent, and it stays paused until our team has looked into it. ${WRITE_TO_US}`,
 }
 
 const PAUSED_BODY = `While it is paused the API refuses new emails and queued ones are not sent. ${WRITE_TO_US}`

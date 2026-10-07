@@ -12,6 +12,7 @@ import {
   canTransfer,
   grantableBy,
   isGrantableRole,
+  ROLE_SUMMARY,
 } from '../lib/roles'
 import { accountBanner, isAccountState } from '../lib/state'
 import { isProfileComplete, nextSteps } from '../lib/steps'
@@ -26,6 +27,23 @@ describe('roles (MAIL-SPEC §9; migration 46)', () => {
     expect(canManage('admin', 'admin', false)).toBe(false)
     expect(canManage('admin', 'viewer', false)).toBe(true)
     expect(canManage('viewer', 'viewer', false)).toBe(false)
+  })
+
+  it('words each role as SQL allows it (migrations 43, 44, 46, 47, 49, 50)', () => {
+    // 49: create/update/rotate/delete/resend a webhook are owner, admin and developer.
+    expect(ROLE_SUMMARY.developer).toContain('manages webhooks')
+    // 47: add_domain and remove_domain are owner, admin and developer.
+    expect(ROLE_SUMMARY.developer).toContain('Adds and removes domains')
+    // 49: remove_suppression is owner and admin only.
+    expect(ROLE_SUMMARY.developer).not.toContain('suppression')
+    expect(ROLE_SUMMARY.admin).toContain('removes suppressions')
+    expect(ROLE_SUMMARY.admin).toMatch(/^Everything a developer can/)
+    expect(ROLE_SUMMARY.owner).toMatch(/^Everything an admin can/)
+    // 50: start_checkout and schedule_plan_change are owner and admin only.
+    expect(ROLE_SUMMARY.admin).toContain('changes the plan')
+    expect(ROLE_SUMMARY.viewer).toContain('changes nothing')
+    // The invite page lower-cases the first letter and runs the sentence on.
+    for (const words of Object.values(ROLE_SUMMARY)) expect(words).toMatch(/^[A-Z].*\.$/)
   })
 
   it('never offers to change the owner, or oneself', () => {
@@ -70,6 +88,14 @@ describe('accountBanner (§7.2, §8, MR5)', () => {
       accountBanner({ state: 'sandbox', sesStatus: 'disabled' }, { status: 'past_due', until }, 1)
         ?.kind,
     ).toBe('paused')
+    // Migration 54 (MR5): SES's pause holds here even once SES says enabled again.
+    const ses = accountBanner(
+      { state: 'paused', sesStatus: 'enabled', stateReason: 'paused_by_ses' },
+      null,
+      null,
+    )
+    expect(ses?.body).toContain('Amazon SES paused sending')
+    expect(ses?.body).toContain('until our team has looked into it')
   })
 
   it('words seven days past due, by the date sending stops', () => {
