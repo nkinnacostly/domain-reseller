@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next'
+import { DOCS_PAGES } from '@/features/api/docs/pages'
 import { LEGAL_DOCUMENTS } from '@/features/legal/lib/documents'
 import { BUSINESS } from '@/lib/business'
 
@@ -7,8 +8,10 @@ import { BUSINESS } from '@/lib/business'
  * while it keeps proving accurate, so a page gets one only where we know it
  * (CLAUDE.md §15): the legal pages carry their date, and pages that show
  * plan figures change when a plan row does. Everything else goes without,
- * rather than claim "now" on every build. `changefreq` and `priority` are
- * left out: Google ignores both.
+ * rather than claim "now" on every build — the docs among them: nothing
+ * records when a guide last changed, and the reference follows the schemas
+ * in whatever build is deployed. `changefreq` and `priority` are left out:
+ * Google ignores both.
  *
  * Not listed: the dashboard, sign-in and sign-up, the API.
  */
@@ -17,7 +20,7 @@ type Stamp = 'plans' | 'legal' | null
 export const PUBLIC_PAGES: readonly { path: string; stamp: Stamp }[] = [
   { path: '/', stamp: 'plans' },
   { path: '/pricing', stamp: 'plans' },
-  { path: '/docs', stamp: null },
+  ...DOCS_PAGES.map((page) => ({ path: page.href, stamp: null })),
   { path: '/contact', stamp: null },
   { path: '/abuse', stamp: null },
   { path: '/legal', stamp: 'legal' },

@@ -19,6 +19,19 @@ export const PUBLIC_PAGES = [
 
 export const LEGAL_PAGES = PUBLIC_PAGES.filter((path) => path.startsWith('/legal/'))
 
+/** The guides under /docs, which the sitemap lists too; docs.spec.ts checks their frame. */
+export const DOCS_GUIDES = [
+  '/docs/quickstart',
+  '/docs/api',
+  '/docs/errors',
+  '/docs/limits',
+  '/docs/idempotency',
+  '/docs/scheduling',
+  '/docs/statuses',
+  '/docs/webhooks',
+  '/docs/domains',
+] as const
+
 /** CLAUDE.md §7: no horizontal overflow at these widths. */
 export const WIDTHS = [320, 375, 414, 768, 1024, 1440, 1920] as const
 

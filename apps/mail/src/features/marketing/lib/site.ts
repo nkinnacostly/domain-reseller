@@ -16,12 +16,6 @@ export const LAUNCH = {
   paidPlansOnSale: false,
 } as const
 
-/**
- * The quickstart (§6 "Docs"), written by the docs package. Null until it
- * exists: /docs links to it the moment it is set (N9b: no link to nothing).
- */
-export const QUICKSTART_PATH: string | null = null
-
 export const ROUTES = {
   home: '/',
   pricing: '/pricing',
@@ -55,6 +49,11 @@ export const SAFETY = {
   warnComplaint: '0.05%',
   pauseBounce: '4%',
   pauseComplaint: '0.08%',
+  /**
+   * §5, migration 54: a claim that ended unverified keeps the name from the
+   * same people for this many days (settings.domain_claim_cooldown_days).
+   */
+  claimCooldownDays: 7,
 } as const
 
 /** The header's links: two pages, then the two account actions. */
