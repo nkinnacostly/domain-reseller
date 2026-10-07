@@ -1,5 +1,5 @@
 import { connection } from 'next/server'
-import { runApi } from '@/features/api/lib/handler'
+import { otherMethods, runApi } from '@/features/api/lib/handler'
 import { domainApiDeps } from '@/features/domains/api/deps'
 import { createDomainApi, listDomainsApi } from '@/features/domains/api/handlers'
 
@@ -17,3 +17,5 @@ export function POST(request: Request) {
     createDomainApi(request, deps, requestId),
   )
 }
+
+export const { PATCH, PUT, DELETE } = otherMethods(['GET', 'POST'])
