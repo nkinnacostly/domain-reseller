@@ -172,31 +172,25 @@ describe('billing reads, as the person', () => {
     expect(fake.calls.some((c) => c.table === 'invoices' && c.method === 'order')).toBe(true)
   })
 
-  it('asks once more when a read never reached the database, but not after a refusal', async () => {
-    let calls = 0
-    session({
-      rpc: {
-        billing_overview: () => {
-          calls += 1
-          return calls === 1
-            ? { data: null, error: { code: '', message: 'TypeError: fetch failed' } }
-            : { data: freeOverview(), error: null }
+  it('asks each read once: a dropped connection is the client’s to ask again, not billing’s', async () => {
+    // The session client's fetch asks a dropped read once more (lib/supabase/retry);
+    // what reaches billing is the answer after that, shown as the error state.
+    for (const error of [
+      { code: '', message: 'TypeError: fetch failed' },
+      { code: '42501', message: 'denied' },
+    ]) {
+      let calls = 0
+      session({
+        rpc: {
+          billing_overview: () => {
+            calls += 1
+            return { data: null, error }
+          },
         },
-      },
-    })
-    expect((await getBillingOverview(`${ACCOUNT_ID}-c`))?.plan?.code).toBe('free')
-    expect(calls).toBe(2)
-    calls = 0
-    session({
-      rpc: {
-        billing_overview: () => {
-          calls += 1
-          return { data: null, error: { code: '42501', message: 'denied' } }
-        },
-      },
-    })
-    expect(await getBillingOverview(`${ACCOUNT_ID}-d`)).toBeNull()
-    expect(calls).toBe(1)
+      })
+      expect(await getBillingOverview(`${ACCOUNT_ID}-${error.code || 'c'}`)).toBeNull()
+      expect(calls).toBe(1)
+    }
   })
 
   it('answers null when a read fails', async () => {

@@ -3,6 +3,7 @@ import 'server-only'
 import type { Database } from '@dr/db'
 import { createClient } from '@supabase/supabase-js'
 import { env } from '@/lib/env'
+import { retryingFetch } from './retry'
 
 /**
  * SECRET-KEY CLIENT, schema `mail` — for the v1 API, whose callers carry an
@@ -20,6 +21,8 @@ export function createServiceClient() {
   return createClient<Database, 'mail'>(env.NEXT_PUBLIC_SUPABASE_URL, secretKey, {
     db: { schema: 'mail' },
     auth: { autoRefreshToken: false, persistSession: false },
+    // A read whose connection dropped is asked once more; a write never (./retry).
+    global: { fetch: retryingFetch() },
   })
 }
 

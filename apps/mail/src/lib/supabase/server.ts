@@ -4,6 +4,7 @@ import { cookies, headers } from 'next/headers'
 import { env } from '@/lib/env'
 import { SESSION_COOKIE_OPTIONS } from './cookies'
 import { forwardedAuthHeaders } from './forwarded'
+import { retryingFetch } from './retry'
 
 /**
  * Server client bound to the request's cookies, on schema `mail`. Acts AS THE
@@ -21,8 +22,9 @@ export async function createClient() {
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
       db: { schema: 'mail' },
-      // Sessions record the person's browser and address, not our server's.
-      global: { headers: forwardedAuthHeaders(requestHeaders) },
+      // Sessions record the person's browser and address, not our server's;
+      // a read whose connection dropped is asked once more (./retry).
+      global: { headers: forwardedAuthHeaders(requestHeaders), fetch: retryingFetch() },
       cookieOptions: SESSION_COOKIE_OPTIONS,
       cookies: {
         getAll() {
