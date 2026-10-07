@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect as baseExpect, type Page, test } from '@playwright/test'
 import { createTestUser, deleteTestUser, type TestUser } from './support/accounts'
-import { createTestAccount, renewOnMock } from './support/billing'
+import { createTestAccount, renewOnMock, setPeriodEnd } from './support/billing'
 
 /**
  * MAIL-SPEC §8 billing against the real Supabase project and a mock
@@ -72,11 +72,12 @@ const currentPlan = (page: Page) => page.getByRole('region', { name: 'Your plan'
 test.describe('billing, on a mock Flutterwave', () => {
   test.describe.configure({ mode: 'serial' })
   let owner: TestUser
+  let accountId: string
 
   test.beforeAll(async () => {
     test.skip(!SIGN_IN_PROJECTS.includes(test.info().project.name), 'sign-in rate limits')
     owner = await createTestUser('billing', 'Bisi Billing')
-    await createTestAccount(owner, `Billing e2e ${Date.now()}`)
+    accountId = await createTestAccount(owner, `Billing e2e ${Date.now()}`)
   })
 
   test.afterAll(async () => {
@@ -151,7 +152,22 @@ test.describe('billing, on a mock Flutterwave', () => {
     await expect(currentPlan(page).getByRole('button', { name: 'Keep Starter' })).toHaveCount(0)
   })
 
+  test('a failed charge mid-period is not a renewal: the plan stays active (§8)', async ({
+    page,
+  }) => {
+    // A stray failed charge a month from the period's end records an incident;
+    // it never puts the customer past due (migration 54, item 22).
+    expect(await renewOnMock(owner.email, 'failed')).toBe(200)
+    await signIn(page, owner)
+    await expect(currentPlan(page)).toContainText('Active')
+    await expect(page.getByRole('region', { name: 'Account status' })).not.toContainText(
+      'Your renewal payment has not come through',
+    )
+  })
+
   test('a failed renewal puts the account past due, with a way to pay (§8)', async ({ page }) => {
+    // The renewal is due: bring the period's end within the window, then fail it.
+    await setPeriodEnd(accountId, new Date(Date.now() + 60 * 60 * 1000))
     // Flutterwave's renewal run, through the webhook Paidly forwards: 200 is settled.
     expect(await renewOnMock(owner.email, 'failed')).toBe(200)
 

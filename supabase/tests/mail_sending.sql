@@ -690,7 +690,8 @@ begin
     "ppm_text":"none", "profile_complete":"none", "purge_old_emails":"none", "purge_safety_records":"none",
     "queue_tenant_action":"none", "rate_ppm":"none", "record_tenant_action":"service_role",
     "run_safety_checks":"service_role", "ses_findings_of":"none", "window_usage":"none",
-    "note_claim_failure":"none", "billing_return_allowed":"service_role"
+    "note_claim_failure":"none", "billing_return_allowed":"service_role",
+    "e2e_set_period_end":"service_role"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop

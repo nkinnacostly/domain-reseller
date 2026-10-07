@@ -2254,6 +2254,10 @@ export type Database = {
         }
         Returns: Json
       }
+      e2e_set_period_end: {
+        Args: { p_account_id: string; p_period_end: string }
+        Returns: undefined
+      }
       e2e_set_plan: {
         Args: { p_account_id: string; p_plan_code: string }
         Returns: Json

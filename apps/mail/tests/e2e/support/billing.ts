@@ -64,3 +64,18 @@ export async function renewOnMock(email: string, status: 'successful' | 'failed'
   if (!response.ok || !body.ok) throw new Error(`renewal on the mock failed: ${response.status}`)
   return body.webhookStatus ?? 0
 }
+
+/**
+ * Brings the e2e subscription's period end to `at` (migration 55; e2e accounts
+ * only). A failed renewal marks an account past due only near its period's
+ * end (migration 54, item 22), so the past-due journey sets the end first.
+ */
+export async function setPeriodEnd(accountId: string, at: Date): Promise<void> {
+  const client = createClient(env('NEXT_PUBLIC_SUPABASE_URL'), env('SUPABASE_SECRET_KEY'), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { error } = await client
+    .schema('mail')
+    .rpc('e2e_set_period_end', { p_account_id: accountId, p_period_end: at.toISOString() })
+  if (error) throw error
+}
