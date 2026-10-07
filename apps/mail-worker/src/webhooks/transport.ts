@@ -2,12 +2,15 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns'
 import type { ClientRequest, IncomingMessage } from 'node:http'
 import { request as httpsRequest, type RequestOptions } from 'node:https'
 import { isIP, type LookupFunction } from 'node:net'
-import { isPublicAddress } from '@dr/shared/mail'
+import { isPublicAddress, isWebhookPort, WEBHOOK_TIMEOUT_SECONDS } from '@dr/shared/mail'
 
 /**
  * How a signed delivery reaches a customer's endpoint (MAIL-SPEC §6, MR6).
  *
  *   - https only, certificates checked (Node's default; never turned off);
+ *   - port 443 or 8443 only, as the dashboard and SQL allow: an endpoint
+ *     must not be able to point the worker at other services, one port
+ *     after another;
  *   - only to public addresses: the name is resolved here and every private,
  *     loopback, link-local or reserved address is dropped before connecting,
  *     so a name that pointed somewhere public when it was saved cannot be
@@ -17,8 +20,9 @@ import { isPublicAddress } from '@dr/shared/mail'
  *   - 10 seconds for the whole exchange, and at most 2 KB of the answer read,
  *     of which the first 500 characters are kept to show the customer.
  *
- * A failure is a code — timeout, dns_failed, private_address, tls_failed,
- * connection_failed — never the endpoint's own words (they are the answer).
+ * A failure is a code — timeout, dns_failed, private_address, port_not_allowed,
+ * tls_failed, connection_failed — never the endpoint's own words (they are
+ * the answer).
  */
 
 export type Delivery = { url: string; headers: Record<string, string>; body: string }
@@ -32,7 +36,7 @@ export type TransportResult = {
 
 export type Transport = (delivery: Delivery) => Promise<TransportResult>
 
-export const DELIVERY_TIMEOUT_MS = 10_000
+export const DELIVERY_TIMEOUT_MS = WEBHOOK_TIMEOUT_SECONDS * 1000
 const MAX_ANSWER_BYTES = 2_048
 const KEPT_ANSWER_CHARS = 500
 
@@ -115,6 +119,10 @@ export function createTransport({
       }
       if (url.protocol !== 'https:' && !(allowHttp && url.protocol === 'http:')) {
         done({ status: null, error: 'connection_failed', response: null })
+        return
+      }
+      if (url.protocol === 'https:' && !isWebhookPort(url.port)) {
+        done({ status: null, error: 'port_not_allowed', response: null })
         return
       }
       const host = url.hostname.replace(/^\[|\]$/g, '')

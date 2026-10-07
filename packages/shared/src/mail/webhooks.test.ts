@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { checkWebhookUrl, isPublicAddress, isWebhookEvent, WEBHOOK_EVENTS } from './webhooks'
+import {
+  checkWebhookUrl,
+  isPublicAddress,
+  isWebhookEvent,
+  isWebhookPort,
+  WEBHOOK_EVENTS,
+  WEBHOOK_PORTS,
+  WEBHOOK_TIMEOUT_SECONDS,
+  WEBHOOK_USER_AGENT,
+} from './webhooks'
 
 /**
  * Which endpoints Mail will call (MAIL-SPEC §6): https, public, and in the
@@ -49,8 +58,34 @@ describe('checkWebhookUrl', () => {
     ['https://hooks.acme.ng./x', 'internal_name'],
     ['https://hooks_acme.ng/x', 'internal_name'],
     [`https://hooks.acme.ng/${'a'.repeat(500)}`, 'too_long'],
+    ['https://hooks.acme.ng:22/x', 'port'],
+    ['https://hooks.acme.ng:6379/x', 'port'],
+    ['https://hooks.acme.ng:8080/x', 'port'],
+    ['https://8.8.8.8:25/x', 'port'],
+    ['https://hooks.acme.ng:65535/x', 'port'],
   ])('refuses %s (%s)', (input, reason) => {
     expect(checkWebhookUrl(input)).toEqual({ ok: false, reason })
+  })
+
+  it('calls 443 and 8443 only, so no endpoint can make the worker a port scanner', () => {
+    expect(WEBHOOK_PORTS).toEqual([443, 8443])
+    expect([isWebhookPort(''), isWebhookPort('443'), isWebhookPort(8443)]).toEqual([
+      true,
+      true,
+      true,
+    ])
+    expect([isWebhookPort('80'), isWebhookPort('8080'), isWebhookPort('x')]).toEqual([
+      false,
+      false,
+      false,
+    ])
+  })
+})
+
+describe('how a delivery arrives', () => {
+  it('names the worker and gives the endpoint ten seconds, as the guide says', () => {
+    expect(WEBHOOK_USER_AGENT).toBe('MyDomainsHub-Mail-Webhooks/1')
+    expect(WEBHOOK_TIMEOUT_SECONDS).toBe(10)
   })
 })
 

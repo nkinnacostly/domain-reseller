@@ -6,6 +6,8 @@
 # Secrets are set with `fly secrets set -c fly.mail.toml`:
 #   NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY,
 #   MAIL_SES_SENDER_ACCESS_KEY_ID, MAIL_SES_SENDER_SECRET_ACCESS_KEY,
+#   MAIL_WEBHOOK_SECRET_KEY (the same value as the Mail Vercel project's: it
+#   opens each endpoint's sealed signing secret, MR6),
 #   MAIL_SAFETY_SECRET (the same value as the Mail Vercel project's: the ping
 #   that asks apps/mail to apply a queued SES pause, §7.4)
 app = "mydomainshub-mail-worker"

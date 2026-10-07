@@ -195,6 +195,27 @@ describe('posting a delivery', () => {
     })
   })
 
+  it('calls https on 443 and 8443 only, so an endpoint cannot aim it at other ports', async () => {
+    const connected: string[] = []
+    const transport = createTransport({
+      request: ((url: URL) => {
+        connected.push(url.href)
+        throw new Error('no connection in this test')
+      }) as never,
+    })
+    for (const url of [
+      'https://hooks.acme.example:22/in',
+      'https://hooks.acme.example:6379/in',
+      'https://8.8.8.8:25/in',
+    ]) {
+      expect(await transport({ url, headers: {}, body: '{}' })).toMatchObject({
+        status: null,
+        error: 'port_not_allowed',
+      })
+    }
+    expect(connected).toEqual([])
+  })
+
   it('refuses, before connecting, a name that resolves only to private addresses', async () => {
     const transport = createTransport({
       lookup: publicOnlyLookup((_host, callback) =>

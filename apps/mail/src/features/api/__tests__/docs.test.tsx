@@ -110,10 +110,7 @@ describe('the words the docs keep', () => {
     expect(new Set(DOCS_PAGES.map((page) => page.href)).size).toBe(DOCS_PAGES.length)
     expect(docsPage('quickstart').href).toBe('/docs/quickstart')
     expect(() => docsPage('nope')).toThrow()
-    expect(DOCS_PAGES.filter((page) => page.stub).map((page) => page.slug)).toEqual([
-      'webhooks',
-      'domains',
-    ])
+    expect(DOCS_PAGES.filter((page) => page.stub).map((page) => page.slug)).toEqual(['domains'])
   })
 })
 
@@ -160,9 +157,13 @@ describe('the docs frame', () => {
       'page',
     )
     expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
-    expect(within(nav).getByRole('link', { name: /^Webhooks\s*Soon$/ })).toHaveAttribute(
+    expect(within(nav).getByRole('link', { name: 'Webhooks' })).toHaveAttribute(
       'href',
       '/docs/webhooks',
+    )
+    expect(within(nav).getByRole('link', { name: /^Domains and DNS\s*Soon$/ })).toHaveAttribute(
+      'href',
+      '/docs/domains',
     )
   })
 

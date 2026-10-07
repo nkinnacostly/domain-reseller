@@ -45,8 +45,51 @@ describe('the docs pages', () => {
   )
 
   it('the stubs say plainly that they are not written', () => {
-    render(<WebhooksPage />)
+    render(<DomainsPage />)
     expect(screen.getAllByText('This guide is being written.')).toHaveLength(1)
+  })
+
+  it('the webhooks guide covers the events, the payload, the signature and the retries', () => {
+    render(<WebhooksPage />)
+    expect(screen.queryByText('This guide is being written.')).toBeNull()
+    for (const name of [
+      'Set up an endpoint',
+      'The events',
+      'The payload',
+      'The request',
+      'Check the signature',
+      'Answers, retries and turning off',
+    ]) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument()
+    }
+    for (const label of [
+      'Webhook events',
+      'Signature headers',
+      'A delivery as plain HTTP',
+      'Checking a delivery in Node',
+      'The signed content',
+      'An email.delivered payload',
+    ]) {
+      expect(screen.getByRole('region', { name: label })).toBeInTheDocument()
+    }
+    const events = screen.getByRole('region', { name: 'Webhook events' })
+    for (const event of [
+      'email.sent',
+      'email.delivered',
+      'email.delivery_delayed',
+      'email.bounced',
+      'email.complained',
+      'email.failed',
+      'domain.verified',
+      'domain.failed',
+    ]) {
+      expect(events).toHaveTextContent(event)
+    }
+    const article = screen.getByRole('article')
+    expect(article).toHaveTextContent('24 hours')
+    expect(article).toHaveTextContent('3 days')
+    expect(article).toHaveTextContent('443 or 8443')
+    expect(article).toHaveTextContent('within 10 seconds')
   })
 
   it('the quickstart shows all four languages', () => {

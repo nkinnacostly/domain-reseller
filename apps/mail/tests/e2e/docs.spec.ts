@@ -78,9 +78,26 @@ test('the reference lists every endpoint the OpenAPI document does', async ({ pa
   }
 })
 
-test('the stubs say they are not written yet', async ({ page }) => {
-  await page.goto('/docs/webhooks')
-  await expect(page.getByText('This guide is being written.')).toBeVisible()
+test('the stub says it is not written yet', async ({ page }) => {
   await page.goto('/docs/domains')
   await expect(page.getByText('This guide is being written.')).toBeVisible()
+})
+
+test('the webhooks guide shows the signature headers and a check that runs as written', async ({
+  page,
+}) => {
+  await page.goto('/docs/webhooks')
+  await expect(page.getByText('This guide is being written.')).toHaveCount(0)
+  const headers = page.getByRole('region', { name: 'Signature headers' })
+  for (const name of ['webhook-id', 'webhook-timestamp', 'webhook-signature']) {
+    await expect(headers).toContainText(name)
+  }
+  await expect(page.getByRole('region', { name: 'Checking a delivery in Node' })).toContainText(
+    "createHmac('sha256', key)",
+  )
+  await expect(page.getByRole('region', { name: 'A delivery as plain HTTP' })).toContainText(
+    'user-agent: MyDomainsHub-Mail-Webhooks/1',
+  )
+  const nav = page.getByRole('navigation', { name: 'Docs' })
+  await expect(nav.getByRole('link', { name: 'Webhooks', exact: true })).toBeVisible()
 })

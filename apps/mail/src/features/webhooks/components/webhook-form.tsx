@@ -88,7 +88,7 @@ export function WebhookForm({
         id={`${id}-url`}
         label="Endpoint URL"
         error={urlError}
-        hint="https only, on the public internet. We POST JSON to it."
+        hint="https only, on the public internet, port 443 or 8443. We POST JSON to it."
       >
         <input
           id={`${id}-url`}
@@ -104,7 +104,7 @@ export function WebhookForm({
           aria-describedby={describedBy(
             `${id}-url`,
             urlError,
-            'https only, on the public internet. We POST JSON to it.',
+            'https only, on the public internet, port 443 or 8443. We POST JSON to it.',
           )}
           className={inputClass}
         />
