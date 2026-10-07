@@ -1,4 +1,5 @@
 import type { Tone } from '@/components/common/status-pill'
+import { SAFETY } from '@/features/marketing/lib/site'
 import type { RecordState } from './dns-check'
 
 /**
@@ -46,10 +47,17 @@ const FAILURE_WORDS: Record<string, (missing: string | null) => string> = {
   ses_refused: () => 'Amazon SES would not accept this domain.',
 }
 
-/** Why a domain failed, and what to do about it. */
+/**
+ * Why a domain failed, and what to do about it. A failed claim keeps the name
+ * from this account for SAFETY.claimCooldownDays (migration 54), so the next
+ * try is then, not at once.
+ */
 export function failureWords(reason: string | null, missing: string | null): string {
+  if (reason === 'ses_identity_exists') {
+    return 'Amazon SES already holds this domain outside this account, so we could not add it. If it is yours, email hello@mydomainshub.com and we will sort it out.'
+  }
   const said = reason ? FAILURE_WORDS[reason]?.(missing) : undefined
-  return `${said ?? 'This domain was not verified in time.'} Check the records at your DNS host, then try again: you get new DKIM records and another 72 hours.`
+  return `${said ?? 'This domain was not verified in time.'} Check the records at your DNS host. You can try again ${SAFETY.claimCooldownDays} days after it failed, with new DKIM records and another 72 hours.`
 }
 
 export const RECORD_STATE_LABEL: Record<RecordState, { label: string; tone: Tone }> = {
