@@ -261,6 +261,7 @@ export type Database = {
         Row: {
           checkout_ttl_minutes: number
           checkouts_per_hour: number
+          duplicate_renewal_window_hours: number
           failed_renewal_window_hours: number
           id: boolean
           past_due_days: number
@@ -274,6 +275,7 @@ export type Database = {
         Insert: {
           checkout_ttl_minutes?: number
           checkouts_per_hour?: number
+          duplicate_renewal_window_hours?: number
           failed_renewal_window_hours?: number
           id?: boolean
           past_due_days?: number
@@ -287,6 +289,7 @@ export type Database = {
         Update: {
           checkout_ttl_minutes?: number
           checkouts_per_hour?: number
+          duplicate_renewal_window_hours?: number
           failed_renewal_window_hours?: number
           id?: boolean
           past_due_days?: number
@@ -2067,6 +2070,15 @@ export type Database = {
       as_timestamptz: { Args: { p_value: string }; Returns: string }
       asked_ses_to_pause: { Args: { p_account_id: string }; Returns: boolean }
       authenticate_key: { Args: { p_key_hash: string }; Returns: Json }
+      begin_billing_jobs: {
+        Args: {
+          p_api_host: string
+          p_limit: number
+          p_test_mode: boolean
+          p_token: string
+        }
+        Returns: Json
+      }
       begin_ses_jobs: { Args: { p_token: string }; Returns: Json }
       billing_issue_invoice: {
         Args: {
@@ -2341,6 +2353,7 @@ export type Database = {
       is_webhook_url: { Args: { p_url: string }; Returns: boolean }
       iso_time: { Args: { p_at: string }; Returns: string }
       keep_current_plan: { Args: { p_account_id: string }; Returns: Json }
+      kick_billing_jobs: { Args: never; Returns: number }
       kick_ses_jobs: { Args: { p_account_id?: string }; Returns: number }
       lagos_day: { Args: { p_at: string }; Returns: string }
       leave_account: { Args: { p_account_id: string }; Returns: Json }

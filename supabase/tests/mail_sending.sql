@@ -633,11 +633,14 @@ begin
   execute 'reset role';
   v_passed := v_passed + 1;
 
-  -- ── 16. Every function in schema mail (migrations 43–54), granted to exactly the role it names.
+  -- ── 16. Every function in schema mail (migrations 43–56), granted to exactly the role it names.
   -- 47, 48, 50 and 51's names are as the hosted project holds them (6 Oct 2026); their packages'
   -- own maps are reconciled with this one at merge. Migration 54 adds note_claim_failure (a
   -- trigger) and billing_return_allowed, and replaces reserve_send, webhook_for_caller and five
   -- webhook functions under new signatures: still one function a name, so the count holds.
+  -- Migration 55 adds e2e_set_period_end. Migration 56 adds begin_billing_jobs and
+  -- kick_billing_jobs, and replaces record_billing_charge and alert_conditions under their
+  -- own signatures.
   v_expected := '{
     "settings_stay":"none", "append_only":"none", "has_role":"authenticated",
     "create_account":"authenticated", "create_api_key":"authenticated", "revoke_api_key":"authenticated",
@@ -691,7 +694,7 @@ begin
     "queue_tenant_action":"none", "rate_ppm":"none", "record_tenant_action":"service_role",
     "run_safety_checks":"service_role", "ses_findings_of":"none", "window_usage":"none",
     "note_claim_failure":"none", "billing_return_allowed":"service_role",
-    "e2e_set_period_end":"service_role"
+    "e2e_set_period_end":"service_role", "begin_billing_jobs":"service_role", "kick_billing_jobs":"none"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop
