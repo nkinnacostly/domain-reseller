@@ -183,6 +183,10 @@ describe('what choosing a plan does, in words (N9b)', () => {
       action: { kind: 'checkout', label: 'Pay ₦21,500 for Starter' },
     })
     expect(optionCopy(due.plans[2] as never, due).badge).toBeNull()
+    // Migration 54 (review 23): the paid month runs on from the last, not from the day of paying.
+    expect(optionCopy(due.plans[1] as never, due).lines[0]).toMatch(
+      /runs for a month from .+, where your last paid month ends, not from the day you pay\.$/,
+    )
     expect(optionCopy(due.plans[0] as never, due).lines[0]).toContain(
       'moves here by itself on 13 November 2026',
     )

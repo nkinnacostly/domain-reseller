@@ -17,7 +17,9 @@ import { recordIncident, stopReplaced } from './provider'
  *
  * `unverified`: Flutterwave could not be asked, or the database could not
  * record what it said. Nothing is settled; the webhook answers 503 so
- * Flutterwave (through Paidly) sends it again.
+ * Flutterwave (through Paidly) sends it again. `wrong_checkout`: the redirect
+ * named a charge for another checkout — recorded as an incident, settled by
+ * its own webhook, and nothing to say about this checkout.
  */
 export type SettleOutcome =
   | 'paid'
@@ -31,6 +33,7 @@ export type SettleOutcome =
   | 'unknown_reference'
   | 'missing'
   | 'not_ours'
+  | 'wrong_checkout'
   | 'unverified'
 
 const OUTCOMES = new Set<string>([
@@ -64,7 +67,7 @@ export async function settleCharge(
       reference: charge.id,
       detail: { status: charge.status, amount_kobo: charge.amountKobo },
     })
-    return 'mismatch'
+    return 'wrong_checkout'
   }
   // The account is shared: another app's charge is never ours to settle.
   if (!charge.txRef.startsWith(MAIL_TX_REF_PREFIX)) return 'not_ours'

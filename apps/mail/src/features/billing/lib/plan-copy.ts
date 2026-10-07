@@ -128,11 +128,16 @@ export function optionCopy(option: PlanOption, overview: BillingOverview): Optio
         },
       }
     }
-    case 'pay':
+    case 'pay': {
+      // Migration 54 (review 23): the paid month follows on from the last one,
+      // so the days past due were sent on credit, not given free.
+      const from = live
+        ? `${formatDay(live.currentPeriodEnd)}, where your last paid month ends`
+        : 'where your last paid month ends'
       return {
         badge: live?.planCode === option.code ? 'Payment due' : null,
         lines: [
-          `${total} now: ${formatKobo(quote.subtotalKobo)} plus ${vat} VAT. ${option.name} runs for a month from the day you pay.`,
+          `${total} now: ${formatKobo(quote.subtotalKobo)} plus ${vat} VAT. ${option.name} runs for a month from ${from}, not from the day you pay.`,
           monthly,
         ],
         action: {
@@ -141,6 +146,7 @@ export function optionCopy(option: PlanOption, overview: BillingOverview): Optio
           totalKobo: quote.totalKobo,
         },
       }
+    }
     default:
       return {
         badge: null,
