@@ -75,6 +75,23 @@ describe('the docs pages', () => {
     expect(screen.getByText(/not affiliated with Resend/)).toBeInTheDocument()
   })
 
+  it('the overview starts people on the quickstart or SMTP, and names SMTP in the basics', () => {
+    render(<DocsIndex />)
+    expect(screen.getByRole('link', { name: 'Read the quickstart' })).toHaveAttribute(
+      'href',
+      '/docs/quickstart',
+    )
+    expect(screen.getByRole('link', { name: 'Use SMTP' })).toHaveAttribute('href', '/docs/smtp')
+    expect(screen.getByRole('link', { name: 'Keep its Node.js SDK' })).toHaveAttribute(
+      'href',
+      '/docs/resend',
+    )
+    const basics = screen.getByRole('region', { name: 'Address, keys and format' })
+    expect(basics).toHaveTextContent(`${SMTP_SETTINGS.host}, port 465 (SSL/TLS)`)
+    expect(basics).toHaveTextContent('{ "name", "message", "statusCode" }')
+    expect(indexMeta.description).toContain('over SMTP')
+  })
+
   it('the SMTP guide gives the relay’s own settings, samples and replies', () => {
     render(<SmtpPage />)
     const settings = screen.getByRole('region', { name: 'SMTP settings' })
