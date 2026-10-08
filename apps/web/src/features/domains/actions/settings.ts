@@ -261,6 +261,7 @@ const CODE_ERROR: Record<string, string> = {
   AUTH_CODE_UNAVAILABLE: `The registry gave no transfer code for this domain. Email ${BUSINESS.email} and we will get it for you within five days.`,
   WRONG_REGISTRY:
     'We cannot reach the registry that holds this domain just now. Please try again later.',
+  INTENT_REQUIRED: 'This request could not be confirmed as yours. Ask for the code again.',
 }
 const CODE_FALLBACK = `We could not reach the registry just now. Please try again in a few minutes — if it keeps failing, email ${BUSINESS.email} and we will send the code within five days.`
 
@@ -289,11 +290,32 @@ export const revealTransferCode = elevatedAction
       }
     }
 
+    // A one-use intent, made as the person in SQL (aal2, their domain) — the
+    // gateway reads the code only by claiming it (migration 65, security
+    // audit 8 Oct 2026): the gateway secret alone reads nothing.
+    const { data: asked, error: intentError } = await ctx.supabase.rpc('request_auth_code_intent', {
+      p_domain_id: domain.id,
+    })
+    const intent = asked as { ok?: boolean; code?: string; intentId?: string } | null
+    if (intentError || intent?.ok !== true || !intent.intentId) {
+      logger.warn(
+        { domainId: domain.id, code: intent?.code ?? intentError?.code },
+        'transfer code intent refused',
+      )
+      return {
+        error:
+          intent?.code === 'mfa_required'
+            ? "Confirm it's you with the code from your authenticator app, then ask again."
+            : CODE_FALLBACK,
+      }
+    }
+
     let code: string
     try {
       const side = domain.test_mode ? 'sandbox' : 'live'
       const answer = await callGateway<{ authCode: string }>({
         path: `domains/${encodeURIComponent(domain.domain_name)}/auth-code?side=${side}`,
+        headers: { 'x-intent-id': intent.intentId },
       })
       code = answer.authCode
     } catch (error) {

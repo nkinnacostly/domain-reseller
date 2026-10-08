@@ -13,18 +13,24 @@ function appWith(
 ) {
   const authCode = vi.fn(async () => answer)
   const reader = vi.fn((): AuthCodeReader => ({ authCode }))
+  const claimIntent = vi.fn(async () => true)
   const app = createApp({
-    domains: createDomainsRoute({ target: 'ote', reader, ...over }),
+    domains: createDomainsRoute({ target: 'ote', reader, claimIntent, ...over }),
   })
-  return { app, reader, authCode }
+  return { app, reader, authCode, claimIntent }
 }
+
+const INTENT = '7f1c9a52-3d4b-4e6f-8a1b-2c3d4e5f6a7b'
 
 async function get(
   app: ReturnType<typeof createApp>,
   path = '/v1/domains/example.com/auth-code?side=sandbox',
   secret = SECRET,
+  intent: string | null = INTENT,
 ) {
-  const response = await app.request(path, { headers: { authorization: `Bearer ${secret}` } })
+  const response = await app.request(path, {
+    headers: { authorization: `Bearer ${secret}`, ...(intent ? { 'x-intent-id': intent } : {}) },
+  })
   return {
     status: response.status,
     cache: response.headers.get('cache-control'),
@@ -38,6 +44,41 @@ describe('GET /v1/domains/:name/auth-code (FR-DS5, FR-T5)', () => {
     const { status } = await get(app, undefined, 'wrong-secret-value-xx')
     expect(status).toBe(401)
     expect(authCode).not.toHaveBeenCalled()
+  })
+
+  it('reads nothing without the owner’s fresh intent, even with the secret (security audit)', async () => {
+    const missing = appWith({ kind: 'found', data: CODE })
+    const none = await get(missing.app, undefined, SECRET, null)
+    expect(none.status).toBe(403)
+    expect(JSON.parse(none.body)).toMatchObject({ ok: false, code: 'INTENT_REQUIRED' })
+    expect(missing.claimIntent).not.toHaveBeenCalled()
+
+    const malformed = await get(missing.app, undefined, SECRET, 'not-a-uuid')
+    expect(malformed.status).toBe(403)
+
+    const spent = appWith({ kind: 'found', data: CODE }, { claimIntent: vi.fn(async () => false) })
+    const refused = await get(spent.app)
+    expect(refused.status).toBe(403)
+    expect(refused.body).not.toContain(CODE)
+    expect(spent.authCode).not.toHaveBeenCalled()
+  })
+
+  it('claims the intent for this name and side before reading', async () => {
+    const { app, claimIntent, authCode } = appWith({ kind: 'found', data: CODE })
+    const { status } = await get(app)
+    expect(status).toBe(200)
+    expect(claimIntent).toHaveBeenCalledWith(INTENT, 'example.com', 'sandbox')
+    expect(authCode).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers 503, reading nothing, when the intent cannot be checked', async () => {
+    const down = appWith(
+      { kind: 'found', data: CODE },
+      { claimIntent: vi.fn(async () => Promise.reject(new Error('db down'))) },
+    )
+    const { status } = await get(down.app)
+    expect(status).toBe(503)
+    expect(down.authCode).not.toHaveBeenCalled()
   })
 
   it('refuses to ask the live registry from a sandbox gateway, and the other way round', async () => {
@@ -123,7 +164,9 @@ describe('GET /v1/domains/:name/auth-code (FR-DS5, FR-T5)', () => {
 
   it('answers retryable, never with a code, when its own registry cannot be reached', async () => {
     // The real reader, on a gateway with no sandbox key: nothing to ask with.
-    const app = createApp({ domains: createDomainsRoute({ target: 'ote' }) })
+    const app = createApp({
+      domains: createDomainsRoute({ target: 'ote', claimIntent: async () => true }),
+    })
     const { status, body } = await get(app)
     expect(status).toBe(500)
     expect(JSON.parse(body)).toMatchObject({ ok: false, retryable: true })

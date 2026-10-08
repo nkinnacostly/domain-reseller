@@ -2,6 +2,7 @@ import { domainNameSchema } from '@dr/shared'
 import { Hono } from 'hono'
 import { getDnaWriteClient, type WriteTarget } from '../dna/client'
 import { env } from '../env'
+import { createServiceClient } from '../lib/db'
 import { logger } from '../lib/logger'
 import { TokenBucket } from '../lib/rate-limit'
 import { type AuthCodeReader, createDnaRegistrar } from '../provisioning/registrar'
@@ -17,6 +18,11 @@ import { createSupabaseStore, type JobStore } from '../provisioning/store'
  * on none, refuses rather than asking the wrong registry. It is never
  * stored, cached or logged (SEC-12, N13); the answer carries it and nothing
  * else. The web app checks ownership and two-factor (SEC-2) before asking.
+ *
+ * The shared secret alone is not enough (security audit, 8 Oct 2026): each
+ * read needs `X-Intent-Id`, a one-use intent the domain's owner made in SQL
+ * at aal2 under a minute ago, claimed here before anything else is spent
+ * (migration 65). Without it nothing is read.
  */
 
 type Deps = {
@@ -27,6 +33,20 @@ type Deps = {
   all: TokenBucket
   /** Per domain: nobody needs a code more than a few times an hour. */
   perDomain: () => TokenBucket
+  /** Claims the owner's one-use intent for this name and side (migration 65); throws if SQL cannot be asked. */
+  claimIntent: (intentId: string, name: string, side: 'sandbox' | 'live') => Promise<boolean>
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+async function claimIntentInSql(intentId: string, name: string, side: 'sandbox' | 'live') {
+  const { data, error } = await createServiceClient().rpc('claim_auth_code_intent', {
+    p_intent_id: intentId,
+    p_domain_name: name,
+    p_side: side,
+  })
+  if (error) throw new Error(`claim_auth_code_intent failed: ${error.code ?? 'unknown'}`)
+  return data === true
 }
 
 const SIDES = { sandbox: 'ote', live: 'production' } as const satisfies Record<string, WriteTarget>
@@ -50,6 +70,7 @@ export function createDomainsRoute(overrides: Partial<Deps> = {}) {
     reader: defaultReader,
     all: new TokenBucket(20, 1 / 30),
     perDomain: () => new TokenBucket(3, 3 / 3600),
+    claimIntent: claimIntentInSql,
     ...overrides,
   }
   const buckets = new Map<string, TokenBucket>()
@@ -86,6 +107,31 @@ export function createDomainsRoute(overrides: Partial<Deps> = {}) {
                 : 'This gateway does not reach the live registry',
             ),
             409,
+          )
+        }
+
+        // The owner's own, fresh request — or nothing is read, and nothing spent.
+        const intent = c.req.header('x-intent-id') ?? ''
+        let claimed = false
+        if (UUID.test(intent)) {
+          try {
+            claimed = await deps.claimIntent(intent, name.data, side)
+          } catch (error) {
+            logger.error(
+              { err: error instanceof Error ? error.message : String(error) },
+              'transfer code intent not checked',
+            )
+            return c.json(
+              refuse('SUPPLIER_UNAVAILABLE', 'The request could not be checked just now', true),
+              503,
+            )
+          }
+        }
+        if (!claimed) {
+          logger.warn({ side }, 'transfer code refused: no valid intent')
+          return c.json(
+            refuse('INTENT_REQUIRED', 'This request was not confirmed by the domain’s owner'),
+            403,
           )
         }
 

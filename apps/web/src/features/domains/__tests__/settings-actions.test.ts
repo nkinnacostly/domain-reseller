@@ -59,9 +59,22 @@ const DOMAIN: Row = {
   pending_registrant: null,
 }
 
-function userClient({ owns = true, freshCode = true, domain = {} as Row } = {}) {
+const INTENT = '7f1c9a52-3d4b-4e6f-8a1b-2c3d4e5f6a7b'
+
+function userClient({
+  owns = true,
+  freshCode = true,
+  domain = {} as Row,
+  intent = { ok: true, intentId: INTENT } as Record<string, unknown>,
+} = {}) {
   const row = owns ? { ...DOMAIN, ...domain } : null
   const client = {
+    // Migration 65: the one-use intent the gateway claims before reading a code.
+    rpc: vi.fn(async (fn: string) =>
+      fn === 'request_auth_code_intent'
+        ? { data: intent, error: null }
+        : { data: null, error: { code: 'PGRST202' } },
+    ),
     auth: {
       getUser: async () => ({ data: { user: { id: 'user-1' } } }),
       mfa: {
@@ -346,11 +359,16 @@ describe('changeRegistrant (FR-DS1, FR-DS2, SEC-2)', () => {
 })
 
 describe('revealTransferCode (FR-DS5, FR-T5, SEC-2)', () => {
+  let intents: (string | null)[] = []
+  beforeEach(() => {
+    intents = []
+  })
   function gateway(reply: () => Response) {
     const seen: string[] = []
     server.use(
       http.get('http://gateway.test/v1/domains/:name/auth-code', ({ request }) => {
         seen.push(new URL(request.url).pathname + new URL(request.url).search)
+        intents.push(request.headers.get('x-intent-id'))
         return reply()
       }),
     )
@@ -364,6 +382,25 @@ describe('revealTransferCode (FR-DS5, FR-T5, SEC-2)', () => {
     expect((await revealTransferCode({ domainId: DOMAIN_ID }))?.serverError).toMatch(
       /Confirm it's you/,
     )
+    expect(seen).toEqual([])
+  })
+
+  it('sends the gateway the owner’s one-use intent, made as them in SQL (migration 65)', async () => {
+    userClient()
+    gateway(fromRegistry)
+    expect((await revealTransferCode({ domainId: DOMAIN_ID }))?.data).toEqual({
+      ok: true,
+      code: CODE,
+    })
+    expect(intents).toEqual([INTENT])
+  })
+
+  it('asks the registry nothing when SQL gives no intent', async () => {
+    userClient({ intent: { ok: false, code: 'mfa_required' } })
+    const seen = gateway(fromRegistry)
+    expect((await revealTransferCode({ domainId: DOMAIN_ID }))?.data).toEqual({
+      error: "Confirm it's you with the code from your authenticator app, then ask again.",
+    })
     expect(seen).toEqual([])
   })
 

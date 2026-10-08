@@ -2922,6 +2922,51 @@ export type Database = {
         }
         Relationships: []
       }
+      auth_code_intents: {
+        Row: {
+          created_at: string
+          domain_id: string
+          domain_name: string
+          id: string
+          side: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain_id: string
+          domain_name: string
+          id?: string
+          side: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          domain_id?: string
+          domain_name?: string
+          id?: string
+          side?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auth_code_intents_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "admin_domains_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auth_code_intents_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_operation_items: {
         Row: {
           domain_id: string
@@ -6602,6 +6647,10 @@ export type Database = {
         Returns: undefined
       }
       check_request: { Args: never; Returns: undefined }
+      claim_auth_code_intent: {
+        Args: { p_domain_name: string; p_intent_id: string; p_side: string }
+        Returns: boolean
+      }
       claim_emails: {
         Args: { p_limit?: number; p_test_mode: boolean; p_worker: string }
         Returns: {
@@ -7189,6 +7238,7 @@ export type Database = {
         Args: { p_code: string; p_job_id: string; p_message: string }
         Returns: undefined
       }
+      request_auth_code_intent: { Args: { p_domain_id: string }; Returns: Json }
       request_ssl_reissue: {
         Args: { p_certificate_id: string; p_user_id: string }
         Returns: string
