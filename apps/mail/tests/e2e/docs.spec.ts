@@ -13,6 +13,7 @@ import { leftEdges, noHorizontalOverflow, WIDE } from './support/public-pages'
 const DOCS = [
   ['/docs', 'Overview'],
   ['/docs/quickstart', 'Quickstart'],
+  ['/docs/smtp', 'SMTP'],
   ['/docs/resend', 'Switching from Resend'],
   ['/docs/api', 'API reference'],
   ['/docs/errors', 'Errors'],

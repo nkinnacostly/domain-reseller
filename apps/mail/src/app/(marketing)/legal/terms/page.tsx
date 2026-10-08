@@ -40,10 +40,11 @@ export default function TermsPage() {
 
       <LegalSection id="service" title="The service">
         <p>
-          An API for sending transactional email — receipts, sign-in links, alerts — from domains
-          you have verified, through Amazon Simple Email Service, and a record of what happened to
-          each email. It does not include newsletters, contact lists, a template editor, SMTP,
-          inbound email, dedicated IP addresses, or open and click tracking.
+          An API, and an SMTP relay that sends the same way, for transactional email — receipts,
+          sign-in links, alerts — from domains you have verified, through Amazon Simple Email
+          Service, and a record of what happened to each email. It does not include newsletters,
+          contact lists, a template editor, inbound email, dedicated IP addresses, or open and click
+          tracking.
         </p>
       </LegalSection>
 

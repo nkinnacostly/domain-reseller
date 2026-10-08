@@ -1,3 +1,4 @@
+import { SMTP_SETTINGS } from '@dr/shared/mail'
 import { KeyRound } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -75,6 +76,32 @@ async function ApiKeys() {
         ) : (
           <KeysList accountId={account.id} keys={live} domains={domains} memberRole={role} />
         )}
+      </section>
+
+      <section aria-labelledby="smtp-heading" className={`${card} max-w-3xl`}>
+        <h2 id="smtp-heading" className="font-semibold">
+          Sending over SMTP
+        </h2>
+        <p className="mt-1 text-pretty text-sm/6 text-muted-foreground">
+          WordPress, Laravel, Django and other programs that speak SMTP can send with a key as the
+          password. The{' '}
+          <Link href="/docs/smtp" className={LINK}>
+            SMTP guide
+          </Link>{' '}
+          has the settings for each.
+        </p>
+        <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+          <dt className="text-muted-foreground">Host</dt>
+          <dd className="break-all font-mono">{SMTP_SETTINGS.host}</dd>
+          <dt className="text-muted-foreground">Port</dt>
+          <dd className="font-mono">
+            {SMTP_SETTINGS.ports.join(' or ')} <span className="font-sans">(SSL/TLS)</span>
+          </dd>
+          <dt className="text-muted-foreground">Username</dt>
+          <dd className="font-mono">{SMTP_SETTINGS.username}</dd>
+          <dt className="text-muted-foreground">Password</dt>
+          <dd>An API key from this page</dd>
+        </dl>
       </section>
 
       {keys && domains && revoked.length > 0 ? (

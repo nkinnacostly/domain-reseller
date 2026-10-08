@@ -22,7 +22,8 @@ export default function DocsPage() {
       intro={
         <p>
           The MyDomainsHub Mail API sends transactional email — receipts, sign-in links, alerts —
-          from your own domain, with one HTTP call. JSON in and out; no SDK needed.
+          from your own domain, with one HTTP call. JSON in and out; no SDK needed. Or send over
+          SMTP from the program you already have.
         </p>
       }
     >

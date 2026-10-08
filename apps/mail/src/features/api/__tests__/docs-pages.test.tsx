@@ -1,3 +1,4 @@
+import { SMTP_SETTINGS } from '@dr/shared/mail'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import ApiPage, { metadata as apiMeta } from '@/app/(marketing)/docs/api/page'
@@ -11,6 +12,7 @@ import DocsIndex, { metadata as indexMeta } from '@/app/(marketing)/docs/page'
 import QuickstartPage, { metadata as quickstartMeta } from '@/app/(marketing)/docs/quickstart/page'
 import ResendPage, { metadata as resendMeta } from '@/app/(marketing)/docs/resend/page'
 import SchedulingPage, { metadata as schedulingMeta } from '@/app/(marketing)/docs/scheduling/page'
+import SmtpPage, { metadata as smtpMeta } from '@/app/(marketing)/docs/smtp/page'
 import StatusesPage, { metadata as statusesMeta } from '@/app/(marketing)/docs/statuses/page'
 import WebhooksPage, { metadata as webhooksMeta } from '@/app/(marketing)/docs/webhooks/page'
 import mailPackage from '../../../../package.json'
@@ -24,6 +26,7 @@ vi.mock('next/navigation', () => ({ usePathname: () => '/docs' }))
 const PAGES = {
   '/docs': [DocsIndex, indexMeta],
   '/docs/quickstart': [QuickstartPage, quickstartMeta],
+  '/docs/smtp': [SmtpPage, smtpMeta],
   '/docs/resend': [ResendPage, resendMeta],
   '/docs/api': [ApiPage, apiMeta],
   '/docs/errors': [ErrorsPage, errorsMeta],
@@ -70,6 +73,29 @@ describe('the docs pages', () => {
       expect(works).toHaveTextContent(call)
     }
     expect(screen.getByText(/not affiliated with Resend/)).toBeInTheDocument()
+  })
+
+  it('the SMTP guide gives the relay’s own settings, samples and replies', () => {
+    render(<SmtpPage />)
+    const settings = screen.getByRole('region', { name: 'SMTP settings' })
+    for (const value of [
+      SMTP_SETTINGS.host,
+      '465, or 2465',
+      SMTP_SETTINGS.username,
+      'STARTTLS is not offered',
+    ]) {
+      expect(settings).toHaveTextContent(value)
+    }
+    for (const label of [
+      'Node.js (Nodemailer)',
+      'Laravel (.env)',
+      'Django (settings.py)',
+      'PHP (PHPMailer)',
+    ]) {
+      expect(screen.getByRole('region', { name: label })).toHaveTextContent(SMTP_SETTINGS.host)
+    }
+    expect(screen.getByRole('region', { name: 'SMTP replies' })).toHaveTextContent('Queued as')
+    expect(screen.getByText(/7 MB a message/)).toBeInTheDocument()
   })
 
   it('the stubs say plainly that they are not written', () => {

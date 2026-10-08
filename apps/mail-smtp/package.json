@@ -1,0 +1,36 @@
+{
+  "name": "@dr/mail-smtp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/server.ts",
+    "build": "rm -rf dist && node scripts/build.mjs",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist node_modules coverage"
+  },
+  "dependencies": {
+    "@dr/db": "workspace:*",
+    "@dr/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.116.0",
+    "pino": "^9.6.0",
+    "postal-mime": "4.0.5",
+    "smtp-server": "3.19.18",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/smtp-server": "^3.5.13",
+    "@vitest/coverage-v8": "^5.0.1",
+    "esbuild": "^0.28.2",
+    "nodemailer": "10.0.16",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.1"
+  }
+}

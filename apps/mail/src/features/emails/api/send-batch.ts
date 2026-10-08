@@ -1,6 +1,7 @@
 import {
   apiError,
   batchSchema,
+  contentProblem,
   describeIssues,
   refusalToApiError,
   requestHash,
@@ -11,7 +12,6 @@ import { authenticate } from '@/features/api/lib/authenticate'
 import { readIdempotencyKey, readJson } from '@/features/api/lib/body'
 import { apiErrorResponse, apiJson } from '@/features/api/lib/respond'
 import { logger } from '@/lib/logger'
-import { contentProblem } from './content'
 
 /**
  * POST /api/v1/emails/batch (MAIL-SPEC §6): up to 100 emails, each

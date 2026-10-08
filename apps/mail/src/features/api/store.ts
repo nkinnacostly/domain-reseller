@@ -2,12 +2,15 @@ import 'server-only'
 
 import {
   API_KEY_PERMISSIONS,
+  type ApiKeyAuth,
   type Cursor,
   EMAIL_STATUSES,
   type EmailRow,
   type EnqueueInput,
   emailRowSchema,
   type SqlRefusal,
+  sqlEnqueuedSchema,
+  sqlKeyAcceptedSchema,
   sqlRefusalSchema,
 } from '@dr/shared/mail'
 import { z } from 'zod'
@@ -30,24 +33,10 @@ export class StoreError extends Error {
   }
 }
 
-const keyAccepted = z.object({
-  ok: z.literal(true),
-  keyId: z.uuid(),
-  accountId: z.uuid(),
-  permission: z.enum(API_KEY_PERMISSIONS),
-  domainId: z.uuid().nullable(),
-})
-
-export type ApiKeyAuth = Omit<z.infer<typeof keyAccepted>, 'ok'>
+export type { ApiKeyAuth }
 export type KeyAnswer = { ok: true; key: ApiKeyAuth } | SqlRefusal
 
-const queued = z.object({
-  ok: z.literal(true),
-  id: z.uuid(),
-  status: z.enum(EMAIL_STATUSES),
-  replayed: z.boolean(),
-})
-export type EnqueueAnswer = z.infer<typeof queued> | SqlRefusal
+export type EnqueueAnswer = z.infer<typeof sqlEnqueuedSchema> | SqlRefusal
 
 const batchQueued = z.object({
   ok: z.literal(true),
@@ -148,7 +137,7 @@ export function createApiStore(client: MailServiceClient): ApiStore {
     async authenticateKey(keyHash) {
       const answer = answered(
         'authenticate_key',
-        keyAccepted,
+        sqlKeyAcceptedSchema,
         await client.rpc('authenticate_key', { p_key_hash: keyHash }),
       )
       if (!answer.ok) return answer
@@ -159,7 +148,7 @@ export function createApiStore(client: MailServiceClient): ApiStore {
     async enqueueEmail({ accountId, keyId, email, idempotencyKey, requestHash }) {
       return answered(
         'enqueue_email',
-        queued,
+        sqlEnqueuedSchema,
         await client.rpc('enqueue_email', {
           p_account_id: accountId,
           p_api_key_id: keyId,

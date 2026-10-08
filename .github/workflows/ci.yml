@@ -93,6 +93,15 @@ jobs:
             exit 1
           fi
 
+      # MAIL-SPEC §4.3, §6 "SMTP" — the relay takes SMTP from the internet and
+      # queues through SQL; it never holds a sending key or the SES client.
+      - name: The SMTP relay cannot send
+        run: |
+          if grep -rnE "MAIL_SES_|@dr/shared/ses|createTenantSender" apps/mail-smtp/src --include='*.ts'; then
+            echo "::error::apps/mail-smtp queues through SQL; only apps/mail-worker sends"
+            exit 1
+          fi
+
       # SEC-5 — supplier credentials belong to the gateway alone.
       - name: Supplier credentials stay in the gateway
         run: |
@@ -159,6 +168,10 @@ jobs:
       # MyDomainsHub Mail's worker ships from here too (fly.mail.toml).
       - name: Mail worker bundle
         run: pnpm --filter @dr/mail-worker build
+
+      # And its SMTP relay (fly.smtp.toml).
+      - name: Mail SMTP relay bundle
+        run: pnpm --filter @dr/mail-smtp build
 
       # A critical advisory in what we ship fails the build (security audit,
       # 8 Oct 2026: next 16.3.5 had one and CI stayed green). High and below

@@ -26,6 +26,12 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     summary: 'From a verified domain to your first email, with curl, Node, Python or PHP.',
   },
   {
+    slug: 'smtp',
+    href: '/docs/smtp',
+    title: 'SMTP',
+    summary: 'Send from WordPress, Laravel, Django or any SMTP program: the host and an API key.',
+  },
+  {
     slug: 'resend',
     href: '/docs/resend',
     title: 'Switching from Resend',

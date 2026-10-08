@@ -201,6 +201,58 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(@types/node@22.20.4)(@vitest/coverage-v8@5.0.1)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@22.20.4)(typescript@5.9.3))(vite@8.3.0(@types/node@22.20.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.14))
 
+  apps/mail-smtp:
+    dependencies:
+      '@dr/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@dr/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@supabase/supabase-js':
+        specifier: ^2.116.0
+        version: 2.116.0
+      pino:
+        specifier: ^9.6.0
+        version: 9.14.0
+      postal-mime:
+        specifier: 4.0.5
+        version: 4.0.5
+      smtp-server:
+        specifier: 3.19.18
+        version: 3.19.18
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.4
+      '@types/nodemailer':
+        specifier: ^8.0.2
+        version: 8.0.2
+      '@types/smtp-server':
+        specifier: ^3.5.13
+        version: 3.5.13
+      '@vitest/coverage-v8':
+        specifier: ^5.0.1
+        version: 5.0.1(vitest@5.0.1)
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      nodemailer:
+        specifier: 10.0.16
+        version: 10.0.16
+      tsx:
+        specifier: ^4.20.0
+        version: 4.23.14
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@22.20.4)(@vitest/coverage-v8@5.0.1)(jsdom@30.1.0(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@22.20.4)(typescript@5.9.3))(vite@8.3.0(@types/node@22.20.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.14))
+
   apps/mail-worker:
     dependencies:
       '@dr/db':
@@ -2504,6 +2556,9 @@ packages:
   '@types/node@22.20.4':
     resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
 
+  '@types/nodemailer@8.0.2':
+    resolution: {integrity: sha512-c7M5ox8p0nEOfbJ2E9Qcmt8/QCu/VzsiAhzBiZbvky2PhKZDHpKB3sQHBM5MEZNkCfBOaS6S9//AGPRTNB7IaA==}
+
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
     peerDependencies:
@@ -2514,6 +2569,9 @@ packages:
 
   '@types/set-cookie-parser@2.4.10':
     resolution: {integrity: sha512-GGmQVGpQWUe5qglJozEjZV/5dyxbOOZ0LHe/lqyWssB88Y4svNfst0uqBVscdDeIKl5Jy5+aPSvy7mI9tYRguw==}
+
+  '@types/smtp-server@3.5.13':
+    resolution: {integrity: sha512-S3rGl2KbViH+98/CgHipPIWgtAFnjxLsppxIRbgJHNuZL7Y+py+7kZjT7xS+wOmCxYTn4O7IqLqkvekg99MDVQ==}
 
   '@types/statuses@2.0.6':
     resolution: {integrity: sha512-xMAgYwceFhRA2zY+XbEA7mxYbA093wdiW8Vu6gZPGWy9cmOyU9XesH1tNcEWsKFd5Vzrqx5T3D38PWx1FIIXkA==}
@@ -3462,6 +3520,9 @@ packages:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}
     engines: {node: '>= 0.10'}
 
+  ipv6-normalize@1.0.1:
+    resolution: {integrity: sha512-Bm6H79i01DjgGTCWjUuCjJ6QDo1HB96PT/xCYuyJUP9WFbVDrLSbG4EZCvOCun2rNswZb0c3e4Jt/ws795esHA==}
+
   is-arrayish@0.2.1:
     resolution: {integrity: sha512-zz06S8t0ozoDXMG+ube26zeCTNXcKIPJZJi8hBrF4idCLms4CG9QtK7qBl1boi5ODzFpjswb5JPmHCbMpjaYzg==}
 
@@ -4124,6 +4185,10 @@ packages:
     resolution: {integrity: sha512-zNkpVpQzOdWslXWiT4KgTEuZSfMObIiQKZxnXG1lm/pESrkOeQiqykEU4z95MPigOsf2Do0qro99tApzulpkcw==}
     engines: {node: '>=16'}
 
+  nodemailer@10.0.16:
+    resolution: {integrity: sha512-VL9xKErxN+el77o8eBOuYKUPMyEx7F9hfnDCuiUKJRp9v3wnWMOudYgP/SWbwSHy8rUL4cylobuXtki1LpQS7A==}
+    engines: {node: '>=20.0.0'}
+
   npm-run-path@4.0.1:
     resolution: {integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==}
     engines: {node: '>=8'}
@@ -4307,6 +4372,10 @@ packages:
   postal-mime@2.7.6:
     resolution: {integrity: sha512-UUlyE2KlxmvwMGq060onF/VWU3zD6dVW31FwokQ5v26jWd35fbs2MoTFzh+jXnPwAyV2MULMKXcBInGOl5TO6Q==}
 
+  postal-mime@4.0.5:
+    resolution: {integrity: sha512-fWu1Cmo2ef6LCwgHU1fVrqo55eyFP31F7hH0j/wMWkQYYdh+H8zz3nBf3EYRQelkmTfDrbDfTvPUQEBT8DS/jw==}
+    engines: {node: '>=20'}
+
   postcss-selector-parser@7.1.6:
     resolution: {integrity: sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw==}
     engines: {node: '>=4'}
@@ -4352,6 +4421,10 @@ packages:
 
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
+
+  punycode.js@2.3.1:
+    resolution: {integrity: sha512-uxFIHU0YlHYhDQtV4R9J6a52SLx28BCjT+4ieh7IGbgwVJWO+km431c4yRlREUAsAmt/uMjQUyQHNEPf0M39CA==}
+    engines: {node: '>=6'}
 
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
@@ -4633,6 +4706,10 @@ packages:
   smart-buffer@4.2.0:
     resolution: {integrity: sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg==}
     engines: {node: '>= 6.0.0', npm: '>= 3.0.0'}
+
+  smtp-server@3.19.18:
+    resolution: {integrity: sha512-wEkfCcY7VepMUr6mT/7HwLtgJz88yE/612yrMgXiNN9L33iZxPdblVIHjUfpKBXzh1WwdHIVfdqMyJSnszhGUw==}
+    engines: {node: '>=20.0.0'}
 
   socks@2.8.10:
     resolution: {integrity: sha512-e0VyvkVTwVYViNovRkZ9aodhxVlyoMn7eJhVUPxZ+eK9P/7CBkxvvsBOHqFPEH416726W8tLXXXjKwqgTErrCQ==}
@@ -7026,6 +7103,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@8.0.2':
+    dependencies:
+      '@types/node': 22.20.4
+
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
       '@types/react': 19.3.0
@@ -7037,6 +7118,11 @@ snapshots:
   '@types/set-cookie-parser@2.4.10':
     dependencies:
       '@types/node': 22.20.4
+
+  '@types/smtp-server@3.5.13':
+    dependencies:
+      '@types/node': 22.20.4
+      '@types/nodemailer': 8.0.2
 
   '@types/statuses@2.0.6': {}
 
@@ -7972,6 +8058,8 @@ snapshots:
 
   ipaddr.js@1.9.1: {}
 
+  ipv6-normalize@1.0.1: {}
+
   is-arrayish@0.2.1: {}
 
   is-buffer@1.1.6: {}
@@ -8499,6 +8587,8 @@ snapshots:
       - debug
       - supports-color
 
+  nodemailer@10.0.16: {}
+
   npm-run-path@4.0.1:
     dependencies:
       path-key: 3.1.1
@@ -8668,6 +8758,8 @@ snapshots:
 
   postal-mime@2.7.6: {}
 
+  postal-mime@4.0.5: {}
+
   postcss-selector-parser@7.1.6:
     dependencies:
       cssesc: 3.0.0
@@ -8717,6 +8809,8 @@ snapshots:
     dependencies:
       end-of-stream: 1.4.5
       once: 1.4.0
+
+  punycode.js@2.3.1: {}
 
   punycode@2.3.1: {}
 
@@ -9107,6 +9201,12 @@ snapshots:
   sisteransi@1.0.5: {}
 
   smart-buffer@4.2.0: {}
+
+  smtp-server@3.19.18:
+    dependencies:
+      ipv6-normalize: 1.0.1
+      nodemailer: 10.0.16
+      punycode.js: 2.3.1
 
   socks@2.8.10:
     dependencies:

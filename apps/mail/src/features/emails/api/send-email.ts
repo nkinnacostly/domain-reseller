@@ -1,5 +1,6 @@
 import {
   apiError,
+  contentProblem,
   describeIssues,
   refusalToApiError,
   requestHash,
@@ -11,7 +12,6 @@ import { authenticate } from '@/features/api/lib/authenticate'
 import { readIdempotencyKey, readJson } from '@/features/api/lib/body'
 import { apiErrorResponse, apiJson } from '@/features/api/lib/respond'
 import { logger } from '@/lib/logger'
-import { contentProblem } from './content'
 
 /**
  * POST /api/v1/emails (MAIL-SPEC §6): queue one email and answer its id.

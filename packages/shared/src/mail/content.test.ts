@@ -7,7 +7,7 @@ import {
   linksToShortener,
   PROTECTED_NAMES,
   splitMailbox,
-} from '../lib/content'
+} from './content'
 
 /** MAIL-SPEC §7.6: content checks at queue time — cheap and certain only. */
 

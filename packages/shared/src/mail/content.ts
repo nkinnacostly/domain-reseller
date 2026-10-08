@@ -1,3 +1,6 @@
+import type { EnqueueInput } from './api'
+import { type ApiError, apiError } from './errors'
+
 /**
  * Content checks at queue time (MAIL-SPEC §7.6): cheap and certain only.
  * Refused before anything is queued or reserved —
@@ -7,9 +10,10 @@
  *   - links to URL shorteners, which hide where a link goes;
  *   - attachments that are programs.
  *
- * Anything subtler is for review, not code. Pure: no I/O, so the API's
- * enqueue path calls it for every email and batch item, and it is tested
- * case by case. A refusal says which rule, never the address it read (N13).
+ * Anything subtler is for review, not code. Pure: no I/O, so every way in —
+ * the API's enqueue path for each email and batch item, and the SMTP relay
+ * for each message — calls it, and it is tested case by case. A refusal says
+ * which rule, never the address it read (N13).
  */
 
 export type ContentRule = 'impersonation' | 'url_shortener' | 'executable_attachment'
@@ -21,7 +25,9 @@ export type ContentInput = {
   from: string
   html?: string | null | undefined
   text?: string | null | undefined
-  attachments?: readonly { filename?: string | null; content_type?: string | null }[] | undefined
+  attachments?:
+    | readonly { filename?: string | null | undefined; content_type?: string | null | undefined }[]
+    | undefined
 }
 
 /**
@@ -217,8 +223,8 @@ export function linksToShortener(...bodies: (string | null | undefined)[]): bool
 }
 
 export function isExecutable(attachment: {
-  filename?: string | null
-  content_type?: string | null
+  filename?: string | null | undefined
+  content_type?: string | null | undefined
 }): boolean {
   const name = (attachment.filename ?? '')
     .trim()
@@ -239,5 +245,28 @@ export function contentRefusal(input: ContentInput): ContentRefusal | null {
   if (imitates(input.from)) return refuse('impersonation')
   if (linksToShortener(input.html, input.text)) return refuse('url_shortener')
   if ((input.attachments ?? []).some(isExecutable)) return refuse('executable_attachment')
+  return null
+}
+
+export type ContentProblem = { rule: ContentRule; index: number; error: ApiError }
+
+/**
+ * The first email of `emails` the check refuses, or null: asked before
+ * enqueue_email or enqueue_batch, so a refused email reserves nothing. The
+ * answer is `validation_error` (422) with the rule's own words; nothing it
+ * read is quoted back or logged (N13).
+ */
+export function contentProblem(emails: readonly EnqueueInput[]): ContentProblem | null {
+  for (const [index, { email, payload }] of emails.entries()) {
+    const refused = contentRefusal({
+      from: email.from,
+      html: payload.html,
+      text: payload.text,
+      attachments: payload.attachments,
+    })
+    if (refused) {
+      return { rule: refused.rule, index, error: apiError('validation_error', refused.message) }
+    }
+  }
   return null
 }

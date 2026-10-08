@@ -49,10 +49,25 @@ sign-off on naming another brand. **Resend's Node SDK** has both (owner, 8 Oct 2
 `resend-sdk.test.ts` and the e2e `resend-sdk.spec.ts` run it unchanged against our API, and
 `/docs/resend` lists what they cover, what differs, and the error names.
 
+### SMTP (owner, 8 Oct 2026: built ahead of v1's scope)
+
+`apps/mail-smtp`, its own Fly app (`fly.smtp.toml`), so the process that takes SMTP from the
+internet never holds the sending key. Fly's proxy ends TLS on 465 and 2465 (implicit TLS, RFC
+8314; no STARTTLS — Fly holds the certificate for `smtp.mydomainshub.com`) and hands it plain
+SMTP. AUTH PLAIN or LOGIN with an API key as the password, through `authenticate_key`; each
+message becomes the v1 API's email — the envelope decides recipients (To and Cc keep their place,
+the rest are Bcc), only the API's allowed headers pass, inline images keep their Content-ID — and
+goes the API's way: sendEmailSchema, the content checks, `enqueue_email`. The Message-ID with the
+envelope's recipients is the Idempotency-Key, so a client's retry is queued once. 7 MB a message,
+50 recipients, 100 messages a connection; each message after the AUTH is charged to the key's
+rate limit. Replies carry the API's words with RFC 3463 codes: 4xx where waiting helps, 5xx where
+something must change. Its heartbeat is `mail-worker:smtp`, so admin health and the silence alert
+cover it. Guide: `/docs/smtp`.
+
 ### Out of scope for v1
 
-Newsletter tool, contact lists and audiences, templates editor, SMTP relay, inbound email, dedicated
-IPs, open and click tracking, a second AWS region, and sub-accounts or resellers.
+Newsletter tool, contact lists and audiences, templates editor, inbound email, dedicated IPs, open
+and click tracking, a second AWS region, and sub-accounts or resellers.
 
 ---
 
