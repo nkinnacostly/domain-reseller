@@ -68,6 +68,14 @@ export function sesResourceArn(
   return `arn:aws:ses:${region}:${account}:${kind}/${name}`
 }
 
+/** A tenant resource's type from its ARN, for an answer that leaves ResourceType out. */
+function resourceTypeOf(arn: string): TenantResourceType | null {
+  if (arn.includes(':configuration-set/')) return 'CONFIGURATION_SET'
+  if (arn.includes(':identity/')) return 'EMAIL_IDENTITY'
+  if (arn.includes(':template/')) return 'EMAIL_TEMPLATE'
+  return null
+}
+
 /** SES's own reputation policies (developer guide, Tenants). */
 export const reputationPolicyArn = (region: string, policy: ReputationPolicy): string =>
   `arn:aws:ses:${region}:aws:reputation-policy/${policy}`
@@ -294,7 +302,12 @@ export function createSesManager(settings: SesCredentials) {
       )
     },
 
-    /** ListTenantResources, every page (at most 20): what the tenant may send with. */
+    /**
+     * ListTenantResources, every page (at most 20): what the tenant may send
+     * with. A type is picked out here, never asked of SES: SES answered
+     * BadRequestException to `Filter: { RESOURCE_TYPE: 'CONFIGURATION_SET' }`
+     * (eu-west-2, 8 Oct 2026), which held every account's set-up back.
+     */
     async listTenantResources(
       tenantName: string,
       resourceType?: TenantResourceType,
@@ -306,15 +319,17 @@ export function createSesManager(settings: SesCredentials) {
         const answer = await call('POST', '/tenants/resources/list', {
           TenantName: tenantName,
           PageSize: 100,
-          ...(resourceType ? { Filter: { RESOURCE_TYPE: resourceType } } : {}),
           ...(nextToken ? { NextToken: nextToken } : {}),
         })
         if (!answer.ok) return answer
         const body = asRecord(answer.json)
         for (const item of Array.isArray(body.TenantResources) ? body.TenantResources : []) {
           const resourceArn = asString(asRecord(item).ResourceArn)
-          if (resourceArn)
-            resources.push({ resourceArn, resourceType: asString(asRecord(item).ResourceType) })
+          const type = asString(asRecord(item).ResourceType)
+          if (!resourceArn) continue
+          if (resourceType && (type ?? resourceTypeOf(resourceArn))?.toUpperCase() !== resourceType)
+            continue
+          resources.push({ resourceArn, resourceType: type })
         }
         nextToken = asString(body.NextToken)
         if (!nextToken) break
