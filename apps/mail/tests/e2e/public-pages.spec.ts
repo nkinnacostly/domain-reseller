@@ -70,11 +70,12 @@ for (const path of PUBLIC_PAGES) {
 test.describe('the header', () => {
   test('links Pricing, Docs, Sign in and Get started, and marks the current page', async ({
     page,
-    isMobile,
   }) => {
     await page.goto('/pricing')
     const banner = page.getByRole('banner')
-    if (isMobile) {
+    // The header folds into a menu below `sm` (640px) — by width, not by device:
+    // the tablet profile is a mobile device wide enough for the full header.
+    if ((page.viewportSize()?.width ?? 1280) < 640) {
       // Below `sm` the header holds only the logo, the theme and the menu.
       await expect(banner.getByRole('link', { name: 'Get started' }).first()).toBeHidden()
       await banner.getByRole('button', { name: 'Open menu' }).click()

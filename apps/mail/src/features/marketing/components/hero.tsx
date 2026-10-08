@@ -39,8 +39,8 @@ export function Hero({ free = null }: { free?: Plan | null } = {}) {
             Transactional email for Nigerian businesses
           </h1>
           <p className="mt-5 max-w-xl text-pretty text-brand-muted-foreground sm:text-lg">
-            Send receipts, sign-in links and alerts from your own domain with one HTTP call. Plans
-            are priced in naira.
+            Send receipts, sign-in links and alerts from your own domain with one HTTP call — or
+            over SMTP from the app you already have. Plans are priced in naira.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link href={ROUTES.signUp} className={ON_BRAND_PRIMARY}>

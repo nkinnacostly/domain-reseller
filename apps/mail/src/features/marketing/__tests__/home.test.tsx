@@ -11,6 +11,7 @@ import { HowItWorks, STEPS } from '../components/how-it-works'
 import { PageHero } from '../components/page-hero'
 import { PlansTeaser } from '../components/plans-teaser'
 import { PreLaunchNotice } from '../components/pre-launch-notice'
+import { WaysToSend } from '../components/ways-to-send'
 import {
   curlExample,
   EXAMPLE_EMAIL,
@@ -104,7 +105,32 @@ describe('the home page sections', () => {
       'Watch deliveries',
     ])
     expect(steps[2]).toHaveTextContent('up to 50 recipients')
+    expect(steps[2]).toHaveTextContent('Or send over SMTP through smtp.mydomainshub.com')
     expect(steps[1]).toHaveTextContent('mdh_live_')
+  })
+
+  it('two ways in: the API and SMTP, with the relay’s own settings and the Resend guide', () => {
+    render(<WaysToSend />)
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Send with our API, or over SMTP',
+    )
+    expect(screen.getByRole('heading', { level: 3, name: 'The API' })).toBeInTheDocument()
+    expect(document.body).toHaveTextContent('Batches of up to 100')
+    const smtp = screen.getByLabelText('SMTP settings')
+    expect(smtp).toHaveTextContent('smtp.mydomainshub.com')
+    expect(smtp).toHaveTextContent('465 (SSL/TLS)')
+    expect(screen.getByRole('link', { name: 'Read the quickstart' })).toHaveAttribute(
+      'href',
+      '/docs/quickstart',
+    )
+    expect(screen.getByRole('link', { name: 'See the SMTP settings' })).toHaveAttribute(
+      'href',
+      '/docs/smtp',
+    )
+    expect(screen.getByRole('link', { name: 'Switching from Resend' })).toHaveAttribute(
+      'href',
+      '/docs/resend',
+    )
   })
 
   it('deliverability: isolation, sandbox, suppression and pausing, with the spec’s numbers', () => {

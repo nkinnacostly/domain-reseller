@@ -27,7 +27,8 @@ export function FinalCta({ hasFreePlan = false }: { hasFreePlan?: boolean } = {}
               </h2>
               <p className="mt-4 max-w-lg text-pretty text-brand-muted-foreground">
                 Create an account{hasFreePlan ? ' on the Free plan — no card needed' : ''}, verify
-                your domain and make one call. Questions first? Email{' '}
+                your domain and make one call, or point your app’s SMTP settings at us. Questions
+                first? Email{' '}
                 <a
                   href={`mailto:${BUSINESS.email}`}
                   className="rounded-sm font-medium text-brand-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-foreground"

@@ -6,6 +6,7 @@ import { Hero } from '@/features/marketing/components/hero'
 import { HowItWorks } from '@/features/marketing/components/how-it-works'
 import { PlansTeaser } from '@/features/marketing/components/plans-teaser'
 import { PreLaunchNotice } from '@/features/marketing/components/pre-launch-notice'
+import { WaysToSend } from '@/features/marketing/components/ways-to-send'
 import { freePlan } from '@/features/pricing/lib/plans'
 import { getPlanCatalogue } from '@/features/pricing/queries/plans'
 import { JsonLd } from '@/features/seo/components/json-ld'
@@ -17,11 +18,11 @@ export const metadata: Metadata = pageMetadata({
   title: `${PRODUCT_NAME} — transactional email for Nigerian businesses`,
   absolute: true,
   description:
-    'Send receipts, sign-in links and alerts from your own domain with one HTTP call. Start on the Free plan, no card needed; paid plans priced in naira, every cap shown.',
+    'Send receipts, sign-in links and alerts from your own domain with one HTTP call, or over SMTP from WordPress, Laravel or Django. Start on the Free plan, no card needed; paid plans priced in naira, every cap shown.',
   path: '/',
 })
 
-/** The home page (MAIL-SPEC §10): what Mail is and its Free plan, the call, how it works, what protects you. */
+/** The home page (MAIL-SPEC §10): what Mail is and its Free plan, the call, how it works, the API or SMTP, what protects you. */
 export default async function HomePage() {
   const catalogue = await getPlanCatalogue()
   const free = catalogue ? freePlan(catalogue.plans) : null
@@ -33,6 +34,7 @@ export default async function HomePage() {
       <Hero free={free} />
       <PreLaunchNotice />
       <HowItWorks />
+      <WaysToSend />
       <Deliverability />
       <PlansTeaser catalogue={catalogue} />
       <FinalCta hasFreePlan={free !== null} />

@@ -1,4 +1,4 @@
-import { API_KEY_PREFIX, EMAIL_LIMITS } from '@dr/shared/mail'
+import { API_KEY_PREFIX, EMAIL_LIMITS, SMTP_SETTINGS } from '@dr/shared/mail'
 import type { Icon } from '@phosphor-icons/react'
 import { ChartLineUp, Key, PaperPlaneTilt, ShieldCheck } from '@phosphor-icons/react/ssr'
 import { Container } from '@/components/layout/container'
@@ -41,6 +41,8 @@ export const STEPS: Step[] = [
         Post each email to <code className={CODE}>/api/v1/emails</code> with a from, to, subject,
         and html or text — up to {EMAIL_LIMITS.maxRecipients} recipients. With an{' '}
         <code className={CODE}>Idempotency-Key</code>, a retry within 24 hours never sends it twice.
+        Or send over SMTP through <code className={CODE}>{SMTP_SETTINGS.host}</code>, with the key
+        as the password.
       </>
     ),
   },
