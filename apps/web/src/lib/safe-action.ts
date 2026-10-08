@@ -20,6 +20,7 @@ import {
   hasFreshSecondFactor,
   resetHoldUntil,
   SENSITIVE_CHANGE_NEEDS_TWO_FACTOR,
+  startedWithStrongSignIn,
 } from '@/features/auth/lib/security'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
@@ -47,7 +48,12 @@ export const actionClient = createSafeActionClient({ handleServerError }).use(as
   return next({ ctx: { requestId: requestHeaders.get('x-request-id') ?? crypto.randomUUID() } })
 })
 
-export const authAction = actionClient.use(async ({ next }) => {
+/**
+ * Signed in, whether or not the two-factor code has been entered yet: only
+ * for what finishing sign-in itself needs — entering the code, signing out,
+ * setting a new password from a reset link. Everything else is `authAction`.
+ */
+export const partialAuthAction = actionClient.use(async ({ next }) => {
   const supabase = await createClient()
   const {
     data: { user },
@@ -56,6 +62,24 @@ export const authAction = actionClient.use(async ({ next }) => {
   if (!user) throw new AppError('UNAUTHENTICATED', 'Please sign in to continue.')
 
   return next({ ctx: { user, supabase } })
+})
+
+export const SIGN_IN_UNFINISHED =
+  'Enter the code from your authenticator app to finish signing in, then try again.'
+
+/**
+ * A signed-in person who has finished signing in: with two-factor on, the
+ * code is entered (security audit, 8 Oct 2026). The proxy sends unfinished
+ * sessions to /verify, but an action can be posted to any path — one the
+ * proxy skips included — so it checks for itself. Decoded from the JWT: no
+ * network call.
+ */
+export const authAction = partialAuthAction.use(async ({ next, ctx }) => {
+  const { data: aal } = await ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    throw new AppError('MFA_REQUIRED', SIGN_IN_UNFINISHED)
+  }
+  return next({ ctx })
 })
 
 /**
@@ -86,11 +110,22 @@ export const elevatedAction = authAction.use(async ({ next, ctx }) => {
     )
   }
 
+  // A session that began from an email link (a reset or sign-in link) is
+  // what someone with only the inbox gets; adding a second factor to it
+  // through Supabase's own API must not open these changes (security audit,
+  // 8 Oct 2026). Only a password or Google sign-in may make them.
+  if (!startedWithStrongSignIn(aal.currentAuthenticationMethods ?? [])) {
+    throw new AppError('FORBIDDEN', SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN)
+  }
+
   const hold = resetHoldUntil(profile?.password_reset_at ?? null, now)
   if (hold) throw new AppError('FORBIDDEN', describeHold(hold))
 
   return next({ ctx })
 })
+
+export const SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN =
+  'Sign in with your password or Google, then enter your code, to make this change. A sign-in from an email link cannot make it.'
 
 // ── Admin (ADR-006) ─────────────────────────────────────────────────────────
 

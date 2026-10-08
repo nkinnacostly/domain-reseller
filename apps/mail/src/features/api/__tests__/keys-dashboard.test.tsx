@@ -53,7 +53,15 @@ function session({
     return chain
   }
   const client = {
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1' } } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from,
     rpc: async (fn: string, args: Record<string, unknown>) => {
       rpcCalls.push({ fn, args })

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { BRAND_NAME } from '@/components/layout/brand'
 import { env } from '@/lib/env'
-import { authAction } from '@/lib/safe-action'
+import { authAction, partialAuthAction } from '@/lib/safe-action'
 import type { MailSessionClient } from '@/lib/supabase/server'
 import { SECURITY_PAGE } from '../lib/links'
 import { authMessage } from '../lib/messages'
@@ -104,7 +104,7 @@ export const disableTwoFactor = authAction
   )
 
 /** The second step of sign-in, and the step-up before turning two-factor off. */
-export const verifySecondFactor = authAction
+export const verifySecondFactor = partialAuthAction
   .inputSchema(z.object({ code: totpCodeSchema, next: z.string().optional() }))
   .action(async ({ parsedInput, ctx }): Promise<{ error: string } | undefined> => {
     const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_MAIL_URL)

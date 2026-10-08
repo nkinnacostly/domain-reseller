@@ -82,6 +82,7 @@ function userClient({
           data: {
             currentLevel: 'aal2',
             currentAuthenticationMethods: [
+              { method: 'password', timestamp: Math.floor(Date.now() / 1000) - 7200 },
               { method: 'totp', timestamp: freshCode ? now() : now() - 3600 },
             ],
           },

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { env } from '@/lib/env'
-import { authAction } from '@/lib/safe-action'
+import { authAction, partialAuthAction } from '@/lib/safe-action'
 import { authMessage } from '../lib/messages'
 import { safeNext } from '../lib/redirect'
 import {
@@ -102,7 +102,7 @@ export const disableTwoFactor = authAction
   )
 
 /** The second step of sign-in, and the step-up before sensitive changes. */
-export const verifySecondFactor = authAction
+export const verifySecondFactor = partialAuthAction
   .inputSchema(z.object({ code: totpCodeSchema, next: z.string().optional() }))
   .action(async ({ parsedInput, ctx }): Promise<{ error: string } | undefined> => {
     const next = safeNext(parsedInput.next, env.NEXT_PUBLIC_APP_URL)

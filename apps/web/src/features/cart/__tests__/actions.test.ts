@@ -3,8 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { checkAvailability } from '@/features/search/queries/availability'
 import { env } from '@/lib/env'
+import { withinLimit } from '@/lib/rate-limit'
 import * as store from '../queries/store'
 
+vi.mock('@/lib/rate-limit', async (original) => ({
+  ...(await original<typeof import('@/lib/rate-limit')>()),
+  addressKey: vi.fn(async (scope: string) => `${scope}:test`),
+  withinLimit: vi.fn(async () => true),
+}))
 vi.mock('@/features/pricing/queries/pricing', () => ({ getPricedCatalogue: vi.fn() }))
 vi.mock('@/features/ssl/queries/catalogue', () => ({ getSslCatalogue: vi.fn() }))
 vi.mock('@/features/search/queries/availability', () => ({ checkAvailability: vi.fn() }))
@@ -87,6 +93,15 @@ beforeEach(() => {
 })
 
 describe('addToCart', () => {
+  it('stops one address that adds too fast, before asking the registry (security audit)', async () => {
+    vi.mocked(withinLimit).mockResolvedValueOnce(false)
+    const result = await addToCart({ domain: 'getpaid.com' })
+    expect(result?.data).toEqual({
+      error: "You've added a lot in the last few minutes. Wait a little and try again.",
+    })
+    expect(checkAvailability).not.toHaveBeenCalled()
+  })
+
   it('refuses an extension we do not sell', async () => {
     const result = await addToCart({ domain: 'getpaid.xyz' })
     expect(result?.data).toEqual({ error: "We don't sell .xyz." })

@@ -2,7 +2,14 @@ import { AppError } from '@dr/shared/errors'
 import { headers } from 'next/headers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createClient } from '@/lib/supabase/server'
-import { actionClient, authAction, elevatedAction } from '../safe-action'
+import {
+  actionClient,
+  authAction,
+  elevatedAction,
+  partialAuthAction,
+  SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN,
+  SIGN_IN_UNFINISHED,
+} from '../safe-action'
 
 vi.mock('next/headers', () => ({ headers: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
@@ -96,6 +103,35 @@ describe('authAction', () => {
     session()
     expect(await whoAmI()).toEqual({ data: 'user-1' })
   })
+
+  it('refuses a session with two-factor on whose code is not entered yet (security audit)', async () => {
+    session({ aal: { currentLevel: 'aal1', nextLevel: 'aal2', currentAuthenticationMethods: [] } })
+    const body = vi.fn()
+    const action = authAction.action(async () => body())
+    expect(await action()).toEqual({ serverError: SIGN_IN_UNFINISHED })
+    expect(body).not.toHaveBeenCalled()
+  })
+
+  it('lets a password-only session through when there is no second factor to enter', async () => {
+    session({ aal: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] } })
+    expect(await whoAmI()).toEqual({ data: 'user-1' })
+  })
+})
+
+describe('partialAuthAction (finishing sign-in)', () => {
+  it('lets a session that has not entered its code yet through — to enter it, or sign out', async () => {
+    session({ aal: { currentLevel: 'aal1', nextLevel: 'aal2', currentAuthenticationMethods: [] } })
+    expect(await partialAuthAction.action(async ({ ctx }) => ctx.user.id)()).toEqual({
+      data: 'user-1',
+    })
+  })
+
+  it('still needs someone signed in', async () => {
+    session({ user: null })
+    expect(await partialAuthAction.action(async () => 1)()).toEqual({
+      serverError: 'Please sign in to continue.',
+    })
+  })
 })
 
 describe('elevatedAction (SEC-2)', () => {
@@ -135,9 +171,23 @@ describe('elevatedAction (SEC-2)', () => {
     expect(body).not.toHaveBeenCalled()
   })
 
-  it('asks for the code when an authenticator is set up but not used this session', async () => {
+  it('asks to finish signing in when an authenticator is set up but its code not entered', async () => {
     session({ aal: { currentLevel: 'aal1', nextLevel: 'aal2', currentAuthenticationMethods: [] } })
-    expect(await sensitive()).toEqual({ serverError: MFA })
+    expect(await sensitive()).toEqual({ serverError: SIGN_IN_UNFINISHED })
+  })
+
+  it('refuses a session that began from an email link, even with a fresh code (security audit)', async () => {
+    session({
+      aal: {
+        currentLevel: 'aal2',
+        nextLevel: 'aal2',
+        currentAuthenticationMethods: [
+          { method: 'otp', timestamp: nowSeconds() - 600 },
+          { method: 'totp', timestamp: nowSeconds() - 60 },
+        ],
+      },
+    })
+    expect(await sensitive()).toEqual({ serverError: SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN })
   })
 
   it('holds sensitive changes for a day after a password reset (FR-A6)', async () => {

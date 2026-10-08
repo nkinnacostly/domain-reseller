@@ -32,6 +32,8 @@ export const REFUND_REASONS = [
   'overpayment',
   'underpayment',
   'empty_order',
+  'late_payment',
+  'over_limit',
 ] as const
 export type RefundReason = (typeof REFUND_REASONS)[number]
 
@@ -197,6 +199,8 @@ export const INCIDENT_KINDS = [
   'underpayment',
   'tx_ref_mismatch',
   'registered_after_refund',
+  'late_payment',
+  'over_limit',
 ] as const
 
 export function isOwedIncident(kind: string): boolean {

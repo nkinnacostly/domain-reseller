@@ -24,6 +24,8 @@ export const REFUND_REASON_LABEL: Record<string, string> = {
   overpayment: 'Overpaid',
   underpayment: 'Underpaid',
   empty_order: 'Nothing to supply',
+  late_payment: 'Paid too late',
+  over_limit: 'Over the daily limit',
 }
 
 export const JOB_STATUS_LABEL: Record<string, string> = {

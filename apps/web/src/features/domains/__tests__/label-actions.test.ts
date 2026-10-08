@@ -25,7 +25,15 @@ let calls: Call[]
  */
 function signedIn() {
   const client = {
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1' } } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from: (table: string) => {
       /** A real promise for this table and operation, with the query methods chained on. */
       const query = (op: string): Record<string, unknown> => {

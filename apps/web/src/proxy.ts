@@ -213,12 +213,20 @@ export async function proxy(request: NextRequest) {
  * Matchers are OR'd. The first skips static files by extension, which would
  * also skip `/admin/orders/x.png` — a page under /admin, rendered with no
  * gate, no CSP and no X-Robots-Tag. So every /admin path is matched on its
- * own (ADMIN-SPEC §2.3).
+ * own (ADMIN-SPEC §2.3), and so is every signed-in path: `/app/domains/x.png`
+ * is a domain page, and a server action posted to it once skipped the
+ * two-factor redirect (security audit, 8 Oct 2026).
  */
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif)$).*)',
     '/admin',
     '/admin/:path*',
+    '/app',
+    '/app/:path*',
+    '/verify',
+    '/verify/:path*',
+    '/reset-password',
+    '/reset-password/:path*',
   ],
 }

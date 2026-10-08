@@ -3,7 +3,7 @@
 import { createClient as createStandaloneClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { env } from '@/lib/env'
-import { authAction } from '@/lib/safe-action'
+import { authAction, partialAuthAction } from '@/lib/safe-action'
 import { retryingFetch } from '@/lib/supabase/retry'
 import { authMessage } from '../lib/messages'
 import { startedFromEmailLink } from '../lib/security'
@@ -19,7 +19,7 @@ type Result = { error: string } | { ok: true }
  * session is signed out, the shop's 24-hour hold starts (the password is
  * shared, MAIL-SPEC M5), and the account-wide security email is queued.
  */
-export const completePasswordReset = authAction
+export const completePasswordReset = partialAuthAction
   .inputSchema(newPasswordSchema)
   .action(async ({ parsedInput, ctx }): Promise<Result> => {
     const { data: aal } = await ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel()

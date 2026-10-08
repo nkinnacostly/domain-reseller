@@ -27,6 +27,9 @@ const claimSchema = z.object({
     'overpayment',
     'underpayment',
     'empty_order',
+    // Migration 61 (security audit, 8 Oct 2026): refunded whole, nothing registered.
+    'late_payment',
+    'over_limit',
   ]),
   amount_kobo: z.coerce.number().int().positive(),
   attempts: z.number().int().nonnegative(),

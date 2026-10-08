@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { loadPricedCatalogue, readPricedCatalogue } from '@/features/pricing/queries/pricing'
 import { loadSslCatalogue, readSslCatalogue } from '@/features/ssl/queries/catalogue'
 import { logger } from '@/lib/logger'
-import { LIMITS, withinLimit } from '@/lib/rate-limit'
+import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 
 /**
  * Puts new prices on the site as soon as the pricing jobs write them
@@ -12,10 +12,12 @@ import { LIMITS, withinLimit } from '@/lib/rate-limit'
  * It needs no secret: it compares the cached prices with the database and
  * expires the cache only when they differ. Anyone can call it, and the most
  * it can do is refresh prices that really have changed — once — so a caller
- * gains nothing. Rate-limited all the same.
+ * gains nothing. Rate-limited all the same, per caller.
  */
 export async function POST() {
-  if (!(await withinLimit('pricing:refresh', LIMITS.pricingRefresh))) {
+  // Counted per caller's address: one shared count let anyone use up the
+  // gateway's refreshes for the hour (security audit, 8 Oct 2026).
+  if (!(await withinLimit(await addressKey('pricing_refresh'), LIMITS.pricingRefresh))) {
     return NextResponse.json({ ok: false }, { status: 429 })
   }
 

@@ -90,7 +90,15 @@ let profileLookups: unknown[][]
 
 function userClient(profile: unknown = PROFILE_ROW) {
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from: (table: string) => {
       // FR-A2: an account well under ten domains — two-factor stays optional.
       if (table === 'domains') return chain({ count: 1, error: null })

@@ -45,6 +45,8 @@ const REASON_FOR: Record<string, string> = {
   renewal_failed: 'A renewal that failed',
   transfer_failed: 'A transfer that failed',
   ssl_failed: 'A certificate that was not ordered',
+  late_payment: 'A payment after the order’s grace period',
+  over_limit: 'A cancelled order paid past the daily limit',
 }
 
 /** "Registration of example.com", or what a charge refund is for. */
@@ -263,6 +265,8 @@ export const INCIDENT_KIND_LABEL: Record<string, string> = {
   underpayment: 'Paid less than the total',
   tx_ref_mismatch: 'Charge for another order',
   registered_after_refund: 'Registered after its refund',
+  late_payment: 'Paid too late',
+  over_limit: 'Paid past the daily limit',
 }
 
 /** What each kind means, for the incident's card. */
@@ -281,4 +285,8 @@ export const INCIDENT_KIND_MEANING: Record<string, string> = {
     "A charge was presented for an order that isn't its own. Nothing was applied; look at it in Flutterwave.",
   registered_after_refund:
     'A line was registered while its refund was on its way. Check whether the customer has both the domain and the money.',
+  late_payment:
+    'A payment came in after the order’s grace period (ops_settings.late_payment_grace_hours), so its prices no longer held. Nothing was registered and the whole amount is being refunded.',
+  over_limit:
+    'A cancelled order was paid when it would take the account past its daily limit on new domains (SEC-11). Nothing was registered and the whole amount is being refunded. Look at the account if it keeps happening.',
 }

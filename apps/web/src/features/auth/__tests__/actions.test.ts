@@ -619,7 +619,8 @@ describe('turning two-factor on', () => {
 
   it('treats a session with no recorded sign-in method as not started with the password', async () => {
     const { client } = fake()
-    client.auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValueOnce({ data: null } as never)
+    // authAction asks too (finished sign-in?), then the action itself.
+    client.auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({ data: null } as never)
     const result = await startTotpEnrollment()
     expect(result?.data).toEqual({ error: expect.stringMatching(/Sign in with your password/) })
   })

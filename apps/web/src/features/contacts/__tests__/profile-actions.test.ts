@@ -64,7 +64,15 @@ function userClient(answers: Answer[]) {
     return node
   })
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1' } } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from,
   } as never)
   return { writes, from }
@@ -225,7 +233,15 @@ describe('deleteContactProfile (FR-A4)', () => {
 
   it('needs a signed-in user', async () => {
     vi.mocked(createClient).mockResolvedValue({
-      auth: { getUser: async () => ({ data: { user: null } }) },
+      auth: {
+        getUser: async () => ({ data: { user: null } }),
+        mfa: {
+          getAuthenticatorAssuranceLevel: async () => ({
+            data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+            error: null,
+          }),
+        },
+      },
     } as never)
     expect((await deleteContactProfile({ id: PROFILE_ID }))?.serverError).toBe(
       'Please sign in to continue.',

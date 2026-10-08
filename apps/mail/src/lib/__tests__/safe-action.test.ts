@@ -9,14 +9,18 @@ import {
   authAction,
   isMemberRole,
   NOT_A_MEMBER,
+  partialAuthAction,
   ROLE_TOO_LOW,
   SERVER_CRASH_WORDS,
+  SIGN_IN_UNFINISHED,
 } from '../safe-action'
 
 vi.mock('next/headers', () => ({ headers: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 
 const ACCOUNT = '0b6c2a3e-6a1f-4c51-9d8e-1f2a3b4c5d6e'
+/** What the session's assurance level asks for next: 'aal2' once a second factor is verified. */
+let aalNext: 'aal1' | 'aal2' = 'aal1'
 
 /** A session as the server client sees it: who, and their row in mail.members. */
 function session(
@@ -34,7 +38,15 @@ function session(
   }
   const from = vi.fn(() => query)
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user } }) },
+    auth: {
+      getUser: async () => ({ data: { user } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: aalNext, currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from,
   } as never)
   return { from, eqs }
@@ -70,6 +82,22 @@ describe('actionClient', () => {
 })
 
 describe('authAction', () => {
+  it('refuses a session with two-factor on whose code is not entered yet (security audit)', async () => {
+    aalNext = 'aal2'
+    session({ id: 'u-1' })
+    expect(await authAction.action(async () => 'ok')()).toEqual({ serverError: SIGN_IN_UNFINISHED })
+    // …and so does every account action, which is built on it.
+    const action = accountAction(z.object({ accountId: z.string() })).action(async () => 'ok')
+    expect(await action({ accountId: ACCOUNT })).toEqual({
+      serverError: SIGN_IN_UNFINISHED,
+    })
+    // Finishing sign-in is still possible.
+    expect(await partialAuthAction.action(async ({ ctx }) => ctx.user.id)()).toEqual({
+      data: 'u-1',
+    })
+    aalNext = 'aal1'
+  })
+
   it('needs a signed-in person', async () => {
     session(null)
     expect(await authAction.action(async () => 'ok')()).toEqual({

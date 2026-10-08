@@ -34,3 +34,16 @@ export function clientAddress(headers: Headers): string | undefined {
     undefined
   )
 }
+
+/**
+ * A rate-limit key for an email address (an auth email's recipient):
+ * keyed-hashed like an IP address, for the same reason — the address is
+ * personal data, and the table must never hold it as written.
+ */
+export function addressHashKey(scope: string, email: string): string {
+  const digest = createHmac('sha256', env.SUPABASE_SECRET_KEY ?? 'unkeyed')
+    .update(email.trim().toLowerCase())
+    .digest('hex')
+    .slice(0, 32)
+  return `${scope}:${digest}`
+}

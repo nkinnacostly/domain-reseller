@@ -52,7 +52,15 @@ function signedIn(user: { id: string; email?: string } | null, tables: Tables = 
     return query
   })
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user } }) },
+    auth: {
+      getUser: async () => ({ data: { user } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from,
   } as never)
   return from

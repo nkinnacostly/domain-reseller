@@ -177,7 +177,13 @@ beforeEach(() => {
   vi.mocked(createClient).mockResolvedValue({
     auth: {
       getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }),
-      mfa: { listFactors: async () => factors },
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+        listFactors: async () => factors,
+      },
     },
     from: (table: string) => {
       if (table === 'domains') return chain(held)

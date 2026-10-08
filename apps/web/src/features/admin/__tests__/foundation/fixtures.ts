@@ -44,7 +44,13 @@ export function sessionClient({
     client: {
       auth: {
         getUser: async () => ({ data: { user } }),
-        mfa: { challengeAndVerify },
+        mfa: {
+          getAuthenticatorAssuranceLevel: async () => ({
+            data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+            error: null,
+          }),
+          challengeAndVerify,
+        },
       },
       rpc: rpcFn,
     },

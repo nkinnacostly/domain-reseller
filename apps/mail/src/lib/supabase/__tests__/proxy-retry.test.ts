@@ -17,7 +17,15 @@ vi.mock('@supabase/ssr', () => ({
   createServerClient: (_url: string, _key: string, options: never) => {
     seen.options = options
     return {
-      auth: { getUser: async () => ({ data: { user: null } }) },
+      auth: {
+        getUser: async () => ({ data: { user: null } }),
+        mfa: {
+          getAuthenticatorAssuranceLevel: async () => ({
+            data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+            error: null,
+          }),
+        },
+      },
       rpc: async () => ({ data: 'not_admin', error: null }),
     }
   },

@@ -43,7 +43,13 @@ export function fakeAdmin({
   const client = {
     auth: {
       getUser: vi.fn(async () => ({ data: { user } })),
-      mfa: { challengeAndVerify },
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+        challengeAndVerify,
+      },
     },
     schema: vi.fn((name: string) => at(name)),
     ...at('mail'),
