@@ -6,8 +6,8 @@ import { ROUTES } from '../lib/site'
 import { ON_BRAND_PRIMARY, ON_BRAND_SECONDARY } from './hero'
 import { IconDisc } from './page-hero'
 
-/** The closing call to action, on the blue panel. */
-export function FinalCta() {
+/** The closing call to action, on the blue panel; "Start free" while there is a Free plan. */
+export function FinalCta({ hasFreePlan = false }: { hasFreePlan?: boolean } = {}) {
   return (
     <section aria-labelledby="final-cta-heading">
       <Container className="pb-16 sm:pb-24">
@@ -26,7 +26,8 @@ export function FinalCta() {
                 Send your first email
               </h2>
               <p className="mt-4 max-w-lg text-pretty text-brand-muted-foreground">
-                Create an account, verify your domain and make one call. Questions first? Email{' '}
+                Create an account{hasFreePlan ? ' on the Free plan — no card needed' : ''}, verify
+                your domain and make one call. Questions first? Email{' '}
                 <a
                   href={`mailto:${BUSINESS.email}`}
                   className="rounded-sm font-medium text-brand-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-foreground"
@@ -37,7 +38,7 @@ export function FinalCta() {
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link href={ROUTES.signUp} className={ON_BRAND_PRIMARY}>
-                  Get started
+                  {hasFreePlan ? 'Start free' : 'Get started'}
                 </Link>
                 <Link href={ROUTES.docs} className={ON_BRAND_SECONDARY}>
                   Read the docs

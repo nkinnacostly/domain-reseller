@@ -77,6 +77,16 @@ describe('the home page sections', () => {
     expect(screen.getByRole('link', { name: 'See pricing' })).toHaveAttribute('href', '/pricing')
   })
 
+  it('the hero leads with the Free plan, its numbers from the plan row (N5b)', () => {
+    const free = CATALOGUE.plans.find((plan) => plan.priceKobo === 0)
+    render(<Hero free={free ?? null} />)
+    expect(document.body).toHaveTextContent('Free plan: 100 emails a day')
+    expect(screen.getByRole('link', { name: 'Start free' })).toHaveAttribute('href', '/sign-up')
+    expect(document.body).toHaveTextContent(
+      'No card needed: 3,000 emails a month free, up to 100 a day. New accounts send to their own team until we have approved them.',
+    )
+  })
+
   it('a code sample without a title is still named', () => {
     render(<CodeSample label="Example" code="echo hi" />)
     expect(screen.getByRole('region', { name: 'Example' })).toHaveTextContent('echo hi')
@@ -111,10 +121,16 @@ describe('the home page sections', () => {
 
   it('the plans teaser quotes the plan rows, and says less without them', () => {
     const { unmount } = render(<PlansTeaser catalogue={CATALOGUE} />)
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Start on the Free plan')
-    expect(document.body).toHaveTextContent(
-      '3,000 emails a month, up to 100 a day, for 1 sending domain.',
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Start free, upgrade when you grow',
     )
+    expect(document.body).toHaveTextContent(
+      'The Free plan sends 3,000 emails a month, up to 100 a day, for 1 sending domain. No card needed.',
+    )
+    const facts = screen.getByLabelText('The Free plan')
+    expect(facts).toHaveTextContent('₦0a month')
+    expect(facts).toHaveTextContent('100emails a day')
+    expect(screen.getByRole('link', { name: 'Start free' })).toHaveAttribute('href', '/sign-up')
     expect(document.body).toHaveTextContent(
       /Paid plans from ₦20,000 a month before VAT; VAT 7\.5% is added at checkout\./,
     )
@@ -141,7 +157,12 @@ describe('the home page sections', () => {
   })
 
   it('the closing call to action', () => {
+    const { unmount } = render(<FinalCta hasFreePlan />)
+    expect(screen.getByRole('link', { name: 'Start free' })).toHaveAttribute('href', '/sign-up')
+    expect(document.body).toHaveTextContent('on the Free plan — no card needed')
+    unmount()
     render(<FinalCta />)
+    expect(screen.getByRole('link', { name: 'Get started' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Send your first email' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Read the docs' })).toHaveAttribute('href', '/docs')
   })
