@@ -165,20 +165,24 @@ describe('updateProfile', () => {
   })
 })
 
-describe('createInvite (§9: a hash of the token, the link shown once)', () => {
-  it('sends SQL only the hash, and answers the link with the token in it', async () => {
+describe('createInvite (§9: a hash of the token, the link shown once and emailed)', () => {
+  it('makes the invite with only the hash, then emails the link (migration 58)', async () => {
     const { rpcCalls } = use({
-      rpc: { create_invite: ok({ inviteId: INVITE, expiresAt: '2026-10-13T10:00:00Z' }) },
+      rpc: {
+        create_invite: ok({ inviteId: INVITE, expiresAt: '2026-10-13T10:00:00Z' }),
+        email_invite: ok({ queued: true }),
+      },
     })
     const result = await createInvite({
       accountId: ACCOUNT,
       email: ' Bola@Example.com ',
       role: 'developer',
     })
-    const data = result?.data as { link: string; expiresAt: string }
+    const data = result?.data as { link: string; expiresAt: string; emailed: boolean }
     const token = new URL(data.link).searchParams.get('token') ?? ''
     expect(data.link).toMatch(/^http:\/\/localhost:3001\/invite\?token=[A-Za-z0-9_-]{43}$/)
     expect(data.expiresAt).toBe('2026-10-13T10:00:00Z')
+    expect(data.emailed).toBe(true)
     expect(rpcCalls).toEqual([
       {
         fn: 'create_invite',
@@ -189,8 +193,26 @@ describe('createInvite (§9: a hash of the token, the link shown once)', () => {
           p_token_hash: hashInviteToken(token),
         },
       },
+      // The token goes to SQL only to be emailed, for this invite.
+      { fn: 'email_invite', args: { p_invite_id: INVITE, p_token: token } },
     ])
-    expect(JSON.stringify(rpcCalls)).not.toContain(token)
+    expect(JSON.stringify(rpcCalls[0])).not.toContain(token)
+  })
+
+  it('still answers the link when the email could not be queued, and says so', async () => {
+    for (const email_invite of [crash, ok({ queued: false }), refuse('already_sent')]) {
+      use({
+        rpc: {
+          create_invite: ok({ inviteId: INVITE, expiresAt: '2026-10-13T10:00:00Z' }),
+          email_invite,
+        },
+      })
+      const data = (
+        await createInvite({ accountId: ACCOUNT, email: 'b@example.com', role: 'viewer' })
+      )?.data as { link: string; emailed: boolean }
+      expect(data.link).toContain('/invite?token=')
+      expect(data.emailed).toBe(false)
+    }
   })
 
   it('is refused to developers before SQL, and words SQL’s refusals', async () => {

@@ -9,7 +9,7 @@ import { formatDay } from './words'
  * billing date to that day; a move to a smaller paid plan needs a new card
  * payment once the period ends (Flutterwave's payment plans cannot change a
  * subscription's amount); a cancellation keeps the plan to the period's end,
- * with no refund for the rest of it. No email is promised.
+ * with no refund for the rest of it. No email is promised for these choices.
  */
 
 const COUNT = new Intl.NumberFormat('en-NG')

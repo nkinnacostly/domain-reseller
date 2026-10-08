@@ -7,6 +7,7 @@ import {
   setTestPlan,
   type TestUser,
 } from './support/accounts'
+import { queuedEmailsFor } from './support/mail-data'
 
 /**
  * MAIL-SPEC §7.1, §7.2, §9, §10 against the real Supabase project: sign up,
@@ -241,7 +242,7 @@ test.describe('the account journey', () => {
     await expect(page.getByText('1 of 1 seat on the Free plan taken')).toBeVisible()
     const invite = page.getByRole('form', { name: 'Invite someone' })
     await invite.getByLabel('Their email').fill(invitee.email)
-    await invite.getByRole('button', { name: 'Make an invite link' }).click()
+    await invite.getByRole('button', { name: 'Send invite' }).click()
     await expect(invite.getByText(/This plan has 1 member seat/)).toBeVisible()
 
     const [accountId] = await mailAccountIdsOf(owner)
@@ -251,8 +252,13 @@ test.describe('the account journey', () => {
     await expect(page.getByText('1 of 3 seats on the Starter plan taken')).toBeVisible()
     await invite.getByLabel('Their email').fill(invitee.email)
     await invite.getByLabel('Role', { exact: true }).selectOption('developer')
-    await invite.getByRole('button', { name: 'Make an invite link' }).click()
-    await expect(page.getByText('We don’t email invites yet')).toBeVisible()
+    await invite.getByRole('button', { name: 'Send invite' }).click()
+    // An e2e address is reserved: the invite email is queued as skipped, so the
+    // page says to send the link, and the outbox never held the token (migration 58).
+    await expect(page.getByText(/We could not email it just now/)).toBeVisible()
+    await expect
+      .poll(() => queuedEmailsFor(invitee.email))
+      .toEqual([{ kind: 'mail_invite', status: 'skipped', hasToken: false }])
     inviteLink = await page.getByLabel('Invite link').inputValue()
     expect(inviteLink).toMatch(/\/invite\?token=[A-Za-z0-9_-]{43}$/)
     await expect(page.locator(`[data-invite="${invitee.email}"]`)).toContainText('Developer')

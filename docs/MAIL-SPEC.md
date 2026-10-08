@@ -461,15 +461,22 @@ As `CLAUDE.md` §10, plus:
 | Q5 | Say "works with the X SDK" in the docs (§1)? | No, until tested and approved |
 | Q6 | ~~Send-rate split~~ | **Decided:** shop 4/s, Mail 10/s until AWS raises the quota |
 
-### Not yet built: the Mail notifications package
+### The Mail notifications package (built 8 Oct 2026, migration 58)
 
-The emails this spec promises to customers are not sent yet; the dashboard shows each state
-instead. Copy must not promise them (N9b) until this package ships:
+Mail's database queues each notice into the shop's outbox (migration 31) in the same transaction as
+the event, and the gateway sends it from `no-reply@notify.mydomainshub.com` under the name
+"MyDomainsHub Mail", rendered from `@dr/shared/email` with links to emails.mydomainshub.com. It never
+goes through Mail's own sending path, so a paused account still hears that it is paused. All are
+transactional and cannot be switched off; e2e accounts' are queued as skipped.
 
-- **Invites:** the invitation email (an invite is a link the inviter copies and shares today).
-- **Cap notices:** the emails at 80% and 100% of a cap (§8; the dashboard notice is built).
-- **Past due:** the emails while a renewal is past due (§8; the banner is built).
-- **Webhook disabled:** the owner's email when an endpoint is turned off for failing (§6; the
-  Webhooks page and the account log show it).
-- **Findings:** the owner's email when SES or our threshold opens a finding or pauses the account
-  (§4.2, §7.4; the dashboard banner and Mail's admin show it).
+| Email | Sent when | To |
+|---|---|---|
+| `mail_invite` | an owner or admin invites someone (the one-time link, removed from the outbox once sent) | the invited address |
+| `mail_cap_reached` | 80% and 100% of a day's or month's cap (§8), once per cap, period and level | owner and admins |
+| `mail_past_due` | a renewal goes past due (§8) | owner |
+| `mail_plan_lapsed` | past due beyond its grace: the Free plan | owner |
+| `mail_webhook_disabled` | an endpoint is turned off for failing (§6), named by host only | owner and admins |
+| `mail_account_paused` | our threshold, SES or an admin pauses sending (§7.4) | owner and admins |
+| `mail_sending_warning` | a threshold warning, or a high-impact SES finding (§4.2) | owner and admins |
+
+A customer turning a webhook off, SES's low-impact advice and SES echoing our own pause send nothing.

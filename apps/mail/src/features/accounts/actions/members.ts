@@ -35,12 +35,17 @@ function failed(data: unknown): Failure | null {
 }
 
 /**
- * An invitation: a fresh token, of which SQL keeps only the hash. We do not
- * email invites yet — the link is answered once, for the inviter to copy and
- * send, and never logged (N13).
+ * An invitation: a fresh token, of which SQL keeps only the hash. The link is
+ * emailed to the invited address (`mail.email_invite`, migration 58: the
+ * outbox holds the token only until the email is sent) and answered once, for
+ * the inviter to copy too; never logged (N13). An invite whose email could
+ * not be queued still stands: the inviter is told to send the link.
  */
 export const createInvite = accountAction(createInviteSchema, ['owner', 'admin']).action(
-  async ({ parsedInput, ctx }): Promise<Failure | { link: string; expiresAt: string }> => {
+  async ({
+    parsedInput,
+    ctx,
+  }): Promise<Failure | { link: string; expiresAt: string; emailed: boolean }> => {
     const { token, hash } = newInviteToken()
     const { data, error } = await ctx.supabase.rpc('create_invite', {
       p_account_id: ctx.account.id,
@@ -51,10 +56,15 @@ export const createInvite = accountAction(createInviteSchema, ['owner', 'admin']
     if (error) throw new Error(`create_invite failed: ${error.code ?? 'unknown'}`)
     const refused = failed(data)
     if (refused) return refused
+    const answer = asAnswer(data)
+    const emailed = await ctx.supabase
+      .rpc('email_invite', { p_invite_id: String(answer?.inviteId ?? ''), p_token: token })
+      .then(({ data: sent, error: failure }) => !failure && asAnswer(sent)?.queued === true)
     revalidatePath(MEMBERS_PAGE)
     return {
       link: inviteLink(env.NEXT_PUBLIC_MAIL_URL, token),
-      expiresAt: String(asAnswer(data)?.expiresAt ?? ''),
+      expiresAt: String(answer?.expiresAt ?? ''),
+      emailed,
     }
   },
 )
