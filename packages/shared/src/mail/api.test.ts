@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { toBase64 } from '../ses/base64'
 import {
   addressKey,
   batchSchema,
@@ -7,6 +8,7 @@ import {
   emailIdSchema,
   formatMailbox,
   idempotencyKeySchema,
+  inlineContentType,
   isAllowedHeader,
   isBlockedAttachment,
   parseMailbox,
@@ -15,6 +17,7 @@ import {
   toEnqueueInput,
   toUtc,
 } from './api'
+import { describeIssues } from './errors'
 
 const EMAIL = {
   from: 'Acme <receipts@acme.example>',
@@ -28,6 +31,12 @@ const issues = (input: unknown) => {
   return parsed.success
     ? []
     : parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+}
+
+/** As the API answers it: describeIssues' sentence. */
+const described = (input: unknown) => {
+  const parsed = sendEmailSchema.safeParse(input)
+  return parsed.success ? '' : describeIssues(parsed.error)
 }
 
 describe('mailboxes', () => {
@@ -167,9 +176,12 @@ describe('sendEmailSchema (§6)', () => {
     expect(issues({ ...EMAIL, attachments: [{ ...file, content_type: 'pdf' }] }).join()).toContain(
       'MIME type',
     )
+    // Attachments by URL are another API's: refused, saying what to send instead.
     expect(
-      issues({ ...EMAIL, attachments: [{ ...file, path: 'https://x.example/a.pdf' }] }).length,
-    ).toBeGreaterThan(0)
+      described({ ...EMAIL, attachments: [{ ...file, path: 'https://x.example/a.pdf' }] }),
+    ).toBe(
+      'attachments[0]: path: attachments by URL are not supported; send the file itself in content, as base64',
+    )
     expect(isBlockedAttachment('archive.tar.gz')).toBe(false)
     expect(isBlockedAttachment('script.js')).toBe(true)
     expect(isBlockedAttachment('exe')).toBe(false)
@@ -177,6 +189,65 @@ describe('sendEmailSchema (§6)', () => {
     expect(issues({ ...EMAIL, attachments: [{ ...file, content: big }] }).join()).toContain(
       'too large',
     )
+  })
+
+  it('takes a Node.js Buffer as JSON writes it, and turns it into base64', () => {
+    const bytes = [0x25, 0x50, 0x44, 0x46, 0xff, 0x00]
+    const parsed = sendEmailSchema.parse({
+      ...EMAIL,
+      attachments: [{ filename: 'a.pdf', content: { type: 'Buffer', data: bytes } }],
+    })
+    expect(parsed.attachments?.[0]?.content).toBe(toBase64(Uint8Array.from(bytes)))
+    for (const content of [
+      { type: 'Buffer', data: [256] },
+      { type: 'Buffer', data: [1.5] },
+      { type: 'Buffer', data: [] },
+      { type: 'Blob', data: [1] },
+      { type: 'Buffer', data: [1], extra: true },
+    ]) {
+      expect(issues({ ...EMAIL, attachments: [{ filename: 'a.pdf', content }] }).length).toBe(1)
+    }
+  })
+
+  it('takes content_id for inline images, each once, with a type from the file name', () => {
+    const logo = { filename: 'logo.PNG', content: 'iVBORw0KGgo=', content_id: 'logo@acme' }
+    const input = toEnqueueInput(sendEmailSchema.parse({ ...EMAIL, attachments: [logo] }))
+    expect(input.payload.attachments).toEqual([
+      {
+        filename: 'logo.PNG',
+        content: 'iVBORw0KGgo=',
+        content_type: 'image/png',
+        content_id: 'logo@acme',
+      },
+    ])
+    // A type given is kept; an unknown extension inline is octet-stream, as files are.
+    expect(
+      toEnqueueInput(
+        sendEmailSchema.parse({
+          ...EMAIL,
+          attachments: [{ ...logo, filename: 'logo.bin', content_type: 'image/avif' }],
+        }),
+      ).payload.attachments[0]?.content_type,
+    ).toBe('image/avif')
+    expect(inlineContentType('logo')).toBe('application/octet-stream')
+    expect(inlineContentType('a.jpeg')).toBe('image/jpeg')
+    expect(issues({ ...EMAIL, attachments: [logo, { ...logo, filename: 'b.png' }] })).toEqual([
+      'attachments: Each content_id once',
+    ])
+    for (const bad of ['', '<logo>', 'two words', 'x'.repeat(129), 'a"b']) {
+      expect(issues({ ...EMAIL, attachments: [{ ...logo, content_id: bad }] }).length).toBe(1)
+    }
+  })
+
+  it('names the other APIs’ fields it does not take, and what to do instead', () => {
+    expect(described({ ...EMAIL, template: { id: 't' } })).toBe(
+      'body: template: stored templates are not supported; send the email’s html or text',
+    )
+    expect(described({ ...EMAIL, topic_id: 't' })).toBe(
+      'body: topic_id: topics are not supported; leave it out',
+    )
+    // A field nobody's API has keeps Zod's own words.
+    expect(described({ ...EMAIL, colour: 'red' })).toBe('body: Unrecognized key: "colour"')
   })
 
   it('takes tags SES allows, each name once, never our own mdm_ names', () => {

@@ -1428,6 +1428,8 @@ export type Database = {
           owned_accounts_max: number
           quota_alert_pct: number
           sandbox_daily_cap: number
+          suppression_import_daily_cap: number
+          suppression_list_max: number
           threshold_min_sends: number
           threshold_window_days: number
           updated_at: string
@@ -1457,6 +1459,8 @@ export type Database = {
           owned_accounts_max?: number
           quota_alert_pct?: number
           sandbox_daily_cap?: number
+          suppression_import_daily_cap?: number
+          suppression_list_max?: number
           threshold_min_sends?: number
           threshold_window_days?: number
           updated_at?: string
@@ -1486,6 +1490,8 @@ export type Database = {
           owned_accounts_max?: number
           quota_alert_pct?: number
           sandbox_daily_cap?: number
+          suppression_import_daily_cap?: number
+          suppression_list_max?: number
           threshold_min_sends?: number
           threshold_window_days?: number
           updated_at?: string
@@ -2348,6 +2354,10 @@ export type Database = {
       has_role: {
         Args: { p_account_id: string; p_roles?: string[] }
         Returns: boolean
+      }
+      import_suppressions: {
+        Args: { p_account_id: string; p_addresses: string[]; p_reason: string }
+        Returns: Json
       }
       invite_preview: { Args: { p_token_hash: string }; Returns: Json }
       is_e2e_account: { Args: { p_account_id: string }; Returns: boolean }

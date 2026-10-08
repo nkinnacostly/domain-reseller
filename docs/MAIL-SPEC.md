@@ -45,7 +45,9 @@ a shared free tier everyone abuses, and the same honest-pricing promise as the d
 `attachments`, `headers`, `tags`; `Idempotency-Key`; JSON errors with a `name` and `message`).
 Copy and docs say only what we have tested (N9b): any claim of drop-in compatibility with
 another company's SDK needs a test that runs that SDK against our API, and the owner's
-sign-off on naming another brand.
+sign-off on naming another brand. **Resend's Node SDK** has both (owner, 8 Oct 2026):
+`resend-sdk.test.ts` and the e2e `resend-sdk.spec.ts` run it unchanged against our API, and
+`/docs/resend` lists what they cover, what differs, and the error names.
 
 ### Out of scope for v1
 
@@ -382,7 +384,7 @@ Vercel, Fly, Flutterwave, Cloudflare), contact and abuse.
 | Domains | each domain's state; the DNS records with copy buttons and a live check |
 | API keys | create (shown once), name, permission, domain, last used, revoke |
 | Webhooks | endpoints, events, signing secret (reveal once), recent deliveries with their answer, resend one |
-| Suppressions | addresses on the list, why and when; remove one (with a warning) |
+| Suppressions | addresses on the list, why and when; remove one (with a warning); import another provider's list — a CSV export or one address a line, read in the browser, owners and admins only (migration 68) |
 | Billing | plan, period, invoices (tax invoices), change plan, card on file (last four only) |
 | Settings | account profile, members and roles, your own security (password, two-factor), account log |
 

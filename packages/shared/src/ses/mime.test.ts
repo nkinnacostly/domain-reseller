@@ -125,6 +125,57 @@ describe('buildMimeMessage', () => {
     expect(/^[\x20-\x7e\r\n]*$/.test(message)).toBe(true)
   })
 
+  it('inline images go in related beside the bodies, files in mixed around it all', () => {
+    n = 0
+    const message = buildMimeMessage({
+      from: 'receipts@acme.example',
+      to: ['ada@example.com'],
+      subject: 'Logo',
+      html: '<img src="cid:logo@acme">',
+      attachments: [
+        { filename: 'receipt.pdf', contentType: 'application/pdf', content: 'JVBERi0xLjQK' },
+        {
+          filename: 'logo.png',
+          contentType: 'image/png',
+          content: 'iVBORw0K',
+          contentId: 'logo@acme',
+        },
+      ],
+      date: DATE,
+      boundary,
+    })
+    expect(message.split('\r\nMIME-Version: 1.0\r\n')[1]).toBe(
+      [
+        'Content-Type: multipart/mixed; boundary="b2"',
+        '',
+        '--b2',
+        'Content-Type: multipart/related; boundary="b1"',
+        '',
+        '--b1',
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '',
+        toBase64(utf8('<img src="cid:logo@acme">')),
+        '--b1',
+        'Content-Type: image/png; name="logo.png"',
+        'Content-Disposition: inline; filename="logo.png"',
+        'Content-ID: <logo@acme>',
+        'Content-Transfer-Encoding: base64',
+        '',
+        'iVBORw0K',
+        '--b1--',
+        '--b2',
+        'Content-Type: application/pdf; name="receipt.pdf"',
+        'Content-Disposition: attachment; filename="receipt.pdf"',
+        'Content-Transfer-Encoding: base64',
+        '',
+        'JVBERi0xLjQK',
+        '--b2--',
+        '',
+      ].join('\r\n'),
+    )
+  })
+
   it('one body part needs no multipart; a non-ASCII file name uses RFC 2231', () => {
     const htmlOnly = buildMimeMessage({
       from: 'a@acme.example',

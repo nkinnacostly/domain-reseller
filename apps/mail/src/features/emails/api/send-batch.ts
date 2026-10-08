@@ -26,6 +26,21 @@ export const NOT_A_BATCH = apiError(
   'The body must be a JSON array of 1 to 100 emails, each shaped as for POST /emails.',
 )
 
+/**
+ * Resend's SDK sends `x-batch-validation: strict` with every batch, which is
+ * what this API does. `permissive` — queue the good ones, report the rest —
+ * is not, and a batch is refused rather than half-sent the caller did not ask for.
+ */
+export const NOT_STRICT = apiError(
+  'validation_error',
+  'x-batch-validation: permissive is not supported. A batch is checked whole: if one email is refused, none is queued. Leave the header out, or send strict.',
+)
+
+const strictOrAbsent = (request: Request) => {
+  const mode = request.headers.get('x-batch-validation')
+  return mode === null || mode.trim().toLowerCase() === 'strict'
+}
+
 export async function sendBatch(
   request: Request,
   deps: ApiDeps,
@@ -37,6 +52,7 @@ export async function sendBatch(
 
   const idempotency = readIdempotencyKey(request)
   if (!idempotency.ok) return apiErrorResponse(idempotency.error, requestId)
+  if (!strictOrAbsent(request)) return apiErrorResponse(NOT_STRICT, requestId)
 
   const body = await readJson(request)
   if (!body.ok) return apiErrorResponse(body.error, requestId)

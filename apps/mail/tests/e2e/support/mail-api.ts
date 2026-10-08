@@ -18,8 +18,16 @@
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { hashApiKey, newApiKey } from '@dr/shared/mail'
 import { createClient } from '@supabase/supabase-js'
 import type { TestUser } from './accounts'
+
+/**
+ * The e2e server's API key pepper — the same made-up test value
+ * playwright.config.ts gives the server — so a key made here hashes as the
+ * server will look it up, and no e2e key can ever match production's hashes.
+ */
+export const E2E_API_KEY_PEPPER = 'e2e pepper, not a secret, 0123456789'
 
 function env(name: string): string {
   if (process.env[name]) return process.env[name] as string
@@ -72,17 +80,53 @@ export async function readyAccount(user: TestUser, name: string): Promise<ReadyA
   return { accountId, domain }
 }
 
-type Claimed = { id: number; publicId: string }
+/**
+ * An API key for the account, made as its owner through `create_api_key` —
+ * the dashboard's own path, minus the page — for specs that only call the
+ * API. The key is returned to the spec, never logged.
+ */
+export async function apiKeyFor(
+  user: TestUser,
+  accountId: string,
+  permission: 'full' | 'sending' = 'full',
+): Promise<string> {
+  const client = createClient(
+    env('NEXT_PUBLIC_SUPABASE_URL'),
+    env('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'),
+    noSession,
+  )
+  const { error: signInError } = await client.auth.signInWithPassword({
+    email: user.email,
+    password: user.password,
+  })
+  if (signInError) throw signInError
+  const { key, prefix } = newApiKey()
+  const made = await client.schema('mail').rpc('create_api_key', {
+    p_account_id: accountId,
+    p_name: 'E2E API key',
+    p_permission: permission,
+    p_prefix: prefix,
+    p_key_hash: await hashApiKey(key, E2E_API_KEY_PEPPER),
+  })
+  await client.auth.signOut({ scope: 'local' })
+  if (made.error || (made.data as { ok?: boolean } | null)?.ok !== true) {
+    throw made.error ?? new Error('create_api_key refused')
+  }
+  return key
+}
+
+type Claimed = { id: number; publicId: string; attachments?: Record<string, unknown>[] }
 
 /**
  * What the worker and SES would do with one email of this account: claim it,
- * record SES's "sent", then the events SES would publish.
+ * record SES's "sent", then the events SES would publish. Answers the claim
+ * as the worker received it.
  */
 export async function workAsSender(
   accountId: string,
   emailId: string,
   events: ('send' | 'delivery')[] = ['send', 'delivery'],
-): Promise<void> {
+): Promise<Claimed> {
   const worker = `e2e-worker-${Date.now()}`
   const claimed = await service().rpc('claim_sends', {
     p_worker: worker,
@@ -110,4 +154,5 @@ export async function workAsSender(
     })
     if (recorded.error) throw recorded.error
   }
+  return mine
 }

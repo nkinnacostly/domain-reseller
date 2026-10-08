@@ -7,8 +7,14 @@ import { Container } from '@/components/layout/container'
 import { PageSkeleton } from '@/features/accounts/components/dashboard-skeleton'
 import { PartError } from '@/features/accounts/components/overview-parts'
 import { getCurrentAccount } from '@/features/accounts/queries/accounts'
+import { ImportSuppressions } from '@/features/suppressions/components/import-suppressions'
 import { RemoveSuppression } from '@/features/suppressions/components/remove-suppression'
-import { canRemoveSuppressions, REASON, SOURCE } from '@/features/suppressions/lib/words'
+import {
+  canImportSuppressions,
+  canRemoveSuppressions,
+  REASON,
+  SOURCE,
+} from '@/features/suppressions/lib/words'
 import {
   getSuppressions,
   SUPPRESSIONS_PAGE_SIZE,
@@ -33,7 +39,8 @@ const pageLink =
 /**
  * Suppressions (MAIL-SPEC §7.5, §10): the addresses this account will not
  * send to, why and when each was added, and — for owners and admins — a way
- * to remove one, with a warning. Shown to the account's members only (MR4).
+ * to remove one, with a warning, and to import another provider's list
+ * (migration 68). Shown to the account's members only (MR4).
  */
 async function Suppressions({ searchParams }: { searchParams: Params }) {
   const [data, params] = await Promise.all([getCurrentAccount(), searchParams])
@@ -43,11 +50,13 @@ async function Suppressions({ searchParams }: { searchParams: Params }) {
   const page = Math.max(1, Math.min(10_000, Number.parseInt(params.page ?? '1', 10) || 1))
   const list = await getSuppressions(account.id, { page, search })
   const remove = canRemoveSuppressions(role)
+  const canImport = canImportSuppressions(role)
   const pages = list ? Math.max(1, Math.ceil(list.total / SUPPRESSIONS_PAGE_SIZE)) : 1
   const href = (n: number) => `${PAGE}?page=${n}`
 
   return (
     <div className="space-y-6">
+      {canImport ? <ImportSuppressions accountId={account.id} /> : null}
       <search aria-label="Find an address" className="block max-w-xl">
         <form method="get" action={PAGE}>
           <label htmlFor="suppression-search" className="text-sm font-medium">
@@ -85,7 +94,7 @@ async function Suppressions({ searchParams }: { searchParams: Params }) {
               ? 'That address is not on the list: this account can send to it.'
               : list.total > 0
                 ? 'There is nothing on this page.'
-                : 'No addresses are suppressed. When one hard-bounces or marks an email as spam, it appears here and nothing more is sent to it.'}
+                : `No addresses are suppressed. When one hard-bounces or marks an email as spam, it appears here and nothing more is sent to it.${canImport ? ' Moving from another provider? Import its list above.' : ''}`}
           </p>
           {search || list.total > 0 ? (
             <Link href={PAGE} className={pageLink}>
@@ -153,7 +162,7 @@ async function Suppressions({ searchParams }: { searchParams: Params }) {
       )}
       {!remove ? (
         <p className="max-w-2xl text-pretty text-xs text-muted-foreground">
-          Only the account’s owner or an admin can remove an address from the list.
+          Only the account’s owner or an admin can import a list or remove an address from it.
         </p>
       ) : null}
     </div>
@@ -166,8 +175,8 @@ export default function SuppressionsPage({ searchParams }: { searchParams: Param
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Suppressions</h1>
       <p className="mt-2 max-w-3xl text-pretty text-sm/6 text-muted-foreground">
         Addresses this account will not send to. A hard bounce or a spam complaint puts an address
-        here, and on Amazon SES’s list for this account; an email to it is refused before it costs
-        anything.
+        here, and on Amazon SES’s list for this account; so can you, by importing another provider’s
+        list. An email to an address here is refused before it costs anything.
       </p>
       <div className="mt-8">
         <Suspense fallback={<PageSkeleton />}>

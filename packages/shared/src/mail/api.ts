@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { base64ByteLength } from '../ses/base64'
+import { base64ByteLength, toBase64 } from '../ses/base64'
 import { sha256Hex } from '../ses/sigv4'
 
 /**
@@ -160,6 +160,39 @@ export function isBlockedAttachment(filename: string): boolean {
 const hasControlCharacter = (value: string) =>
   [...value].some((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f)
 
+/**
+ * A Node.js Buffer as `JSON.stringify` writes it. SDKs that take a Buffer
+ * for `content` (Resend's, for one) send this rather than base64; it is
+ * turned into base64 here, so everything after the door sees one form.
+ */
+const bufferJson = z
+  .strictObject({
+    type: z.literal('Buffer'),
+    data: z.array(z.number().int().min(0).max(255)).min(1),
+  })
+  .transform(({ data }) => toBase64(Uint8Array.from(data)))
+
+/**
+ * An inline part's Content-ID, which the HTML names as `cid:…`: the
+ * characters a message id may hold, without the angle brackets MIME adds.
+ */
+export const CONTENT_ID = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.@-]{1,128}$/
+
+/** The type of an inline image given without one, from its file name (MIME needs it to show the image). */
+const INLINE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+}
+
+export function inlineContentType(filename: string): string {
+  const extension = filename.toLowerCase().split('.').pop() ?? ''
+  return (filename.includes('.') && INLINE_TYPES[extension]) || 'application/octet-stream'
+}
+
 const attachment = z.strictObject({
   filename: z
     .string()
@@ -170,16 +203,29 @@ const attachment = z.strictObject({
       'A file name, without a path',
     )
     .refine((name) => !isBlockedAttachment(name), 'Executable attachments are not accepted'),
-  /** Base64, as the popular APIs take it. */
-  content: z
-    .string()
-    .min(1)
-    .refine((value) => /^[A-Za-z0-9+/\s]*={0,2}\s*$/.test(value), 'content must be base64'),
+  /** Base64, as the popular APIs take it, or a Buffer's JSON form. */
+  content: z.union([
+    z
+      .string()
+      .min(1)
+      .refine((value) => /^[A-Za-z0-9+/\s]*={0,2}\s*$/.test(value), 'content must be base64'),
+    bufferJson,
+  ]),
   content_type: z
     .string()
     .regex(/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i, 'Not a MIME type')
     .max(127)
     .optional(),
+  content_id: z
+    .string()
+    .regex(
+      CONTENT_ID,
+      'Letters, digits and . @ - _ (and the other characters of a message id), 1 to 128, without < >',
+    )
+    .optional()
+    .describe(
+      'Makes the file an inline image, shown where the HTML has `<img src="cid:…">` with this id. Each id once per email.',
+    ),
 })
 
 // ── Tags ────────────────────────────────────────────────────────────────────
@@ -251,7 +297,7 @@ export const sendEmailSchema = z
       .max(EMAIL_LIMITS.maxAttachments)
       .optional()
       .describe(
-        'Up to 20 files, each base64 in `content`. The whole request stays under 4 MB. Executable file types are refused.',
+        'Up to 20 files, each in `content` as base64 (or a Node.js Buffer, which arrives as its JSON form). The whole request stays under 4 MB. Executable file types are refused. Give one a `content_id` to show it inline.',
       ),
     tags: z
       .array(tag)
@@ -287,6 +333,10 @@ export const sendEmailSchema = z
     const names = new Set((email.tags ?? []).map((one) => one.name))
     if (names.size !== (email.tags ?? []).length) {
       ctx.addIssue({ code: 'custom', path: ['tags'], message: 'Each tag name once' })
+    }
+    const ids = (email.attachments ?? []).flatMap((one) => (one.content_id ? [one.content_id] : []))
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({ code: 'custom', path: ['attachments'], message: 'Each content_id once' })
     }
     const attached = (email.attachments ?? []).reduce(
       (sum, one) => sum + base64ByteLength(one.content),
@@ -335,7 +385,8 @@ export type EnqueueInput = {
     html: string | null
     text: string | null
     headers: Record<string, string>
-    attachments: { filename: string; content: string; content_type: string }[]
+    /** `content_id` only on an inline part, so an email without one fingerprints as it always has. */
+    attachments: { filename: string; content: string; content_type: string; content_id?: string }[]
   }
 }
 
@@ -361,7 +412,10 @@ export function toEnqueueInput(email: SendEmail): EnqueueInput {
       attachments: (email.attachments ?? []).map((one) => ({
         filename: one.filename,
         content: one.content.replace(/\s+/g, ''),
-        content_type: one.content_type ?? 'application/octet-stream',
+        content_type:
+          one.content_type ??
+          (one.content_id ? inlineContentType(one.filename) : 'application/octet-stream'),
+        ...(one.content_id ? { content_id: one.content_id } : {}),
       })),
     },
   }

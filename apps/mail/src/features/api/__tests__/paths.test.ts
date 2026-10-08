@@ -83,6 +83,7 @@ describe('the v1 paths', () => {
       expect(await response.json()).toEqual({
         name: 'not_found',
         message: expect.stringContaining('/docs/api'),
+        statusCode: 404,
       })
     }
   })

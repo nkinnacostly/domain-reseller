@@ -135,6 +135,23 @@ describe('POST /api/v1/emails/batch', () => {
     expect((await response.json()).message).not.toContain('emails[')
   })
 
+  it('takes x-batch-validation: strict, as Resend’s SDK sends it, and refuses permissive', async () => {
+    const calls = mockRpc({
+      authenticate_key: () => KEY_OK,
+      enqueue_batch: () => ({ ok: true, ids: IDS, replayed: false }),
+    })
+    expect((await post([EMAIL, EMAIL], { 'x-batch-validation': 'strict' })).status).toBe(200)
+    const refused = await post([EMAIL, EMAIL], { 'x-batch-validation': 'permissive' })
+    expect(refused.status).toBe(422)
+    expect(await refused.json()).toEqual({
+      name: 'validation_error',
+      message: expect.stringContaining('permissive is not supported'),
+      statusCode: 422,
+    })
+    // Refused before anything was queued.
+    expect(calls.filter((call) => call.fn === 'enqueue_batch')).toHaveLength(1)
+  })
+
   it('refuses a bad key, a bad Idempotency-Key, or a body that is not JSON', async () => {
     mockRpc({ authenticate_key: () => ({ ok: false, code: 'unauthorized' }) })
     expect((await post([EMAIL])).status).toBe(401)

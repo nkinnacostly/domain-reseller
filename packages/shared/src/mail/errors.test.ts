@@ -28,8 +28,12 @@ describe('the error answer (§6)', () => {
     ])
     expect(API_ERROR_STATUS.unauthorized).toBe(401)
     expect(API_ERROR_STATUS.quota_exceeded).toBe(429)
-    expect(apiErrorSchema.safeParse({ name: 'forbidden', message: 'x' }).success).toBe(true)
-    expect(apiErrorSchema.safeParse({ name: 'teapot', message: 'x' }).success).toBe(false)
+    expect(
+      apiErrorSchema.safeParse({ name: 'forbidden', message: 'x', statusCode: 403 }).success,
+    ).toBe(true)
+    expect(
+      apiErrorSchema.safeParse({ name: 'teapot', message: 'x', statusCode: 418 }).success,
+    ).toBe(false)
   })
 
   it('rounds retry-after up to whole seconds, at least one', () => {

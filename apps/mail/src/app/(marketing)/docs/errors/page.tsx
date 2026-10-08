@@ -18,6 +18,7 @@ const EXAMPLE = JSON.stringify(
   {
     name: 'validation_error',
     message: 'to: Not an email address, or "Name <address>"',
+    statusCode: 422,
   },
   null,
   2,
@@ -31,8 +32,9 @@ export default function ErrorsPage() {
       icons={[Warning, Wrench, BugBeetle]}
       intro={
         <p>
-          A refused request answers JSON with a <code>name</code> you can test for and a{' '}
-          <code>message</code> a person can read.
+          A refused request answers JSON with a <code>name</code> you can test for, a{' '}
+          <code>message</code> a person can read, and the HTTP status again as{' '}
+          <code>statusCode</code>.
         </p>
       }
     >

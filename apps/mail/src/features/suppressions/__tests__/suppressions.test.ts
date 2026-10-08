@@ -17,10 +17,18 @@ vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
 
 const { env } = await import('@/lib/env')
 const { logger } = await import('@/lib/logger')
-const { removeSuppression } = await import('../actions/suppressions')
+const { importSuppressions, removeSuppression } = await import('../actions/suppressions')
 const { getSuppressions, readSuppressions, searchTerm } = await import('../queries/suppressions')
-const { canRemoveSuppressions, REASON, SES_REFUSED, SES_UNAVAILABLE, suppressionRefusal } =
-  await import('../lib/words')
+const {
+  canImportSuppressions,
+  canRemoveSuppressions,
+  IMPORT_FALLBACK,
+  importRefusal,
+  REASON,
+  SES_REFUSED,
+  SES_UNAVAILABLE,
+  suppressionRefusal,
+} = await import('../lib/words')
 
 const settings = env as {
   MAIL_SES_MANAGER_ACCESS_KEY_ID?: string
@@ -225,5 +233,65 @@ describe('the list', () => {
     expect(canRemoveSuppressions('developer')).toBe(false)
     expect(suppressionRefusal({ code: 'unauthorized' })).toMatch(/Sign in/)
     expect(suppressionRefusal({})).toMatch(/still on the list/)
+  })
+})
+
+describe('importSuppressions (migration 68)', () => {
+  const addresses = ['ada@example.com', 'bola@example.com']
+  const imported = (answer: unknown, role = 'owner') => {
+    const fake = fakeSupabase({
+      role,
+      rpc: { import_suppressions: () => ({ data: answer, error: null }) },
+    })
+    vi.mocked(createClient).mockResolvedValue(fake.client as never)
+    return fake
+  }
+
+  it('sends one chunk to SQL as the person, and answers its counts', async () => {
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined)
+    const fake = imported({ ok: true, added: 1, already: 1, invalid: 0 })
+    const result = await importSuppressions({ accountId: ACCOUNT, reason: 'bounce', addresses })
+    expect(result.data).toEqual({ ok: true, added: 1, already: 1, invalid: 0 })
+    expect(fake.rpcCalls).toEqual([
+      {
+        fn: 'import_suppressions',
+        args: { p_account_id: ACCOUNT, p_addresses: addresses, p_reason: 'bounce' },
+      },
+    ])
+    // Counts reach the log; addresses never do (N13).
+    expect(JSON.stringify(info.mock.calls)).not.toMatch(/@/)
+  })
+
+  it('is for owners and admins only, and refuses a reason or a chunk it does not take', async () => {
+    const developer = imported({ ok: true, added: 0, already: 0, invalid: 0 }, 'developer')
+    expect(
+      (await importSuppressions({ accountId: ACCOUNT, reason: 'bounce', addresses })).serverError,
+    ).toMatch(/role/)
+    expect(developer.rpcCalls).toHaveLength(0)
+    const owner = imported({ ok: true, added: 0, already: 0, invalid: 0 })
+    for (const input of [
+      { accountId: ACCOUNT, reason: 'unsubscribe', addresses },
+      { accountId: ACCOUNT, reason: 'bounce', addresses: [] },
+      { accountId: ACCOUNT, reason: 'bounce', addresses: Array(5001).fill('a@example.com') },
+    ]) {
+      expect((await importSuppressions(input as never)).validationErrors).toBeTruthy()
+    }
+    expect(owner.rpcCalls).toHaveLength(0)
+  })
+
+  it('words SQL’s refusals: the day’s and the list’s limits, and anything else', async () => {
+    imported({ ok: false, code: 'import_limit', per: 'day', max: 100000, added: 98000 })
+    expect(
+      (await importSuppressions({ accountId: ACCOUNT, reason: 'manual', addresses })).data,
+    ).toEqual({
+      error: expect.stringContaining('100,000 addresses a day, and 98,000 were added today'),
+    })
+    expect(importRefusal({ code: 'import_limit', per: 'list', max: 1000000 })).toContain(
+      'can hold 1,000,000',
+    )
+    expect(importRefusal({ code: 'forbidden' })).toContain('owner or an admin')
+    expect(importRefusal({ code: 'something new' })).toBe(IMPORT_FALLBACK)
+    expect(canImportSuppressions('admin')).toBe(true)
+    expect(canImportSuppressions('developer')).toBe(false)
   })
 })

@@ -22,10 +22,14 @@ export function apiJson(
   })
 }
 
-/** `{ name, message }` with its status; a 429 says when to come back (`retry-after`, seconds). */
+/**
+ * `{ name, message, statusCode }` with its status; a 429 says when to come
+ * back (`retry-after`, seconds). The status is repeated in the body because
+ * SDKs written for other email APIs (Resend's) read it from there.
+ */
 export function apiErrorResponse(error: ApiError, requestId: string): Response {
   return apiJson(
-    { name: error.name, message: error.message },
+    { name: error.name, message: error.message, statusCode: error.status },
     error.status,
     requestId,
     error.retryAfter !== undefined ? { 'retry-after': String(error.retryAfter) } : {},

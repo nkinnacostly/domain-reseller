@@ -9,10 +9,13 @@ import IdempotencyPage, {
 import LimitsPage, { metadata as limitsMeta } from '@/app/(marketing)/docs/limits/page'
 import DocsIndex, { metadata as indexMeta } from '@/app/(marketing)/docs/page'
 import QuickstartPage, { metadata as quickstartMeta } from '@/app/(marketing)/docs/quickstart/page'
+import ResendPage, { metadata as resendMeta } from '@/app/(marketing)/docs/resend/page'
 import SchedulingPage, { metadata as schedulingMeta } from '@/app/(marketing)/docs/scheduling/page'
 import StatusesPage, { metadata as statusesMeta } from '@/app/(marketing)/docs/statuses/page'
 import WebhooksPage, { metadata as webhooksMeta } from '@/app/(marketing)/docs/webhooks/page'
+import mailPackage from '../../../../package.json'
 import { DOCS_PAGES } from '../docs/pages'
+import { RESEND_SDK_TESTED } from '../docs/resend'
 
 /** Every docs page renders its own h1, and its metadata names its own address. */
 
@@ -21,6 +24,7 @@ vi.mock('next/navigation', () => ({ usePathname: () => '/docs' }))
 const PAGES = {
   '/docs': [DocsIndex, indexMeta],
   '/docs/quickstart': [QuickstartPage, quickstartMeta],
+  '/docs/resend': [ResendPage, resendMeta],
   '/docs/api': [ApiPage, apiMeta],
   '/docs/errors': [ErrorsPage, errorsMeta],
   '/docs/limits': [LimitsPage, limitsMeta],
@@ -43,6 +47,30 @@ describe('the docs pages', () => {
       expect(metadata.alternates?.canonical).toBe(href)
     },
   )
+
+  it('the Resend guide names the SDK version the tests run, and nothing else as tested', () => {
+    // resend-sdk.test.ts runs the package pinned here, exactly: the page must name that one (N9b).
+    expect(mailPackage.devDependencies.resend).toBe(RESEND_SDK_TESTED)
+    render(<ResendPage />)
+    expect(
+      screen.getByText(new RegExp(`version ${RESEND_SDK_TESTED.replace(/\./g, '\\.')}`)),
+    ).toBeInTheDocument()
+    for (const name of [
+      'Before you switch',
+      'Point the SDK here',
+      'What works',
+      'What is different',
+      'Error names',
+      'Other languages',
+    ]) {
+      expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument()
+    }
+    const works = screen.getByRole('region', { name: 'Resend SDK calls that work here' })
+    for (const call of ['emails.send', 'batch.send', 'emails.get', 'webhooks.verify']) {
+      expect(works).toHaveTextContent(call)
+    }
+    expect(screen.getByText(/not affiliated with Resend/)).toBeInTheDocument()
+  })
 
   it('the stubs say plainly that they are not written', () => {
     render(<DomainsPage />)

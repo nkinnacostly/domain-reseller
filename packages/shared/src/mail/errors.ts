@@ -36,6 +36,12 @@ export const API_ERROR_STATUS: Record<ApiErrorName, number> = {
 export const apiErrorSchema = z.strictObject({
   name: z.enum(API_ERROR_NAMES),
   message: z.string().min(1),
+  statusCode: z
+    .number()
+    .int()
+    .describe(
+      'The HTTP status again, in the body, where SDKs built for other email APIs look for it.',
+    ),
 })
 
 export type ApiError = {
@@ -203,6 +209,26 @@ function issuePath(path: readonly PropertyKey[], root: string): string {
 }
 
 /**
+ * Fields other email APIs take that we do not (N9b: refused, never ignored),
+ * each with what to do instead — someone moving code across should not have
+ * to guess from "Unrecognized key".
+ */
+export const UNSUPPORTED_FIELDS: Readonly<Record<string, string>> = {
+  path: 'attachments by URL are not supported; send the file itself in content, as base64',
+  template: 'stored templates are not supported; send the email’s html or text',
+  topic_id: 'topics are not supported; leave it out',
+  after: 'pages go by cursor: pass the next_cursor of the page before as cursor',
+  before: 'pages go newest first by cursor; start again without one for the newest',
+}
+
+function issueMessage(issue: z.core.$ZodIssue): string {
+  if (issue.code !== 'unrecognized_keys') return issue.message
+  const known = issue.keys.filter((key) => Object.hasOwn(UNSUPPORTED_FIELDS, key))
+  if (known.length === 0) return issue.message
+  return known.map((key) => `${key}: ${UNSUPPORTED_FIELDS[key]}`).join('; ')
+}
+
+/**
  * Zod's issues in a sentence: the field paths and what is wrong — never the
  * values. `root` names what the body is (`emails` for a batch, so a path
  * reads `emails[3].to`).
@@ -210,6 +236,6 @@ function issuePath(path: readonly PropertyKey[], root: string): string {
 export function describeIssues(error: z.ZodError, root = ''): string {
   const parts = error.issues
     .slice(0, 5)
-    .map((issue) => `${issuePath(issue.path, root)}: ${issue.message}`)
+    .map((issue) => `${issuePath(issue.path, root)}: ${issueMessage(issue)}`)
   return parts.join('; ')
 }

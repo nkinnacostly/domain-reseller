@@ -6,7 +6,9 @@ import { z } from 'zod'
 import { requireSesManagerEnv } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { accountAction } from '@/lib/safe-action'
+import { IMPORT_LIMITS } from '../lib/import'
 import {
+  importRefusal,
   SES_REFUSED,
   SES_UNAVAILABLE,
   SUPPRESSION_FALLBACK,
@@ -87,5 +89,50 @@ export const removeSuppression = accountAction(schema, ['owner', 'admin']).actio
       return { error: answer ? suppressionRefusal(answer) : SUPPRESSION_FALLBACK }
     revalidatePath('/dashboard/suppressions')
     return { ok: true }
+  },
+)
+
+const importSchema = z.object({
+  accountId: z.uuid(),
+  reason: z.enum(['bounce', 'complaint', 'manual']),
+  addresses: z.array(z.string().min(3).max(320)).min(1).max(IMPORT_LIMITS.chunkAddresses),
+})
+
+export type ImportCounts = { added: number; already: number; invalid: number }
+
+/**
+ * One chunk of an imported list (migration 68): the browser read the file
+ * and sends its addresses a chunk at a time; SQL checks the role again,
+ * keeps each address once, leaves listed ones as they are, and bounds the
+ * day and the list. Ours alone — SES has none of these until it suppresses
+ * one itself. No path is revalidated per chunk: the page refreshes once,
+ * at the end. Counts only reach the log (N13).
+ */
+export const importSuppressions = accountAction(importSchema, ['owner', 'admin']).action(
+  async ({ parsedInput, ctx }): Promise<Failure | ({ ok: true } & ImportCounts)> => {
+    const { data, error } = await ctx.supabase.rpc('import_suppressions', {
+      p_account_id: ctx.account.id,
+      p_addresses: parsedInput.addresses,
+      p_reason: parsedInput.reason,
+    })
+    if (error) throw new Error(`import_suppressions failed: ${error.code ?? 'unknown'}`)
+    const answer = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
+    if (answer.ok !== true) {
+      logger.info(
+        { accountId: ctx.account.id, refused: answer.code, per: answer.per },
+        'suppressions: an import was refused',
+      )
+      return { error: importRefusal(answer) }
+    }
+    const counts = {
+      added: Number(answer.added) || 0,
+      already: Number(answer.already) || 0,
+      invalid: Number(answer.invalid) || 0,
+    }
+    logger.info(
+      { accountId: ctx.account.id, reason: parsedInput.reason, ...counts },
+      'suppressions: imported',
+    )
+    return { ok: true, ...counts }
   },
 )

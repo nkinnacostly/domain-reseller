@@ -152,6 +152,7 @@ describe('POST /api/v1/emails — the key door', () => {
     expect(await response.json()).toEqual({
       name: 'unauthorized',
       message: expect.stringContaining('missing, wrong or revoked'),
+      statusCode: 401,
     })
   })
 

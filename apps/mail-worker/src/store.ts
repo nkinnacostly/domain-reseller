@@ -19,6 +19,8 @@ const attachment = z.object({
   filename: z.string().min(1),
   content: z.string().min(1),
   content_type: z.string().min(1),
+  /** An inline image's id (the API's CONTENT_ID); absent on a plain attachment. */
+  content_id: z.string().min(1).max(128).optional(),
 })
 
 export const claimedEmailSchema = z.object({

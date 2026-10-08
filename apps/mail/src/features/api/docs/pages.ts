@@ -26,6 +26,12 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     summary: 'From a verified domain to your first email, with curl, Node, Python or PHP.',
   },
   {
+    slug: 'resend',
+    href: '/docs/resend',
+    title: 'Switching from Resend',
+    summary: 'Keep Resend’s Node.js SDK: change the API key and the base URL.',
+  },
+  {
     slug: 'api',
     href: '/docs/api',
     title: 'API reference',

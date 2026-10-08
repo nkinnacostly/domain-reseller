@@ -11,7 +11,17 @@ import { randomBytes, utf8 } from './platform'
  * Bcc never appears: those recipients travel in SendEmail's Destination.
  */
 
-export type MimeAttachment = { filename: string; contentType: string; content: string }
+/**
+ * A file. With a `contentId` it is an inline part: the HTML shows it with
+ * `<img src="cid:…">`, so it travels beside the bodies in multipart/related
+ * (RFC 2387) rather than as a download.
+ */
+export type MimeAttachment = {
+  filename: string
+  contentType: string
+  content: string
+  contentId?: string
+}
 
 export type MimeMessage = {
   from: string
@@ -107,7 +117,23 @@ function textPart(type: 'plain' | 'html', body: string): string {
   ].join(CRLF)
 }
 
-function multipart(type: 'alternative' | 'mixed', boundary: string, parts: string[]): string {
+function filePart(file: MimeAttachment): string {
+  const disposition = file.contentId ? 'inline' : 'attachment'
+  return [
+    `Content-Type: ${file.contentType}; ${fileParameter('name', file.filename)}`,
+    `Content-Disposition: ${disposition}; ${fileParameter('filename', file.filename)}`,
+    ...(file.contentId ? [`Content-ID: <${file.contentId.replace(/[<>\s]/g, '')}>`] : []),
+    'Content-Transfer-Encoding: base64',
+    '',
+    wrapBase64(file.content),
+  ].join(CRLF)
+}
+
+function multipart(
+  type: 'alternative' | 'mixed' | 'related',
+  boundary: string,
+  parts: string[],
+): string {
   return [
     `Content-Type: multipart/${type}; boundary="${boundary}"`,
     '',
@@ -126,17 +152,13 @@ export function buildMimeMessage(message: MimeMessage): string {
     bodies.length === 1 ? (bodies[0] as string) : multipart('alternative', boundary(), bodies)
 
   const attachments = message.attachments ?? []
-  if (attachments.length > 0) {
-    const files = attachments.map((file) =>
-      [
-        `Content-Type: ${file.contentType}; ${fileParameter('name', file.filename)}`,
-        `Content-Disposition: attachment; ${fileParameter('filename', file.filename)}`,
-        'Content-Transfer-Encoding: base64',
-        '',
-        wrapBase64(file.content),
-      ].join(CRLF),
-    )
-    content = multipart('mixed', boundary(), [content, ...files])
+  const inline = attachments.filter((file) => file.contentId)
+  const files = attachments.filter((file) => !file.contentId)
+  if (inline.length > 0) {
+    content = multipart('related', boundary(), [content, ...inline.map(filePart)])
+  }
+  if (files.length > 0) {
+    content = multipart('mixed', boundary(), [content, ...files.map(filePart)])
   }
 
   const head = [

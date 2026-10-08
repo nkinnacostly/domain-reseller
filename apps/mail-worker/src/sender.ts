@@ -76,6 +76,7 @@ function toSesEmail(email: ClaimedEmail) {
       filename: file.filename,
       contentType: file.content_type,
       content: file.content,
+      ...(file.content_id ? { contentId: file.content_id } : {}),
     })),
     tags: email.tags,
   }

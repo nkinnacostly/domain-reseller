@@ -21,7 +21,24 @@ export const REASON: Record<SuppressionReason, { label: string; tone: Tone; why:
     tone: 'warning',
     why: 'Its owner reported one of this account’s emails as spam.',
   },
-  manual: { label: 'Added by hand', tone: 'neutral', why: 'Someone added it to the list.' },
+  manual: {
+    label: 'Added to the list',
+    tone: 'neutral',
+    why: 'Put here on purpose — an unsubscribe, say, or a list brought from another provider.',
+  },
+}
+
+/** The choice an import asks for: why the file's addresses were on the old provider's list. */
+export const IMPORT_REASON: Record<SuppressionReason, { label: string; hint: string }> = {
+  bounce: {
+    label: 'They bounced',
+    hint: 'Hard bounces: the address does not exist or never accepts mail.',
+  },
+  complaint: { label: 'They complained', hint: 'Their owners marked an email as spam.' },
+  manual: {
+    label: 'They unsubscribed, or another reason',
+    hint: 'Unsubscribes, and anyone else you must not email.',
+  },
 }
 
 export const SOURCE: Record<SuppressionSource, string> = {
@@ -32,6 +49,9 @@ export const SOURCE: Record<SuppressionSource, string> = {
 
 /** Removing an address risks the account's reputation, so owners and admins only (migration 49). */
 export const canRemoveSuppressions = (role: MemberRole) => role === 'owner' || role === 'admin'
+
+/** Importing a list is the same people's (migration 68). */
+export const canImportSuppressions = canRemoveSuppressions
 
 const SQL_WORDS: Record<string, string> = {
   unauthorized: 'Your session has ended. Sign in again to continue.',
@@ -50,4 +70,27 @@ export const SES_UNAVAILABLE =
 
 export function suppressionRefusal(answer: { code?: unknown }): string {
   return (typeof answer.code === 'string' && SQL_WORDS[answer.code]) || SUPPRESSION_FALLBACK
+}
+
+const count = (n: unknown) => new Intl.NumberFormat('en-NG').format(Number(n) || 0)
+
+export const IMPORT_FALLBACK =
+  'Something went wrong on our end, and this part of the list was not added. Try the import again: addresses already added are skipped.'
+
+/** import_suppressions' refusals (migration 68), in words. */
+export function importRefusal(answer: Record<string, unknown>): string {
+  switch (answer.code) {
+    case 'unauthorized':
+      return SQL_WORDS.unauthorized as string
+    case 'forbidden':
+      return 'Only the account’s owner or an admin can import a list.'
+    case 'account_closed':
+      return 'This account is closed, so nothing can be added to its list.'
+    case 'import_limit':
+      return answer.per === 'list'
+        ? `The list can hold ${count(answer.max)} addresses, and this import would pass that. Email us if you need more.`
+        : `An account can import ${count(answer.max)} addresses a day, and ${count(answer.added)} were added today. The rest can be imported tomorrow (Lagos time): addresses already added are skipped.`
+    default:
+      return IMPORT_FALLBACK
+  }
 }
