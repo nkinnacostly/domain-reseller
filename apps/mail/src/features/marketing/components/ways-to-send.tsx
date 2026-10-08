@@ -7,7 +7,7 @@ import { Container } from '@/components/layout/container'
 const CARD = 'flex flex-col rounded-3xl border border-brand-subtle-border bg-card p-6 sm:p-8'
 const ICON = 'grid size-12 shrink-0 place-items-center rounded-2xl bg-brand-subtle'
 const MORE =
-  'mt-6 inline-flex min-h-11 w-fit items-center gap-2 rounded-full border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]'
+  'inline-flex min-h-11 w-fit items-center gap-2 rounded-full border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]'
 const LINK =
   'rounded-sm font-medium text-brand-ink underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 
@@ -45,10 +45,13 @@ export function WaysToSend() {
               sending later, retries that never send twice, tags, and signed webhooks for every
               delivery, bounce and complaint.
             </p>
-            <Link href="/docs/quickstart" className={MORE}>
-              Read the quickstart
-              <ArrowRight aria-hidden="true" className="size-4" />
-            </Link>
+            {/* At the card's foot, so both buttons line up side by side. */}
+            <div className="mt-auto pt-6">
+              <Link href="/docs/quickstart" className={MORE}>
+                Read the quickstart
+                <ArrowRight aria-hidden="true" className="size-4" />
+              </Link>
+            </div>
           </div>
 
           <div className={CARD}>
@@ -73,10 +76,13 @@ export function WaysToSend() {
               <dt>Password</dt>
               <dd>Your API key</dd>
             </dl>
-            <Link href="/docs/smtp" className={MORE}>
-              See the SMTP settings
-              <ArrowRight aria-hidden="true" className="size-4" />
-            </Link>
+            {/* At the card's foot, so both buttons line up side by side. */}
+            <div className="mt-auto pt-6">
+              <Link href="/docs/smtp" className={MORE}>
+                See the SMTP settings
+                <ArrowRight aria-hidden="true" className="size-4" />
+              </Link>
+            </div>
           </div>
         </div>
 
