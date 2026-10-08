@@ -141,6 +141,10 @@ const MAIL_ROLE: Record<'admin' | 'developer' | 'viewer', string> = {
   viewer: 'a viewer',
 }
 
+/** At most `max` characters, with an ellipsis when cut: an account's name is the customer's text. */
+const shorten = (value: string, max: number) =>
+  value.length <= max ? value : `${value.slice(0, max - 1).trimEnd()}…`
+
 const membersFooter = (account: string) =>
   `You get this as an owner or admin of ${account} on MyDomainsHub Mail. It is about the account itself, so it cannot be switched off.`
 const ownerFooter = (account: string) =>
@@ -741,23 +745,26 @@ export const NOTICE_TEMPLATES = {
   // hears that it is paused. Each names the product and links to Mail.
 
   mail_invite: template({
-    version: 1,
+    // 2: the subject names no account, and the inviter is their confirmed
+    // address — no free text an inviter writes reaches the subject (security
+    // audit, 8 Oct 2026; migration 60).
+    version: 2,
     category: 'transactional',
     schema: z.object({
       accountName: z.string().min(1).max(100),
-      invitedBy: z.string().min(1).max(320),
+      invitedBy: z.string().min(3).max(320),
       role: z.enum(['admin', 'developer', 'viewer']),
       expiresAt: iso,
       token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
     }),
-    subject: (d) => `${d.invitedBy} invited you to ${d.accountName} on MyDomainsHub Mail`,
+    subject: (d) => `${d.invitedBy} invited you to a team on MyDomainsHub Mail`,
     content: (d, context) => ({
       product: MAIL_PRODUCT,
-      heading: `Join ${d.accountName} on MyDomainsHub Mail`,
+      heading: 'You’re invited to MyDomainsHub Mail',
       blocks: [
         {
           kind: 'text',
-          text: `${d.invitedBy} invited you to join ${d.accountName} as ${MAIL_ROLE[d.role]}. MyDomainsHub Mail sends an app’s email — receipts, sign-in codes and the like — through one API.`,
+          text: `${d.invitedBy} invited you to join their team, “${shorten(d.accountName, 60)}”, as ${MAIL_ROLE[d.role]}. MyDomainsHub Mail sends an app’s email — receipts, sign-in codes and the like — through one API.`,
         },
         {
           kind: 'text',
@@ -769,7 +776,7 @@ export const NOTICE_TEMPLATES = {
         href: mailLink(context, `/invite?token=${encodeURIComponent(d.token)}`),
       },
       footer: [
-        'Not expecting this? You can ignore it: nothing happens unless you accept, and the invite expires by itself.',
+        `Don’t know ${d.invitedBy}, or not expecting this? Ignore it: nothing happens unless you accept, and the invite expires by itself.`,
       ],
     }),
   }),

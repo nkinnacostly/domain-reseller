@@ -4,7 +4,7 @@ import { createClient as createStandaloneClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
-import { authAction } from '@/lib/safe-action'
+import { authAction, partialAuthAction } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
 import { authMessage } from '../lib/messages'
 import { startedFromEmailLink } from '../lib/security'
@@ -22,7 +22,7 @@ type Result = { error: string } | { ok: true }
  * held for 24 hours, because a reset is exactly what someone who has broken
  * into your email would do.
  */
-export const completePasswordReset = authAction
+export const completePasswordReset = partialAuthAction
   .inputSchema(newPasswordSchema)
   .action(async ({ parsedInput, ctx }): Promise<Result> => {
     const { data: aal } = await ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel()

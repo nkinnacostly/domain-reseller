@@ -40,7 +40,15 @@ export function fakeSupabase({
   }
 
   const client = {
-    auth: { getUser: vi.fn(async () => ({ data: { user } })) },
+    auth: {
+      getUser: vi.fn(async () => ({ data: { user } })),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from: vi.fn(from),
     rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
       rpcCalls.push({ fn, args })

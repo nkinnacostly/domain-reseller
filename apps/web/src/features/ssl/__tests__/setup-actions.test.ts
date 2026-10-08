@@ -83,7 +83,15 @@ beforeEach(() => {
     maybeSingle: async () => ({ data: certificate }),
   }
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from: () => read,
   } as never)
   rpc = vi.fn(async () => ({ data: 'job-1', error: null }))

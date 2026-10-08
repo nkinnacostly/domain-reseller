@@ -134,7 +134,13 @@ function userClient({
   const client = {
     auth: {
       getUser: async () => ({ data: { user: { id: 'user-1', email } } }),
-      mfa: { listFactors },
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+        listFactors,
+      },
     },
     from: (table: string) => {
       if (table === 'domains') return chain(held)
@@ -486,7 +492,15 @@ describe('placeOrder — the cart must be ready to buy', () => {
 
   it('asks a signed-out visitor to sign in, and does nothing else', async () => {
     vi.mocked(createClient).mockResolvedValue({
-      auth: { getUser: async () => ({ data: { user: null } }) },
+      auth: {
+        getUser: async () => ({ data: { user: null } }),
+        mfa: {
+          getAuthenticatorAssuranceLevel: async () => ({
+            data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+            error: null,
+          }),
+        },
+      },
     } as never)
     const result = await placeOrder(INPUT)
     expect(result?.serverError).toBe('Please sign in to continue.')

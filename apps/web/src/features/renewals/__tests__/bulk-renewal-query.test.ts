@@ -63,7 +63,15 @@ function userClient({
   }
   vi.mocked(createClient).mockResolvedValue({
     from: (name: string) => (name === 'domains' ? table(domains, domainsError) : table(lines)),
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
   } as never)
 }
 

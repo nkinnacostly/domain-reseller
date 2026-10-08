@@ -57,7 +57,15 @@ beforeEach(() => {
   vi.mocked(paymentTestMode).mockReturnValue(true)
   vi.mocked(lookupDomain).mockResolvedValue(found())
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user } }) },
+    auth: {
+      getUser: async () => ({ data: { user } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     from: (table: string) => {
       if (table === 'domains') return chain({ data: own })
       if (table === 'contact_profiles') return chain({ data: null })

@@ -36,13 +36,36 @@ export const actionClient = createSafeActionClient({ handleServerError }).use(as
   return next({ ctx: { requestId: sent && UUID.test(sent) ? sent : crypto.randomUUID() } })
 })
 
-export const authAction = actionClient.use(async ({ next }) => {
+/**
+ * Signed in, whether or not the two-factor code has been entered yet: only
+ * for what finishing sign-in itself needs — entering the code, signing out,
+ * setting a new password from a reset link. Everything else is `authAction`.
+ */
+export const partialAuthAction = actionClient.use(async ({ next }) => {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) throw new AppError('UNAUTHENTICATED', 'Please sign in to continue.')
   return next({ ctx: { user, supabase } })
+})
+
+export const SIGN_IN_UNFINISHED =
+  'Enter the code from your authenticator app to finish signing in, then try again.'
+
+/**
+ * A signed-in person who has finished signing in: with two-factor on, the
+ * code is entered (security audit, 8 Oct 2026). The proxy sends unfinished
+ * sessions to /verify, but an action can be posted to any path, so it checks
+ * for itself — and so does every account action built on it. Decoded from
+ * the JWT: no network call.
+ */
+export const authAction = partialAuthAction.use(async ({ next, ctx }) => {
+  const { data: aal } = await ctx.supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    throw new AppError('MFA_REQUIRED', SIGN_IN_UNFINISHED)
+  }
+  return next({ ctx })
 })
 
 export const MEMBER_ROLES = ['owner', 'admin', 'developer', 'viewer'] as const

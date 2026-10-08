@@ -78,7 +78,7 @@ const SAMPLES: Record<NoticeKind, Record<string, unknown>> = {
   undelegated_nudge: { domain: 'getpaid.com' },
   mail_invite: {
     accountName: 'Acme Ltd',
-    invitedBy: 'Ada Obi',
+    invitedBy: 'ada@acme.example',
     role: 'developer',
     expiresAt: AT,
     token: 'a'.repeat(43),
@@ -430,9 +430,12 @@ describe('renderNotice', () => {
 describe('MyDomainsHub Mail’s notices (MAIL-SPEC §15, migration 58)', () => {
   it('invites with the one-time link, the role and the deadline, under Mail’s name', () => {
     const invite = render('mail_invite', SAMPLES.mail_invite)
-    expect(invite.subject).toBe('Ada Obi invited you to Acme Ltd on MyDomainsHub Mail')
+    // No account name in the subject: it is the customer's own text (migration 60).
+    expect(invite.subject).toBe('ada@acme.example invited you to a team on MyDomainsHub Mail')
+    expect(invite.text).toContain('join their team, “Acme Ltd”, as a developer')
+    const long = render('mail_invite', { ...SAMPLES.mail_invite, accountName: 'A'.repeat(100) })
+    expect(long.text).toContain(`“${'A'.repeat(59)}…”`)
     expect(invite.text).toContain(`${MAIL_SITE_URL}/invite?token=${'a'.repeat(43)}`)
-    expect(invite.text).toContain('as a developer')
     expect(invite.text).toContain('only for this email address')
     expect(invite.html).toContain('MyDomainsHub Mail')
     expect(

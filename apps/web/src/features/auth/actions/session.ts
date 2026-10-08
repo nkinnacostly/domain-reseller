@@ -3,7 +3,7 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { env } from '@/lib/env'
-import { actionClient, authAction } from '@/lib/safe-action'
+import { actionClient, partialAuthAction } from '@/lib/safe-action'
 import { createClient } from '@/lib/supabase/server'
 import { humanCheckError, verifyTurnstile } from '@/lib/turnstile'
 import { callbackUrl } from '../lib/links'
@@ -114,7 +114,7 @@ export const requestPasswordReset = actionClient
     return { sentTo: parsedInput.email }
   })
 
-export const signOut = authAction.action(async ({ ctx }) => {
+export const signOut = partialAuthAction.action(async ({ ctx }) => {
   // This device only — signing out everywhere is a separate, deliberate choice.
   await ctx.supabase.auth.signOut({ scope: 'local' })
   redirect('/')

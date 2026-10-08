@@ -181,5 +181,18 @@ export const config = {
     '/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt)$).*)',
     '/admin',
     '/admin/:path*',
+    // Signed-in paths, matched on their own like /admin: `/dashboard/x.png`
+    // is still a page, and a server action posted to it must not skip the
+    // proxy's two-factor redirect (security audit, 8 Oct 2026).
+    '/dashboard',
+    '/dashboard/:path*',
+    '/onboarding',
+    '/onboarding/:path*',
+    '/invite',
+    '/invite/:path*',
+    '/verify',
+    '/verify/:path*',
+    '/reset-password',
+    '/reset-password/:path*',
   ],
 }

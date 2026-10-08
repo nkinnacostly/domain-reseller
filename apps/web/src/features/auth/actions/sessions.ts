@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
-import { authAction } from '@/lib/safe-action'
+import { partialAuthAction } from '@/lib/safe-action'
 import { authMessage, FALLBACK_MESSAGE } from '../lib/messages'
 
 /**
@@ -33,7 +33,7 @@ async function hasFinishedSignIn(supabase: Supabase): Promise<boolean> {
   return !(aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2')
 }
 
-export const revokeSession = authAction
+export const revokeSession = partialAuthAction
   .inputSchema(z.object({ sessionId: z.uuid() }))
   .action(async ({ parsedInput, ctx }): Promise<Result> => {
     if (!(await hasFinishedSignIn(ctx.supabase))) return { error: UNFINISHED }
@@ -53,7 +53,7 @@ export const revokeSession = authAction
     return { ok: true }
   })
 
-export const signOutOtherSessions = authAction.action(async ({ ctx }): Promise<Result> => {
+export const signOutOtherSessions = partialAuthAction.action(async ({ ctx }): Promise<Result> => {
   if (!(await hasFinishedSignIn(ctx.supabase))) return { error: UNFINISHED }
 
   const { error } = await ctx.supabase.auth.signOut({ scope: 'others' })

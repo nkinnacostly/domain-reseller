@@ -140,7 +140,15 @@ beforeEach(() => {
   vi.mocked(createPaymentLink).mockResolvedValue('https://checkout.test/pay/1')
 
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'user-1', email: 'ada@example.com' } } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
     // FR-A2: an account well under ten domains — two-factor stays optional.
     from: (table: string) =>
       chain(

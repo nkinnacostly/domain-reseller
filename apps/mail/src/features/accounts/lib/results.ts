@@ -23,6 +23,10 @@ const WORDS: Record<string, string | ((answer: SqlAnswer) => string)> = {
   already_member: 'That person is already a member of this account.',
   already_invited:
     'An invite to that address is already waiting. Revoke it first to send a new one.',
+  too_many_invites: (answer) =>
+    `That is ${answer.max ?? 'the most'} invites this ${answer.per === 'month' ? 'month' : 'day'}, the most one account can send, counting revoked ones. Try again ${answer.per === 'month' ? 'next month' : 'tomorrow'}, or write to hello@mydomainshub.com if you need more.`,
+  account_paused:
+    'Sending is paused on this account, so we did not email the invite. Copy the link and send it yourself.',
   accepted: 'That invite has already been used.',
   expired: 'That invite has expired. Ask whoever sent it for a new one.',
   wrong_email:

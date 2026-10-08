@@ -70,7 +70,15 @@ function fakeService(answers: Record<string, Answer[]>) {
 
 function signedIn(user: { id: string } | null) {
   vi.mocked(createClient).mockResolvedValue({
-    auth: { getUser: async () => ({ data: { user } }) },
+    auth: {
+      getUser: async () => ({ data: { user } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => ({
+          data: { currentLevel: 'aal1', nextLevel: 'aal1', currentAuthenticationMethods: [] },
+          error: null,
+        }),
+      },
+    },
   } as never)
 }
 
