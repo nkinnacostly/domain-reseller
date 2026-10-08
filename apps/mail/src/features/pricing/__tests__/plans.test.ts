@@ -54,11 +54,12 @@ describe('the plans the pricing page shows (MAIL-SPEC §8)', () => {
       '1 sending domain',
       '1 team member',
       'Email log kept 7 days',
+      'Send by API or SMTP',
     ])
     expect(planFeatures(starter)).toContain('5 sending domains')
     expect(planFeatures(starter)).toContain('3 team members')
     expect(planSummary(free)).toBe(
-      'Free: Free. 3,000 emails a month; Up to 100 a day; 1 sending domain; 1 team member; Email log kept 7 days.',
+      'Free: Free. 3,000 emails a month; Up to 100 a day; 1 sending domain; 1 team member; Email log kept 7 days; Send by API or SMTP.',
     )
     expect(planSummary(starter)).toMatch(/^Starter: ₦\s?20,000 a month before VAT\. 50,000 emails/)
   })

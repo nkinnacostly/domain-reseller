@@ -1,3 +1,4 @@
+import { SMTP_SETTINGS } from '@dr/shared/mail'
 import type { Faq } from '@/features/marketing/components/faq'
 import { SAFETY } from '@/features/marketing/lib/site'
 import { BUSINESS } from '@/lib/business'
@@ -25,7 +26,7 @@ export const CAP_RULES = [
   {
     level: '100% of a cap',
     title: 'Sending stops until it resets',
-    body: `The API refuses further emails with quota_exceeded (HTTP 429), and nothing is queued. ${CAP_RESETS} There is no overage: going over is never charged.`,
+    body: `The API refuses further emails with quota_exceeded (HTTP 429), and SMTP with a 451 reply (550 for the monthly cap); nothing is queued. ${CAP_RESETS} There is no overage: going over is never charged.`,
   },
 ] as const
 
@@ -49,7 +50,11 @@ export function pricingFaqs(catalogue: PlanCatalogue | null): Faq[] {
     },
     {
       q: 'What happens when I reach a cap?',
-      a: `At 80% of either cap the account’s dashboard shows a notice on every page. At 100%, the API refuses further emails with quota_exceeded (HTTP 429) until the cap resets. ${CAP_RESETS} There is no overage billing.`,
+      a: `At 80% of either cap the account’s dashboard shows a notice on every page. At 100%, the API refuses further emails with quota_exceeded (HTTP 429), and SMTP with a 451 reply (550 for the monthly cap), until the cap resets. ${CAP_RESETS} There is no overage billing.`,
+    },
+    {
+      q: 'Can I send over SMTP?',
+      a: `Yes, on every plan, Free included. Use host ${SMTP_SETTINGS.host}, port ${SMTP_SETTINGS.ports[0]} (SSL/TLS), username ${SMTP_SETTINGS.username}, and an API key as the password. Emails sent over SMTP count against the same caps as the API’s, and land in the same log.`,
     },
     {
       q: 'Why can I send fewer emails a day than my plan allows?',

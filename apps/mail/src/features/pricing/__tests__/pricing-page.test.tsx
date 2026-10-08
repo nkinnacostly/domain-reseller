@@ -24,6 +24,7 @@ describe('the plan cards (MAIL-SPEC §8; N8 for Mail)', () => {
       '5 sending domains',
       '3 team members',
       'Email log kept 30 days',
+      'Send by API or SMTP',
     ]) {
       expect(starter).toHaveTextContent(line)
     }
@@ -69,6 +70,7 @@ describe('what happens at a cap', () => {
     expect(text).toContain('its dashboard shows a notice on every page')
     expect(text).not.toMatch(/we email/i)
     expect(text).toContain('quota_exceeded (HTTP 429)')
+    expect(text).toContain('SMTP with a 451 reply (550 for the monthly cap)')
     expect(text).toContain('midnight, Lagos time')
     expect(text).toContain('There is no overage')
     expect(text).toContain('An email to three people counts as three')
@@ -98,7 +100,10 @@ describe('the pricing questions', () => {
       'Message bodies are deleted 72 hours after sending.',
     )
     expect(answer('Is there a free plan?')).toBe(
-      'Yes. Free includes 3,000 emails a month, up to 100 a day, 1 sending domain, 1 team member, email log kept 7 days, at ₦0.',
+      'Yes. Free includes 3,000 emails a month, up to 100 a day, 1 sending domain, 1 team member, email log kept 7 days, send by API or SMTP, at ₦0.',
+    )
+    expect(answer('Can I send over SMTP?')).toBe(
+      'Yes, on every plan, Free included. Use host smtp.mydomainshub.com, port 465 (SSL/TLS), username mydomainshub, and an API key as the password. Emails sent over SMTP count against the same caps as the API’s, and land in the same log.',
     )
     expect(answer('Why can I send fewer emails a day than my plan allows?')).toContain(
       'starts at 1,000',

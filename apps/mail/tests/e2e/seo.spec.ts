@@ -26,7 +26,8 @@ test('the sitemap lists every public page, dated only where the date is true', a
   expect(xml).not.toMatch(/dashboard|sign-in|sign-up/)
   const entry = (path: string) =>
     xml.match(new RegExp(`<url>\\s*<loc>[^<]*${path}</loc>[\\s\\S]*?</url>`))?.[0] ?? ''
-  expect(entry('/legal/terms')).toContain('<lastmod>2026-10-05T23:00:00.000Z</lastmod>')
+  // BUSINESS.legalUpdatedOn (src/lib/business.ts), midnight in Lagos: change both together.
+  expect(entry('/legal/terms')).toContain('<lastmod>2026-10-07T23:00:00.000Z</lastmod>')
   expect(entry('/docs')).not.toContain('<lastmod>')
   expect(entry('/contact')).not.toContain('<lastmod>')
   for (const path of DOCS_GUIDES) {

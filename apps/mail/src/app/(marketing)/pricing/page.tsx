@@ -14,7 +14,7 @@ import { env } from '@/lib/env'
 export const metadata: Metadata = pageMetadata({
   title: 'Pricing',
   description:
-    'Mail plans priced in naira: each with its monthly and daily cap, counted per recipient, and what happens at the cap. Before VAT.',
+    'Mail plans priced in naira: each with its monthly and daily cap, counted per recipient, and what happens at the cap. API and SMTP on every plan. Before VAT.',
   path: '/pricing',
 })
 

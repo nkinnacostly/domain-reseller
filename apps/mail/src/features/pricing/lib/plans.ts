@@ -95,6 +95,8 @@ export function planFeatures(plan: Plan): string[] {
     plural(plan.maxDomains, 'sending domain', 'sending domains'),
     plural(plan.maxMembers, 'team member', 'team members'),
     `Email log kept ${plural(plan.logRetentionDays, 'day', 'days')}`,
+    // Not a plan row: every plan sends both ways (MAIL-SPEC §6, "SMTP").
+    'Send by API or SMTP',
   ]
 }
 
