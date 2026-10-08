@@ -555,37 +555,44 @@ describe('the reads provisioning makes before each write (§4.1)', () => {
     ).rejects.toThrow('topic')
   })
 
-  it('ListTenantResources: filtered by type, every page followed', async () => {
+  it('ListTenantResources: every page followed, the type picked out here, never sent as a Filter', async () => {
     const { ses, calls } = manager(
       {
         status: 200,
         body: {
-          TenantResources: [{ ResourceArn: SET_ARN, ResourceType: 'CONFIGURATION_SET' }, {}],
+          TenantResources: [
+            { ResourceArn: SET_ARN, ResourceType: 'CONFIGURATION_SET' },
+            {
+              ResourceArn: 'arn:aws:ses:eu-west-2:111122223333:identity/acme.example',
+              ResourceType: 'EMAIL_IDENTITY',
+            },
+            {},
+          ],
           NextToken: 'page-2',
         },
       },
-      { status: 200, body: { TenantResources: [{ ResourceArn: TENANT_ARN }] } },
+      // No ResourceType: the ARN says which it is.
+      {
+        status: 200,
+        body: { TenantResources: [{ ResourceArn: SET_ARN.replace('mdm-', 'mdm-x') }] },
+      },
     )
     expect(await ses.listTenantResources('mdm-0a1b2c3d4e', 'CONFIGURATION_SET')).toEqual({
       ok: true,
       resources: [
         { resourceArn: SET_ARN, resourceType: 'CONFIGURATION_SET' },
-        { resourceArn: TENANT_ARN, resourceType: null },
+        { resourceArn: SET_ARN.replace('mdm-', 'mdm-x'), resourceType: null },
       ],
     })
+    // SES refused `Filter: { RESOURCE_TYPE: … }` with BadRequestException (8 Oct 2026).
     expect(shape(calls[0])).toEqual({
       method: 'POST',
       url: `${BASE}/tenants/resources/list`,
-      body: {
-        TenantName: 'mdm-0a1b2c3d4e',
-        PageSize: 100,
-        Filter: { RESOURCE_TYPE: 'CONFIGURATION_SET' },
-      },
+      body: { TenantName: 'mdm-0a1b2c3d4e', PageSize: 100 },
     })
     expect(shape(calls[1]).body).toEqual({
       TenantName: 'mdm-0a1b2c3d4e',
       PageSize: 100,
-      Filter: { RESOURCE_TYPE: 'CONFIGURATION_SET' },
       NextToken: 'page-2',
     })
     expectSigned(calls[0], true)

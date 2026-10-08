@@ -119,11 +119,10 @@ export function createFakeSes({ region = 'eu-west-2' } = {}) {
       const held = resources.get(body.TenantName)
       if (b === 'list') {
         if (!held) return notFound()
-        const wanted = body.Filter?.RESOURCE_TYPE
+        // As SES did on 8 Oct 2026: a Filter of RESOURCE_TYPE is a BadRequestException.
+        if (body.Filter !== undefined) return bad()
         return answer(200, {
-          TenantResources: [...held]
-            .map((r) => ({ ResourceArn: r, ResourceType: typeOf('', r) }))
-            .filter((r) => !wanted || r.ResourceType === wanted),
+          TenantResources: [...held].map((r) => ({ ResourceArn: r, ResourceType: typeOf('', r) })),
         })
       }
       if (!held) return notFound()
