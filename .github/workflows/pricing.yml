@@ -21,25 +21,31 @@ concurrency:
   group: pricing-data
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   update:
     runs-on: ubuntu-latest
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      FX_PARALLEL_API_KEY: ${{ secrets.FX_PARALLEL_API_KEY }}
+    # The secrets are given to the one step that writes them, not to the whole
+    # job: actions and package install scripts never see them (security audit,
+    # 8 Oct 2026). Actions are pinned to a commit, not a tag that can move.
     steps:
       - name: Note the start time
         run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: pnpm install --frozen-lockfile
 
       # The scripts read the workspace .env; in CI the values come from secrets.
       - name: Write env
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          FX_PARALLEL_API_KEY: ${{ secrets.FX_PARALLEL_API_KEY }}
         run: |
           {
             echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"

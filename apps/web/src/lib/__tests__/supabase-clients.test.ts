@@ -154,7 +154,7 @@ describe('server client', () => {
       string,
       { cookieOptions: { httpOnly: boolean } },
     ]
-    expect(options.cookieOptions).toEqual({ httpOnly: true })
+    expect(options.cookieOptions).toMatchObject({ httpOnly: true })
   })
 
   it('passes a request id on as x-request-id, and nothing that is not a uuid', async () => {

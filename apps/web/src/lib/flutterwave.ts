@@ -67,6 +67,10 @@ export async function createPaymentLink(input: {
       currency: 'NGN',
       redirect_url: input.redirectUrl,
       payment_options: 'card,banktransfer,ussd',
+      // The hosted page closes after a day, when an unpaid order is closed
+      // (expire_unpaid_orders): a link kept for weeks cannot pay an old price
+      // (security audit, 8 Oct 2026). Flutterwave's maximum, in minutes.
+      session_duration: 1440,
       customer: {
         email: input.customer.email,
         name: input.customer.name,

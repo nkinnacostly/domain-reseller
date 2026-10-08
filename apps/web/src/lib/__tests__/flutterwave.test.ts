@@ -58,6 +58,7 @@ describe('createPaymentLink', () => {
       amount: 19_780,
       currency: 'NGN',
       payment_options: 'card,banktransfer,ussd',
+      session_duration: 1440,
       customizations: { description: 'Order ND-001001' },
       meta: { order_number: 'ND-001001' },
     })

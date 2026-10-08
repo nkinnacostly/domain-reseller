@@ -20,6 +20,7 @@ import {
   hasFreshSecondFactor,
   resetHoldUntil,
   SENSITIVE_CHANGE_NEEDS_TWO_FACTOR,
+  startedWithStrongSignIn,
 } from '@/features/auth/lib/security'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
@@ -109,11 +110,22 @@ export const elevatedAction = authAction.use(async ({ next, ctx }) => {
     )
   }
 
+  // A session that began from an email link (a reset or sign-in link) is
+  // what someone with only the inbox gets; adding a second factor to it
+  // through Supabase's own API must not open these changes (security audit,
+  // 8 Oct 2026). Only a password or Google sign-in may make them.
+  if (!startedWithStrongSignIn(aal.currentAuthenticationMethods ?? [])) {
+    throw new AppError('FORBIDDEN', SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN)
+  }
+
   const hold = resetHoldUntil(profile?.password_reset_at ?? null, now)
   if (hold) throw new AppError('FORBIDDEN', describeHold(hold))
 
   return next({ ctx })
 })
+
+export const SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN =
+  'Sign in with your password or Google, then enter your code, to make this change. A sign-in from an email link cannot make it.'
 
 // ── Admin (ADR-006) ─────────────────────────────────────────────────────────
 

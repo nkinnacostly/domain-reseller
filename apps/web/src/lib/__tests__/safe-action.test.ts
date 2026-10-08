@@ -7,6 +7,7 @@ import {
   authAction,
   elevatedAction,
   partialAuthAction,
+  SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN,
   SIGN_IN_UNFINISHED,
 } from '../safe-action'
 
@@ -173,6 +174,20 @@ describe('elevatedAction (SEC-2)', () => {
   it('asks to finish signing in when an authenticator is set up but its code not entered', async () => {
     session({ aal: { currentLevel: 'aal1', nextLevel: 'aal2', currentAuthenticationMethods: [] } })
     expect(await sensitive()).toEqual({ serverError: SIGN_IN_UNFINISHED })
+  })
+
+  it('refuses a session that began from an email link, even with a fresh code (security audit)', async () => {
+    session({
+      aal: {
+        currentLevel: 'aal2',
+        nextLevel: 'aal2',
+        currentAuthenticationMethods: [
+          { method: 'otp', timestamp: nowSeconds() - 600 },
+          { method: 'totp', timestamp: nowSeconds() - 60 },
+        ],
+      },
+    })
+    expect(await sensitive()).toEqual({ serverError: SENSITIVE_CHANGE_NEEDS_STRONG_SIGN_IN })
   })
 
   it('holds sensitive changes for a day after a password reset (FR-A6)', async () => {

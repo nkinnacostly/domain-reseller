@@ -3,7 +3,13 @@ import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendEmail } from '@/lib/email/send'
 import { env } from '@/lib/env'
+import { withinLimit } from '@/lib/rate-limit'
 
+vi.mock('@/lib/rate-limit', async (original) => ({
+  ...(await original<typeof import('@/lib/rate-limit')>()),
+  addressKey: vi.fn(async (scope: string) => `${scope}:test`),
+  withinLimit: vi.fn(async () => true),
+}))
 vi.mock('@/lib/email/send', () => ({ sendEmail: vi.fn() }))
 
 const { POST } = await import('@/app/api/auth/send-email/route')
@@ -69,6 +75,16 @@ describe('POST /api/auth/send-email (L1)', () => {
       error: { http_code: 401, message: 'Invalid signature' },
     })
     expect(sendEmail).not.toHaveBeenCalled()
+  })
+
+  it('holds back a sixth email to one address within the hour (security audit)', async () => {
+    vi.mocked(withinLimit).mockResolvedValueOnce(false)
+    const response = await POST(request(JSON.stringify(PAYLOAD)))
+    expect(response.status).toBe(429)
+    expect(sendEmail).not.toHaveBeenCalled()
+    // Keyed by a hash of the address, never the address itself.
+    const [key] = vi.mocked(withinLimit).mock.calls.at(-1) ?? []
+    expect(key).toMatch(/^auth_email:[0-9a-f]{32}$/)
   })
 
   it('says so when the email could not be sent, so Supabase shows an error', async () => {

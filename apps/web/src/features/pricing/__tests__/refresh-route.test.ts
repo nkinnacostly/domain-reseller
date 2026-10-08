@@ -15,6 +15,7 @@ vi.mock('@/features/ssl/queries/catalogue', () => ({
 }))
 vi.mock('@/lib/rate-limit', async (original) => ({
   ...(await original<typeof import('@/lib/rate-limit')>()),
+  addressKey: vi.fn(async (scope: string) => `${scope}:caller-hash`),
   withinLimit: vi.fn(),
 }))
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
@@ -37,6 +38,11 @@ describe('POST /api/pricing/refresh (L8)', () => {
     const response = await POST()
     expect(await response.json()).toEqual({ ok: true, refreshed: true })
     expect(revalidateTag).toHaveBeenCalledWith('pricing', { expire: 0 })
+  })
+
+  it('counts each caller on their own, so no one can use up the gateway’s refreshes (security audit)', async () => {
+    await POST()
+    expect(withinLimit).toHaveBeenCalledWith('pricing_refresh:caller-hash', expect.anything())
   })
 
   it('does nothing when they have not — so a caller cannot force work', async () => {

@@ -12,6 +12,18 @@ pre-commit:
           echo "✖ Possible secret in staged changes. Remove it or use .env (never committed)."
           exit 1
         fi
+        # The rest of the project's secrets by name (security audit, 8 Oct 2026),
+        # skipping a value that is itself a variable name (TURNSTILE_TEST_SECRET_KEY).
+        if git diff --cached -U0 | grep '^+' | grep -v '^+++ ' | grep -E '(GATEWAY_SHARED_SECRET|GATEWAY_ADMIN_SECRET|PROD_[A-Z_]+|VERCEL_TOKEN|SUPABASE_ACCESS_TOKEN|CLOUDFLARE_API_TOKEN|AWS_SETUP_[A-Z_]+|TELEGRAM_BOT_TOKEN|BREVO_API_KEY|TURNSTILE_SECRET_KEY|FLUTTERWAVE_WEBHOOK_HASH|FLUTTERWAVE_ENCRYPTION_KEY|GOOGLE_OAUTH_CLIENT_SECRET|SEND_EMAIL_HOOK_SECRET|SES_SMTP_PASSWORD|FX_PARALLEL_API_KEY|MAIL_DOMAIN_CONNECT_PRIVATE_KEY)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9_+/\-]{12,}' | grep -vE '[=:][[:space:]]*["'"'"']?[A-Z][A-Z0-9_]+["'"'"']?,?[[:space:]]*$'; then
+          echo "✖ Possible secret in staged changes. Remove it or use .env (never committed)."
+          exit 1
+        fi
+        # Raw key formats, whatever they are called: AWS access keys, live
+        # Flutterwave keys, Supabase secret and management keys, private keys.
+        if git diff --cached -U0 | grep '^+' | grep -v '^+++ ' | grep -nE '(AKIA[0-9A-Z]{16}|FLWSECK-[0-9a-f]{32}-X|sb_secret_[A-Za-z0-9_-]{20,}|sbp_[0-9a-f]{40}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|MIIE[uv][A-Za-z0-9+/]{200,})' | grep -v 'AKIAIOSFODNN7EXAMPLE'; then
+          echo "✖ Possible key in staged changes. Remove it or use .env (never committed)."
+          exit 1
+        fi
         # Mail's webhook sealing key (MR6): 32 bytes of base64, so a value of 40 or more
         # base64 characters; a variable name or a test placeholder is not one.
         if git diff --cached -U0 | grep '^+' | grep -v '^+++ ' | grep -nE 'MAIL_WEBHOOK_SECRET_KEY[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9+/]{40,}'; then

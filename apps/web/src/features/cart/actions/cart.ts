@@ -45,6 +45,9 @@ export const addToCart = actionClient
     const { stem, tld, isValid } = parseSearchQuery(parsedInput.domain)
     if (!isValid || !tld) return { error: 'That is not a domain we can add.' }
     const domain = `${stem}.${tld}`
+    if (!(await withinLimit(await addressKey('cart_add'), LIMITS.cartAdd))) {
+      return { error: "You've added a lot in the last few minutes. Wait a little and try again." }
+    }
 
     const priced = await getPricedCatalogue()
     if (!priced) return { error: 'Prices are unavailable right now, so nothing can be added.' }

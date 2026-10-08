@@ -1,9 +1,11 @@
 import { verifyWebhook } from '@dr/shared/webhooks'
 import { type NextRequest, NextResponse } from 'next/server'
 import { authEmailPayloadSchema, planAuthEmail } from '@/features/auth/lib/auth-email'
+import { addressHashKey } from '@/lib/client-ip'
 import { sendEmail } from '@/lib/email/send'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import { LIMITS, withinLimit } from '@/lib/rate-limit'
 
 /**
  * Supabase Auth's Send Email hook (L1). Sign-up, sign-in links, password
@@ -67,6 +69,15 @@ export async function POST(request: NextRequest) {
   }
 
   for (const email of plan.emails) {
+    // Supabase's own endpoints skip our Turnstile check (SEC-9), so no one
+    // address gets more than a few auth emails an hour from us, whoever asks.
+    if (!(await withinLimit(addressHashKey('auth_email', email.to), LIMITS.authEmailPerAddress))) {
+      logger.warn({ action }, 'auth email held back: too many to one address')
+      return failure(
+        429,
+        'Too many emails were sent to this address. Wait a while, then try again.',
+      )
+    }
     const sent = await sendEmail(email)
     if (!sent.ok) {
       logger.error({ action, status: sent.status }, 'auth email not sent')

@@ -50,6 +50,8 @@ function signedIn({ freshCode = true } = {}) {
           data: {
             currentLevel: 'aal2',
             currentAuthenticationMethods: [
+              // Signed in with the password, as elevatedAction requires (security audit).
+              { method: 'password', timestamp: now() - 7200 },
               { method: 'totp', timestamp: freshCode ? now() : now() - 3600 },
             ],
           },

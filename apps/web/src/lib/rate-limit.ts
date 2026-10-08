@@ -50,6 +50,14 @@ export const LIMITS = {
   bulkSearch: { max: 180, windowSeconds: 600 },
   // Adding every available name re-checks them all with the registry first.
   bulkAddToCart: { max: 20, windowSeconds: 600 },
+  // One domain added to a cart: each asks the registry afresh (FR-S6) through
+  // the gateway's shared bucket, so one address must not be able to drain it
+  // for every other shopper (security audit, 8 Oct 2026).
+  cartAdd: { max: 30, windowSeconds: 600 },
+  // Auth emails to one address (sign-up, links, resets) through Supabase's
+  // hook. Its own endpoints can be called without our Turnstile check, so the
+  // hook caps what any one address receives (security audit, 8 Oct 2026).
+  authEmailPerAddress: { max: 5, windowSeconds: 3600 },
   // FR-P4 — one bulk change can queue a registry job for each of 500
   // domains. A person makes a few in a sitting; a script would flood the queue.
   bulkChange: { max: 20, windowSeconds: 600 },
