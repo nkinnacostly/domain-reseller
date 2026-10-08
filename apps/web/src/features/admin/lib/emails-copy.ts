@@ -48,6 +48,14 @@ export const EMAIL_KIND_LABEL: Readonly<Record<string, string>> = {
   two_factor_off: 'Two-factor turned off',
   expiry_notice: 'Expiry notice (ERRP)',
   undelegated_nudge: 'Not pointed anywhere yet',
+  // MyDomainsHub Mail's notices (MAIL-SPEC §15, migration 58), sent from this outbox.
+  mail_invite: 'Mail: team invitation',
+  mail_cap_reached: 'Mail: sending limit reached',
+  mail_past_due: 'Mail: payment past due',
+  mail_plan_lapsed: 'Mail: plan moved to Free',
+  mail_webhook_disabled: 'Mail: webhook turned off',
+  mail_account_paused: 'Mail: sending paused',
+  mail_sending_warning: 'Mail: sending warning',
 }
 
 /** A kind in words; one without a label shows as itself, spaced. */
