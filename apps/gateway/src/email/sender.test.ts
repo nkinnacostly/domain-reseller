@@ -85,6 +85,21 @@ describe('sending', () => {
     expect(store.sent).toHaveBeenCalledWith('e1', 'gw-1', '<m1>', 'password_changed@1')
   })
 
+  it('sends MyDomainsHub Mail’s notices under Mail’s name, linking to Mail', async () => {
+    const store = fakeStore([
+      email({
+        kind: 'mail_plan_lapsed',
+        data: { accountName: 'Acme Ltd', plan: 'Starter' },
+      }),
+    ])
+    const mailer = fakeMailer()
+    expect(await sender(store, mailer).sendDue()).toEqual({ sent: 1, failed: 0, skipped: 0 })
+    const [message] = mailer.send.mock.calls[0] as [{ fromName: string; text: string }]
+    expect(message.fromName).toBe('MyDomainsHub Mail')
+    expect(message.text).toContain('https://emails.mydomainshub.com/dashboard/billing')
+    expect(store.sent).toHaveBeenCalledWith('e1', 'gw-1', '<m1>', 'mail_plan_lapsed@1')
+  })
+
   it('marks a test-mode email as a test', async () => {
     const store = fakeStore([
       email({

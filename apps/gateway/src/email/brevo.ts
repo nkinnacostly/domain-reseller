@@ -44,7 +44,7 @@ export function createBrevo(options: {
           headers,
           timeoutMs: 15_000,
           body: {
-            sender: { name: EMAIL_BRAND.name, email: EMAIL_BRAND.noReplyEmail },
+            sender: { name: message.fromName ?? EMAIL_BRAND.name, email: EMAIL_BRAND.noReplyEmail },
             replyTo: { name: EMAIL_BRAND.name, email: EMAIL_BRAND.supportEmail },
             to: [{ email: message.to }],
             subject: message.subject,

@@ -7,8 +7,11 @@ import {
   isNoticeKind,
   lagosDate,
   lagosDateTime,
+  MAIL_PRODUCT,
+  MAIL_SITE_URL,
   NOTICE_TEMPLATES,
   type NoticeKind,
+  percent,
   renderNotice,
 } from './notices'
 
@@ -73,6 +76,47 @@ const SAMPLES: Record<NoticeKind, Record<string, unknown>> = {
     notice: 'errp_pre_35',
   },
   undelegated_nudge: { domain: 'getpaid.com' },
+  mail_invite: {
+    accountName: 'Acme Ltd',
+    invitedBy: 'Ada Obi',
+    role: 'developer',
+    expiresAt: AT,
+    token: 'a'.repeat(43),
+  },
+  mail_cap_reached: {
+    accountName: 'Acme Ltd',
+    scope: 'day',
+    level: 80,
+    cap: 5000,
+    used: 4000,
+    plan: 'Starter',
+  },
+  mail_past_due: {
+    accountName: 'Acme Ltd',
+    plan: 'Starter',
+    amountKobo: 2150000,
+    pastDueUntil: '2026-10-15T09:00:00Z',
+  },
+  mail_plan_lapsed: { accountName: 'Acme Ltd', plan: 'Starter' },
+  mail_webhook_disabled: {
+    accountName: 'Acme Ltd',
+    endpoint: 'hooks.acme.example',
+    failingSince: AT,
+  },
+  mail_account_paused: {
+    accountName: 'Acme Ltd',
+    reason: 'bounce_rate',
+    bouncePpm: 43000,
+    windowDays: 7,
+  },
+  mail_sending_warning: {
+    accountName: 'Acme Ltd',
+    source: 'threshold',
+    kind: 'bounce_warning',
+    bouncePpm: 21000,
+    pausePpm: 40000,
+    windowDays: 7,
+  },
 }
 
 const render = (kind: string, data: unknown, context = CONTEXT) => {
@@ -127,8 +171,11 @@ describe('renderNotice', () => {
       expect(notice.category).toBe(NOTICE_TEMPLATES[kind].category)
       expect(notice.tags).toEqual([notice.category, kind])
       expect(notice.subject.length).toBeGreaterThan(5)
-      expect(notice.html).toContain('href="https://www.mydomainshub.com/')
-      expect(notice.text).toContain('https://www.mydomainshub.com/')
+      // MyDomainsHub Mail's notices link to Mail, and come from it by name.
+      const site = kind.startsWith('mail_') ? MAIL_SITE_URL : 'https://www.mydomainshub.com'
+      expect(notice.html).toContain(`href="${site}/`)
+      expect(notice.text).toContain(`${site}/`)
+      expect(notice.fromName).toBe(kind.startsWith('mail_') ? MAIL_PRODUCT : EMAIL_BRAND.name)
     },
   )
 
@@ -377,6 +424,104 @@ describe('renderNotice', () => {
       'It is registered to you.',
     )
     expect(render('transfer_completed', { domain: 'a.com' }).text).toContain('now in your account.')
+  })
+})
+
+describe('MyDomainsHub Mail’s notices (MAIL-SPEC §15, migration 58)', () => {
+  it('invites with the one-time link, the role and the deadline, under Mail’s name', () => {
+    const invite = render('mail_invite', SAMPLES.mail_invite)
+    expect(invite.subject).toBe('Ada Obi invited you to Acme Ltd on MyDomainsHub Mail')
+    expect(invite.text).toContain(`${MAIL_SITE_URL}/invite?token=${'a'.repeat(43)}`)
+    expect(invite.text).toContain('as a developer')
+    expect(invite.text).toContain('only for this email address')
+    expect(invite.html).toContain('MyDomainsHub Mail')
+    expect(
+      renderNotice('mail_invite', { ...SAMPLES.mail_invite, token: 'short' }, CONTEXT).ok,
+    ).toBe(false)
+  })
+
+  it('links to the Mail site a test names', () => {
+    const rendered = renderNotice('mail_plan_lapsed', SAMPLES.mail_plan_lapsed, {
+      ...CONTEXT,
+      mailUrl: 'http://localhost:3301/',
+    })
+    expect(rendered.ok && rendered.notice.text).toContain('http://localhost:3301/dashboard/billing')
+  })
+
+  it('words a cap at 80% and at 100%, by the day and the month, with when it resets', () => {
+    const near = render('mail_cap_reached', SAMPLES.mail_cap_reached)
+    expect(near.subject).toBe('Acme Ltd has used 80% of its daily sending limit')
+    expect(near.text).toContain('4,000 of its 5,000 emails a day on the Starter plan')
+    expect(near.text).toContain('at midnight, Lagos time')
+    const full = render('mail_cap_reached', {
+      ...SAMPLES.mail_cap_reached,
+      scope: 'month',
+      level: 100,
+    })
+    expect(full.subject).toBe('Acme Ltd has reached its monthly sending limit')
+    expect(full.text).toContain('quota_exceeded')
+    expect(full.text).toContain('on the first day of next month')
+    expect(
+      renderNotice('mail_cap_reached', { ...SAMPLES.mail_cap_reached, level: 50 }, CONTEXT).ok,
+    ).toBe(false)
+  })
+
+  it('says how long a past-due plan keeps working, and what it costs, to the owner', () => {
+    const due = render('mail_past_due', SAMPLES.mail_past_due)
+    expect(due.text).toContain('₦21,500')
+    expect(due.text).toContain('Sending carries on until 15 October 2026')
+    expect(due.text).toContain('as the owner of Acme Ltd')
+    expect(render('mail_plan_lapsed', SAMPLES.mail_plan_lapsed).text).toContain(
+      'moved to the Free plan',
+    )
+  })
+
+  it('names a disabled webhook by its host only', () => {
+    const hook = render('mail_webhook_disabled', SAMPLES.mail_webhook_disabled)
+    expect(hook.text).toContain('Your endpoint at hooks.acme.example')
+    expect(hook.text).toContain('/dashboard/webhooks')
+  })
+
+  it('says why sending is paused, for each way it can be', () => {
+    expect(render('mail_account_paused', SAMPLES.mail_account_paused).text).toContain(
+      'bounced (4.3% over the last 7 days)',
+    )
+    expect(
+      render('mail_account_paused', {
+        accountName: 'Acme Ltd',
+        reason: 'complaint_rate',
+        complaintPpm: 900,
+      }).text,
+    ).toContain('reported Acme Ltd’s recent emails as spam (0.09%)')
+    expect(
+      render('mail_account_paused', { accountName: 'Acme Ltd', reason: 'ses' }).text,
+    ).toContain('Amazon SES paused sending')
+    const admin = render('mail_account_paused', { accountName: 'Acme Ltd', reason: 'admin' })
+    expect(admin.text).toContain('Our team paused sending on Acme Ltd.')
+    expect(admin.text).toContain('the API refuses new emails')
+  })
+
+  it('warns before a pause, with the rate and the line, or in SES’s own words', () => {
+    const warn = render('mail_sending_warning', SAMPLES.mail_sending_warning)
+    expect(warn.subject).toBe('Acme Ltd: bounces are getting high')
+    expect(warn.text).toContain(
+      'Over the last 7 days, 2.1% of Acme Ltd’s emails bounced. At 4% we pause',
+    )
+    const ses = render('mail_sending_warning', {
+      accountName: 'Acme Ltd',
+      source: 'ses',
+      kind: 'bounce',
+      summary: 'The bounce rate exceeded 5%.',
+    })
+    expect(ses.subject).toBe('Amazon SES flagged Acme Ltd’s sending')
+    expect(ses.text).toContain('The bounce rate exceeded 5%.')
+  })
+
+  it('writes rates as mail.ppm_text does', () => {
+    expect(percent(43_000)).toBe('4.3%')
+    expect(percent(523)).toBe('0.052%')
+    expect(percent(800)).toBe('0.08%')
+    expect(percent(40_000)).toBe('4%')
   })
 })
 

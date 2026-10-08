@@ -42,6 +42,8 @@ export type SesEmail = {
   text: string
   /** Our tags — `[category, kind]` — become SES message tags. */
   tags?: readonly string[]
+  /** The From name for this message (a product's, such as MyDomainsHub Mail); the address stays. */
+  fromName?: string
 }
 
 /** Failures a person must fix: SES will refuse everything until then. */
@@ -172,7 +174,7 @@ export function createSesClient(settings: SesSettings) {
     async send(email: SesEmail): Promise<SesSendResult> {
       const tags = sesTags(email.tags)
       const body = JSON.stringify({
-        FromEmailAddress: mailbox(from),
+        FromEmailAddress: mailbox(email.fromName ? { ...from, name: email.fromName } : from),
         Destination: { ToAddresses: [email.to] },
         ReplyToAddresses: [mailbox(replyTo)],
         Content: {

@@ -59,6 +59,14 @@ describe('SES mailer (L1)', () => {
     ])
   })
 
+  it('sends a product’s notice under its name, from the same address', async () => {
+    const { fetch, calls } = answering({ status: 200, body: { MessageId: '0102-abc-000001' } })
+    await mailer(fetch).send({ ...MESSAGE, fromName: 'MyDomainsHub Mail' })
+    const body = JSON.parse(calls[0]?.init.body ?? '{}')
+    expect(body.FromEmailAddress).toBe('MyDomainsHub Mail <no-reply@notify.mydomainshub.com>')
+    expect(body.ReplyToAddresses).toEqual(['MyDomainsHub <hello@mydomainshub.com>'])
+  })
+
   it('fails a rejected message for good, without the address in the error', async () => {
     const { fetch } = answering({
       status: 400,

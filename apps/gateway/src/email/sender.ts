@@ -117,6 +117,7 @@ export function createEmailSender(options: EmailSenderOptions) {
           html: notice.html,
           text: notice.text,
           tags: notice.tags,
+          fromName: notice.fromName,
         }),
       )
       if (result.ok) {

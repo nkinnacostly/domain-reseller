@@ -13,6 +13,8 @@ export type OutgoingMessage = {
   html: string
   text: string
   tags: string[]
+  /** The From name (the product the email is about); the address is always ours. */
+  fromName?: string
 }
 
 export type SendOutcome =

@@ -19,6 +19,8 @@ export type NoticeCategory = 'transactional' | 'security' | 'compliance'
 export type NoticeContext = {
   /** Where links point: the site the account belongs to. */
   siteUrl: string
+  /** Where MyDomainsHub Mail's notices link to; emails.mydomainshub.com unless a test says otherwise. */
+  mailUrl?: string
   /** A test-mode order or domain: no money moved, and the email says so. */
   testMode: boolean
   now: Date
@@ -32,6 +34,8 @@ export type RenderedNotice = {
   version: string
   category: NoticeCategory
   tags: string[]
+  /** The sender's display name: the product the email is about. */
+  fromName: string
 }
 
 // ── Formatting ───────────────────────────────────────────────────────────────
@@ -115,6 +119,32 @@ const NOT_YOU =
   'If you did not do this, change your password now, sign out the devices you do not recognise in your settings, and reply to this email so we can help.'
 
 const TEST_NOTE = 'Test mode: this was paid with Flutterwave test keys, so no money moved.'
+
+// ── MyDomainsHub Mail's pieces ───────────────────────────────────────────────
+
+export const MAIL_PRODUCT = 'MyDomainsHub Mail'
+export const MAIL_SITE_URL = 'https://emails.mydomainshub.com'
+
+const mailLink = (context: NoticeContext, path: string) =>
+  `${(context.mailUrl ?? MAIL_SITE_URL).replace(/\/+$/, '')}${path}`
+
+const COUNT = new Intl.NumberFormat('en-NG')
+
+/** Parts per million as a percentage, as mail.ppm_text words it: 43,000 → 4.3%, 523 → 0.052%. */
+export function percent(ppm: number): string {
+  return `${(ppm / 10_000).toFixed(3).replace(/\.?0+$/, '')}%`
+}
+
+const MAIL_ROLE: Record<'admin' | 'developer' | 'viewer', string> = {
+  admin: 'an admin',
+  developer: 'a developer',
+  viewer: 'a viewer',
+}
+
+const membersFooter = (account: string) =>
+  `You get this as an owner or admin of ${account} on MyDomainsHub Mail. It is about the account itself, so it cannot be switched off.`
+const ownerFooter = (account: string) =>
+  `You get this as the owner of ${account} on MyDomainsHub Mail. It is about the account itself, so it cannot be switched off.`
 
 // ── Templates ────────────────────────────────────────────────────────────────
 
@@ -704,6 +734,273 @@ export const NOTICE_TEMPLATES = {
       footer: ['We send this once. Not ready yet? You can do it any time from your account.'],
     }),
   }),
+
+  // ── MyDomainsHub Mail (docs/MAIL-SPEC.md §15; migration 58) ─────────────────
+  // Queued by Mail's database into this outbox and sent from the shop's own
+  // identity — never through Mail's sending path, so a paused account still
+  // hears that it is paused. Each names the product and links to Mail.
+
+  mail_invite: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      accountName: z.string().min(1).max(100),
+      invitedBy: z.string().min(1).max(320),
+      role: z.enum(['admin', 'developer', 'viewer']),
+      expiresAt: iso,
+      token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    }),
+    subject: (d) => `${d.invitedBy} invited you to ${d.accountName} on MyDomainsHub Mail`,
+    content: (d, context) => ({
+      product: MAIL_PRODUCT,
+      heading: `Join ${d.accountName} on MyDomainsHub Mail`,
+      blocks: [
+        {
+          kind: 'text',
+          text: `${d.invitedBy} invited you to join ${d.accountName} as ${MAIL_ROLE[d.role]}. MyDomainsHub Mail sends an app’s email — receipts, sign-in codes and the like — through one API.`,
+        },
+        {
+          kind: 'text',
+          text: `The link works once, and only for this email address, until ${lagosDateTime(d.expiresAt)}. Sign in with this address, or create a MyDomainsHub sign-in with it, to accept.`,
+        },
+      ],
+      action: {
+        label: 'Accept the invite',
+        href: mailLink(context, `/invite?token=${encodeURIComponent(d.token)}`),
+      },
+      footer: [
+        'Not expecting this? You can ignore it: nothing happens unless you accept, and the invite expires by itself.',
+      ],
+    }),
+  }),
+
+  mail_cap_reached: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      accountName: z.string().min(1).max(100),
+      scope: z.enum(['day', 'month']),
+      level: z.coerce.number().pipe(z.union([z.literal(80), z.literal(100)])),
+      cap: z.coerce.number().int().positive(),
+      used: z.coerce.number().int().nonnegative(),
+      plan: z.string().min(1).max(40).nullish(),
+    }),
+    subject: (d) =>
+      d.level === 100
+        ? `${d.accountName} has reached its ${d.scope === 'day' ? 'daily' : 'monthly'} sending limit`
+        : `${d.accountName} has used 80% of its ${d.scope === 'day' ? 'daily' : 'monthly'} sending limit`,
+    content: (d, context) => {
+      const limit = `${COUNT.format(d.cap)} emails a ${d.scope}`
+      const resets =
+        d.scope === 'day' ? 'at midnight, Lagos time' : 'on the first day of next month, Lagos time'
+      return {
+        product: MAIL_PRODUCT,
+        heading:
+          d.level === 100
+            ? 'You have reached your sending limit'
+            : 'You have used 80% of your sending limit',
+        blocks: [
+          {
+            kind: 'text',
+            text:
+              d.level === 100
+                ? `${d.accountName} has sent ${COUNT.format(d.used)} of its ${limit}${d.plan ? ` on the ${d.plan} plan` : ''}. Until the limit resets ${resets}, the API refuses new emails with a quota_exceeded error.`
+                : `${d.accountName} has sent ${COUNT.format(d.used)} of its ${limit}${d.plan ? ` on the ${d.plan} plan` : ''}. At the limit, the API refuses new emails until it resets ${resets}.`,
+          },
+          {
+            kind: 'text',
+            text: 'Need more? A bigger plan raises both limits at once.',
+          },
+        ],
+        action: { label: 'See plans', href: mailLink(context, '/dashboard/billing') },
+        footer: [membersFooter(d.accountName)],
+      }
+    },
+  }),
+
+  mail_past_due: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      accountName: z.string().min(1).max(100),
+      plan: z.string().min(1).max(40),
+      amountKobo: naira.nullish(),
+      pastDueUntil: iso.nullish(),
+    }),
+    subject: (d) => `${d.accountName}: the ${d.plan} plan’s renewal payment has not come through`,
+    content: (d, context) => ({
+      product: MAIL_PRODUCT,
+      heading: 'Your renewal payment has not come through',
+      blocks: [
+        {
+          kind: 'text',
+          text: `We have not received this month’s payment for ${d.accountName}’s ${d.plan} plan${d.amountKobo ? ` (${formatNaira(d.amountKobo)}, VAT included)` : ''}.`,
+        },
+        {
+          kind: 'text',
+          text: d.pastDueUntil
+            ? `Sending carries on until ${lagosDate(d.pastDueUntil)}. Pay on the Billing page before then to keep the ${d.plan} plan; after that the account moves to the Free plan’s limits.`
+            : `Pay on the Billing page to keep the ${d.plan} plan; otherwise the account moves to the Free plan’s limits.`,
+        },
+      ],
+      action: { label: 'Pay now', href: mailLink(context, '/dashboard/billing') },
+      footer: [ownerFooter(d.accountName)],
+    }),
+  }),
+
+  mail_plan_lapsed: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      accountName: z.string().min(1).max(100),
+      plan: z.string().min(1).max(40).nullish(),
+    }),
+    subject: (d) => `${d.accountName} is on the Free plan now`,
+    content: (d, context) => ({
+      product: MAIL_PRODUCT,
+      heading: `${d.accountName} is on the Free plan now`,
+      blocks: [
+        {
+          kind: 'text',
+          text: `The ${d.plan ? `${d.plan} plan’s` : 'plan’s'} renewal payment did not come through in time, so ${d.accountName} has moved to the Free plan and its lower limits. Your domains, keys and email log are kept.`,
+        },
+        {
+          kind: 'text',
+          text: 'You can choose a paid plan again at any time; it starts as soon as the payment goes through.',
+        },
+      ],
+      action: { label: 'Choose a plan', href: mailLink(context, '/dashboard/billing') },
+      footer: [ownerFooter(d.accountName)],
+    }),
+  }),
+
+  mail_webhook_disabled: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      accountName: z.string().min(1).max(100),
+      endpoint: z.string().min(1).max(253).nullish(),
+      failingSince: iso.nullish(),
+    }),
+    subject: (d) => `${d.accountName}: we turned off a webhook endpoint that kept failing`,
+    content: (d, context) => ({
+      product: MAIL_PRODUCT,
+      heading: 'We turned off a failing webhook endpoint',
+      blocks: [
+        {
+          kind: 'text',
+          text: `Your endpoint${d.endpoint ? ` at ${d.endpoint}` : ''} has not accepted our deliveries${d.failingSince ? ` since ${lagosDateTime(d.failingSince)}` : ' for days'}, so we turned it off. Deliveries that were waiting for it were marked failed.`,
+        },
+        {
+          kind: 'text',
+          text: 'Your emails were not affected, and every event is still in the email log. Fix the endpoint, then turn it back on from the Webhooks page.',
+        },
+      ],
+      action: { label: 'Open Webhooks', href: mailLink(context, '/dashboard/webhooks') },
+      footer: [membersFooter(d.accountName)],
+    }),
+  }),
+
+  mail_account_paused: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      accountName: z.string().min(1).max(100),
+      reason: z.enum(['bounce_rate', 'complaint_rate', 'ses', 'admin']).nullish(),
+      bouncePpm: z.coerce.number().int().nonnegative().nullish(),
+      complaintPpm: z.coerce.number().int().nonnegative().nullish(),
+      windowDays: z.coerce.number().int().positive().nullish(),
+    }),
+    subject: (d) => `Sending is paused on ${d.accountName}`,
+    content: (d, context) => {
+      const days = d.windowDays ? ` over the last ${d.windowDays} days` : ''
+      const why =
+        d.reason === 'bounce_rate'
+          ? `Too many of ${d.accountName}’s recent emails bounced${d.bouncePpm != null ? ` (${percent(d.bouncePpm)}${days})` : ''}, so we paused sending to protect your sender reputation.`
+          : d.reason === 'complaint_rate'
+            ? `Too many recipients reported ${d.accountName}’s recent emails as spam${d.complaintPpm != null ? ` (${percent(d.complaintPpm)}${days})` : ''}, so we paused sending to protect your sender reputation.`
+            : d.reason === 'ses'
+              ? `Amazon SES paused sending on ${d.accountName}, usually over its bounce or complaint rates. It stays paused until our team has looked into it.`
+              : `Our team paused sending on ${d.accountName}.`
+      return {
+        product: MAIL_PRODUCT,
+        heading: 'Sending is paused',
+        blocks: [
+          { kind: 'text', text: why },
+          {
+            kind: 'note',
+            text: 'While it is paused, the API refuses new emails and queued ones are not sent.',
+          },
+          {
+            kind: 'text',
+            text: 'Reply to this email, or write to hello@mydomainshub.com, and a person will look into it with you.',
+          },
+        ],
+        action: { label: 'Open the dashboard', href: mailLink(context, '/dashboard') },
+        footer: [membersFooter(d.accountName)],
+      }
+    },
+  }),
+
+  mail_sending_warning: template({
+    version: 1,
+    category: 'transactional',
+    schema: z.object({
+      accountName: z.string().min(1).max(100),
+      source: z.enum(['threshold', 'ses']),
+      kind: z.string().min(1).max(60),
+      bouncePpm: z.coerce.number().int().nonnegative().nullish(),
+      complaintPpm: z.coerce.number().int().nonnegative().nullish(),
+      pausePpm: z.coerce.number().int().positive().nullish(),
+      windowDays: z.coerce.number().int().positive().nullish(),
+      summary: z.string().max(500).nullish(),
+    }),
+    subject: (d) =>
+      d.source === 'ses'
+        ? `Amazon SES flagged ${d.accountName}’s sending`
+        : d.kind === 'complaint_warning'
+          ? `${d.accountName}: spam complaints are getting high`
+          : `${d.accountName}: bounces are getting high`,
+    content: (d, context) => {
+      const days = d.windowDays ? `Over the last ${d.windowDays} days` : 'Recently'
+      const rate = d.kind === 'complaint_warning' ? d.complaintPpm : d.bouncePpm
+      const what = d.kind === 'complaint_warning' ? 'were reported as spam' : 'bounced'
+      const blocks: EmailBlock[] =
+        d.source === 'ses'
+          ? [
+              {
+                kind: 'text',
+                text: `Amazon SES, which sends ${d.accountName}’s email, raised a high-impact finding about its sending.`,
+              },
+              ...(d.summary ? [{ kind: 'note', text: d.summary } as const] : []),
+              {
+                kind: 'text',
+                text: 'Look at who you send to: remove addresses that bounce, and send only to people who asked for your email. If it gets worse, sending can be paused.',
+              },
+            ]
+          : [
+              {
+                kind: 'text',
+                text: `${days}, ${rate != null ? percent(rate) : 'too many'} of ${d.accountName}’s emails ${what}.${d.pausePpm ? ` At ${percent(d.pausePpm)} we pause sending to protect every sender’s reputation.` : ' If it keeps rising, we pause sending to protect every sender’s reputation.'}`,
+              },
+              {
+                kind: 'text',
+                text:
+                  d.kind === 'complaint_warning'
+                    ? 'Send only to people who asked for your email, and make it easy to stop receiving it.'
+                    : 'Remove addresses that bounce, and check how addresses are collected: a typo at sign-up bounces every time.',
+              },
+            ]
+      return {
+        product: MAIL_PRODUCT,
+        heading:
+          d.source === 'ses' ? 'Amazon SES flagged your sending' : 'Your sending needs attention',
+        blocks,
+        action: { label: 'Open the dashboard', href: mailLink(context, '/dashboard') },
+        footer: [membersFooter(d.accountName)],
+      }
+    },
+  }),
 } as const
 
 export type NoticeKind = keyof typeof NOTICE_TEMPLATES
@@ -746,6 +1043,7 @@ export function renderNotice(kind: string, data: unknown, context: NoticeContext
       version: `${kind}@${entry.version}`,
       category: entry.category,
       tags: [entry.category, kind],
+      fromName: content.product ?? EMAIL_BRAND.name,
     },
   }
 }
