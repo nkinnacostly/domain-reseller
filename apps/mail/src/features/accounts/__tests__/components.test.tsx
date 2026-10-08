@@ -386,6 +386,7 @@ describe('members (§9, §10 Settings)', () => {
       data: {
         link: 'https://emails.mydomainshub.com/invite?token=tok',
         expiresAt: '2026-10-13T10:00:00Z',
+        emailed: true,
       },
     })
     const user = userEvent.setup()
@@ -395,14 +396,14 @@ describe('members (§9, §10 Settings)', () => {
       screen.getAllByRole('option').map((option) => (option as HTMLOptionElement).value),
     ).toEqual(['developer', 'viewer'])
     await user.type(screen.getByLabelText('Their email'), 'Bola@Example.com')
-    await user.click(screen.getByRole('button', { name: 'Make an invite link' }))
+    await user.click(screen.getByRole('button', { name: 'Send invite' }))
     expect(createInvite).toHaveBeenCalledWith({
       accountId: ACCOUNT,
       email: 'Bola@Example.com',
       role: 'developer',
     })
-    expect(await screen.findByText('Invite ready for bola@example.com')).toBeInTheDocument()
-    expect(screen.getByText(/We don’t email invites yet/)).toBeInTheDocument()
+    expect(await screen.findByText('Invite sent to bola@example.com')).toBeInTheDocument()
+    expect(screen.getByText(/We have emailed them this link/)).toBeInTheDocument()
     expect(screen.getByLabelText('Invite link')).toHaveValue(
       'https://emails.mydomainshub.com/invite?token=tok',
     )
@@ -414,12 +415,16 @@ describe('members (§9, §10 Settings)', () => {
   })
 
   it('says when copying failed, and how to copy by hand', async () => {
-    answer(createInvite, { data: { link: 'https://x.test/invite?token=t', expiresAt: '' } })
+    answer(createInvite, {
+      data: { link: 'https://x.test/invite?token=t', expiresAt: '', emailed: false },
+    })
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'))
     const user = userEvent.setup()
     render(<InviteForm accountId={ACCOUNT} myRole="owner" />)
     await user.type(screen.getByLabelText('Their email'), 'b@example.com')
-    await user.click(screen.getByRole('button', { name: 'Make an invite link' }))
+    await user.click(screen.getByRole('button', { name: 'Send invite' }))
+    expect(await screen.findByText('Invite ready for b@example.com')).toBeInTheDocument()
+    expect(screen.getByText(/We could not email it just now/)).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Copy link' }))
     expect(await screen.findByText(/select the link and copy it/)).toBeInTheDocument()
     expect(screen.getByText(/until in seven days/)).toBeInTheDocument()
@@ -429,7 +434,7 @@ describe('members (§9, §10 Settings)', () => {
     answer(createInvite, { data: { error: 'This plan has 1 member seat.' } })
     const user = userEvent.setup()
     render(<InviteForm accountId={ACCOUNT} myRole="owner" />)
-    await user.click(screen.getByRole('button', { name: 'Make an invite link' }))
+    await user.click(screen.getByRole('button', { name: 'Send invite' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('1 member seat')
   })
 

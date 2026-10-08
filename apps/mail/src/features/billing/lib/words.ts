@@ -1,8 +1,9 @@
 /**
  * Billing in words (MAIL-SPEC §8; the shop's UX-7): what happened, why, and
  * what to do next. A code without words of its own gets the fallback, never
- * the raw code. Nothing here promises an email: v1 sends none for billing
- * (owner, 6 Oct 2026), so the banner and this page carry everything (N9b).
+ * the raw code. The owner is emailed when a renewal goes past due and when
+ * the plan lapses (migration 58); the banner and this page still carry
+ * everything, and nothing here promises an email (N9b).
  */
 
 export const BILLING_FALLBACK = 'Something went wrong on our end. Nothing was changed. Try again.'

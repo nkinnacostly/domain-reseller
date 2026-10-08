@@ -42,6 +42,7 @@ export function InviteForm({ accountId, myRole }: { accountId: string; myRole: M
         link={data.link}
         email={sentTo}
         expiresAt={data.expiresAt}
+        emailed={data.emailed}
         onAnother={() => {
           invite.reset()
           setSentTo(null)
@@ -108,10 +109,10 @@ export function InviteForm({ accountId, myRole }: { accountId: string; myRole: M
       </ul>
       <SubmitButton
         pending={invite.isPending}
-        pendingLabel="Making the link…"
+        pendingLabel="Sending the invite…"
         className="sm:w-auto"
       >
-        Make an invite link
+        Send invite
       </SubmitButton>
     </form>
   )
@@ -121,11 +122,14 @@ function InviteLink({
   link,
   email,
   expiresAt,
+  emailed,
   onAnother,
 }: {
   link: string
   email: string | null
   expiresAt: string
+  /** The invite email was queued (migration 58); otherwise the inviter sends the link. */
+  emailed: boolean
   onAnother: () => void
 }) {
   const id = useId()
@@ -135,10 +139,16 @@ function InviteLink({
   return (
     <div className="space-y-4">
       <FormMessage tone="success">
-        <p className="font-medium">Invite ready{email ? ` for ${email}` : ''}</p>
+        <p className="font-medium">
+          {emailed
+            ? `Invite sent${email ? ` to ${email}` : ''}`
+            : `Invite ready${email ? ` for ${email}` : ''}`}
+        </p>
         <p>
-          We don’t email invites yet: copy this link and send it to them yourself. It works once,
-          only for that address, until {expires}. It is shown only now.
+          {emailed
+            ? 'We have emailed them this link. You can copy it too, to send another way.'
+            : 'We could not email it just now: copy this link and send it to them yourself.'}{' '}
+          It works once, only for that address, until {expires}. It is shown only now.
         </p>
       </FormMessage>
       <div>

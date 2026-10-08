@@ -38,6 +38,28 @@ export function serviceMail() {
   return createClient<Database, 'mail'>(url, secret, { db: { schema: 'mail' }, auth: noSession })
 }
 
+/**
+ * Migration 58: the notification emails queued for an address, as the shop's
+ * outbox holds them — e2e addresses are reserved, so each is `skipped`, never
+ * sent. Kind, status and whether the data still holds a token; nothing else.
+ */
+export async function queuedEmailsFor(
+  address: string,
+): Promise<{ kind: string; status: string; hasToken: boolean }[]> {
+  const { url, secret } = settings()
+  const client = createClient<Database>(url, secret, { auth: noSession })
+  const { data, error } = await client
+    .from('email_outbox')
+    .select('kind, status, data')
+    .eq('to_email', address.toLowerCase())
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    kind: row.kind,
+    status: row.status,
+    hasToken: typeof row.data === 'object' && row.data !== null && 'token' in row.data,
+  }))
+}
+
 /** The person's own session, schema mail: what RLS lets them see. */
 export async function signedInMail(user: TestUser) {
   const { url, publishable } = settings()

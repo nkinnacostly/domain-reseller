@@ -33,7 +33,7 @@ describe('legal pages are marked as drafts (MAIL-SPEC §14.5)', () => {
     )
     expect(container.innerHTML).toContain(`<!-- ${LEGAL_DRAFT_NOTICE} -->`)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Terms of Service')
-    expect(screen.getByText('Last updated 6 October 2026')).toBeInTheDocument()
+    expect(screen.getByText('Last updated 8 October 2026')).toBeInTheDocument()
     expect(screen.getByRole('article')).toHaveTextContent(
       'Our lawyer has not reviewed this document',
     )

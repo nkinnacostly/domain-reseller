@@ -67,7 +67,8 @@ export default function PrivacyPage() {
             much — what we review an account by.
           </li>
           <li>
-            <strong>Your team:</strong> the people you add, their email addresses and roles.
+            <strong>Your team:</strong> the people you add or invite, their email addresses and
+            roles. An invitation is emailed to the address you give.
           </li>
           <li>
             <strong>API keys:</strong> a hash of each key and its first characters, never the key
@@ -117,6 +118,13 @@ export default function PrivacyPage() {
           <li>
             <strong>To run your account and send your email</strong> — necessary to perform our
             contract with you.
+          </li>
+          <li>
+            <strong>To email you about your account</strong> — invitations, sending limits reached,
+            payments not received, webhooks turned off and sending paused — necessary to perform our
+            contract with you, so these emails cannot be switched off. An invitation goes to the
+            person invited; payment emails to the account’s owner; the rest to its owner and admins.
+            They come from no-reply@notify.mydomainshub.com, through the same Amazon SES account.
           </li>
           <li>
             <strong>To review accounts, and to stop spam, phishing and abuse</strong> — our

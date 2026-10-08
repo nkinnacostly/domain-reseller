@@ -2281,6 +2281,10 @@ export type Database = {
           monthly: number
         }[]
       }
+      email_invite: {
+        Args: { p_invite_id: string; p_token: string }
+        Returns: Json
+      }
       email_page: {
         Args: {
           p_account_id: string
@@ -2385,6 +2389,16 @@ export type Database = {
       note_provider_canceled: {
         Args: { p_account_id: string; p_first_transaction_id: string }
         Returns: Json
+      }
+      notify_members: {
+        Args: {
+          p_account_id: string
+          p_data?: Json
+          p_key: string
+          p_kind: string
+          p_roles: string[]
+        }
+        Returns: number
       }
       on_jobs_side: {
         Args: { p_account_id: string; p_e2e: boolean }
@@ -2722,6 +2736,7 @@ export type Database = {
           webhook: Database["mail"]["Tables"]["webhooks"]["Row"]
         }[]
       }
+      webhook_host: { Args: { p_url: string }; Returns: string }
       window_usage: {
         Args: { p_account_id: string; p_days: number }
         Returns: Record<string, unknown>

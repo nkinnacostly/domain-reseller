@@ -90,7 +90,7 @@ describe('sitemap.xml (dates only where true)', () => {
   it('dates legal pages by the drafts, plan pages by the plan rows, the rest not at all', () => {
     const entries = buildSitemap(SITE, { plansUpdatedAt: '2026-10-06T11:00:00.000Z' })
     const at = (path: string) => entries.find((entry) => entry.url === `${SITE}${path}`)
-    expect(at('/legal/terms')?.lastModified).toEqual(new Date('2026-10-06T00:00:00+01:00'))
+    expect(at('/legal/terms')?.lastModified).toEqual(new Date('2026-10-08T00:00:00+01:00'))
     expect(at('/pricing')?.lastModified).toEqual(new Date('2026-10-06T11:00:00.000Z'))
     expect(at('/')?.lastModified).toEqual(new Date('2026-10-06T11:00:00.000Z'))
     expect(at('/docs')).not.toHaveProperty('lastModified')

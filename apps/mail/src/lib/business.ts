@@ -32,9 +32,9 @@ export const BUSINESS = {
    */
   vatRate: '7.5%',
   /** The legal pages' date: when these drafts were written. */
-  legalUpdated: '6 October 2026',
+  legalUpdated: '8 October 2026',
   /** The same date for machines (the sitemap's lastmod). */
-  legalUpdatedOn: '2026-10-06',
+  legalUpdatedOn: '2026-10-08',
 } as const
 
 /**
