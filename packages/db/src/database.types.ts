@@ -7327,6 +7327,8 @@ export type Database = {
         | "renewal_failed"
         | "transfer_failed"
         | "ssl_failed"
+        | "late_payment"
+        | "over_limit"
       refund_status:
         | "queued"
         | "held"
@@ -7533,6 +7535,8 @@ export const Constants = {
         "renewal_failed",
         "transfer_failed",
         "ssl_failed",
+        "late_payment",
+        "over_limit",
       ],
       refund_status: [
         "queued",

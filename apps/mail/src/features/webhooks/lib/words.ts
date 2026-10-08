@@ -101,6 +101,8 @@ const SQL_WORDS: Record<string, string> = {
   account_closed: 'This account is closed, so its webhooks cannot be changed.',
   webhook_disabled: 'That endpoint is turned off. Turn it back on to send to it again.',
   in_progress: 'That delivery is still being tried. Wait for its answer, then resend it.',
+  too_many_resends:
+    'That is the most resends one account can make in an hour. Try again later; new events are still delivered as they happen.',
 }
 
 const FIELD_WORDS: Record<string, string> = {

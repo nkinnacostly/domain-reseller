@@ -199,6 +199,10 @@ const REFUND_REASON: Record<string, (domainName: string | null) => string> = {
   overpayment: () => 'for the amount you paid over the order total',
   underpayment: () => 'for a payment that was less than the order total, which paid for nothing',
   empty_order: () => 'for a payment for an order with nothing in it',
+  late_payment: () =>
+    'for a payment that arrived after the order had closed, when its prices no longer held — nothing was registered',
+  over_limit: () =>
+    'for an order paid after it was cancelled, which would have gone over the number of new domains an account can buy in a day — nothing was registered',
 }
 
 export const NOTICE_TEMPLATES = {
@@ -459,7 +463,8 @@ export const NOTICE_TEMPLATES = {
 
   refund_sent: template({
     // 2: a refund for a certificate that could not be ordered (FR-SSL-3).
-    version: 2,
+    // 3: words for late_payment and over_limit refunds (migration 61).
+    version: 3,
     category: 'transactional',
     schema: z.object({
       order_id: z.string().min(1),

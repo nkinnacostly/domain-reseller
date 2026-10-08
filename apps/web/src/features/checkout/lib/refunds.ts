@@ -9,6 +9,8 @@ const REASONS: Record<string, string> = {
   overpayment: 'The amount paid over the total',
   underpayment: 'A payment below the order total',
   empty_order: 'A payment for an order with nothing in it',
+  late_payment: 'A payment that arrived after the order closed',
+  over_limit: 'A payment over the day’s limit on new domains',
 }
 
 export function refundLabel(refund: { reason: string; domain: string | null }): string {
