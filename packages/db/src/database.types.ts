@@ -1420,6 +1420,8 @@ export type Database = {
           domain_failed_claims_max: number
           domain_failed_claims_window_days: number
           id: boolean
+          invite_daily_cap: number
+          invite_monthly_cap: number
           key_burst: number
           key_rate_per_second: number
           max_send_attempts: number
@@ -1433,6 +1435,7 @@ export type Database = {
           webhook_backlog_minutes: number
           webhook_disable_after_days: number
           webhook_endpoints_max: number
+          webhook_resend_hourly_cap: number
           webhook_retry_hours: number
         }
         Insert: {
@@ -1446,6 +1449,8 @@ export type Database = {
           domain_failed_claims_max?: number
           domain_failed_claims_window_days?: number
           id?: boolean
+          invite_daily_cap?: number
+          invite_monthly_cap?: number
           key_burst?: number
           key_rate_per_second?: number
           max_send_attempts?: number
@@ -1459,6 +1464,7 @@ export type Database = {
           webhook_backlog_minutes?: number
           webhook_disable_after_days?: number
           webhook_endpoints_max?: number
+          webhook_resend_hourly_cap?: number
           webhook_retry_hours?: number
         }
         Update: {
@@ -1472,6 +1478,8 @@ export type Database = {
           domain_failed_claims_max?: number
           domain_failed_claims_window_days?: number
           id?: boolean
+          invite_daily_cap?: number
+          invite_monthly_cap?: number
           key_burst?: number
           key_rate_per_second?: number
           max_send_attempts?: number
@@ -1485,6 +1493,7 @@ export type Database = {
           webhook_backlog_minutes?: number
           webhook_disable_after_days?: number
           webhook_endpoints_max?: number
+          webhook_resend_hourly_cap?: number
           webhook_retry_hours?: number
         }
         Relationships: []
@@ -4232,6 +4241,7 @@ export type Database = {
           auto_refund_max_kobo: number
           float_alert_usd: number
           id: boolean
+          late_payment_grace_hours: number
           max_domains_per_account_day: number
           refund_delay_minutes: number
           stuck_order_minutes: number
@@ -4247,6 +4257,7 @@ export type Database = {
           auto_refund_max_kobo?: number
           float_alert_usd?: number
           id?: boolean
+          late_payment_grace_hours?: number
           max_domains_per_account_day?: number
           refund_delay_minutes?: number
           stuck_order_minutes?: number
@@ -4262,6 +4273,7 @@ export type Database = {
           auto_refund_max_kobo?: number
           float_alert_usd?: number
           id?: boolean
+          late_payment_grace_hours?: number
           max_domains_per_account_day?: number
           refund_delay_minutes?: number
           stuck_order_minutes?: number
@@ -6589,6 +6601,7 @@ export type Database = {
         Args: { p_by: string; p_note: string; p_refund_id: string }
         Returns: undefined
       }
+      check_request: { Args: never; Returns: undefined }
       claim_emails: {
         Args: { p_limit?: number; p_test_mode: boolean; p_worker: string }
         Returns: {

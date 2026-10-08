@@ -638,6 +638,7 @@ begin
   -- own maps are reconciled with this one at merge. Migration 54 adds note_claim_failure (a
   -- trigger) and billing_return_allowed, and replaces reserve_send, webhook_for_caller and five
   -- webhook functions under new signatures: still one function a name, so the count holds.
+  -- Migration 57 adds start_dns_setup; 58 the notification emails' functions.
   -- Migration 55 adds e2e_set_period_end. Migration 56 adds begin_billing_jobs and
   -- kick_billing_jobs, and replaces record_billing_charge and alert_conditions under their
   -- own signatures.
@@ -694,7 +695,10 @@ begin
     "queue_tenant_action":"none", "rate_ppm":"none", "record_tenant_action":"service_role",
     "run_safety_checks":"service_role", "ses_findings_of":"none", "window_usage":"none",
     "note_claim_failure":"none", "billing_return_allowed":"service_role",
-    "e2e_set_period_end":"service_role", "begin_billing_jobs":"service_role", "kick_billing_jobs":"none"
+    "e2e_set_period_end":"service_role", "begin_billing_jobs":"service_role", "kick_billing_jobs":"none",
+    "start_dns_setup":"authenticated", "notify_members":"none", "email_cap_notice":"none",
+    "email_from_audit":"none", "webhook_host":"none", "email_safety_warning":"none",
+    "email_ses_finding":"none", "email_invite":"authenticated"
   }';
   v_n := 0;
   for v_row in select p.oid, p.proname from pg_proc p where p.pronamespace = 'mail'::regnamespace loop

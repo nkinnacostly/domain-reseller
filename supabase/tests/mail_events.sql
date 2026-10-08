@@ -416,7 +416,9 @@ begin
   end if;
   v_j := pg_temp.mv_claim(100);
   if exists (select 1 from jsonb_array_elements(v_j) x where (x ->> 'accountId')::uuid = b_acc)
-     or jsonb_array_length(v_j) <> (select count(*) from mail.webhook_deliveries where account_id = a_acc) then
+     -- Migration 64: at most two deliveries to one endpoint at a time.
+     or jsonb_array_length(v_j) <> (select coalesce(sum(least(n, 2)), 0) from (
+          select count(*) as n from mail.webhook_deliveries where account_id = a_acc group by webhook_id) per_hook) then
     raise exception 'FAILED 4: the worker''s claim answered % rows', jsonb_array_length(v_j);
   end if;
   select x into v_j2 from jsonb_array_elements(v_j) x where (x ->> 'webhookId')::uuid = w2;
@@ -570,16 +572,23 @@ begin
   select id into v_id2 from mail.webhook_deliveries where webhook_id = w1 and email_id = v_e3 and event_type = 'email.delivered';
   update mail.webhooks set failing_since = now() - interval '3 days 1 minute' where id = w2;
   update mail.webhook_deliveries set next_attempt_at = now() + interval '1 hour' where id = v_id2;
-  v_j := pg_temp.mv_claim(1, a_acc);
-  if (v_j #>> '{0,id}')::bigint is distinct from v_id then
+  -- Earlier checks left deliveries to w2 in flight; answered now, so the
+  -- endpoint has room again (migration 64: two in flight per endpoint).
+  update mail.webhook_deliveries set status = 'delivered', delivered_at = now()
+   where webhook_id = w2 and status = 'delivering';
+  v_j := pg_temp.mv_claim(10, a_acc);
+  if not exists (select 1 from jsonb_array_elements(v_j) x where (x ->> 'id')::bigint = v_id) then
     raise exception 'FAILED 7: claimed % for the failing endpoint', v_j;
   end if;
   -- Another message waiting for the same endpoint.
   perform pg_temp.mv_event('m49-' || v_tag || '-1', 'delivery', 'k-del-again');
   v_j := pg_temp.mv_attempt(v_id, 500);
   if (v_j ->> 'disabled')::boolean is not true
+     -- Migration 58: the owner's email is queued at once, so the notice is no longer due.
      or (select status || '/' || disabled_reason || '/' || owner_notice_due from mail.webhooks where id = w2)
-          <> 'disabled/failing/true'
+          <> 'disabled/failing/false'
+     or not exists (select 1 from public.email_outbox o
+                     where o.kind = 'mail_webhook_disabled' and o.data ->> 'accountId' = a_acc::text)
      or exists (select 1 from mail.webhook_deliveries where webhook_id = w2 and status in ('pending', 'delivering'))
      or (select status_reason from mail.webhook_deliveries where id = v_id) <> 'endpoint_disabled'
      or not exists (select 1 from mail.account_audit_log where account_id = a_acc and actor = 'system'
