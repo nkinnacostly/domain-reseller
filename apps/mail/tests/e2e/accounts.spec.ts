@@ -194,7 +194,7 @@ test.describe('the account journey', () => {
     const banner = page.getByRole('region', { name: 'Account status' })
     await expect(banner).toContainText('This account is in the sandbox')
     await expect(banner).toContainText(/up to \d+ a day/)
-    await expect(page.getByRole('meter', { name: 'This month' })).toHaveAttribute('max', '15000')
+    await expect(page.getByRole('meter', { name: 'This month' })).toHaveAttribute('max', '10500')
     await expect(page.getByText('Nothing sent yet this month')).toBeVisible()
     const steps = page.getByRole('region', { name: 'Next steps' })
     await expect(steps.locator('[data-step="domain"]')).toContainText('To do')

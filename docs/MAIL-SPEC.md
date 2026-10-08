@@ -302,7 +302,7 @@ deliverability basics, and limits.
 
 | Plan | A month, before VAT | Emails a month | A day | Domains | Members | Log kept |
 |---|---|---|---|---|---|---|
-| Free | ₦0 | 15,000 | 500 | 1 | 1 | 7 days |
+| Free | ₦0 | 10,500 | 350 | 1 | 1 | 7 days |
 | Starter | ₦20,000 | 50,000 | 5,000 | 5 | 3 | 30 days |
 | Pro | ₦55,000 | 150,000 | 20,000 | 20 | 10 | 30 days |
 | Scale | ₦160,000 | 500,000 | 60,000 | 50 | 25 | 60 days |
@@ -456,7 +456,7 @@ As `CLAUDE.md` §10, plus:
 |---|---|---|
 | Q1 | ~~Product name~~ | **Decided:** MyDomainsHub Mail |
 | Q2 | ~~Plan prices~~ | **Decided:** Starter ₦20,000, Pro ₦55,000, Scale ₦160,000 a month before VAT (§8) |
-| Q3 | ~~Free plan~~ | **Decided:** 500 a day, 15,000 a month (owner, 8 Oct 2026; was 100 and 3,000) |
+| Q3 | ~~Free plan~~ | **Decided:** 350 a day, 10,500 a month (owner, 8 Oct 2026: just above Brevo's 300; was 100 and 3,000) |
 | Q4 | ~~Body retention~~ | **Decided:** 72 hours (MR3) |
 | Q5 | Say "works with the X SDK" in the docs (§1)? | No, until tested and approved |
 | Q6 | ~~Send-rate split~~ | **Decided:** shop 4/s, Mail 10/s until AWS raises the quota |

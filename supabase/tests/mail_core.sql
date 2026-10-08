@@ -83,10 +83,10 @@ begin
   v_passed := v_passed + 1;
 
   -- ── 2. The four plans of §8, prices in kobo, Scale not offered (owner, 6 Oct 2026);
-  -- Free at 500 a day, 15,000 a month since migration 66 (owner, 8 Oct 2026).
+  -- Free at 350 a day, 10,500 a month since migration 67 (owner, 8 Oct 2026).
   select count(*) into v_n from mail.plans p
    where (p.code, p.price_kobo, p.monthly_cap, p.daily_cap, p.max_domains, p.max_members, p.log_retention_days, p.is_offered)
-         in (('free', 0, 15000, 500, 1, 1, 7, true),
+         in (('free', 0, 10500, 350, 1, 1, 7, true),
              ('starter', 2000000, 50000, 5000, 5, 3, 30, true),
              ('pro', 5500000, 150000, 20000, 20, 10, 30, true),
              ('scale', 16000000, 500000, 60000, 50, 25, 60, false));
