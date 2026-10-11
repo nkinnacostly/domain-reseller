@@ -2,6 +2,7 @@ import { API_KEY_PREFIX, EMAIL_LIMITS, SMTP_SETTINGS } from '@dr/shared/mail'
 import type { Icon } from '@phosphor-icons/react'
 import { ChartLineUp, Key, PaperPlaneTilt, ShieldCheck } from '@phosphor-icons/react/ssr'
 import { Container } from '@/components/layout/container'
+import { BUSINESS } from '@/lib/business'
 
 type Step = { title: string; body: React.ReactNode; icon: Icon }
 
@@ -19,7 +20,14 @@ export const STEPS: Step[] = [
       <>
         Add the domain you send from. We give you three DKIM records to publish, plus an MX and an
         SPF record for its bounce address, and check them in public DNS until the domain is
-        verified.
+        verified. No domain yet?{' '}
+        <a
+          href={BUSINESS.shopUrl}
+          className="rounded-sm font-medium text-brand-ink underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          Register one at {BUSINESS.shopSite}
+        </a>
+        , priced in naira.
       </>
     ),
   },

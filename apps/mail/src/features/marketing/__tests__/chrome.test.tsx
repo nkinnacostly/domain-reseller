@@ -85,6 +85,10 @@ describe('the public footer', () => {
       'href',
       'https://www.mydomainshub.com',
     )
+    expect(within(footer).getByRole('link', { name: 'Buy a domain name' })).toHaveAttribute(
+      'href',
+      'https://www.mydomainshub.com',
+    )
     const nav = within(footer).getByRole('navigation', { name: 'Footer' })
     for (const href of [
       '/pricing',

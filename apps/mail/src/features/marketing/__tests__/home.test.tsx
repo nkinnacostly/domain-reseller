@@ -107,6 +107,12 @@ describe('the home page sections', () => {
     expect(steps[2]).toHaveTextContent('up to 50 recipients')
     expect(steps[2]).toHaveTextContent('Or send over SMTP through smtp.mydomainshub.com')
     expect(steps[1]).toHaveTextContent('mdh_live_')
+    // No domain yet: the shop, MyDomainsHub's other product.
+    expect(
+      within(steps[0] as HTMLElement).getByRole('link', {
+        name: 'Register one at www.mydomainshub.com',
+      }),
+    ).toHaveAttribute('href', 'https://www.mydomainshub.com')
   })
 
   it('two ways in: the API and SMTP, with the relay’s own settings and the Resend guide', () => {

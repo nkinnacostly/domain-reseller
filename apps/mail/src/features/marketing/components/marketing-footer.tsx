@@ -15,6 +15,8 @@ export const FOOTER_COLUMNS = [
       { href: ROUTES.docs, label: 'Docs' },
       { href: ROUTES.signUp, label: 'Get started' },
       { href: ROUTES.signIn, label: 'Sign in' },
+      // The shop, MyDomainsHub's other product: a domain to send from.
+      { href: BUSINESS.shopUrl, label: 'Buy a domain name' },
     ],
   },
   {
