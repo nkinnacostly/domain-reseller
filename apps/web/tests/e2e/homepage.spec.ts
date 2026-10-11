@@ -16,6 +16,7 @@ test.describe('homepage structure', () => {
       'Point it at your host',
       'Why choose MyDomainsHub?',
       'Popular extensions',
+      'Send email from your domain',
       'Questions people actually ask',
       'Find the name before someone else does',
     ]) {
@@ -230,6 +231,7 @@ test.describe('horizontal alignment', () => {
     leftEdge('popular extensions', (p) =>
       section(p, 'Popular extensions').getByRole('list').first(),
     ),
+    leftEdge('mail promo', (p) => section(p, 'Send email from your domain').locator('div').nth(1)),
     leftEdge('faq', (p) => p.getByRole('heading', { name: 'Questions people actually ask' })),
     leftEdge('footer tagline', (p) => p.getByText('Domain registration for Nigeria.')),
   ]

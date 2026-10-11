@@ -8,6 +8,7 @@ import { Faq, HOME_FAQS } from '@/features/marketing/components/faq'
 import { FinalCta } from '@/features/marketing/components/final-cta'
 import { Hero } from '@/features/marketing/components/hero'
 import { HowItWorks } from '@/features/marketing/components/how-it-works'
+import { MailPromo } from '@/features/marketing/components/mail-promo'
 import type { Quote } from '@/features/marketing/components/phone-screens'
 import { StatsStrip } from '@/features/marketing/components/stats-strip'
 import { WhyUs } from '@/features/marketing/components/why-us'
@@ -85,6 +86,7 @@ export default async function HomePage() {
         />
         <WhyUs rate={priced?.effectiveRate ?? null} />
         <PopularExtensions />
+        <MailPromo />
         <Faq />
         <FinalCta tlds={quotes.slice(1, 5).map((quote) => quote.tld)} />
       </main>

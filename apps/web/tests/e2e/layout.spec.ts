@@ -103,9 +103,15 @@ test('the footer’s extension links lead to real extension pages', async ({ pag
   }
 })
 
-test('the footer links the WHOIS lookup and the service status', async ({ page }) => {
+test('the footer links the WHOIS lookup, the service status and MyDomainsHub Mail', async ({
+  page,
+}) => {
   await page.goto('/')
   const footer = page.getByRole('contentinfo')
+  await expect(footer.getByRole('link', { name: 'MyDomainsHub Mail' })).toHaveAttribute(
+    'href',
+    'https://emails.mydomainshub.com',
+  )
   await expect(footer.getByRole('link', { name: 'WHOIS lookup' })).toHaveAttribute('href', '/whois')
   await expect(footer.getByRole('link', { name: 'Service status' })).toHaveAttribute(
     'href',

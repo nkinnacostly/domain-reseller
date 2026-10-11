@@ -18,13 +18,15 @@ import { BUSINESS, SPONSORING_REGISTRAR } from '@/lib/business'
  */
 const COLUMNS = [
   {
-    heading: 'Domains',
+    heading: 'Products',
     links: [
       { href: '/search', label: 'Search' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/transfer', label: 'Transfer in' },
       { href: '/ssl', label: 'SSL certificates' },
       { href: '/whois', label: 'WHOIS lookup' },
+      // Our transactional email service, on its own site.
+      { href: BUSINESS.mailSite, label: 'MyDomainsHub Mail' },
     ],
   },
   {

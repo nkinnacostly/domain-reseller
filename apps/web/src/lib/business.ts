@@ -17,6 +17,11 @@ export const BUSINESS = {
    */
   tin: '2622401595060',
   site: 'www.mydomainshub.com',
+  /**
+   * MyDomainsHub Mail, the same operator's transactional email service: its
+   * own app (apps/mail) and address. The home page and footer link to it.
+   */
+  mailSite: 'https://emails.mydomainshub.com',
   /** One address for support, abuse and privacy requests (the owner's choice). */
   email: 'hello@mydomainshub.com',
   /**
