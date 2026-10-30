@@ -49,3 +49,7 @@ pnpm-debug.log*
 # local scratch
 /tmp/
 .scratch/
+
+# Claude Code: the agent manual and local settings stay on this machine
+CLAUDE.md
+.claude/
