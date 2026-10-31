@@ -60,6 +60,15 @@ const SITE_HEADERS = {
   }),
 }
 
+/**
+ * Supabase keeps a session in `sb-<project>-auth-token` cookies, chunked as
+ * `.0`, `.1` when large. Without one there is no session to read or refresh.
+ */
+const hasSessionCookie = (request: NextRequest) =>
+  request.cookies
+    .getAll()
+    .some(({ name }) => name.startsWith('sb-') && name.includes('-auth-token'))
+
 /** 400 days, the longest a browser keeps a cookie: the hint lives as long as a session can. */
 const HINT_MAX_AGE = 400 * 24 * 60 * 60
 
@@ -94,32 +103,30 @@ export async function proxy(request: NextRequest) {
   const forward = () => NextResponse.next({ request: { headers: requestHeaders() } })
   let response = forward()
 
-  const supabase = createServerClient(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    {
-      // A refresh here rewrites the session's device and address: send the
-      // person's, or every session reads as our server (FR-A5).
-      global: { headers: forwardedAuthHeaders(request.headers) },
-      // No script on any page can read the refresh token (ADMIN-SPEC §5.1).
-      cookieOptions: SESSION_COOKIE_OPTIONS,
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) request.cookies.set(name, value)
-          response = forward()
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options)
-          }
+  // Most requests are signed-out visitors and crawlers: with no session cookie
+  // they cost no Supabase client (Vercel paused the site for CPU, 31 Oct 2026).
+  const supabase = hasSessionCookie(request)
+    ? createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, {
+        // A refresh here rewrites the session's device and address: send the
+        // person's, or every session reads as our server (FR-A5).
+        global: { headers: forwardedAuthHeaders(request.headers) },
+        // No script on any page can read the refresh token (ADMIN-SPEC §5.1).
+        cookieOptions: SESSION_COOKIE_OPTIONS,
+        cookies: {
+          getAll: () => request.cookies.getAll(),
+          setAll(cookiesToSet) {
+            for (const { name, value } of cookiesToSet) request.cookies.set(name, value)
+            response = forward()
+            for (const { name, value, options } of cookiesToSet) {
+              response.cookies.set(name, value, options)
+            }
+          },
         },
-      },
-    },
-  )
+      })
+    : null
 
   // Refreshes the token. Do not remove — Server Components cannot write cookies.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = supabase ? (await supabase.auth.getUser()).data.user : null
 
   /**
    * Every answer carries the signed-in hint, and an admin answer its headers
@@ -161,7 +168,7 @@ export async function proxy(request: NextRequest) {
     // carries no nonce, so Next stamps none, and the answer gets the site's
     // CSP and none of the admin headers.
     let status = toAdminStatus(null)
-    if (user) {
+    if (user && supabase) {
       const { data, error } = await supabase.rpc('admin_status')
       status = error ? 'not_admin' : toAdminStatus(data)
     }
@@ -176,7 +183,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (matches(pathname, PROTECTED)) {
-    if (!user) return redirectTo('/sign-in', { next: `${pathname}${search}` })
+    if (!user || !supabase) return redirectTo('/sign-in', { next: `${pathname}${search}` })
 
     // Two-factor on, but not yet entered this session: finish signing in first.
     // Decoded from the JWT — no network call.

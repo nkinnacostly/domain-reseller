@@ -137,7 +137,7 @@ export function createCatalogueSchedule<R extends Outcome = SyncResult>(
     let pricesRefreshed: boolean | null = null
     if (result.outcome === 'written' && refreshPrices) {
       pricesRefreshed = await refreshPrices()
-      if (!pricesRefreshed) log.warn({}, 'site did not refresh its prices; it will within the hour')
+      if (!pricesRefreshed) log.warn({}, 'site did not refresh its prices; it will within a day')
     }
     log.info({ outcome: result.outcome, ...counts, pricesRefreshed }, `${label} finished`)
     await record({

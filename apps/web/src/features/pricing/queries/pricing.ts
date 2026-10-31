@@ -82,9 +82,11 @@ export async function getPricedCatalogue(): Promise<PricedCatalogue | null> {
 export async function loadPricedCatalogue(): Promise<PricedCatalogue | null> {
   'use cache'
   // Rate and catalogue both change at most daily and are identical for every
-  // visitor. /api/pricing/refresh expires this tag when a job writes new data.
+  // visitor. /api/pricing/refresh expires this tag when a job writes new data,
+  // so a day's lifetime only bounds a missed refresh; an hour re-rendered
+  // every extension page hourly for crawlers (Vercel CPU pause, 31 Oct 2026).
   cacheTag('pricing')
-  cacheLife('hours')
+  cacheLife('days')
   return readPricedCatalogue()
 }
 

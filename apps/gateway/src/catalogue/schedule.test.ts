@@ -198,7 +198,7 @@ describe('the weekly catalogue sync', () => {
     )
     expect(logger.warn).toHaveBeenCalledWith(
       {},
-      'site did not refresh its prices; it will within the hour',
+      'site did not refresh its prices; it will within a day',
     )
   })
 

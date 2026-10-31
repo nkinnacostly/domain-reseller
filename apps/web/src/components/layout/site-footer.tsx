@@ -1,5 +1,5 @@
+import { cacheLife } from 'next/cache'
 import Link from 'next/link'
-import { connection } from 'next/server'
 import { Suspense } from 'react'
 import { BRAND_NAME, Brand } from '@/components/layout/brand'
 import { NavLink } from '@/components/layout/nav-link'
@@ -63,15 +63,17 @@ const COLUMNS = [
 ] as const
 
 /**
- * Reading the clock is request-time data. Under Cache Components a bare
- * `new Date()` during render aborts the static shell, so this awaits
- * `connection()` to mark itself dynamic and renders inside a Suspense
- * boundary — the rest of the footer still prerenders.
+ * Reading the clock is request-time data: under Cache Components a bare
+ * `new Date()` during render aborts the static shell. The year is read inside
+ * a cache entry kept for days instead of after `connection()`, which made every
+ * view of every public page run a function — Vercel paused the site for its
+ * CPU on 31 Oct 2026. A new year shows within a day of 1 January.
  */
 const LAUNCH_YEAR = 2026
 
 async function CopyrightYear() {
-  await connection()
+  'use cache'
+  cacheLife('days')
   const year = new Date().getFullYear()
   return <>{year > LAUNCH_YEAR ? `${LAUNCH_YEAR}–${year}` : LAUNCH_YEAR}</>
 }

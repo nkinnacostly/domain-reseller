@@ -46,7 +46,7 @@ export async function getSslCatalogue(): Promise<SslCatalogue | null> {
 export async function loadSslCatalogue(): Promise<SslCatalogue | null> {
   'use cache'
   cacheTag('pricing')
-  cacheLife('hours')
+  cacheLife('days')
   return readSslCatalogue()
 }
 

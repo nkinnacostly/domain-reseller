@@ -54,14 +54,14 @@ async function inputs(): Promise<LlmsInput & { all: PriceLine[] }> {
 export async function getLlmsTxt(): Promise<string> {
   'use cache'
   cacheTag('pricing')
-  cacheLife('hours')
+  cacheLife('days')
   return llmsTxt(await inputs())
 }
 
 export async function getLlmsFullTxt(): Promise<string> {
   'use cache'
   cacheTag('pricing')
-  cacheLife('hours')
+  cacheLife('days')
   return llmsFullTxt({
     ...(await inputs()),
     faqs: [

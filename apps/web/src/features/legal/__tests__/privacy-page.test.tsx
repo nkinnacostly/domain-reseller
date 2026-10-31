@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { env } from '@/lib/env'
 
 vi.mock('next/navigation', () => ({ usePathname: () => '/legal/privacy' }))
-vi.mock('next/server', () => ({ connection: async () => undefined }))
+// The footer's year is a cached read (site-footer.tsx).
+vi.mock('next/cache', () => ({ cacheLife: () => undefined }))
 // The header asks Supabase whether this browser holds a session.
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({

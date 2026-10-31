@@ -27,6 +27,8 @@ const auth = vi.hoisted(() => ({
   /** What a token refresh writes during getUser(). */
   refreshed: [] as Cookie[],
   rpc: vi.fn(),
+  /** Supabase clients the proxy built. */
+  clients: 0,
 }))
 
 vi.mock('@supabase/ssr', () => ({
@@ -34,21 +36,28 @@ vi.mock('@supabase/ssr', () => ({
     _url: string,
     _key: string,
     options: { cookies: { setAll: (cookies: Cookie[]) => void } },
-  ) => ({
-    auth: {
-      getUser: async () => {
-        if (auth.refreshed.length > 0) options.cookies.setAll(auth.refreshed)
-        return { data: { user: auth.user } }
+  ) => {
+    auth.clients += 1
+    return {
+      auth: {
+        getUser: async () => {
+          if (auth.refreshed.length > 0) options.cookies.setAll(auth.refreshed)
+          return { data: { user: auth.user } }
+        },
+        mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: auth.aal }) },
       },
-      mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: auth.aal }) },
-    },
-    rpc: auth.rpc,
-  }),
+      rpc: auth.rpc,
+    }
+  },
 }))
 
 const SITE = 'https://www.mydomainshub.com'
-const request = (path: string, cookie?: string) =>
-  new NextRequest(`${SITE}${path}`, cookie ? { headers: { cookie } } : {})
+/** A signed-in test user arrives with a session cookie, as a browser does. */
+const SESSION_COOKIE = 'sb-test-auth-token=session'
+const request = (path: string, cookie?: string) => {
+  const cookies = [auth.user ? SESSION_COOKIE : null, cookie].filter(Boolean).join('; ')
+  return new NextRequest(`${SITE}${path}`, cookies ? { headers: { cookie: cookies } } : {})
+}
 
 const scriptSrc = (csp: string | null) =>
   (csp ?? '')
@@ -118,7 +127,8 @@ async function routed(
     for (const { key, value } of rule.headers) headers[key] = value
   }
 
-  const response = await proxy(new NextRequest(`${SITE}${path}`, { headers: asked }))
+  const sent = auth.user ? { ...asked, cookie: SESSION_COOKIE } : asked
+  const response = await proxy(new NextRequest(`${SITE}${path}`, { headers: sent }))
   const overridden = response.headers.get('x-middleware-override-headers')
   const passedOn: Record<string, string> = overridden
     ? Object.fromEntries(
@@ -169,6 +179,7 @@ beforeEach(() => {
   auth.status = { data: 'not_admin', error: null }
   auth.aal = { currentLevel: 'aal1', nextLevel: 'aal1' }
   auth.refreshed = []
+  auth.clients = 0
   auth.rpc.mockImplementation(async (name: string) =>
     name === 'admin_status' ? auth.status : { data: null, error: { message: 'no such function' } },
   )
@@ -290,7 +301,9 @@ describe('the proxy at /admin', () => {
   it("drops a mark the browser sent itself, so an admin's pages still render", async () => {
     auth.user = { id: 'u1' }
     auth.status = { data: 'ok', error: null }
-    const forged = new NextRequest(`${SITE}/admin`, { headers: { [STRANGER_HEADER]: '1' } })
+    const forged = new NextRequest(`${SITE}/admin`, {
+      headers: { [STRANGER_HEADER]: '1', cookie: SESSION_COOKIE },
+    })
     const response = await proxy(forged)
     expect(response.headers.get('x-middleware-next')).toBe('1')
     // Listed for the request without the mark: Next deletes it before the rewrite is judged.
@@ -341,6 +354,24 @@ describe("a stranger's 404 at /admin beside any other 404, as Next sends them (D
 })
 
 describe('the proxy elsewhere', () => {
+  it('builds no Supabase client for a visitor without a session cookie, and still drops a stale hint', async () => {
+    expect((await proxy(request('/'))).headers.get('location')).toBeNull()
+    const hinted = await proxy(request('/pricing', `${SIGNED_IN_HINT}=1`))
+    expect(hinted.cookies.get(SIGNED_IN_HINT)?.value).toBe('')
+    // A sign-in that has only begun (the OAuth code verifier) is still read.
+    await proxy(request('/auth/callback', 'sb-test-auth-token-code-verifier=v'))
+    expect(auth.clients).toBe(1)
+  })
+
+  it('refreshes the session of anyone with a session cookie, on public pages too', async () => {
+    auth.user = { id: 'u1' }
+    auth.refreshed = [{ name: 'sb-test-auth-token.0', value: 'fresh', options: { path: '/' } }]
+    const response = await proxy(request('/pricing'))
+    expect(auth.clients).toBe(1)
+    expect(response.cookies.get('sb-test-auth-token.0')?.value).toBe('fresh')
+    expect(response.cookies.get(SIGNED_IN_HINT)?.value).toBe('1')
+  })
+
   it('leaves the rest of the site to its own policy: no nonce, no admin headers', async () => {
     const response = await proxy(request('/pricing'))
     expect(response.headers.get('content-security-policy')).toBeNull()

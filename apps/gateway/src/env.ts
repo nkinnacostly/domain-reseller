@@ -50,7 +50,7 @@ const schema = z
     /**
      * The storefront, e.g. https://www.mydomainshub.com. After the catalogue
      * sync writes new costs the gateway asks it to refresh its cached prices
-     * (`POST /api/pricing/refresh`); unset, they reach the site within the hour.
+     * (`POST /api/pricing/refresh`); unset, they reach the site within a day.
      */
     APP_URL: z.url().optional(),
     /**

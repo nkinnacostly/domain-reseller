@@ -7,7 +7,8 @@ import { LEGAL_DOCUMENTS } from '../lib/documents'
 const pathname = vi.hoisted(() => ({ current: '/legal/privacy' }))
 
 vi.mock('next/navigation', () => ({ usePathname: () => pathname.current }))
-vi.mock('next/server', () => ({ connection: async () => undefined }))
+// The footer's year is a cached read (site-footer.tsx).
+vi.mock('next/cache', () => ({ cacheLife: () => undefined }))
 // The header asks Supabase whether this browser holds a session.
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({

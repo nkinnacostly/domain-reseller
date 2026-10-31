@@ -1,5 +1,5 @@
 /**
- * Asks the storefront to put new prices up now rather than within the hour
+ * Asks the storefront to put new prices up now rather than within the day
  * its cache otherwise takes (backlog L8). The route needs no secret: it
  * compares its cached prices with the database and refreshes only when they
  * differ (apps/web/src/app/api/pricing/refresh/route.ts).

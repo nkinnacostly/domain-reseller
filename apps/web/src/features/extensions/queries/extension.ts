@@ -21,7 +21,7 @@ import { type ExtensionFacts, factsFromPricing, registerPeriodsOf } from '../lib
 export async function loadCatalogueFacts(): Promise<ExtensionFacts[]> {
   'use cache'
   cacheTag('pricing')
-  cacheLife('hours')
+  cacheLife('days')
 
   const client = createPublicClient()
   const { data, error } = await allRows((from, to) =>

@@ -31,7 +31,7 @@ export async function getLengthRules(): Promise<LengthRules> {
 export async function loadLengthRules(): Promise<LengthRules> {
   'use cache'
   cacheTag('pricing')
-  cacheLife('hours')
+  cacheLife('days')
   const { data, error } = await createPublicClient()
     .from('tlds')
     .select('name, min_chars, max_chars')

@@ -7,7 +7,7 @@ import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 
 /**
  * Puts new prices on the site as soon as the pricing jobs write them
- * (backlog L8), instead of within the hour the cache otherwise takes.
+ * (backlog L8), instead of within the day the cache otherwise takes.
  *
  * It needs no secret: it compares the cached prices with the database and
  * expires the cache only when they differ. Anyone can call it, and the most

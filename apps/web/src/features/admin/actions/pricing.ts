@@ -16,7 +16,7 @@ import { adminMoneyAction } from '@/lib/safe-action'
  *
  * The storefront caches every price under the `pricing` tag (as the price
  * list apply and /api/pricing/refresh do), so a change that reprices the
- * site expires it at once rather than within the hour.
+ * site expires it at once rather than within the day.
  */
 
 type Answer = { data: unknown; error: { message: string } | null }
