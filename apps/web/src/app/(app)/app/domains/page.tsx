@@ -23,10 +23,11 @@ import { cn } from '@/lib/utils'
 export const metadata: Metadata = { title: 'Your domains' }
 
 /**
- * Portfolio — the authenticated landing page (PRD FR-P1). The top is an
- * overview of the account's own domains and orders; the list below is every
- * domain, soonest expiry first, with the expiry view (FR-P5) and labels
- * (FR-P3) as filters, and bulk actions on the domains ticked (FR-P4).
+ * Portfolio — the authenticated landing page (PRD FR-P1). The greeting and
+ * counts head the page; the list comes next, because the domains are what
+ * people came for (owner, 2 Nov 2026): every domain, soonest expiry first,
+ * with the expiry view (FR-P5) and labels (FR-P3) as filters, and bulk actions
+ * on the domains ticked (FR-P4). The overview panels follow it.
  */
 type Search = Promise<{ q?: string; within?: string; label?: string }>
 
@@ -52,6 +53,16 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
         now={now}
       />
 
+      <Portfolio
+        domains={domains}
+        query={params.q ?? ''}
+        within={parseExpiryWindow(params.within)}
+        labelId={parseLabelFilter(params.label, labels ?? [])}
+        labels={labels ?? []}
+        presets={presets}
+        hasTwoFactor={Boolean(account?.totpFactor)}
+      />
+
       {/* grid-cols-1, not the implicit auto column: that grows to the widest
           card's content and pushed a phone's page 30px sideways (S5, S6). */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,1fr)]">
@@ -70,16 +81,6 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
           className="md:col-span-2"
         />
       </div>
-
-      <Portfolio
-        domains={domains}
-        query={params.q ?? ''}
-        within={parseExpiryWindow(params.within)}
-        labelId={parseLabelFilter(params.label, labels ?? [])}
-        labels={labels ?? []}
-        presets={presets}
-        hasTwoFactor={Boolean(account?.totpFactor)}
-      />
     </div>
   )
 }
@@ -88,12 +89,12 @@ function DashboardSkeleton() {
   return (
     <div aria-hidden="true" className="space-y-4">
       <div className={cn(PANEL, 'h-72 animate-pulse')} />
+      <div className={cn(PANEL, 'h-64 animate-pulse')} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className={cn(PANEL, 'h-80 animate-pulse')} />
         <div className={cn(PANEL, 'h-80 animate-pulse')} />
         <div className={cn(PANEL, 'h-80 animate-pulse')} />
       </div>
-      <div className={cn(PANEL, 'h-64 animate-pulse')} />
     </div>
   )
 }
