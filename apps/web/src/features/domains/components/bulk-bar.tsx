@@ -115,14 +115,20 @@ function download(fileName: string, text: string) {
  */
 export function BulkBar({
   domains,
+  matching = domains,
   labels,
   presets,
   hasTwoFactor,
   returnTo,
   renewAll,
 }: {
-  /** The domains shown, in order. */
+  /** The domains shown on this page, in order: the ones that can be ticked. */
   domains: PortfolioDomain[]
+  /**
+   * Every domain the filters match, on every page: what "Export all" writes
+   * and "Renew all" lists. The renew page names each one before payment.
+   */
+  matching?: PortfolioDomain[]
   labels: DomainLabel[]
   presets: NameserverPreset[]
   hasTwoFactor: boolean
@@ -152,7 +158,7 @@ export function BulkBar({
   }, [selected.size])
 
   const exportCsv = () => {
-    const rows = chosen.length > 0 ? chosen : domains
+    const rows = chosen.length > 0 ? chosen : matching
     download(
       csvFileName(new Date()),
       portfolioCsv(rows, (status) => STATUS_LABEL[status]),
@@ -160,7 +166,7 @@ export function BulkBar({
   }
 
   const renewIds = chosen.map((domain) => domain.id)
-  const allIds = domains.map((domain) => domain.id)
+  const allIds = matching.map((domain) => domain.id)
 
   return (
     <section

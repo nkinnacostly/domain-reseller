@@ -70,20 +70,26 @@ export function filterPortfolio(
     })
 }
 
-/** The portfolio's address with its filters, each kept when another changes. */
+/**
+ * The portfolio's address with its filters, each kept when another changes.
+ * A page is kept only when asked for: changing a filter starts again at page 1.
+ */
 export function portfolioHref({
   query,
   within,
   labelId,
+  page,
 }: {
   query?: string
   within?: ExpiryWindow | null
   labelId?: string | null
+  page?: number
 }): string {
   const params = new URLSearchParams()
   if (query) params.set('q', query)
   if (within) params.set('within', String(within))
   if (labelId) params.set('label', labelId)
+  if (page && page > 1) params.set('page', String(page))
   const search = params.toString()
   return search ? `/app/domains?${search}` : '/app/domains'
 }
@@ -91,6 +97,66 @@ export function portfolioHref({
 export function parseExpiryWindow(value: string | undefined): ExpiryWindow | null {
   const number = Number(value)
   return (EXPIRY_WINDOWS as readonly number[]).includes(number) ? (number as ExpiryWindow) : null
+}
+
+/** Rows on one page of the portfolio: a phone on 4G renders 25 cards quickly (S10). */
+export const PAGE_SIZE = 25
+
+export type PortfolioPage<T> = {
+  items: T[]
+  /** The page shown: the one asked for, kept between the first and the last. */
+  page: number
+  pageCount: number
+  /** 1-based positions of the first and last row shown, for "26–50 of 60". */
+  from: number
+  to: number
+  total: number
+}
+
+/** One page of the filtered list. A page past the end shows the last one. */
+export function paginate<T>(rows: T[], page: number, size = PAGE_SIZE): PortfolioPage<T> {
+  const pageCount = Math.max(1, Math.ceil(rows.length / size))
+  const current = Math.min(Math.max(1, page), pageCount)
+  const start = (current - 1) * size
+  const items = rows.slice(start, start + size)
+  return {
+    items,
+    page: current,
+    pageCount,
+    from: items.length > 0 ? start + 1 : 0,
+    to: start + items.length,
+    total: rows.length,
+  }
+}
+
+export function parsePage(value: string | undefined): number {
+  const number = Number(value)
+  return Number.isSafeInteger(number) && number > 1 ? number : 1
+}
+
+/**
+ * The page links to offer: every page up to seven, else always seven — the
+ * first, the last, the current one's neighbours, and a gap for what is left
+ * out. A gap never stands for a single page; that page is shown instead.
+ */
+export function pageNumbers(
+  page: number,
+  pageCount: number,
+): Array<number | 'gap-start' | 'gap-end'> {
+  const range = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, index) => from + index)
+  if (pageCount <= 7) return range(1, pageCount)
+  let first = Math.max(2, Math.min(page - 1, pageCount - 4))
+  let last = Math.min(pageCount - 1, Math.max(page + 1, 5))
+  if (first === 3) first = 2
+  if (last === pageCount - 2) last = pageCount - 1
+  return [
+    1,
+    ...(first > 2 ? (['gap-start'] as const) : []),
+    ...range(first, last),
+    ...(last < pageCount - 1 ? (['gap-end'] as const) : []),
+    pageCount,
+  ]
 }
 
 export const DELEGATION_LABEL: Record<DelegationStatus, string> = {

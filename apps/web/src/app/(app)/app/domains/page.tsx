@@ -11,7 +11,7 @@ import { RenewalsChart } from '@/features/domains/components/dashboard/renewals-
 import { Portfolio } from '@/features/domains/components/portfolio'
 import { summarize } from '@/features/domains/lib/dashboard'
 import { parseLabelFilter } from '@/features/domains/lib/labels'
-import { parseExpiryWindow } from '@/features/domains/lib/portfolio'
+import { parseExpiryWindow, parsePage } from '@/features/domains/lib/portfolio'
 import {
   getNameserverPresets,
   getPortfolio,
@@ -29,7 +29,7 @@ export const metadata: Metadata = { title: 'Your domains' }
  * with the expiry view (FR-P5) and labels (FR-P3) as filters, and bulk actions
  * on the domains ticked (FR-P4). The overview panels follow it.
  */
-type Search = Promise<{ q?: string; within?: string; label?: string }>
+type Search = Promise<{ q?: string; within?: string; label?: string; page?: string }>
 
 async function Dashboard({ searchParams }: { searchParams: Search }) {
   const [account, domains, orders, events, labels, presets, params] = await Promise.all([
@@ -58,6 +58,7 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
         query={params.q ?? ''}
         within={parseExpiryWindow(params.within)}
         labelId={parseLabelFilter(params.label, labels ?? [])}
+        page={parsePage(params.page)}
         labels={labels ?? []}
         presets={presets}
         hasTwoFactor={Boolean(account?.totpFactor)}

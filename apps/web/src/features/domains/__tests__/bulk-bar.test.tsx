@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PortfolioDomain } from '../lib/portfolio'
+import { BULK_RENEW_MAX } from '@/features/renewals/lib/renewal'
+import { PAGE_SIZE, type PortfolioDomain } from '../lib/portfolio'
 import type { NameserverPreset } from '../queries/domains'
 
 // The server actions are the network boundary: the bar sees only their results.
@@ -214,13 +215,14 @@ describe('renew (FR-P4, FR-P5)', () => {
     expect(within(bar()).queryByRole('link', { name: /Renew all/ })).not.toBeInTheDocument()
   })
 
-  it('says how many can be renewed at once past the limit', async () => {
+  it('ticks a page at most, which is never more than can be renewed at once', async () => {
+    expect(PAGE_SIZE).toBeLessThanOrEqual(BULK_RENEW_MAX)
     const user = userEvent.setup()
     const many = Array.from({ length: 101 }, (_, index) => domain(index + 1, `d${index}.com`))
     renderPortfolio({ domains: many })
     await user.click(within(bar()).getByRole('checkbox', { name: /Select all/ }))
-    expect(within(bar()).queryByRole('link', { name: 'Renew' })).not.toBeInTheDocument()
-    expect(within(bar()).getByText('Renew up to 100 at a time.')).toBeInTheDocument()
+    expect(within(bar()).getByText(`${PAGE_SIZE} selected`)).toBeInTheDocument()
+    expect(within(bar()).getByRole('link', { name: 'Renew' })).toBeInTheDocument()
   })
 })
 
@@ -247,7 +249,7 @@ describe('export CSV (FR-P4)', () => {
     })
   })
 
-  it('exports every domain shown when none is ticked, and the ticked ones when some are', async () => {
+  it('exports every domain listed when none is ticked, and the ticked ones when some are', async () => {
     const user = userEvent.setup()
     renderPortfolio()
     await user.click(within(bar()).getByRole('button', { name: 'Export all as CSV' }))
@@ -266,6 +268,16 @@ describe('export CSV (FR-P4)', () => {
       /^shop\.com,Active,\d{4}-\d{2}-\d{2},ns1\.vercel-dns\.com ns2\.vercel-dns\.com,Banks,On,On,Off$/,
     )
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv')
+  })
+
+  it('exports every page the filters match, not only the page shown', async () => {
+    const user = userEvent.setup()
+    const many = Array.from({ length: 30 }, (_, index) => domain(index + 1, `d${index}.com`))
+    renderPortfolio({ domains: many })
+    await user.click(within(bar()).getByRole('button', { name: 'Export all as CSV' }))
+    await waitFor(() => expect(saved).toHaveLength(1))
+    // A header and all 30, though the page shows 25.
+    expect(saved[0]?.text.trim().split('\r\n')).toHaveLength(31)
   })
 })
 

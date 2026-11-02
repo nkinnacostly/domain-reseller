@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { DomainName } from '@/components/common/domain-name'
 import { DomainStatusPill } from '@/components/common/domain-status-pill'
@@ -11,6 +11,8 @@ import {
   type ExpiryWindow,
   filterPortfolio,
   type PortfolioDomain,
+  pageNumbers,
+  paginate,
   portfolioHref,
 } from '../lib/portfolio'
 import { transferExpiryText } from '../lib/registration'
@@ -30,17 +32,21 @@ const FILTER_LINK =
   'inline-flex h-9 items-center rounded-full border px-3.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98]'
 const FILTER_OFF = 'border-border bg-background text-muted-foreground hover:text-foreground'
 const FILTER_ON = 'border-brand bg-brand font-medium text-brand-foreground'
+// Page links are tapped often: a 44px target (S7).
+const PAGE_LINK = cn(FILTER_LINK, 'h-11 min-w-11 justify-center gap-1')
 
 /**
  * FR-P2 table and FR-P5 expiry view in one: the view is a filter, not a
  * separate page. FR-P3 labels show on each row and filter the list; FR-P4
- * bulk actions act on the rows ticked.
+ * bulk actions act on the rows ticked. The list is paged in the address
+ * (`?page=`), so a page works without script and can be shared.
  */
 export function Portfolio({
   domains,
   query,
   within,
   labelId = null,
+  page = 1,
   labels = [],
   presets = [],
   hasTwoFactor = false,
@@ -49,13 +55,17 @@ export function Portfolio({
   query: string
   within: ExpiryWindow | null
   labelId?: string | null
+  /** The page asked for; one past the end shows the last. */
+  page?: number
   /** Every label on the account, for the filter and the bulk bar. */
   labels?: DomainLabel[]
   presets?: NameserverPreset[]
   hasTwoFactor?: boolean
 }) {
   const now = new Date()
-  const shown = filterPortfolio(domains, { query, expiringWithin: within, labelId }, now)
+  const matching = filterPortfolio(domains, { query, expiringWithin: within, labelId }, now)
+  const paged = paginate(matching, page)
+  const shown = paged.items
   const filteredBy = labels.find((label) => label.id === labelId)
 
   return (
@@ -171,7 +181,7 @@ export function Portfolio({
         </div>
       ) : null}
 
-      {domains.length === 0 ? null : shown.length === 0 ? (
+      {domains.length === 0 ? null : matching.length === 0 ? (
         <p className="mt-4 rounded-2xl border border-border border-dashed px-6 py-10 text-center text-muted-foreground">
           {within
             ? `Nothing expires in the next ${within} days.`
@@ -183,10 +193,11 @@ export function Portfolio({
         <BulkSelection ids={shown.map((domain) => domain.id)}>
           <BulkBar
             domains={shown}
+            matching={matching}
             labels={labels}
             presets={presets}
             hasTwoFactor={hasTwoFactor}
-            returnTo={portfolioHref({ query, within, labelId })}
+            returnTo={portfolioHref({ query, within, labelId, page: paged.page })}
             renewAll={within !== null}
           />
 
@@ -332,8 +343,102 @@ export function Portfolio({
               </tbody>
             </table>
           </div>
+
+          {paged.pageCount > 1 ? (
+            <Pages
+              {...paged}
+              hrefFor={(to) => portfolioHref({ query, within, labelId, page: to })}
+            />
+          ) : null}
         </BulkSelection>
       )}
     </section>
+  )
+}
+
+/**
+ * Page links under the list. Each lands on the list itself (`#portfolio`),
+ * not the top of the page. Previous and Next are shown disabled at the ends
+ * rather than removed, so the links do not move under a thumb (S12).
+ */
+function Pages({
+  page,
+  pageCount,
+  from,
+  to,
+  total,
+  hrefFor,
+}: {
+  page: number
+  pageCount: number
+  from: number
+  to: number
+  total: number
+  hrefFor: (page: number) => string
+}) {
+  const href = (target: number) => `${hrefFor(target)}#portfolio`
+  const disabled = cn(PAGE_LINK, FILTER_OFF, 'pointer-events-none opacity-50')
+  return (
+    <nav
+      aria-label="Pages of your domains"
+      className="mt-4 flex flex-col items-center gap-3 border-border border-t pt-4 sm:flex-row sm:justify-between"
+    >
+      <p className="text-sm text-muted-foreground tabular-nums">
+        Showing {from}–{to} of {total}
+      </p>
+      <ul className="flex flex-wrap items-center justify-center gap-1.5 text-sm">
+        <li>
+          {page > 1 ? (
+            <Link href={href(page - 1)} className={cn(PAGE_LINK, FILTER_OFF, 'px-3')}>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              Previous
+            </Link>
+          ) : (
+            <span aria-disabled="true" className={cn(disabled, 'px-3')}>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              Previous
+            </span>
+          )}
+        </li>
+        {pageNumbers(page, pageCount).map((number) =>
+          typeof number === 'number' ? (
+            <li key={number}>
+              <Link
+                href={href(number)}
+                aria-label={`Page ${number}`}
+                aria-current={number === page ? 'page' : undefined}
+                className={cn(
+                  PAGE_LINK,
+                  'px-2 tabular-nums',
+                  // The current page is ringed, not only recoloured (S13, WCAG 1.4.1).
+                  number === page
+                    ? cn(FILTER_ON, 'ring-2 ring-brand/40 ring-offset-2 ring-offset-background')
+                    : FILTER_OFF,
+                )}
+              >
+                {number}
+              </Link>
+            </li>
+          ) : (
+            <li key={number} aria-hidden="true" className="px-1 text-muted-foreground">
+              …
+            </li>
+          ),
+        )}
+        <li>
+          {page < pageCount ? (
+            <Link href={href(page + 1)} className={cn(PAGE_LINK, FILTER_OFF, 'px-3')}>
+              Next
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          ) : (
+            <span aria-disabled="true" className={cn(disabled, 'px-3')}>
+              Next
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </span>
+          )}
+        </li>
+      </ul>
+    </nav>
   )
 }

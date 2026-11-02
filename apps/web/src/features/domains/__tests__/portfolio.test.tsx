@@ -229,3 +229,78 @@ describe('Portfolio expiry view (FR-P5)', () => {
     expect(screen.getByText('Nothing expires in the next 7 days.')).toBeInTheDocument()
   })
 })
+
+describe('Portfolio pages', () => {
+  // 30 domains, d01.com expiring first.
+  const MANY = Array.from({ length: 30 }, (_, index) => {
+    const name = `d${String(index + 1).padStart(2, '0')}.com`
+    return domain(name, { expiresAt: inDays(index + 1) })
+  })
+  const pages = () => screen.getByRole('navigation', { name: 'Pages of your domains' })
+
+  it('shows 25 domains a page, and links to the rest', () => {
+    render(<Portfolio domains={MANY} query="" within={null} />)
+
+    expect(rows()).toEqual(MANY.slice(0, 25).map((row) => row.domainName))
+    expect(within(pages()).getByText('Showing 1–25 of 30')).toBeInTheDocument()
+    expect(within(pages()).getByRole('link', { name: 'Page 1' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(pages()).getByRole('link', { name: 'Page 2' })).toHaveAttribute(
+      'href',
+      '/app/domains?page=2#portfolio',
+    )
+    expect(within(pages()).getByRole('link', { name: 'Next' })).toHaveAttribute(
+      'href',
+      '/app/domains?page=2#portfolio',
+    )
+    // At the first page, Previous stays in place but cannot be followed.
+    expect(within(pages()).queryByRole('link', { name: 'Previous' })).not.toBeInTheDocument()
+    expect(within(pages()).getByText('Previous')).toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('shows the rest on the last page, keeping the filters in every page link', () => {
+    render(<Portfolio domains={MANY} query="d" within={null} page={2} />)
+
+    expect(rows()).toEqual(MANY.slice(25).map((row) => row.domainName))
+    expect(within(pages()).getByText('Showing 26–30 of 30')).toBeInTheDocument()
+    expect(within(pages()).getByRole('link', { name: 'Previous' })).toHaveAttribute(
+      'href',
+      '/app/domains?q=d#portfolio',
+    )
+    expect(within(pages()).queryByRole('link', { name: 'Next' })).not.toBeInTheDocument()
+  })
+
+  it('shows the last page for a page past the end', () => {
+    render(<Portfolio domains={MANY} query="" within={null} page={9} />)
+    expect(within(pages()).getByRole('link', { name: 'Page 2' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
+  it('starts again at page 1 when a filter changes', () => {
+    render(<Portfolio domains={MANY} query="" within={null} page={2} />)
+    const expiry = screen.getByRole('navigation', { name: 'Expiry' })
+    expect(within(expiry).getByRole('link', { name: 'Expiring in 7 days' })).toHaveAttribute(
+      'href',
+      '/app/domains?within=7',
+    )
+    const form = screen.getByRole('searchbox', { name: 'Search your domains' }).closest('form')
+    expect(form?.querySelector('input[name="page"]')).toBeNull()
+  })
+
+  it('offers no page links when everything fits on one', () => {
+    render(<Portfolio domains={PORTFOLIO} query="" within={null} />)
+    expect(
+      screen.queryByRole('navigation', { name: 'Pages of your domains' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('ticks only the page shown, but renews every domain the view matches (FR-P4, FR-P5)', () => {
+    render(<Portfolio domains={MANY} query="" within={90} />)
+    expect(screen.getByRole('checkbox', { name: 'Select all 25 domains shown' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Renew all 30 domains' })).toBeInTheDocument()
+  })
+})
