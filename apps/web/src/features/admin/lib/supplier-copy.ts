@@ -9,7 +9,7 @@ import { ADMIN_ERROR_WORDS } from './errors'
 
 export const APPLY_PRICE_LIST = {
   title: 'Apply the price list now?',
-  body: 'This is the weekly sync, run early: it writes only changes it trusts, refuses a listing that looks broken, and reports the rest. Site prices update on the next refresh.',
+  body: 'This is the daily sync, run early: it writes only changes it trusts, refuses a listing that looks broken, and reports the rest. Site prices update on the next refresh.',
   confirm: 'Apply price list',
   cancel: 'Not now',
   done: 'Price list applied.',
@@ -36,6 +36,13 @@ export const EXPLAIN_CHARGE = {
   confirm: 'Mark as explained',
   cancel: 'Cancel',
   done: 'Charge explained. Its alert closes.',
+  /** A matched charge whose price is unlike the cost recorded at checkout (migration 70). */
+  price: {
+    title: 'Explain this price?',
+    body: 'Say why the supplier charged a different price from the cost recorded at checkout — for example, DomainNameAPI raised the price before our price sync caught it. The charge stays matched to its order, and its warning closes. An explanation is kept with the entry and in the audit log, and it can’t be changed afterwards.',
+    reasonLabel: 'Why was it different?',
+    rows: { warning: 'Warning' },
+  },
 } as const
 
 export const RECORD_TOPUP = {

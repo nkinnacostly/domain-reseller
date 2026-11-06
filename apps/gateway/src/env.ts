@@ -38,15 +38,17 @@ const schema = z
     /** How often the portfolio is compared with the registry (PRD §13.5: hourly). */
     RECONCILE_EVERY_MINUTES: z.coerce.number().int().min(5).default(60),
     /**
-     * How often the supplier catalogue is synced into `tlds` (weekly). Only a
-     * production deployment reading the production catalogue runs it.
+     * How often the supplier catalogue is synced into `tlds`: daily, since
+     * DomainNameAPI raised .com between two weekly runs and two orders were
+     * sold at the old cost (2 and 4 Nov 2026). Only a production deployment
+     * reading the production catalogue runs it.
      */
     CATALOGUE_SYNC_EVERY_HOURS: z.coerce
       .number()
       .int()
       .min(1)
       .max(28 * 24)
-      .default(7 * 24),
+      .default(24),
     /**
      * The storefront, e.g. https://www.mydomainshub.com. After the catalogue
      * sync writes new costs the gateway asks it to refresh its cached prices

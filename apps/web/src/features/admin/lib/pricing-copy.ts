@@ -202,7 +202,7 @@ export function buildSteps({
   active: { costingRate: number; bufferPct: number; charged: number } | null
 }): string[] {
   return [
-    "A year's cost from DomainNameAPI's catalogue, which the gateway syncs every week,",
+    "A year's cost from DomainNameAPI's catalogue, which the gateway syncs every day,",
     `plus the ICANN fee — ${formatIcannFee(settings.icannFeeCents)} a year — on generic extensions,`,
     active
       ? active.bufferPct > 0

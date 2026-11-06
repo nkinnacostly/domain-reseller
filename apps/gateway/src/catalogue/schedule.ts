@@ -9,7 +9,7 @@ import { createCatalogueSource } from './supplier'
 import { type SyncResult, summarise, syncCatalogue } from './sync'
 
 /**
- * The weekly supplier catalogue sync, inside the gateway (N5b).
+ * The daily supplier catalogue sync, inside the gateway (N5b).
  *
  * It ran on GitHub's runners until the supplier's IP allowlist: once that is
  * on, only this process's static egress address may call the supplier, so the

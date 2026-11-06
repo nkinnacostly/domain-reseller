@@ -427,3 +427,39 @@ export async function getCronHealth(admin: AdminPrincipal, side: AdminSide): Pro
     return failed('scheduled jobs', error)
   }
 }
+
+/**
+ * The open price warnings (`supplier_price_drift`, key `ledger_price:<trace>`,
+ * migration 70) of the given ledger entries, by trace: each summary already
+ * says what was charged and what checkout recorded. The Ledger page shows
+ * them beside their entries — read here, where an alert's key may be, rather
+ * than from the line costs, which are the Orders pages' (§9). A failed read
+ * answers none rather than failing the page.
+ */
+export async function getOpenPriceWarnings(
+  admin: AdminPrincipal,
+  side: AdminSide,
+  traceIds: string[],
+): Promise<Map<string, string>> {
+  if (traceIds.length === 0) return new Map()
+  const { data, error } = await adminDb(admin, side)
+    .from('ops_alerts')
+    .select('key, summary')
+    .in(
+      'key',
+      traceIds.map((trace) => `ledger_price:${trace}`),
+    )
+    .is('resolved_at', null)
+  if (error) {
+    failed('price warnings', error)
+    return new Map()
+  }
+  return new Map(
+    (data ?? []).flatMap((row) => {
+      const parsed = z.object({ key: z.string(), summary: z.string() }).safeParse(row)
+      return parsed.success
+        ? [[parsed.data.key.replace(/^ledger_price:/, ''), parsed.data.summary] as const]
+        : []
+    }),
+  )
+}

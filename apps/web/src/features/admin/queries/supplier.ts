@@ -20,6 +20,7 @@ import {
   lagosRange,
 } from '@/features/admin/lib/supplier-ledger'
 import type { TopupHistoryRow } from '@/features/admin/lib/supplier-topups'
+import { getOpenPriceWarnings } from '@/features/admin/queries/alerts'
 import { logger } from '@/lib/logger'
 import { createClient } from '@/lib/supabase/server'
 import { type AdminPrincipal, adminDb } from './session'
@@ -132,6 +133,12 @@ export type LedgerRow = {
   explainedNote: string | null
   explainedBy: string | null
   explainedAt: string | null
+  /** An owner's words for a price unlike the recorded cost (migration 70). */
+  priceNote: string | null
+  priceNotedBy: string | null
+  priceNotedAt: string | null
+  /** A matched entry's open price warning, in the alert's words (migration 70). */
+  priceWarning: string | null
 }
 
 const ledgerRowSchema = z.object({
@@ -154,6 +161,9 @@ const ledgerRowSchema = z.object({
   explained_note: z.string().nullable(),
   explained_by: z.string().nullable(),
   explained_at: z.string().nullable(),
+  price_note: z.string().nullable(),
+  price_noted_by: z.string().nullable(),
+  price_noted_at: z.string().nullable(),
 })
 
 function toLedgerRow(row: unknown): LedgerRow[] {
@@ -181,6 +191,10 @@ function toLedgerRow(row: unknown): LedgerRow[] {
       explainedNote: r.explained_note,
       explainedBy: r.explained_by,
       explainedAt: r.explained_at,
+      priceNote: r.price_note,
+      priceNotedBy: r.price_noted_by,
+      priceNotedAt: r.price_noted_at,
+      priceWarning: null,
     },
   ]
 }
@@ -195,7 +209,7 @@ export async function getLedgerPage(
     let query = adminDb(admin, side)
       .from('supplier_ledger_entries')
       .select(
-        'trace_id, occurred_at, type, status, charge_type, product_type, description, period, old_balance_cents, balance_cents, delta_cents, match_state, match_call_id, match_operation, match_order_item_id, matched_at, explained_note, explained_by, explained_at',
+        'trace_id, occurred_at, type, status, charge_type, product_type, description, period, old_balance_cents, balance_cents, delta_cents, match_state, match_call_id, match_operation, match_order_item_id, matched_at, explained_note, explained_by, explained_at, price_note, price_noted_by, price_noted_at',
         { count: 'exact' },
       )
     if (params.status.length > 0) query = query.in('match_state', params.status)
@@ -212,7 +226,18 @@ export async function getLedgerPage(
       warn(error, 'admin ledger unavailable')
       return null
     }
-    return { rows: (data ?? []).flatMap(toLedgerRow), total: count ?? 0 }
+    const rows = (data ?? []).flatMap(toLedgerRow)
+    const warnings = await getOpenPriceWarnings(
+      admin,
+      side,
+      rows
+        .filter((row) => row.matchState === 'matched' && row.deltaCents < 0)
+        .map((row) => row.traceId),
+    )
+    return {
+      rows: rows.map((row) => ({ ...row, priceWarning: warnings.get(row.traceId) ?? null })),
+      total: count ?? 0,
+    }
   } catch (error) {
     warn(error, 'admin ledger refused')
     return null

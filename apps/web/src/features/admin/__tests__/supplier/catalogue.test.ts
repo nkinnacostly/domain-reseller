@@ -12,11 +12,11 @@ describe('a preview, summarised (D19)', () => {
   it('counts what was listed, what is sellable and what would change', () => {
     expect(previewSummary(preview())).toEqual({
       tone: 'info',
-      headline: '3 changes waiting. The weekly sync writes them, or apply now.',
+      headline: '3 changes waiting. The next sync writes them, or apply now.',
       counts: '724 extensions listed · 705 sellable · 3 changes',
     })
     expect(previewSummary(preview({ changes: 1 })).headline).toBe(
-      '1 change waiting. The weekly sync writes it, or apply now.',
+      '1 change waiting. The next sync writes it, or apply now.',
     )
   })
 

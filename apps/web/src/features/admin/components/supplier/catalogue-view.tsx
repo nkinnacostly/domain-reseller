@@ -24,13 +24,13 @@ const APPLY_ACTION = {
 } as const
 
 const INTRO: Record<CatalogueKind, string> = {
-  tlds: 'Wholesale prices, periods and extensions from DomainNameAPI. The gateway syncs them every week; preview to see what the next sync would change.',
+  tlds: 'Wholesale prices, periods and extensions from DomainNameAPI. The gateway syncs them every day; preview to see what the next sync would change.',
   ssl: "SSL products and their wholesale prices from DomainNameAPI, synced every week. Which products are on sale stays the owner's choice, in Settings.",
 }
 
 /**
  * `/admin/supplier/catalogue` — the price lists (docs/ADMIN-SPEC.md §5.2 B6,
- * D19): when each weekly sync last ran, and, for the owner, a preview of
+ * D19): when each sync last ran, and, for the owner, a preview of
  * what it would change and an apply that runs it now. Everyone else is told
  * why it is not offered — a test administrator in SQL's own words.
  */
@@ -41,7 +41,7 @@ export async function CatalogueView() {
     <PanelPage>
       <SupplierHeader
         title="Price list"
-        description="DomainNameAPI's catalogue, synced weekly by the gateway. Prices are the same on both sides."
+        description="DomainNameAPI's catalogue, synced by the gateway: extensions daily, SSL products weekly. Prices are the same on both sides."
         side={side}
         testOnly={admin.testOnly}
       />
@@ -70,13 +70,13 @@ export async function CatalogueView() {
 export async function LastSync({ admin, kind }: { admin: AdminPrincipal; kind: CatalogueKind }) {
   const beats = await getSyncHeartbeats(admin)
   let words: string
-  if (beats === 'hidden') words = 'The weekly sync’s last run is not shown to test administrators.'
-  else if (beats === null) words = 'The weekly sync’s last run couldn’t be read. Try again.'
+  if (beats === 'hidden') words = 'The sync’s last run is not shown to test administrators.'
+  else if (beats === null) words = 'The sync’s last run couldn’t be read. Try again.'
   else {
     const beat = beats[kind]
     words = beat
       ? heartbeatWords(beat, formatWat(beat.beatAt))
-      : 'The weekly sync has not run from the gateway yet.'
+      : 'The sync has not run from the gateway yet.'
   }
   return <p className="mt-3 text-sm text-foreground">{words}</p>
 }

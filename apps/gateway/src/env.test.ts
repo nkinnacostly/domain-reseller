@@ -119,9 +119,9 @@ describe('refund and alert settings', () => {
 })
 
 describe('scheduled job settings', () => {
-  it('syncs the catalogue weekly and checks delegation every half hour by default', () => {
+  it('syncs the catalogue daily and checks delegation every half hour by default', () => {
     const env = parseEnv(BASE)
-    expect(env.CATALOGUE_SYNC_EVERY_HOURS).toBe(168)
+    expect(env.CATALOGUE_SYNC_EVERY_HOURS).toBe(24)
     expect(env.DELEGATION_CHECK_MINUTES).toBe(30)
   })
 

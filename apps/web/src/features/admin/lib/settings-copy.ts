@@ -23,7 +23,7 @@ export const SETTINGS_PAGES = {
   extensions: {
     title: 'Extensions',
     description:
-      'Which extensions are paused or featured. Wholesale prices and what DomainNameAPI sells come from the weekly sync.',
+      'Which extensions are paused or featured. Wholesale prices and what DomainNameAPI sells come from the daily sync.',
   },
   ssl: {
     title: 'SSL products',
@@ -95,7 +95,7 @@ export const EXTENSIONS_COPY = {
   taglineLabel: 'Tagline (optional)',
   taglineHint: 'Up to 60 characters, shown beside it where the site lists popular extensions.',
   notSold:
-    'DomainNameAPI does not sell this extension today, so it stays off sale whatever is set here, until the weekly sync lists it again.',
+    'DomainNameAPI does not sell this extension today, so it stays off sale whatever is set here, until the daily sync lists it again.',
 } as const
 
 /** The pause dialog: what a pause does to customers, with the held count from SQL. */

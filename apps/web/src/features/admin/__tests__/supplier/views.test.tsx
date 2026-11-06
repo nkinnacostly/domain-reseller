@@ -119,6 +119,10 @@ const ROW: queries.LedgerRow = {
   explainedNote: null,
   explainedBy: null,
   explainedAt: null,
+  priceNote: null,
+  priceNotedBy: null,
+  priceNotedAt: null,
+  priceWarning: null,
 }
 
 beforeEach(() => {
@@ -412,6 +416,33 @@ describe('/admin/supplier/ledger', () => {
     expect(screen.queryByRole('button', { name: 'Explain this charge' })).not.toBeInTheDocument()
   })
 
+  it('shows a matched charge’s open price warning with the button, and an explained price in its words', async () => {
+    const warning = 'The supplier charged $11.99 for x.com, recorded at checkout as $11.31'
+    vi.mocked(queries.getLedgerPage).mockResolvedValue({
+      rows: [
+        { ...ROW, priceWarning: warning },
+        {
+          ...ROW,
+          traceId: TRACE.replace(/^./, 'f'),
+          priceNote: 'DomainNameAPI raised .com before our sync caught it',
+          priceNotedBy: 'owner',
+          priceNotedAt: '2026-11-06T10:00:00Z',
+        },
+      ],
+      total: 2,
+    })
+    vi.mocked(queries.getLedgerRevisions).mockResolvedValue(new Map())
+    render(await LedgerList({ admin: as(OWNER), side: 'live', params: parseLedgerSearch({}) }))
+    const table = screen.getByRole('table', { name: 'Supplier ledger entries' })
+    expect(within(table).getByText(warning)).toBeInTheDocument()
+    expect(within(table).getAllByRole('button', { name: 'Explain this charge' })).toHaveLength(1)
+    expect(
+      within(table).getByText(
+        'Price explained by owner: “DomainNameAPI raised .com before our sync caught it”',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('errs when the list could not be read', async () => {
     vi.mocked(queries.getLedgerPage).mockResolvedValue(null)
     render(await LedgerList({ admin: as(OWNER), side: 'live', params: parseLedgerSearch({}) }))
@@ -642,7 +673,7 @@ describe('/admin/supplier/catalogue', () => {
     expect(screen.queryByRole('button', { name: 'Preview changes' })).toBeNull()
   })
 
-  it('says when each weekly sync last ran', async () => {
+  it('says when each sync last ran', async () => {
     vi.mocked(queries.getSyncHeartbeats).mockResolvedValue({
       tlds: { beatAt: '2026-10-01T12:03:10Z', outcome: 'written', changes: 3 },
       ssl: null,
@@ -653,9 +684,7 @@ describe('/admin/supplier/catalogue', () => {
     ).toBeInTheDocument()
     unmount()
     const ssl = render(await LastSync({ admin: as(OWNER), kind: 'ssl' }))
-    expect(
-      screen.getByText('The weekly sync has not run from the gateway yet.'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('The sync has not run from the gateway yet.')).toBeInTheDocument()
     ssl.unmount()
     vi.mocked(queries.getSyncHeartbeats).mockResolvedValue('hidden')
     const hidden = render(await LastSync({ admin: as(TEST_OPERATOR), kind: 'ssl' }))

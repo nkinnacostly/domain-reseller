@@ -335,6 +335,24 @@ function MatchCell({
           returnTo={returnTo}
         />
       ) : null}
+      {row.priceNotedAt ? (
+        <p className="text-xs break-words text-muted-foreground">
+          Price explained by {row.priceNotedBy}: “{row.priceNote}”
+        </p>
+      ) : row.priceWarning ? (
+        <>
+          <p className="text-xs break-words text-foreground">{row.priceWarning}</p>
+          {canExplain ? (
+            <ExplainCharge
+              traceId={row.traceId}
+              description={row.description}
+              deltaCents={row.deltaCents}
+              priceWarning={row.priceWarning}
+              returnTo={returnTo}
+            />
+          ) : null}
+        </>
+      ) : null}
       {row.matchState === 'matched' && row.matchOrderItemId ? (
         <Link
           href={`/admin/orders?line=${row.matchOrderItemId}`}

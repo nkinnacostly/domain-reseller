@@ -4,7 +4,7 @@ import type { Tone } from './tone'
 
 /**
  * The price list page (docs/ADMIN-SPEC.md §5.2 B6, D19): what a preview of
- * the weekly catalogue sync found, and what an apply did. The report is the
+ * the scheduled catalogue sync found, and what an apply did. The report is the
  * sync's own (`formatReport` in the gateway, at most 200 lines): plain text
  * in blocks split by blank lines, shown as it is written — a summary line
  * first, then each block.
@@ -50,7 +50,7 @@ export function previewSummary(preview: AdminCataloguePreview): PreviewSummary {
   }
   return {
     tone: 'info',
-    headline: `${plural(preview.changes, 'change', 'changes')} waiting. The weekly sync writes ${preview.changes === 1 ? 'it' : 'them'}, or apply now.`,
+    headline: `${plural(preview.changes, 'change', 'changes')} waiting. The next sync writes ${preview.changes === 1 ? 'it' : 'them'}, or apply now.`,
     counts,
   }
 }
@@ -101,7 +101,7 @@ export function applySummary(apply: AdminCatalogueApply): { ok: boolean; words: 
 
 export type SyncHeartbeat = { beatAt: string; outcome: string | null; changes: number | null }
 
-/** The weekly sync's last run, from its heartbeat's detail: no prices, counts only. */
+/** A sync's last run, from its heartbeat's detail: no prices, counts only. */
 export function heartbeatFrom(
   row: { beat_at: string; detail: unknown } | null,
 ): SyncHeartbeat | null {
@@ -127,7 +127,7 @@ const OUTCOME_WORDS: Readonly<Record<string, string>> = {
   failed: 'failed',
 }
 
-/** "Last weekly sync: 1 Oct 2026, 13:03 WAT — wrote its changes (3)". */
+/** "Last sync 1 Oct 2026, 13:03 WAT — wrote its changes (3)". */
 export function heartbeatWords(beat: SyncHeartbeat, when: string): string {
   const outcome = beat.outcome
     ? (OUTCOME_WORDS[beat.outcome] ?? beat.outcome.replace(/_/g, ' '))

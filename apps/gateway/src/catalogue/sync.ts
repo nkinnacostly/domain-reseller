@@ -13,7 +13,7 @@ import type { CatalogueSource } from './supplier'
 
 /**
  * One catalogue sync, shared by the CLI (`sync:catalogue`, report unless
- * `--apply`) and the gateway's weekly schedule (always applies). Every change
+ * `--apply`) and the gateway's daily schedule (always applies). Every change
  * is reported before anything is written; a listing that cannot be trusted
  * is refused and nothing is written. Supplier or database errors throw.
  */

@@ -284,7 +284,7 @@ const ledgerSync =
       })
     : null
 
-// N5b: the weekly supplier catalogue sync — here, so it keeps working once the supplier allowlists this address.
+// N5b: the daily supplier catalogue sync — here, so it keeps working once the supplier allowlists this address.
 const catalogueSync = catalogueScheduleFor(env, logger)
 // FR-SSL-1: the SSL product list, weekly, on the same rules.
 const sslCatalogueSync = sslCatalogueScheduleFor(env, logger)

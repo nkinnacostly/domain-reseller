@@ -1,10 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Migration 69, tried as the database owner: a supplier charge explained by
--- hand. An unexplained debit alerts until an owner explains it; the wrapper
--- refuses a test admin, a stale code, a short reason and anything but an
--- unexplained entry; an explanation closes the alert, survives the matcher
--- and is never rewritten. Each check raises on failure. Everything is rolled
--- back.
+-- Migrations 69–70, tried as the database owner: a supplier charge explained
+-- by hand. An unexplained debit alerts until an owner explains it; the
+-- wrapper refuses a test admin, a stale code, a short reason and anything
+-- with nothing to explain; an explanation closes the alert, survives the
+-- matcher and is never rewritten. A matched debit charged unlike its recorded
+-- cost warns until explained too, and keeps its match. Each check raises on
+-- failure. Everything is rolled back.
 --
 --   supabase db query --linked -f supabase/tests/explained_supplier_charges.sql
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +68,41 @@ begin
   raise exception 'expected "%" from %, but it ran', p_like, p_sql;
 end $f$;
 
+-- A paid test order line (as admin_data.sql's), registered: its job and call.
+create function pg_temp.registered_line(p_user uuid, p_domain text, p_ref text, p_at timestamptz)
+returns uuid language plpgsql as $f$
+declare
+  v_order  uuid;
+  v_item   uuid;
+  v_domain uuid;
+  v_job    uuid;
+begin
+  insert into public.orders (user_id, subtotal_kobo, vat_pct, vat_kobo, total_kobo, fx_rate_id, tx_ref,
+                             registrant, float_check, test_mode, status, paid_at)
+  values (p_user, 100000, 7.5, 7500, 107500, (select f.id from public.fx_rates f where f.status = 'active' limit 1),
+          'MDH-m70-' || p_ref, '{}', 'covered', true, 'provisioning', p_at)
+  returning id into v_order;
+  insert into public.order_items (order_id, domain, tld, item_type, period_years, price_kobo, renewal_kobo,
+                                  privacy, auto_renew, status)
+  values (v_order, p_domain, 'com', 'register', 1, 100000, 100000, false, false, 'completed')
+  returning id into v_item;
+  insert into public.domains (user_id, domain_name, tld, source, test_mode, local_status, order_item_id)
+  values (p_user, p_domain, 'com', 'registration', true, 'active', v_item) returning id into v_domain;
+  insert into public.jobs (kind, idempotency_key, domain_id, order_item_id, test_mode, status)
+  values ('register_domain', 'm70:' || p_ref, v_domain, v_item, true, 'succeeded') returning id into v_job;
+  insert into public.supplier_calls (job_id, environment, operation, domain_name, outcome, duration_ms, created_at)
+  values (v_job, 'ote', 'RegisterWithContactInfo', p_domain, 'ok', 2400, p_at);
+  return v_item;
+end $f$;
+
+create function pg_temp.test_entry(p_trace text) returns public.supplier_ledger_entries language sql as $f$
+  select e from public.supplier_ledger_entries e where e.test_mode and e.trace_id = p_trace::uuid
+$f$;
+
+create function pg_temp.price_warning(p_trace text) returns boolean language sql as $f$
+  select exists (select 1 from public.current_alert_conditions(true) c where c.key = 'ledger_price:' || p_trace)
+$f$;
+
 do $$
 declare
   v_tag    text := left(replace(gen_random_uuid()::text, '-', ''), 8);
@@ -84,6 +120,11 @@ declare
   v_j      jsonb;
   v_j2     jsonb;
   v_e      public.supplier_ledger_entries;
+  v_item   uuid;
+  v_item2  uuid;
+  t_drift  text := pg_temp.trace('drift' || v_tag);
+  t_exact  text := pg_temp.trace('exact' || v_tag);
+  v_price  text := 'DomainNameAPI raised .com before our price sync caught it';
   v_passed integer := 0;
 begin
   insert into auth.users (id, aud, role, email, created_at, updated_at) values
@@ -191,7 +232,55 @@ begin
   end if;
   v_passed := v_passed + 1;
 
-  raise notice 'migration 69: % checks passed', v_passed;
+  -- ── 8. Migration 70: a matched debit charged $11.99 against $11.31 recorded
+  -- at checkout warns; one charged as recorded does not.
+  perform public.record_heartbeat('supplier_ledger:ote', true, jsonb_build_object('outcome', 'ok', 'readAt', now()));
+  v_item := pg_temp.registered_line(u_test, 'm70-d-' || v_tag || '.com', 'd' || v_tag, now() - interval '3 hours');
+  v_item2 := pg_temp.registered_line(u_test, 'm70-e-' || v_tag || '.com', 'e' || v_tag, now() - interval '3 hours');
+  insert into public.order_item_costs (order_item_id, supplier_cost_cents, icann_fee_cents)
+  values (v_item, 1131, 20), (v_item2, 1131, 20);
+  perform public.record_supplier_ledger(true, jsonb_build_array(
+    pg_temp.lrow(t_drift, now() - interval '3 hours' + interval '20 seconds', 1, 1, 1, 'm70-d-' || v_tag || '.com', 5000, 3801),
+    pg_temp.lrow(t_exact, now() - interval '3 hours' + interval '30 seconds', 1, 1, 1, 'm70-e-' || v_tag || '.com', 3801, 2670)));
+  if (pg_temp.test_entry(t_drift)).match_state is distinct from 'matched'
+     or (pg_temp.test_entry(t_drift)).match_order_item_id is distinct from v_item
+     or not pg_temp.price_warning(t_drift) or pg_temp.price_warning(t_exact) then
+    raise exception 'FAILED 8: the drifted debit is % and warning is %, the exact one warning is %',
+      (pg_temp.test_entry(t_drift)).match_state, pg_temp.price_warning(t_drift), pg_temp.price_warning(t_exact);
+  end if;
+  v_passed := v_passed + 1;
+
+  -- ── 9. Explained: still matched, the note kept, the warning gone; nothing to explain on the exact one.
+  perform pg_temp.act(u_owner, s_owner);
+  perform pg_temp.expect_code(public.admin_explain_supplier_charge(true, t_exact::uuid, v_price, gen_random_uuid()),
+                              'NOT_UNEXPLAINED', 'FAILED 9: a charge that matches its cost was explained');
+  v_j := public.admin_explain_supplier_charge(true, t_drift::uuid, v_price, gen_random_uuid());
+  v_e := pg_temp.test_entry(t_drift);
+  if (v_j ->> 'ok')::boolean is not true or v_e.match_state is distinct from 'matched'
+     or v_e.match_order_item_id is distinct from v_item or v_e.price_note is distinct from v_price
+     or v_e.price_noted_by is distinct from l_owner or v_e.explained_at is not null
+     or pg_temp.price_warning(t_drift) then
+    raise exception 'FAILED 9: explain a price % → % %', v_j, v_e.match_state, v_e.price_note;
+  end if;
+  if not exists (select 1 from public.admin_audit_log a
+                  where a.id = (v_j ->> 'auditId')::bigint and a.detail ->> 'kind' = 'price'
+                    and a.detail ->> 'recorded_cost_cents' = '1131' and a.detail ->> 'usd_cents' = '1199') then
+    raise exception 'FAILED 9: the audit row does not say what was explained %', v_j;
+  end if;
+  perform pg_temp.expect_code(public.admin_explain_supplier_charge(true, t_drift::uuid, v_price, gen_random_uuid()),
+                              'NOT_UNEXPLAINED', 'FAILED 9: a price explained twice');
+  v_passed := v_passed + 1;
+
+  -- ── 10. Final, and given only through the wrapper.
+  perform pg_temp.expect_raise(format(
+    'update public.supplier_ledger_entries set price_note = %L where test_mode and trace_id = %L',
+    'Something else entirely', t_drift), '%never rewritten%');
+  perform pg_temp.expect_raise(format(
+    'update public.supplier_ledger_entries set price_note = %L, price_noted_by = %L, price_noted_at = now() where test_mode and trace_id = %L',
+    v_price, 'someone', t_exact), '%only through admin_explain_supplier_charge%');
+  v_passed := v_passed + 1;
+
+  raise notice 'migrations 69–70: % checks passed', v_passed;
 end;
 $$;
 

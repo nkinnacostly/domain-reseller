@@ -12,7 +12,7 @@ import {
 describe('the owner’s dialogs, word for word (§5.2 B6)', () => {
   it('Apply price list', () => {
     expect(APPLY_PRICE_LIST.body).toBe(
-      'This is the weekly sync, run early: it writes only changes it trusts, refuses a listing that looks broken, and reports the rest. Site prices update on the next refresh.',
+      'This is the daily sync, run early: it writes only changes it trusts, refuses a listing that looks broken, and reports the rest. Site prices update on the next refresh.',
     )
     expect(APPLY_PRICE_LIST.confirm).toBe('Apply price list')
     expect(APPLY_PRICE_LIST.cancel).toBe('Not now')

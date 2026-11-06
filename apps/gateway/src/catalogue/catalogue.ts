@@ -512,7 +512,7 @@ export const hasChanges = (diff: CatalogueDiff) =>
   diff.detailChanges.length > 0
 
 /**
- * A weekly job runs unattended, so it refuses a listing that is plainly
+ * A scheduled job runs unattended, so it refuses a listing that is plainly
  * broken rather than writing it: a short read would retire every extension it
  * missed, and nothing on the storefront could be sold again until someone
  * noticed. Real catalogue changes are a handful of extensions at a time.

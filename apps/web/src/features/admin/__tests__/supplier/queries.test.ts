@@ -59,6 +59,9 @@ const ROW = {
   explained_note: null,
   explained_by: null,
   explained_at: null,
+  price_note: null,
+  price_noted_by: null,
+  price_noted_at: null,
 }
 
 beforeEach(() => vi.clearAllMocks())
@@ -127,9 +130,11 @@ describe('the SQL reads, as the admin', () => {
 })
 
 describe('the row reads, through adminDb on the side', () => {
-  it('reads one ledger page, filtered as the URL says, with its total', async () => {
+  it('reads one ledger page, filtered as the URL says, with its total and open price warnings', async () => {
+    const warning = 'The supplier charged $11.99 for x.com, recorded at checkout as $11.31'
     const calls = fakeService({
       supplier_ledger_entries: { data: [ROW, { trace_id: 1 }], count: 7 },
+      ops_alerts: { data: [{ key: `ledger_price:${TRACE}`, summary: warning }, { key: 1 }] },
     })
     const params = parseLedgerSearch({
       status: 'unexplained,matched',
@@ -149,6 +154,7 @@ describe('the row reads, through adminDb on the side', () => {
         deltaCents: -1131,
         matchOperation: 'RegisterWithContactInfo',
         matchCallId: 12,
+        priceWarning: warning,
       }),
     ])
     expect(calls).toEqual([
@@ -166,6 +172,11 @@ describe('the row reads, through adminDb on the side', () => {
       ['order', 'delta_cents', { ascending: true }],
       ['order', 'trace_id', { ascending: true }],
       ['range', 25, 49],
+      ['from', 'ops_alerts'],
+      ['select', 'key, summary', undefined],
+      ['eq', 'test_mode', false],
+      ['in', 'key', [`ledger_price:${TRACE}`]],
+      ['is', 'resolved_at', null],
     ])
   })
 

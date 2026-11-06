@@ -5,7 +5,7 @@ export type Call = [string, ...unknown[]]
 
 type Answer = { data?: unknown; error?: unknown; count?: number | null }
 
-const METHODS = ['select', 'eq', 'in', 'gte', 'lt', 'not', 'order', 'range', 'limit']
+const METHODS = ['select', 'eq', 'in', 'is', 'gte', 'lt', 'not', 'order', 'range', 'limit']
 
 /**
  * A service client whose reads record every call and answer by table, for

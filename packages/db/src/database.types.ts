@@ -5411,6 +5411,9 @@ export type Database = {
           occurred_at: string
           old_balance_cents: number
           period: number | null
+          price_note: string | null
+          price_noted_at: string | null
+          price_noted_by: string | null
           product_id: string | null
           product_type: number
           recorded_at: string
@@ -5435,6 +5438,9 @@ export type Database = {
           occurred_at: string
           old_balance_cents: number
           period?: number | null
+          price_note?: string | null
+          price_noted_at?: string | null
+          price_noted_by?: string | null
           product_id?: string | null
           product_type: number
           recorded_at?: string
@@ -5459,6 +5465,9 @@ export type Database = {
           occurred_at?: string
           old_balance_cents?: number
           period?: number | null
+          price_note?: string | null
+          price_noted_at?: string | null
+          price_noted_by?: string | null
           product_id?: string | null
           product_type?: number
           recorded_at?: string

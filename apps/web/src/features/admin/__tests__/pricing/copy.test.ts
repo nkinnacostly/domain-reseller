@@ -108,7 +108,7 @@ describe('the pricing page', () => {
   it('builds a price in steps, with today’s figures', () => {
     const active = charged(rateRow())
     expect(buildSteps({ settings: settings(), active })).toEqual([
-      "A year's cost from DomainNameAPI's catalogue, which the gateway syncs every week,",
+      "A year's cost from DomainNameAPI's catalogue, which the gateway syncs every day,",
       'plus the ICANN fee — $0.18 a year — on generic extensions,',
       'at the active rate, ₦1,330.57 to the dollar,',
       'plus the margin, ₦4,250,',

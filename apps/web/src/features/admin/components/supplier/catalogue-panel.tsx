@@ -26,7 +26,7 @@ import { APPLY_PRICE_LIST, APPLY_SSL_LIST } from '@/features/admin/lib/supplier-
 
 /**
  * One price list's preview and apply (docs/ADMIN-SPEC.md §5.2 B6, D19). The
- * preview runs the weekly sync without writing and shows its own report;
+ * preview runs the scheduled sync without writing and shows its own report;
  * applying runs it now (money tier: the dialog asks for the authenticator
  * code), and the site's prices are expired so they update on the next
  * refresh. Both are the owner's, and both are audited.
