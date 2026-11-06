@@ -67,6 +67,24 @@ const ROOT = join(__dirname, '../../../../../../..')
 const MIGRATIONS = join(ROOT, 'supabase/migrations')
 const ADMIN_SQL = readFileSync(join(MIGRATIONS, '00000000000040_admin.sql'), 'utf8')
 const DATA_SQL = readFileSync(join(MIGRATIONS, '00000000000041_admin_data.sql'), 'utf8')
+const EXPLAIN_SQL = readFileSync(
+  join(MIGRATIONS, '00000000000069_explained_supplier_charges.sql'),
+  'utf8',
+)
+
+/**
+ * admin_tier as it now stands: the body of its last definition, migration 40
+ * first and every `create or replace` since (51 added Mail's, 69 the ledger's).
+ */
+const TIER_SQL = (() => {
+  let latest = ''
+  for (const file of readdirSync(MIGRATIONS).sort()) {
+    const text = readFileSync(join(MIGRATIONS, file), 'utf8')
+    const start = text.lastIndexOf('function public.admin_tier(')
+    if (start >= 0) latest = text.slice(start, text.indexOf('$$;', start))
+  }
+  return latest
+})()
 
 /** The rows between admin.sql's mask-email markers: `('input', 'expected')`, SQL-quoted. */
 const MASK_TABLE: [string, string][] = (() => {
@@ -80,17 +98,20 @@ const MASK_TABLE: [string, string][] = (() => {
   )
 })()
 
-describe('ADMIN_ACTIONS mirrors admin_tier (migration 40)', () => {
+describe('ADMIN_ACTIONS mirrors admin_tier', () => {
+  // Mail's actions (mail.*, migration 51) belong to Mail's own admin pages.
   const rows = [
-    ...ADMIN_SQL.matchAll(
+    ...TIER_SQL.matchAll(
       /\('([a-z_.]+)',\s+'(owner|operator|viewer)',\s*(true|false),\s*'(\w+)'\)/g,
     ),
-  ].map(([, action, minRole, money, testRule]) => ({
-    action,
-    minRole,
-    money: money === 'true',
-    testRule,
-  }))
+  ]
+    .map(([, action, minRole, money, testRule]) => ({
+      action: action ?? '',
+      minRole,
+      money: money === 'true',
+      testRule,
+    }))
+    .filter((row) => !row.action.startsWith('mail.'))
 
   it('has every action SQL knows, with the same tier', () => {
     expect(rows.length).toBeGreaterThan(40)
@@ -137,7 +158,7 @@ describe('ADMIN_ACTIONS mirrors admin_tier (migration 40)', () => {
 })
 
 describe('errors: every code has words (§2.4)', () => {
-  const sql = `${ADMIN_SQL}\n${DATA_SQL}`
+  const sql = `${ADMIN_SQL}\n${DATA_SQL}\n${EXPLAIN_SQL}`
   const raised = new Set(
     [...sql.matchAll(/message = 'admin:([a-z_]+)'/g)].map(([, code]) => code as string),
   )

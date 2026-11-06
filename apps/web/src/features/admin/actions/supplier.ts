@@ -8,9 +8,11 @@ import type {
 import { revalidateTag } from 'next/cache'
 import { liveRead } from '@/features/admin/actions/live-read'
 import { type AdminResult, adminAccessError, toAdminResult } from '@/features/admin/lib/errors'
+import { getAdminSide } from '@/features/admin/queries/session'
 import {
   applyCatalogueSchema,
   correctTopupSchema,
+  explainChargeSchema,
   previewCatalogueSchema,
   recordTopupSchema,
 } from '@/features/admin/schemas/supplier'
@@ -22,7 +24,8 @@ import { type AdminContext, adminAction, adminMoneyAction } from '@/lib/safe-act
  * float top-up cost (§3.2b). Each is validated first; a preview or an apply
  * then writes its audit note (`admin_note`), stops if SQL refuses it, and
  * calls the gateway with the note's id, which the gateway claims before it
- * calls anyone (D22). Top-ups are `admin_*` wrappers, called as the admin.
+ * calls anyone (D22). Top-ups, and explaining a charge no call explains, are
+ * `admin_*` wrappers, called as the admin.
  */
 
 type Catalogue = 'tlds' | 'ssl'
@@ -149,3 +152,24 @@ export const correctTopup = adminMoneyAction('topup.correct', correctTopupSchema
     return toAdminResult(data)
   },
 )
+
+/**
+ * Explain a charge (money, owner, `supplier.explain_charge`; migration 69): a
+ * debit no provisioning call explains — a domain bought in DomainNameAPI's own
+ * panel — on the side shown. Its alert closes; the words are kept beside the
+ * entry and in the audit log, and never rewritten.
+ */
+export const explainCharge = adminMoneyAction(
+  'supplier.explain_charge',
+  explainChargeSchema,
+).action(async ({ parsedInput, ctx }): Promise<AdminResult> => {
+  const side = await getAdminSide(ctx.admin)
+  const { data, error } = await ctx.db.rpc('admin_explain_supplier_charge', {
+    p_test_mode: side === 'test',
+    p_trace_id: parsedInput.traceId,
+    p_reason: parsedInput.reason,
+    p_request_key: parsedInput.requestKey,
+  })
+  if (error) throw adminAccessError(error.message)
+  return toAdminResult(data)
+})

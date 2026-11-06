@@ -35,8 +35,17 @@ export function ledgerKind(facts: LedgerFacts): LedgerKind {
   return 'unclassified'
 }
 
-/** How the mirror classified an entry (supplier_ledger_entries.match_state). */
-export type LedgerMatchState = 'pending' | 'matched' | 'topup' | 'unexplained' | 'unclassified'
+/**
+ * How the mirror classified an entry (supplier_ledger_entries.match_state).
+ * `explained` is an owner's word for a debit no call explains (migration 69).
+ */
+export type LedgerMatchState =
+  | 'pending'
+  | 'matched'
+  | 'topup'
+  | 'unexplained'
+  | 'unclassified'
+  | 'explained'
 
 export const LEDGER_MATCH_LABELS: Record<LedgerMatchState, string> = {
   pending: 'Waiting to match',
@@ -44,6 +53,7 @@ export const LEDGER_MATCH_LABELS: Record<LedgerMatchState, string> = {
   topup: 'Top-up',
   unexplained: 'No matching order',
   unclassified: 'Not classified',
+  explained: 'Explained by hand',
 }
 
 /**

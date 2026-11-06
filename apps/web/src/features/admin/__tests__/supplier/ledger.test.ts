@@ -98,6 +98,15 @@ describe('match labels (§7)', () => {
       'Not settled at DomainNameAPI (status 0): shown as read, never counted',
     )
     expect(label('something_else')).toBe('something else')
+    expect(
+      matchLabel({
+        matchState: 'explained',
+        matchOperation: null,
+        status: 1,
+        explainedBy: 'Costly',
+        explainedNote: 'Bought by hand in the supplier panel',
+      }),
+    ).toBe('Explained by Costly: “Bought by hand in the supplier panel”')
   })
 })
 

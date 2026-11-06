@@ -56,6 +56,9 @@ const ROW = {
   match_operation: 'RegisterWithContactInfo',
   match_order_item_id: '0b6f3c4e-1d2a-4b5c-8d7e-9f0a1b2c3d4e',
   matched_at: '2026-10-01T09:05:00+00:00',
+  explained_note: null,
+  explained_by: null,
+  explained_at: null,
 }
 
 beforeEach(() => vi.clearAllMocks())

@@ -109,6 +109,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'supplier.catalogue_preview': 'Preview the extension price list',
   'supplier.ssl_catalogue_preview': 'Preview the SSL price list',
   'supplier.catalogue_apply': 'Apply the extension price list',
+  'supplier.explain_charge': 'Explain a supplier charge',
   'supplier.ssl_catalogue_apply': 'Apply the SSL price list',
 }
 

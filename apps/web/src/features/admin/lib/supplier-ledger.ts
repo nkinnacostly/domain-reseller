@@ -16,6 +16,7 @@ export const LEDGER_STATES = [
   'pending',
   'matched',
   'topup',
+  'explained',
 ] as const satisfies readonly LedgerMatchState[]
 
 export const LEDGER_SORTS = ['occurred', 'change'] as const
@@ -101,11 +102,15 @@ export type LedgerMatchFacts = {
   matchState: string
   matchOperation: string | null
   status: number
+  /** An owner's words for a debit no call explains, and who gave them (migration 69). */
+  explainedNote?: string | null
+  explainedBy?: string | null
 }
 
 /**
  * What an entry's match means, in a sentence (§7): matched to the call that
- * spent it, a top-up, not yet matched, or the two kinds that need a person.
+ * spent it, a top-up, not yet matched, the two kinds that need a person, or
+ * one a person has explained.
  */
 export function matchLabel(entry: LedgerMatchFacts): string {
   switch (entry.matchState) {
@@ -120,6 +125,8 @@ export function matchLabel(entry: LedgerMatchFacts): string {
       return 'Waiting to match: a debit is matched to its provisioning call within 2 hours'
     case 'unexplained':
       return 'No matching provisioning call: supplier panel use, a leaked key, or a supplier-side change'
+    case 'explained':
+      return `Explained by ${entry.explainedBy ?? 'an owner'}: “${entry.explainedNote ?? ''}”`
     case 'unclassified':
       return entry.status !== 1
         ? `Not settled at DomainNameAPI (status ${entry.status}): shown as read, never counted`

@@ -43,6 +43,7 @@ vi.mock('@/features/admin/actions/supplier', () => ({
   applySslList: vi.fn(),
   recordTopup: vi.fn(),
   correctTopup: vi.fn(),
+  explainCharge: vi.fn(),
 }))
 vi.mock('@/features/admin/actions/supplier-live', () => ({
   readLiveBalance: vi.fn(),
@@ -115,6 +116,9 @@ const ROW: queries.LedgerRow = {
   matchOperation: 'RegisterWithContactInfo',
   matchOrderItemId: '0b6f3c4e-1d2a-4b5c-8d7e-9f0a1b2c3d4e',
   matchedAt: '2026-10-01T09:05:00Z',
+  explainedNote: null,
+  explainedBy: null,
+  explainedAt: null,
 }
 
 beforeEach(() => {
@@ -369,6 +373,43 @@ describe('/admin/supplier/ledger', () => {
     unmount()
     render(await LedgerList({ admin: as(OWNER), side: 'live', params: parseLedgerSearch({}) }))
     expect(screen.getByText('No ledger entries on this side yet.')).toBeInTheDocument()
+  })
+
+  it('offers an owner to explain an unexplained charge, and shows an explained one in their words', async () => {
+    vi.mocked(queries.getLedgerPage).mockResolvedValue({
+      rows: [
+        {
+          ...ROW,
+          matchState: 'unexplained',
+          matchCallId: null,
+          matchOperation: null,
+          matchOrderItemId: null,
+        },
+        {
+          ...ROW,
+          traceId: TRACE.replace(/^./, 'f'),
+          matchState: 'explained',
+          matchCallId: null,
+          matchOperation: null,
+          matchOrderItemId: null,
+          explainedNote: 'Bought by hand in the supplier panel',
+          explainedBy: 'owner',
+          explainedAt: '2026-11-06T10:00:00Z',
+        },
+      ],
+      total: 2,
+    })
+    vi.mocked(queries.getLedgerRevisions).mockResolvedValue(new Map())
+    const params = parseLedgerSearch({})
+    const { unmount } = render(await LedgerList({ admin: as(OWNER), side: 'live', params }))
+    const table = screen.getByRole('table', { name: 'Supplier ledger entries' })
+    expect(within(table).getAllByRole('button', { name: 'Explain this charge' })).toHaveLength(1)
+    expect(
+      within(table).getByText('Explained by owner: “Bought by hand in the supplier panel”'),
+    ).toBeInTheDocument()
+    unmount()
+    render(await LedgerList({ admin: as({ ...OWNER, role: 'viewer' }), side: 'live', params }))
+    expect(screen.queryByRole('button', { name: 'Explain this charge' })).not.toBeInTheDocument()
   })
 
   it('errs when the list could not be read', async () => {

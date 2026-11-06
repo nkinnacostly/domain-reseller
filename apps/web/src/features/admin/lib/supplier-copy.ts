@@ -23,6 +23,21 @@ export const APPLY_SSL_LIST = {
   done: 'SSL product list applied.',
 } as const
 
+/** Explaining a debit no provisioning call explains (migration 69; money, owner). */
+export const EXPLAIN_CHARGE = {
+  trigger: 'Explain this charge',
+  title: 'Explain this charge?',
+  body: 'Say what it was — for example, a domain you bought in DomainNameAPI’s own panel. The entry is marked explained and its alert closes. An explanation is kept with the entry and in the audit log, and it can’t be changed afterwards.',
+  reasonLabel: 'What was it?',
+  rows: {
+    entry: 'Ledger entry',
+    charged: 'Charged',
+  },
+  confirm: 'Mark as explained',
+  cancel: 'Cancel',
+  done: 'Charge explained. Its alert closes.',
+} as const
+
 export const RECORD_TOPUP = {
   trigger: 'Record what it cost',
   title: 'Record what this top-up cost?',

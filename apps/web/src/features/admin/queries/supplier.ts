@@ -129,6 +129,9 @@ export type LedgerRow = {
   matchOperation: string | null
   matchOrderItemId: string | null
   matchedAt: string | null
+  explainedNote: string | null
+  explainedBy: string | null
+  explainedAt: string | null
 }
 
 const ledgerRowSchema = z.object({
@@ -148,6 +151,9 @@ const ledgerRowSchema = z.object({
   match_operation: z.string().nullable(),
   match_order_item_id: z.string().nullable(),
   matched_at: z.string().nullable(),
+  explained_note: z.string().nullable(),
+  explained_by: z.string().nullable(),
+  explained_at: z.string().nullable(),
 })
 
 function toLedgerRow(row: unknown): LedgerRow[] {
@@ -172,6 +178,9 @@ function toLedgerRow(row: unknown): LedgerRow[] {
       matchOperation: r.match_operation,
       matchOrderItemId: r.match_order_item_id,
       matchedAt: r.matched_at,
+      explainedNote: r.explained_note,
+      explainedBy: r.explained_by,
+      explainedAt: r.explained_at,
     },
   ]
 }
@@ -186,7 +195,7 @@ export async function getLedgerPage(
     let query = adminDb(admin, side)
       .from('supplier_ledger_entries')
       .select(
-        'trace_id, occurred_at, type, status, charge_type, product_type, description, period, old_balance_cents, balance_cents, delta_cents, match_state, match_call_id, match_operation, match_order_item_id, matched_at',
+        'trace_id, occurred_at, type, status, charge_type, product_type, description, period, old_balance_cents, balance_cents, delta_cents, match_state, match_call_id, match_operation, match_order_item_id, matched_at, explained_note, explained_by, explained_at',
         { count: 'exact' },
       )
     if (params.status.length > 0) query = query.in('match_state', params.status)

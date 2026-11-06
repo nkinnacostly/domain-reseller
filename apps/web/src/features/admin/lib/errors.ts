@@ -145,6 +145,8 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   NOT_TOPUP: 'That ledger entry is not a top-up.',
   ALREADY_RECORDED: "This top-up's cost is already recorded. Correct it instead.",
   NOT_CURRENT: 'That record was already corrected. Correct the newest one.',
+  NOT_UNEXPLAINED:
+    'That charge is no longer unexplained: it was matched to an order, or already explained.',
 
   // ── The gateway's claim on a note (D22) ──
   ADMIN_NOTE_REFUSED: 'The gateway refused the audit note, so nothing was read. Try again.',

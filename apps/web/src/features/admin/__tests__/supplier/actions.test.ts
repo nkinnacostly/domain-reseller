@@ -6,6 +6,7 @@ import {
   applyPriceList,
   applySslList,
   correctTopup,
+  explainCharge,
   previewPriceList,
   previewSslList,
   recordTopup,
@@ -324,5 +325,61 @@ describe('top-up costs (money, owner; §3.2b)', () => {
         })
       ).serverError,
     ).toBe(SERVER_CRASH_WORDS)
+  })
+})
+
+describe('explaining a charge no call explains (money, owner; migration 69)', () => {
+  const explain = {
+    traceId: TRACE.toUpperCase(),
+    reason: '  Bought by hand in the supplier panel  ',
+    requestKey: KEY,
+    code: '123456',
+  }
+
+  it('checks the code, then explains the entry on the side shown, as the admin', async () => {
+    const session = owner({ admin_explain_supplier_charge: { data: { ok: true, auditId: 80 } } })
+    const result = await explainCharge(explain)
+    expect(session.challengeAndVerify).toHaveBeenCalledTimes(1)
+    expect(session.rpc).toHaveBeenCalledWith('admin_explain_supplier_charge', {
+      p_test_mode: true,
+      p_trace_id: TRACE,
+      p_reason: 'Bought by hand in the supplier panel',
+      p_request_key: KEY,
+    })
+    expect(result.data).toEqual({ ok: true, auditId: 80 })
+  })
+
+  it('explains a live entry when the live side is shown', async () => {
+    vi.mocked(cookies).mockResolvedValue({ get: () => ({ value: 'live' }), set: vi.fn() } as never)
+    const session = owner({ admin_explain_supplier_charge: { data: { ok: true, auditId: 81 } } })
+    await explainCharge(explain)
+    expect(session.rpc).toHaveBeenCalledWith(
+      'admin_explain_supplier_charge',
+      expect.objectContaining({ p_test_mode: false }),
+    )
+  })
+
+  it('words a charge already matched or explained', async () => {
+    owner({
+      admin_explain_supplier_charge: { data: { ok: false, code: 'NOT_UNEXPLAINED', auditId: 82 } },
+    })
+    expect((await explainCharge(explain)).data).toEqual({
+      ok: false,
+      code: 'NOT_UNEXPLAINED',
+      message: ADMIN_ERROR_WORDS.NOT_UNEXPLAINED,
+      auditId: 82,
+    })
+  })
+
+  it('validates first: no trace id, a short explanation or no code — no call', async () => {
+    const session = owner()
+    for (const bad of [
+      { ...explain, traceId: 'vissioncapitals.org' },
+      { ...explain, reason: 'mine' },
+      { ...explain, code: '12345' },
+    ]) {
+      expect((await explainCharge(bad)).validationErrors, JSON.stringify(bad)).toBeDefined()
+    }
+    expect(session.rpc).not.toHaveBeenCalled()
   })
 })

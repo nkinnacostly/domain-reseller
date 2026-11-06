@@ -709,6 +709,7 @@ begin
     "float_runway":"none", "ledger_alert_conditions":"none", "admin_alert_conditions":"none",
     "cron_alert_conditions":"none", "admin_read_gate":"none", "admin_sales_since":"none",
     "admin_record_float_topup":"authenticated", "admin_correct_float_topup":"authenticated",
+    "admin_explain_supplier_charge":"authenticated",
     "admin_attention_counts":"authenticated", "admin_overview":"authenticated", "admin_revenue":"authenticated",
     "admin_margin":"authenticated", "admin_funnel":"authenticated", "admin_provisioning":"authenticated",
     "admin_refund_stats":"authenticated", "admin_float":"authenticated", "admin_ledger_daily":"authenticated",

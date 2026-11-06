@@ -77,7 +77,7 @@ describe('ledgerKind', () => {
 
   it('has words for every match state', () => {
     expect(Object.keys(LEDGER_MATCH_LABELS).sort()).toEqual(
-      ['matched', 'pending', 'topup', 'unclassified', 'unexplained'].sort(),
+      ['explained', 'matched', 'pending', 'topup', 'unclassified', 'unexplained'].sort(),
     )
   })
 })

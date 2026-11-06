@@ -38,6 +38,7 @@ import {
   type LedgerRow,
 } from '@/features/admin/queries/supplier'
 import { cn } from '@/lib/utils'
+import { ExplainCharge } from './explain-charge'
 import { LiveLedgerSearch } from './live-ledger-search'
 import { SupplierHeader } from './supplier-header'
 
@@ -203,7 +204,13 @@ export async function LedgerList({
     {
       key: 'match',
       header: 'Match',
-      cell: (row) => <MatchCell row={row} />,
+      cell: (row) => (
+        <MatchCell
+          row={row}
+          canExplain={canAct(admin, 'supplier.explain_charge')}
+          returnTo={ledgerHref(params, {})}
+        />
+      ),
     },
     {
       key: 'revisions',
@@ -307,11 +314,27 @@ export async function LedgerList({
   )
 }
 
-function MatchCell({ row }: { row: LedgerRow }) {
+function MatchCell({
+  row,
+  canExplain,
+  returnTo,
+}: {
+  row: LedgerRow
+  canExplain: boolean
+  returnTo: string
+}) {
   return (
     <div className="space-y-1">
       <AdminStatusPill value={row.matchState} labels={LEDGER_STATE_LABEL} />
-      <p className="text-xs text-muted-foreground">{matchLabel(row)}</p>
+      <p className="text-xs break-words text-muted-foreground">{matchLabel(row)}</p>
+      {row.matchState === 'unexplained' && canExplain ? (
+        <ExplainCharge
+          traceId={row.traceId}
+          description={row.description}
+          deltaCents={row.deltaCents}
+          returnTo={returnTo}
+        />
+      ) : null}
       {row.matchState === 'matched' && row.matchOrderItemId ? (
         <Link
           href={`/admin/orders?line=${row.matchOrderItemId}`}

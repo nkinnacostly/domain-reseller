@@ -50,6 +50,14 @@ export const recordTopupSchema = z.object({
   code: codeSchema,
 })
 
+/** Explain a charge (money, owner): the reason is the explanation, kept beside the entry. */
+export const explainChargeSchema = z.object({
+  traceId: traceIdSchema,
+  reason: reasonSchema,
+  requestKey: requestKeySchema,
+  code: codeSchema,
+})
+
 export const correctTopupSchema = z.object({
   topupId: bigintIdSchema,
   ngnPaidKobo: ngnPaidKoboSchema,

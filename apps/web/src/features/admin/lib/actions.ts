@@ -68,6 +68,7 @@ export const ADMIN_TIERS = {
   'supplier.catalogue_preview': tier('owner', false, 'never'),
   'supplier.ssl_catalogue_preview': tier('owner', false, 'never'),
   'supplier.catalogue_apply': tier('owner', true, 'never'),
+  'supplier.explain_charge': tier('owner', true, 'never'),
   'supplier.ssl_catalogue_apply': tier('owner', true, 'never'),
 } as const satisfies Record<string, AdminTier>
 

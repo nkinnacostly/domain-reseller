@@ -5400,6 +5400,9 @@ export type Database = {
           charge_type: number
           delta_cents: number | null
           description: string
+          explained_at: string | null
+          explained_by: string | null
+          explained_note: string | null
           match_call_id: number | null
           match_operation: string | null
           match_order_item_id: string | null
@@ -5421,6 +5424,9 @@ export type Database = {
           charge_type: number
           delta_cents?: number | null
           description?: string
+          explained_at?: string | null
+          explained_by?: string | null
+          explained_note?: string | null
           match_call_id?: number | null
           match_operation?: string | null
           match_order_item_id?: string | null
@@ -5442,6 +5448,9 @@ export type Database = {
           charge_type?: number
           delta_cents?: number | null
           description?: string
+          explained_at?: string | null
+          explained_by?: string | null
+          explained_note?: string | null
           match_call_id?: number | null
           match_operation?: string | null
           match_order_item_id?: string | null
@@ -6217,6 +6226,15 @@ export type Database = {
       admin_e2e_email: { Args: { p_email: string }; Returns: boolean }
       admin_email_stats: {
         Args: { p_days: number; p_test_mode: boolean }
+        Returns: Json
+      }
+      admin_explain_supplier_charge: {
+        Args: {
+          p_reason: string
+          p_request_key: string
+          p_test_mode: boolean
+          p_trace_id: string
+        }
         Returns: Json
       }
       admin_fail_job: {

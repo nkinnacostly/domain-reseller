@@ -102,6 +102,7 @@ export const LEDGER_STATE_LABEL: Record<string, string> = {
   topup: 'Top-up',
   unexplained: 'No matching order',
   unclassified: 'Not classified',
+  explained: 'Explained by hand',
 }
 
 /** The word for a value from one of the maps above; the value itself when unknown. */
