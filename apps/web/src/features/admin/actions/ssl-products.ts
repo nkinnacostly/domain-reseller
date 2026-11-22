@@ -8,7 +8,7 @@ import { adminMoneyAction } from '@/lib/safe-action'
 /**
  * Put an SSL product on sale or take it off (docs/ADMIN-SPEC.md §3.1.2
  * `admin_set_ssl_sellable`, §5.2 B13). `is_sellable` is the owner's choice
- * and the one column the weekly sync never writes (CLAUDE.md §15): owner,
+ * and the one column the daily sync never writes (CLAUDE.md §15): owner,
  * money tier, the dialog's code verified first (D6). A product with no
  * price is refused on (`NO_PRICE`). Certificate prices are cached under
  * `pricing`, so they are expired after a change that went through (N5b).

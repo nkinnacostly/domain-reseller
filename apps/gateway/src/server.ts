@@ -286,7 +286,7 @@ const ledgerSync =
 
 // N5b: the daily supplier catalogue sync — here, so it keeps working once the supplier allowlists this address.
 const catalogueSync = catalogueScheduleFor(env, logger)
-// FR-SSL-1: the SSL product list, weekly, on the same rules.
+// FR-SSL-1: the SSL product list, daily, on the same rules and interval.
 const sslCatalogueSync = sslCatalogueScheduleFor(env, logger)
 // FR-D5: live domains' delegation, checked against public resolvers.
 const delegationCheck = delegationCheckerFor(env, logger)

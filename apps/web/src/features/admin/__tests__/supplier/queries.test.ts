@@ -376,7 +376,7 @@ describe('the row reads, through adminDb on the side', () => {
     expect(await getCalls(await principal(), 'test', params)).toBeNull()
   })
 
-  it('reads the weekly syncs’ heartbeats, hidden from a test administrator', async () => {
+  it('reads the daily syncs’ heartbeats, hidden from a test administrator', async () => {
     expect(await getSyncHeartbeats(await principal({ testOnly: true }))).toBe('hidden')
     fakeService({
       service_heartbeats: {

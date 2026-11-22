@@ -25,7 +25,7 @@ const APPLY_ACTION = {
 
 const INTRO: Record<CatalogueKind, string> = {
   tlds: 'Wholesale prices, periods and extensions from DomainNameAPI. The gateway syncs them every day; preview to see what the next sync would change.',
-  ssl: "SSL products and their wholesale prices from DomainNameAPI, synced every week. Which products are on sale stays the owner's choice, in Settings.",
+  ssl: "SSL products and their wholesale prices from DomainNameAPI, synced every day. Which products are on sale stays the owner's choice, in Settings.",
 }
 
 /**
@@ -41,7 +41,7 @@ export async function CatalogueView() {
     <PanelPage>
       <SupplierHeader
         title="Price list"
-        description="DomainNameAPI's catalogue, synced by the gateway: extensions daily, SSL products weekly. Prices are the same on both sides."
+        description="DomainNameAPI's catalogue, synced daily by the gateway. Prices are the same on both sides."
         side={side}
         testOnly={admin.testOnly}
       />

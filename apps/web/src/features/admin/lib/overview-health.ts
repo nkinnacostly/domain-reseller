@@ -15,7 +15,7 @@ export const HEALTH_LIMITS = {
   gatewayMinutes: 15,
   /** The reconcile runs hourly (PRD §13.5). */
   reconcileHours: 2,
-  /** The extension sync runs daily, the SSL product sync weekly; either is stale after 8 days. */
+  /** Both catalogue syncs run daily (CATALOGUE_SYNC_EVERY_HOURS); stale after 8 days. */
   catalogueDays: 8,
   /** The ledger is mirrored hourly; stale at 3 h (§7, `supplier_ledger_stale`). */
   ledgerHours: 3,

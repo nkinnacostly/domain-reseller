@@ -14,7 +14,7 @@ import {
 } from './products'
 
 /**
- * The weekly SSL product sync (FR-SSL-1, N5b), beside the domain catalogue's
+ * The daily SSL product sync (FR-SSL-1, N5b), beside the domain catalogue's
  * and on the same rules: only the production deployment reading production
  * runs it, it reports before it writes, refuses what it cannot trust, and
  * leaves each run's outcome in the `ssl_catalogue:production` heartbeat —

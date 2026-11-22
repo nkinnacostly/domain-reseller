@@ -16,7 +16,7 @@ import { SslProductAction } from './ssl-product-action'
 
 /**
  * `/admin/settings/ssl-products` (docs/ADMIN-SPEC.md §5.2 B13): every
- * certificate product the weekly sync lists, and the one column it never
+ * certificate product the daily sync lists, and the one column it never
  * writes — whether it is on sale, which is the owner's (CLAUDE.md §15).
  */
 export async function SslProductsView() {
@@ -114,7 +114,7 @@ export async function SslProductList({ admin, side }: { admin: AdminPrincipal; s
         empty={
           <EmptyState
             title="No SSL products yet."
-            body="The gateway syncs DomainNameAPI's list every week; the products appear after its first run."
+            body="The gateway syncs DomainNameAPI's list every day; the products appear after its first run."
           />
         }
       />

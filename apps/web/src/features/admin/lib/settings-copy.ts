@@ -28,7 +28,7 @@ export const SETTINGS_PAGES = {
   ssl: {
     title: 'SSL products',
     description:
-      "Which certificate products are on sale. The weekly sync owns everything else about them; on sale or not is the owner's choice.",
+      "Which certificate products are on sale. The daily sync owns everything else about them; on sale or not is the owner's choice.",
   },
   presets: {
     title: 'Nameserver presets',

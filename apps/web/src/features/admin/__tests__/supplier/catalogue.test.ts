@@ -100,7 +100,7 @@ describe('an apply, in words', () => {
   })
 })
 
-describe('the weekly sync’s last run', () => {
+describe('the daily sync’s last run', () => {
   it('reads counts only from its heartbeat, never prices', () => {
     const beat = heartbeatFrom({
       beat_at: '2026-10-01T12:03:10Z',

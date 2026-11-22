@@ -17,7 +17,7 @@ export const APPLY_PRICE_LIST = {
 
 export const APPLY_SSL_LIST = {
   title: 'Apply the SSL product list now?',
-  body: 'This is the weekly SSL product sync, run early: it writes only changes it trusts, refuses a listing that looks broken, and reports the rest. It never changes which products are on sale. Site prices update on the next refresh.',
+  body: 'This is the daily SSL product sync, run early: it writes only changes it trusts, refuses a listing that looks broken, and reports the rest. It never changes which products are on sale. Site prices update on the next refresh.',
   confirm: 'Apply SSL product list',
   cancel: 'Not now',
   done: 'SSL product list applied.',

@@ -20,7 +20,7 @@ import { type AdminContext, adminAction, adminMoneyAction } from '@/lib/safe-act
 
 /**
  * The owner's Supplier actions (docs/ADMIN-SPEC.md §5.2 B6): previewing and
- * applying the weekly price-list syncs early (D19), and recording what a
+ * applying the daily price-list syncs early (D19), and recording what a
  * float top-up cost (§3.2b). Each is validated first; a preview or an apply
  * then writes its audit note (`admin_note`), stops if SQL refuses it, and
  * calls the gateway with the note's id, which the gateway claims before it
@@ -58,7 +58,7 @@ function catalogueCall<T>(
   })
 }
 
-/** What the weekly extension sync would change, without writing anything. */
+/** What the daily extension sync would change, without writing anything. */
 export const previewPriceList = adminAction(
   'supplier.catalogue_preview',
   previewCatalogueSchema,
@@ -67,7 +67,7 @@ export const previewPriceList = adminAction(
     catalogueCall(ctx, PREVIEW_ROUTE.tlds),
 )
 
-/** What the weekly SSL product sync would change, without writing anything. */
+/** What the daily SSL product sync would change, without writing anything. */
 export const previewSslList = adminAction(
   'supplier.ssl_catalogue_preview',
   previewCatalogueSchema,

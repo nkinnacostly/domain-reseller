@@ -481,7 +481,7 @@ export async function getCallSummary(
   )
 }
 
-/** The weekly syncs' last runs, or 'hidden' for a test administrator (§2.3: heartbeats are not theirs). */
+/** The daily syncs' last runs, or 'hidden' for a test administrator (§2.3: heartbeats are not theirs). */
 export const getSyncHeartbeats = cache(async function getSyncHeartbeats(
   admin: AdminPrincipal,
 ): Promise<{ tlds: SyncHeartbeat | null; ssl: SyncHeartbeat | null } | 'hidden' | null> {
