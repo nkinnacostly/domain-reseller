@@ -3563,6 +3563,8 @@ export type Database = {
           registered_at: string | null
           registrant: Json | null
           registry_checked_at: string | null
+          registry_checks_paused_at: string | null
+          registry_checks_paused_note: string | null
           registry_renewal_mode: string | null
           registry_status: string | null
           source: string
@@ -3596,6 +3598,8 @@ export type Database = {
           registered_at?: string | null
           registrant?: Json | null
           registry_checked_at?: string | null
+          registry_checks_paused_at?: string | null
+          registry_checks_paused_note?: string | null
           registry_renewal_mode?: string | null
           registry_status?: string | null
           source: string
@@ -3629,6 +3633,8 @@ export type Database = {
           registered_at?: string | null
           registrant?: Json | null
           registry_checked_at?: string | null
+          registry_checks_paused_at?: string | null
+          registry_checks_paused_note?: string | null
           registry_renewal_mode?: string | null
           registry_status?: string | null
           source?: string
