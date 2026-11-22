@@ -9,6 +9,7 @@ import { createTelegramNotifier } from './alerts/telegram'
 import { createApp } from './app'
 import { catalogueScheduleFor } from './catalogue/schedule'
 import { delegationCheckerFor } from './delegation/checker'
+import { balanceUsdFrom } from './dna/balance'
 import { getDnaWriteClient } from './dna/client'
 import { emailSetupFor } from './email/provider'
 import { createEmailSender } from './email/sender'
@@ -235,8 +236,7 @@ const monitor = target
           () => getDnaWriteClient(target).GetCurrentBalance('USD'),
           { waitMs: 30_000 },
         )
-        const balance = Number(response.Balance)
-        return response.OperationResult === 'SUCCESS' && Number.isFinite(balance) ? balance : null
+        return balanceUsdFrom(response)
       },
     })
   : null

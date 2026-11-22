@@ -42,6 +42,16 @@ describe('GET /v1/account/balance', () => {
     expect(json).toMatchObject({ ok: false, retryable: true })
   })
 
+  it('reports a success with no figure in it as retryable, never as a zero balance', async () => {
+    for (const Balance of [null, '']) {
+      const { status, json } = await get(
+        appWith(async () => ({ OperationResult: 'SUCCESS', Balance })),
+      )
+      expect(status, String(Balance)).toBe(502)
+      expect(json).toMatchObject({ ok: false, retryable: true })
+    }
+  })
+
   it('reports a supplier that throws as retryable', async () => {
     const { status, json } = await get(
       appWith(async () => {

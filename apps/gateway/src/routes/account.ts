@@ -1,6 +1,7 @@
 import { mapSupplierError } from '@dr/shared'
 import { Hono } from 'hono'
 import type DomainNameApi from 'nodejs-dna'
+import { balanceUsdFrom } from '../dna/balance'
 import { getDnaClient } from '../dna/client'
 import { logger } from '../lib/logger'
 import { QueueTimeout, type Semaphore, supplierSlots } from '../lib/semaphore'
@@ -23,8 +24,8 @@ export function createAccountRoute(overrides: Partial<Deps> = {}) {
         waitMs: 8_000,
         priority: 'high',
       })
-      const balance = Number(response.Balance)
-      if (response.OperationResult !== 'SUCCESS' || !Number.isFinite(balance)) {
+      const balance = balanceUsdFrom(response)
+      if (balance === null) {
         logger.warn(
           { result: response.OperationResult, ms: Date.now() - started },
           'balance read failed',
