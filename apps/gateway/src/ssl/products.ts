@@ -242,7 +242,7 @@ export function formatSslReport(
 export type SslListing = { items: RawSslProduct[]; total: number | null }
 export type SslListingSource = () => Promise<SslListing>
 
-/** Far beyond the 35 listed; stops a supplier bug from paging forever. */
+/** 500 products at the supplier's 50 a page, far beyond the 69 listed; stops a supplier bug from paging forever. */
 const MAX_PAGES = 10
 
 export function createSslListingSource(options: {
@@ -265,7 +265,7 @@ export function createSslListingSource(options: {
     const items: RawSslProduct[] = []
     let total: number | null = null
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const url = `${SSL_BASE_URL[environment]}/products/ssls?MaxResultCount=${pageSize}&SkipCount=${page * pageSize}`
+      const url = `${SSL_BASE_URL[environment]}/products/ssls?MaxResultCount=${pageSize}&SkipCount=${items.length}`
       const answer = await run(() =>
         get(url, { 'X-API-KEY': apiKey, __reseller: resellerId }, 60_000),
       )
@@ -274,7 +274,10 @@ export function createSslListingSource(options: {
       const count = (answer as { totalCount?: unknown }).totalCount
       if (typeof count === 'number' && Number.isInteger(count)) total = count
       items.push(...(list as RawSslProduct[]))
-      if (list.length < pageSize || (total !== null && items.length >= total))
+      // The supplier sends at most 50 a page whatever is asked (69 listed, 22 Nov
+      // 2026), so a short page is the end only when no total says otherwise.
+      // Ending on it read 50 of 69, and every sync since 23 Oct was refused.
+      if (list.length === 0 || (total !== null ? items.length >= total : list.length < pageSize))
         return { items, total }
     }
     throw new Error(`The SSL product listing ran past ${MAX_PAGES} pages; stopped reading`)

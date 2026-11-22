@@ -303,6 +303,46 @@ describe('reading the list from the supplier', () => {
     expect(run).toHaveBeenCalledTimes(1)
   })
 
+  it('reads every page when the supplier sends fewer than it was asked for', async () => {
+    // Live, 22 Nov 2026: 100 asked, 50 sent, 69 in all.
+    const all = Array.from({ length: 69 }, (_, index) =>
+      raw(String(index + 1), `Product ${index + 1}`, 5),
+    )
+    const get = vi.fn(async (url: string) => {
+      const skip = Number(new URL(url).searchParams.get('SkipCount'))
+      return { items: all.slice(skip, skip + 50), totalCount: 69 }
+    })
+    const listing = await createSslListingSource({
+      resellerId: 'r',
+      apiKey: 'k',
+      environment: 'production',
+      pageSize: 100,
+      getJson: get as never,
+    })()
+    expect(listing.items).toHaveLength(69)
+    expect(get.mock.calls.map(([url]) => new URL(url).searchParams.get('SkipCount'))).toEqual([
+      '0',
+      '50',
+    ])
+  })
+
+  it('ends at an empty page, leaving a short listing for the sync to refuse', async () => {
+    const get = vi.fn(async (url: string) =>
+      new URL(url).searchParams.get('SkipCount') === '0'
+        ? { items: LISTING.slice(0, 2), totalCount: 5 }
+        : { items: [], totalCount: 5 },
+    )
+    const listing = await createSslListingSource({
+      resellerId: 'r',
+      apiKey: 'k',
+      environment: 'production',
+      getJson: get as never,
+    })()
+    expect(listing).toMatchObject({ total: 5 })
+    expect(listing.items).toHaveLength(2)
+    expect(get).toHaveBeenCalledTimes(2)
+  })
+
   it('stops at a page that is not a listing, and at one that never ends', async () => {
     await expect(
       createSslListingSource({
