@@ -459,8 +459,11 @@ begin
     v_count := v_count + 1;
   end loop;
   -- The list above is every granted read with a side: a new one must join it.
+  -- Migration 69's explain wrapper takes a side but is a write: a test admin
+  -- is refused with an answer there (explained_supplier_charges.sql).
   if v_count is distinct from (select count(*)::integer from pg_proc p
                                 where p.pronamespace = 'public'::regnamespace and p.proname like 'admin\_%'
+                                  and p.proname <> 'admin_explain_supplier_charge'
                                   and 'p_test_mode' = any (p.proargnames)
                                   and has_function_privilege('authenticated', p.oid, 'execute')) then
     raise exception 'FAILED 9: a read with a side is missing from the test-admin loop';
@@ -710,7 +713,7 @@ begin
     "cron_alert_conditions":"none", "admin_read_gate":"none", "admin_sales_since":"none",
     "admin_record_float_topup":"authenticated", "admin_correct_float_topup":"authenticated",
     "admin_explain_supplier_charge":"authenticated",
-    "admin_review_screening":"authenticated",
+    "admin_review_screening":"authenticated", "admin_alert_help":"authenticated",
     "admin_attention_counts":"authenticated", "admin_overview":"authenticated", "admin_revenue":"authenticated",
     "admin_margin":"authenticated", "admin_funnel":"authenticated", "admin_provisioning":"authenticated",
     "admin_refund_stats":"authenticated", "admin_float":"authenticated", "admin_ledger_daily":"authenticated",

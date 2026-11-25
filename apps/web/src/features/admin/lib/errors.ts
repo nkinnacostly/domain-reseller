@@ -149,6 +149,11 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
     'There is nothing to explain on that charge: it matches its order’s cost, or it was explained already.',
   NOT_FOR_REVIEW: 'That name is not waiting for a review: it was cleared, or reviewed already.',
   BAD_DECISION: 'Choose whether the name looks fine or is abuse.',
+  BAD_MODE: 'Ask for an explanation or a draft ticket.',
+  AI_OFF: 'The copilot is switched off: no DeepSeek key is set.',
+  AI_UNAVAILABLE:
+    "The copilot couldn't answer just now. Your request was recorded; try again in a minute.",
+  COPILOT_BUSY: "You've asked the copilot a lot this hour. Wait a little, then ask again.",
 
   // ── The gateway's claim on a note (D22) ──
   ADMIN_NOTE_REFUSED: 'The gateway refused the audit note, so nothing was read. Try again.',

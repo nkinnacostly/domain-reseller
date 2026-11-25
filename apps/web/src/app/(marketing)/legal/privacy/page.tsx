@@ -32,7 +32,9 @@ export const metadata: Metadata = pageMetadata({
  * questions, with email addresses and phone numbers taken out, and, when
  * asked, a domain's nameserver checks with the domain's name taken out; and
  * a newly bought domain's name when it contains a listed brand (migration
- * 73, apps/gateway/src/screening) — nothing else.
+ * 73, apps/gateway/src/screening); and an alert's words, domains and contact
+ * details masked, when an admin asks the ops copilot (migration 74) —
+ * nothing else.
  * Likewise the email processor is the one EMAIL_PROVIDER names — Brevo in
  * France, or Amazon SES in London — never both, never the one not in use.
  *
@@ -225,8 +227,9 @@ export default function PrivacyPage() {
               results, with your domain’s name taken out. When a domain bought from us has a name
               containing a well-known brand, bank or government service, that name alone is sent for
               a second opinion on whether a person should check it for phishing — your order is
-              never held for it. DeepSeek keeps what it receives on servers in China. Nothing that
-              names you is sent.
+              never held for it. When our staff ask it about an operations alert, it receives the
+              alert’s text with domain names and contact details taken out. DeepSeek keeps what it
+              receives on servers in China. Nothing that names you is sent.
             </li>
           ) : null}
           {hasBotCheck ? (

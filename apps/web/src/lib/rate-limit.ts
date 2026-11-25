@@ -56,6 +56,8 @@ export const LIMITS = {
   setupHelp: { max: 10, windowSeconds: 600 },
   // The help assistant: one model call per question, per address.
   helpAnswers: { max: 20, windowSeconds: 600 },
+  // Migration 74: the admin ops copilot, per admin. Each answer is a paid model call.
+  alertHelp: { max: 30, windowSeconds: 3_600 },
   // Adding every available name re-checks them all with the registry first.
   bulkAddToCart: { max: 20, windowSeconds: 600 },
   // One domain added to a cart: each asks the registry afresh (FR-S6) through

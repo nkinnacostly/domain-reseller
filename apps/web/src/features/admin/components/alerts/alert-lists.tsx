@@ -39,7 +39,9 @@ import {
   type Read,
 } from '@/features/admin/queries/alerts'
 import type { AdminPrincipal, AdminSide } from '@/features/admin/queries/session'
+import { isAiEnabled } from '@/lib/ai'
 import { cn } from '@/lib/utils'
+import { AlertHelp } from './alert-help'
 import { AlertsNote, AlertsSection, PastTheLastPage, SeenAt, SeverityPill } from './alert-parts'
 
 /**
@@ -80,8 +82,8 @@ export function AlertLink({ row }: { row: AlertRow }) {
   )
 }
 
-function openColumns(now: Date): Column<AlertRow, OpenSort>[] {
-  return [
+function openColumns(now: Date, copilot: boolean): Column<AlertRow, OpenSort>[] {
+  const columns: Column<AlertRow, OpenSort>[] = [
     { key: 'alert', header: 'Alert', cell: (row) => <AlertCell row={row} /> },
     {
       key: 'severity',
@@ -102,6 +104,23 @@ function openColumns(now: Date): Column<AlertRow, OpenSort>[] {
       cell: (row) => <SeenAt at={row.lastSeenAt} now={now} />,
     },
     { key: 'where', header: 'Where to look', cell: (row) => <AlertLink row={row} /> },
+  ]
+  if (!copilot) return columns
+  // Migration 74: explained, or drafted into a supplier ticket, on request.
+  return [
+    ...columns,
+    {
+      key: 'ask',
+      header: 'Copilot',
+      cell: (row) => (
+        <AlertHelp
+          alertId={row.id}
+          kind={row.kind}
+          kindLabel={alertKindLabel(row.kind)}
+          page={destinationLabel(row.href)}
+        />
+      ),
+    },
   ]
 }
 
@@ -145,7 +164,7 @@ export async function OpenAlerts({
             }
             rows={result.data.rows}
             rowKey={(row) => String(row.id)}
-            columns={openColumns(now)}
+            columns={openColumns(now, isAiEnabled())}
             sorting={{
               sort: params.list.sort,
               dir: params.list.dir,

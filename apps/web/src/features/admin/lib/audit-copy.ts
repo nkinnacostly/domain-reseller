@@ -32,6 +32,7 @@ export const PREFIX_LABEL: Record<AuditPrefix, string> = {
   job: 'Jobs',
   ssl_job: 'Certificate jobs',
   order: 'Name checks',
+  alert: 'Copilot',
   domain: 'Domains',
   email: 'Emails',
   customer: 'Customers',
@@ -112,6 +113,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'supplier.catalogue_apply': 'Apply the extension price list',
   'supplier.explain_charge': 'Explain a supplier charge',
   'order.review_screening': 'Review a screened name',
+  'alert.explain': 'Ask the copilot about an alert',
   'supplier.ssl_catalogue_apply': 'Apply the SSL price list',
 }
 
@@ -126,6 +128,7 @@ export const TARGET_LABEL: Record<string, string> = {
   job: 'Job',
   ssl_job: 'Certificate job',
   order_item: 'Order line',
+  alert: 'Alert',
   domain: 'Domain',
   email: 'Email',
   customer: 'Customer',

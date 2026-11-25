@@ -6239,6 +6239,10 @@ export type Database = {
           summary: string
         }[]
       }
+      admin_alert_help: {
+        Args: { p_alert_id: number; p_mode: string; p_request_key: string }
+        Returns: Json
+      }
       admin_alert_stats: {
         Args: { p_days: number; p_test_mode: boolean }
         Returns: Json
