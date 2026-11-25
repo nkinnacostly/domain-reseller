@@ -29,10 +29,13 @@ export function ResultList({ rows, label }: { rows: SearchRow[]; label: string }
 export function ResultItem({
   row,
   lookalike = false,
+  note = null,
 }: {
   row: SearchRow
   /** Say when the name can pass for a Latin one (FR-S8) — where each row is its own name. */
   lookalike?: boolean
+  /** A line under the name — the AI name finder's reason for an idea. */
+  note?: string | null
 }) {
   const refusal = refusalNote(row)
   return (
@@ -58,6 +61,7 @@ export function ResultItem({
           <p className="mt-1 text-pretty text-xs text-muted-foreground">{refusal}</p>
         ) : null}
         {lookalike ? <LookalikeWarning stem={row.name} compact className="mt-1.5" /> : null}
+        {note ? <p className="mt-1 text-pretty text-sm text-muted-foreground">{note}</p> : null}
       </div>
 
       {row.status === 'available' && row.price ? (

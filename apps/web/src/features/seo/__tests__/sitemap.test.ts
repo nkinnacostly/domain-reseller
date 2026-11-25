@@ -41,7 +41,7 @@ describe('sitemap', () => {
     // FR-SSL-1: the SSL page shows prices, so it changes when they do.
     expect(byPath.get('/ssl')?.lastModified).toEqual(PRICES_FROM)
     expect(byPath.get('/legal/privacy')?.lastModified).toEqual(
-      new Date('2026-10-02T00:00:00+01:00'),
+      new Date('2026-11-25T00:00:00+01:00'),
     )
     expect(byPath.get('/help')).not.toHaveProperty('lastModified')
   })

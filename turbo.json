@@ -30,6 +30,7 @@
         "MAIL_SES_EVENTS_TOPIC_ARN",
         "MAIL_SAFETY_SECRET",
         "TURNSTILE_SECRET_KEY",
+        "DEEPSEEK_API_KEY",
         "SENTRY_DSN",
         "LOG_LEVEL"
       ]

@@ -70,6 +70,10 @@ export const env = createEnv({
     // Optional like the payment keys: until both keys are set, forms and search
     // run without the check (production logs that once), rather than refusing.
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
+    // DeepSeek, for AI features (docs: "Making AI the core of MyDomainsHub").
+    // Optional: without it the AI features say they are off and everything
+    // else works. Server only; never sent personal data (lib/ai.ts).
+    DEEPSEEK_API_KEY: z.string().min(1).optional(),
     SENTRY_DSN: z.string().optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   },

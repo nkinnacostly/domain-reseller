@@ -18,6 +18,7 @@
     "./ses": "./src/ses/index.ts",
     "./ssl": "./src/ssl/index.ts",
     "./admin": "./src/admin/index.ts",
+    "./ai": "./src/ai/index.ts",
     "./mail": "./src/mail/index.ts",
     "./webhooks": "./src/webhooks/index.ts",
     "./sns": "./src/sns/index.ts"

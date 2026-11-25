@@ -1,9 +1,10 @@
-import { Clock, ListChecks, Search as SearchIcon, ShieldCheck } from 'lucide-react'
+import { Clock, ListChecks, Search as SearchIcon, ShieldCheck, Sparkle } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { PricingUnavailable } from '@/features/pricing/components/pricing-unavailable'
 import { toPublicRow } from '@/features/pricing/lib/public-row'
 import { getPricedCatalogue } from '@/features/pricing/queries/pricing'
+import { isAiEnabled } from '@/lib/ai'
 import { toUnicodeHost } from '../lib/idn'
 import { planSearch } from '../lib/plan'
 import { describeProblem, displayQuery, parseSearchQuery } from '../lib/query'
@@ -59,18 +60,29 @@ export async function SearchHeading({ searchParams }: { searchParams: SearchPara
 /** FR-S5 — the way to bulk search, under the search box. Static, so it prerenders. */
 export function BulkSearchLink() {
   return (
-    <p className="mt-3 text-sm text-brand-muted-foreground">
-      Checking a list of names?{' '}
-      <Link
-        href="/search/bulk"
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-sm font-medium text-brand-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-foreground"
-      >
-        <ListChecks className="size-4" aria-hidden="true" />
-        Search many at once
-      </Link>
+    <p className="mt-3 flex flex-wrap gap-x-4 text-sm text-brand-muted-foreground">
+      <span>
+        Checking a list of names?{' '}
+        <Link href="/search/bulk" className={HERO_LINK}>
+          <ListChecks className="size-4" aria-hidden="true" />
+          Search many at once
+        </Link>
+      </span>
+      {isAiEnabled() ? (
+        <span>
+          No name yet?{' '}
+          <Link href="/ideas" className={HERO_LINK}>
+            <Sparkle className="size-4" aria-hidden="true" />
+            Get ideas for your business
+          </Link>
+        </span>
+      ) : null}
     </p>
   )
 }
+
+const HERO_LINK =
+  'inline-flex min-h-11 items-center gap-1.5 rounded-sm font-medium text-brand-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-foreground'
 
 /** Past every allowance this address has (SEC-9): the only way on is to wait. */
 function SearchLimited() {

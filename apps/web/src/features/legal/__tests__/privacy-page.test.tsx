@@ -60,3 +60,33 @@ describe('the privacy notice names the email provider actually in use (N9b, CMP-
     )
   })
 })
+
+describe('the privacy notice names DeepSeek only while the name finder is on (N9b, CMP-11)', () => {
+  const ai = env as { DEEPSEEK_API_KEY?: string }
+  let key: string | undefined
+  beforeEach(() => {
+    key = ai.DEEPSEEK_API_KEY
+    settings.EMAIL_PROVIDER = 'ses'
+  })
+  afterEach(() => {
+    ai.DEEPSEEK_API_KEY = key
+  })
+
+  it('leaves DeepSeek and China out while no AI key is set', () => {
+    ai.DEEPSEEK_API_KEY = undefined
+    render(<PrivacyPage />)
+    expect(screen.getByRole('main')).not.toHaveTextContent(/DeepSeek|China/)
+  })
+
+  it('names DeepSeek, what it receives and where, and adds China to the transfers once it is on', () => {
+    ai.DEEPSEEK_API_KEY = 'sk-test'
+    render(<PrivacyPage />)
+    const item = recipients().getByText('DeepSeek').closest('li')
+    expect(item).toHaveTextContent('only the description you type there')
+    expect(item).toHaveTextContent('email addresses and phone numbers taken out first')
+    expect(item).toHaveTextContent('servers in China')
+    expect(abroad()).toHaveTextContent(
+      'Türkiye, the United Kingdom, the United States, China (for name finder descriptions) and the country of your extension’s registry',
+    )
+  })
+})

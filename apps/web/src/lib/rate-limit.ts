@@ -48,6 +48,10 @@ export const LIMITS = {
   // second does not. The supplier allows two calls at a time for everyone
   // (PRD V4), and the gateway lets bulk use one.
   bulkSearch: { max: 180, windowSeconds: 600 },
+  // The AI name finder: one model call and up to two supplier calls (24
+  // names on one extension) per request. Ten in ten minutes is plenty for a
+  // person rephrasing an idea, and caps what one address can spend of either.
+  nameIdeas: { max: 10, windowSeconds: 600 },
   // Adding every available name re-checks them all with the registry first.
   bulkAddToCart: { max: 20, windowSeconds: 600 },
   // One domain added to a cart: each asks the registry afresh (FR-S6) through

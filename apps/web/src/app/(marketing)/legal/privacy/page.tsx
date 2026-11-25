@@ -7,6 +7,7 @@ import {
   PolicyLink,
 } from '@/features/legal/components/legal-page'
 import { pageMetadata } from '@/features/seo/lib/metadata'
+import { isAiEnabled } from '@/lib/ai'
 import { BUSINESS, POLICY_LINKS, SPONSORING_REGISTRAR } from '@/lib/business'
 import { emailProvider } from '@/lib/email/provider'
 import { isTurnstileEnabled } from '@/lib/turnstile'
@@ -26,6 +27,9 @@ export const metadata: Metadata = pageMetadata({
  * Cloudflare Turnstile and its search pass cookie (SEC-9) are listed only
  * while the check is switched on (both keys set, lib/turnstile.ts): with
  * them unset nothing reaches Cloudflare, and N9b forbids saying it does.
+ * DeepSeek is listed only while the AI name finder is on (DEEPSEEK_API_KEY,
+ * lib/ai.ts): it receives the description typed there, with email addresses
+ * and phone numbers taken out, and nothing else about the person.
  * Likewise the email processor is the one EMAIL_PROVIDER names — Brevo in
  * France, or Amazon SES in London — never both, never the one not in use.
  *
@@ -36,10 +40,13 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   const hasBotCheck = isTurnstileEnabled()
   const sendsWithSes = emailProvider() === 'ses'
+  const usesAi = isAiEnabled()
   // SES sends from London, already on the list; Brevo adds the European Union.
-  const destinations = sendsWithSes
-    ? 'Türkiye, the United Kingdom, the United States and the country of your extension’s registry'
-    : 'Türkiye, the United Kingdom, the United States, the European Union (for our emails) and the country of your extension’s registry'
+  const emailPlaces = sendsWithSes
+    ? 'Türkiye, the United Kingdom, the United States'
+    : 'Türkiye, the United Kingdom, the United States, the European Union (for our emails)'
+  // DeepSeek keeps what it receives in China: only a name finder description.
+  const destinations = `${emailPlaces}${usesAi ? ', China (for name finder descriptions)' : ''} and the country of your extension’s registry`
   return (
     <LegalPage
       path="/legal/privacy"
@@ -206,6 +213,13 @@ export default function PrivacyPage() {
               (France, European Union).
             </li>
           )}
+          {usesAi ? (
+            <li>
+              <strong>DeepSeek</strong> — suggests names in our name finder. It receives only the
+              description you type there, with email addresses and phone numbers taken out first,
+              and keeps it on servers in China. Nothing from your account is sent.
+            </li>
+          ) : null}
           {hasBotCheck ? (
             <li>
               <strong>Cloudflare Turnstile</strong> — tells people from bots when you sign up, ask
