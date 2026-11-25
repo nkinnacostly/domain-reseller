@@ -56,6 +56,12 @@ export const LIMITS = {
   setupHelp: { max: 10, windowSeconds: 600 },
   // The help assistant: one model call per question, per address.
   helpAnswers: { max: 20, windowSeconds: 600 },
+  // The portfolio copilot (feature 7), per account: each draft is a model call.
+  portfolioCopilot: { max: 15, windowSeconds: 600 },
+  // The MCP server (feature 8): every tool call per address, and searches
+  // across every assistant together — they share the supplier's two a second.
+  mcpCalls: { max: 60, windowSeconds: 600 },
+  mcpSearchAll: { max: 300, windowSeconds: 600 },
   // Migration 74: the admin ops copilot, per admin. Each answer is a paid model call.
   alertHelp: { max: 30, windowSeconds: 3_600 },
   // Adding every available name re-checks them all with the registry first.

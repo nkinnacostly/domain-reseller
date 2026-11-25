@@ -92,6 +92,8 @@ describe('the privacy notice names DeepSeek only while the name finder is on (N9
     expect(item).toHaveTextContent('Nothing that names you is sent')
     // Migration 74: the ops copilot sees an alert's text, masked.
     expect(item).toHaveTextContent('alert’s text with domain names and contact details taken out')
+    // Feature 7: the portfolio copilot sees the instruction, masked, never the account.
+    expect(item).toHaveTextContent('never your list of domains')
     expect(abroad()).toHaveTextContent(
       'Türkiye, the United Kingdom, the United States, China (for our AI features) and the country of your extension’s registry',
     )

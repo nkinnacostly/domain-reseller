@@ -9,6 +9,7 @@ import { Overview } from '@/features/domains/components/dashboard/overview'
 import { PANEL } from '@/features/domains/components/dashboard/panel'
 import { RenewalsChart } from '@/features/domains/components/dashboard/renewals-chart'
 import { Portfolio } from '@/features/domains/components/portfolio'
+import { PortfolioCopilot } from '@/features/domains/components/portfolio-copilot'
 import { summarize } from '@/features/domains/lib/dashboard'
 import { parseLabelFilter } from '@/features/domains/lib/labels'
 import { parseExpiryWindow, parsePage } from '@/features/domains/lib/portfolio'
@@ -18,6 +19,7 @@ import {
   getRecentActivity,
 } from '@/features/domains/queries/domains'
 import { getLabels } from '@/features/domains/queries/labels'
+import { isAiEnabled } from '@/lib/ai'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Your domains' }
@@ -52,6 +54,9 @@ async function Dashboard({ searchParams }: { searchParams: Search }) {
         orderCount={orders.length}
         now={now}
       />
+
+      {/* Feature 7: drafts a bulk change from a sentence; the list below is still how it's confirmed. */}
+      {isAiEnabled() && domains.length > 0 ? <PortfolioCopilot returnTo="/app/domains" /> : null}
 
       <Portfolio
         domains={domains}

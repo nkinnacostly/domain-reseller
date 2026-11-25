@@ -44,6 +44,9 @@ describe('llms.txt from the live catalogue', () => {
     const text = await getLlmsTxt()
     expect(cacheTag).toHaveBeenCalledWith('pricing')
     expect(text).toContain('Search 4 domain extensions')
+    // Feature 8: assistants are told where the MCP server is, and that it changes nothing.
+    expect(text).toContain('an MCP server at')
+    expect(text).toContain('the server changes nothing')
     expect(text).toMatch(/\[\.africa\]\(http[^)]+\/domains\/africa\)/)
     expect(text).toMatch(/\[\.com\]/)
     // .zone is neither featured nor well known: it waits for llms-full.txt.

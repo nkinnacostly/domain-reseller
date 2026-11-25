@@ -60,3 +60,12 @@ export function periodsText(periods: readonly number[]): string {
   if (last - first + 1 === periods.length) return `${first} to ${yearsText(last)}`
   return `${periods.slice(0, -1).join(', ')} or ${yearsText(last)}`
 }
+
+/** "₦18,300 for the first year, then ₦18,700 a year": a price never without its renewal (N8). */
+export function priceWithRenewal(
+  tld: string,
+  first: { price: string; years: number },
+  renewal: { price: string; years: number },
+): string {
+  return `${firstTermPhrase(tld, first.price, first.years)}, then ${renewalPhrase(renewal.price, renewal.years)}`
+}

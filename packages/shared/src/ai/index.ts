@@ -3,6 +3,7 @@
 export * from './deepseek'
 export * from './name-ideas'
 export * from './ops-copilot'
+export * from './portfolio-copilot'
 export * from './redact'
 export * from './screening'
 export * from './words'

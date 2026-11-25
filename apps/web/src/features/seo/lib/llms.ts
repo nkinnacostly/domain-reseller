@@ -109,6 +109,7 @@ function header({ site, prices }: LlmsInput): string[] {
     '- A price is our supplier’s US-dollar price at the day’s exchange rate, plus the ICANN fee on generic extensions and the same flat margin on every extension.',
     '- We register and manage domains, and sell SSL certificates that you install on your own server or hosting; we do not host websites or email.',
     `- Checking a name: ${link(site, '/search')}?q=yourname.com shows whether it is free, with prices. A transfer check is ${link(site, '/transfer')}?domain=yourname.com.`,
+    `- For AI assistants: an MCP server at ${link(site, '/mcp')} (Streamable HTTP, no sign-in) searches names, quotes prices with their renewal prices and makes a cart link. The person adds to their cart and pays on the site; the server changes nothing.`,
     `- Contact: ${BUSINESS.email}`,
     '',
   ]
