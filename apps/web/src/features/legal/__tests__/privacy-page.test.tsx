@@ -82,11 +82,12 @@ describe('the privacy notice names DeepSeek only while the name finder is on (N9
     ai.DEEPSEEK_API_KEY = 'sk-test'
     render(<PrivacyPage />)
     const item = recipients().getByText('DeepSeek').closest('li')
-    expect(item).toHaveTextContent('only the description you type there')
+    expect(item).toHaveTextContent('only the description you type in the name finder')
+    expect(item).toHaveTextContent('with your domain’s name taken out')
     expect(item).toHaveTextContent('email addresses and phone numbers taken out first')
     expect(item).toHaveTextContent('servers in China')
     expect(abroad()).toHaveTextContent(
-      'Türkiye, the United Kingdom, the United States, China (for name finder descriptions) and the country of your extension’s registry',
+      'Türkiye, the United Kingdom, the United States, China (for our AI features) and the country of your extension’s registry',
     )
   })
 })

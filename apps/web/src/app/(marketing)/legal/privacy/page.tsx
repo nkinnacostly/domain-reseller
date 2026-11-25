@@ -27,9 +27,10 @@ export const metadata: Metadata = pageMetadata({
  * Cloudflare Turnstile and its search pass cookie (SEC-9) are listed only
  * while the check is switched on (both keys set, lib/turnstile.ts): with
  * them unset nothing reaches Cloudflare, and N9b forbids saying it does.
- * DeepSeek is listed only while the AI name finder is on (DEEPSEEK_API_KEY,
- * lib/ai.ts): it receives the description typed there, with email addresses
- * and phone numbers taken out, and nothing else about the person.
+ * DeepSeek is listed only while the AI features are on (DEEPSEEK_API_KEY,
+ * lib/ai.ts): it receives the name finder's description, with email
+ * addresses and phone numbers taken out, and, when asked, a domain's
+ * nameserver checks with the domain's name taken out — nothing else.
  * Likewise the email processor is the one EMAIL_PROVIDER names — Brevo in
  * France, or Amazon SES in London — never both, never the one not in use.
  *
@@ -45,8 +46,8 @@ export default function PrivacyPage() {
   const emailPlaces = sendsWithSes
     ? 'Türkiye, the United Kingdom, the United States'
     : 'Türkiye, the United Kingdom, the United States, the European Union (for our emails)'
-  // DeepSeek keeps what it receives in China: only a name finder description.
-  const destinations = `${emailPlaces}${usesAi ? ', China (for name finder descriptions)' : ''} and the country of your extension’s registry`
+  // DeepSeek keeps what it receives in China; nothing it receives names anyone.
+  const destinations = `${emailPlaces}${usesAi ? ', China (for our AI features)' : ''} and the country of your extension’s registry`
   return (
     <LegalPage
       path="/legal/privacy"
@@ -215,9 +216,11 @@ export default function PrivacyPage() {
           )}
           {usesAi ? (
             <li>
-              <strong>DeepSeek</strong> — suggests names in our name finder. It receives only the
-              description you type there, with email addresses and phone numbers taken out first,
-              and keeps it on servers in China. Nothing from your account is sent.
+              <strong>DeepSeek</strong> — suggests names in our name finder and explains a domain’s
+              nameserver checks when you ask. It receives only the description you type in the name
+              finder, with email addresses and phone numbers taken out first, and the nameservers
+              and check results, with your domain’s name taken out. It keeps them on servers in
+              China. Nothing that names you or your domain is sent.
             </li>
           ) : null}
           {hasBotCheck ? (
