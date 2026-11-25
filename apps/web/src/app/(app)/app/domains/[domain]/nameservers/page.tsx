@@ -13,6 +13,7 @@ import { PanelNote } from '@/features/domains/components/domain-badges'
 import { NameserverForm } from '@/features/domains/components/nameserver-form'
 import { NameserverHistory } from '@/features/domains/components/nameserver-history'
 import { RevertNameservers } from '@/features/domains/components/revert-nameservers'
+import { SetupHelpPanel } from '@/features/domains/components/setup-help'
 import { revertTarget } from '@/features/domains/lib/nameserver-history'
 import { type RegistrarSide, registrarSide } from '@/features/domains/lib/registrar-default'
 import { nameserverNote } from '@/features/domains/lib/registration'
@@ -22,6 +23,7 @@ import {
   getNameserverPresets,
   getRegistrarDefault,
 } from '@/features/domains/queries/domains'
+import { isAiEnabled } from '@/lib/ai'
 
 export const metadata: Metadata = { title: 'Nameservers' }
 type Params = Promise<{ domain: string }>
@@ -112,6 +114,11 @@ async function Nameservers({ params }: { params: Params }) {
               <ResolverViews domain={domain.domainName} expected={requested} />
             </Suspense>
           </div>
+          {isAiEnabled() ? (
+            <div className="mt-5 border-border border-t pt-5">
+              <SetupHelpPanel domain={domain.domainName} />
+            </div>
+          ) : null}
         </Panel>
 
         <Panel labelledBy="records-heading">
