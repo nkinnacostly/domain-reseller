@@ -3,11 +3,13 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { FaqItem } from '@/components/common/faq-item'
 import { Accordion } from '@/components/ui/accordion'
+import { HelpAssistant } from '@/features/legal/components/help-assistant'
 import { HELP_TOPICS } from '@/features/legal/components/help-topics'
 import { LegalPage, LegalSection } from '@/features/legal/components/legal-page'
 import { pageMetadata } from '@/features/seo/lib/metadata'
 import { plainText } from '@/features/seo/lib/plain-text'
 import { faqPageLd } from '@/features/seo/lib/structured-data'
+import { isAiEnabled } from '@/lib/ai'
 import { BUSINESS } from '@/lib/business'
 
 export const metadata: Metadata = pageMetadata({
@@ -24,9 +26,16 @@ export default function HelpPage() {
       nav="none"
       icons={[ChatsCircle, BookOpenText, SealCheck]}
       intro={
-        <p>
-          Answers to common questions. Cannot find yours? <Link href="/contact">Contact us</Link>.
-        </p>
+        <>
+          <p>
+            Answers to common questions. Cannot find yours? <Link href="/contact">Contact us</Link>.
+          </p>
+          {isAiEnabled() ? (
+            <div className="mt-6 not-prose text-left">
+              <HelpAssistant supportEmail={BUSINESS.email} />
+            </div>
+          ) : null}
+        </>
       }
       structuredData={[
         faqPageLd(
