@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { formatNaira, type TldPricing } from '@dr/shared'
+import { headers } from 'next/headers'
 import { cartAddHref, MAX_LINK_DOMAINS } from '@/features/cart/lib/add-link'
 import { POPULAR_TLDS } from '@/features/pricing/lib/public-row'
 import { priceWithRenewal } from '@/features/pricing/lib/terms'
@@ -10,9 +11,11 @@ import { planSearch, stemIssue } from '@/features/search/lib/plan'
 import { describeProblem, parseSearchQuery } from '@/features/search/lib/query'
 import { checkAvailability } from '@/features/search/queries/availability'
 import { getLengthRules } from '@/features/search/queries/length-rules'
+import { clientAddress } from '@/lib/client-ip'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
+import { isAnthropicAddress } from '../lib/addresses'
 import type { McpTool, ToolResult } from '../lib/protocol'
 import {
   CART_LINK_SCHEMA,
@@ -65,7 +68,12 @@ function priceWords(pricing: TldPricing): string {
 const absolute = (path: string) => new URL(path, env.NEXT_PUBLIC_APP_URL).toString()
 
 async function limited(scope: 'calls' | 'search'): Promise<boolean> {
-  if (!(await withinLimit(await addressKey('mcp'), LIMITS.mcpCalls))) return true
+  // Claude's users all arrive from Anthropic's range: one larger bucket for them.
+  const fromClaude = isAnthropicAddress(clientAddress(await headers()))
+  const ok = fromClaude
+    ? await withinLimit('mcp:anthropic', LIMITS.mcpClaudeCalls)
+    : await withinLimit(await addressKey('mcp'), LIMITS.mcpCalls)
+  if (!ok) return true
   if (scope === 'search' && !(await withinLimit('mcp_search:all', LIMITS.mcpSearchAll))) return true
   return false
 }
@@ -134,9 +142,6 @@ export async function searchDomains(args: Record<string, unknown>): Promise<Tool
       ...lines,
       '',
       VAT_NOTE(priced.vatPct),
-      ...(free.length > 0
-        ? ['To buy, make a link with create_cart_link and give it to the person.']
-        : []),
     ].join('\n'),
     structured: {
       results: results.map(({ words: _words, ...row }) => row),
@@ -228,7 +233,12 @@ export const MCP_TOOLS: McpTool[] = [
     description:
       'Check whether a domain name is free at MyDomainsHub (Nigeria), with its naira price and renewal price. Checks the extension asked for and popular ones.',
     inputSchema: SEARCH_SCHEMA,
-    annotations: { readOnlyHint: true, openWorldHint: true },
+    annotations: {
+      title: 'Search domain names',
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     run: searchDomains,
   },
   {
@@ -237,7 +247,13 @@ export const MCP_TOOLS: McpTool[] = [
     description:
       'Naira prices to register, renew and transfer in domain extensions at MyDomainsHub, before VAT.',
     inputSchema: PRICES_SCHEMA,
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      title: 'Domain prices',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     run: getPrices,
   },
   {
@@ -246,7 +262,13 @@ export const MCP_TOOLS: McpTool[] = [
     description:
       'A mydomainshub.com link where the person adds the chosen domains to their cart and pays. Nothing is added or charged until they open it and confirm.',
     inputSchema: CART_LINK_SCHEMA,
-    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    annotations: {
+      title: 'Link to buy',
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     run: createCartLink,
   },
 ]

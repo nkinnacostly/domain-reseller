@@ -61,6 +61,8 @@ export const LIMITS = {
   // The MCP server (feature 8): every tool call per address, and searches
   // across every assistant together — they share the supplier's two a second.
   mcpCalls: { max: 60, windowSeconds: 600 },
+  // Every Claude user arrives from Anthropic's range (features/mcp/lib/addresses.ts).
+  mcpClaudeCalls: { max: 600, windowSeconds: 600 },
   mcpSearchAll: { max: 300, windowSeconds: 600 },
   // Migration 74: the admin ops copilot, per admin. Each answer is a paid model call.
   alertHelp: { max: 30, windowSeconds: 3_600 },

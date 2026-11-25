@@ -18,6 +18,7 @@ describe('sitemap', () => {
       '/ssl',
       '/help',
       '/about',
+      '/ai-assistants',
       '/contact',
       '/legal',
     ]) {

@@ -169,6 +169,7 @@ test.describe('what a crawler reads', () => {
 for (const { path, heading } of [
   { path: '/domains', heading: 'Every extension we sell' },
   { path: '/about', heading: 'About MyDomainsHub' },
+  { path: '/ai-assistants', heading: 'Use MyDomainsHub with AI assistants' },
 ]) {
   test(`${path} renders, is accessible and never scrolls sideways`, async ({ page }) => {
     await page.goto(path)

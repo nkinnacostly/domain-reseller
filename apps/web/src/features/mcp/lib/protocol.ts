@@ -9,7 +9,7 @@
 export const MCP_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const
 export const MCP_SERVER_INFO = { name: 'mydomainshub', title: 'MyDomainsHub', version: '1.0.0' }
 export const MCP_INSTRUCTIONS =
-  'Search and price domain names at MyDomainsHub, a domain registrar for Nigeria. Prices are in naira, shown with their renewal price, before VAT. This server never takes payment or changes anything: to buy, give the person the link from create_cart_link, where they confirm and pay on mydomainshub.com.'
+  'Search and price domain names at MyDomainsHub, a domain registrar for Nigeria. Prices are in naira, shown with their renewal price, before VAT. This server never takes payment or changes anything. Buying happens on mydomainshub.com: create_cart_link makes a link where the person adds the names to their cart and pays.'
 
 export type JsonSchema = Record<string, unknown>
 
@@ -20,7 +20,7 @@ export type McpTool = {
   title: string
   description: string
   inputSchema: JsonSchema
-  annotations?: Record<string, boolean>
+  annotations?: Record<string, boolean | string>
   run: (args: Record<string, unknown>) => Promise<ToolResult>
 }
 

@@ -6,7 +6,10 @@ import { getLengthRules } from '@/features/search/queries/length-rules'
 import { logger } from '@/lib/logger'
 import { withinLimit } from '@/lib/rate-limit'
 
-vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
+const sent = { ip: '102.89.1.1' }
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ 'x-real-ip': sent.ip }),
+}))
 vi.mock('@/lib/rate-limit', async (original) => ({
   ...(await original<typeof import('@/lib/rate-limit')>()),
   addressKey: vi.fn(async (scope: string) => `${scope}:test`),
@@ -126,12 +129,28 @@ describe('create_cart_link', () => {
     expect((await createCartLink({ domains: [] })).isError).toBe(true)
   })
 
-  it('offers three read-only tools', () => {
+  it('gives Claude’s shared addresses their own, larger bucket', async () => {
+    sent.ip = '160.79.106.20'
+    await getPrices({})
+    expect(withinLimit).toHaveBeenCalledWith('mcp:anthropic', expect.objectContaining({ max: 600 }))
+    sent.ip = '102.89.1.1'
+    vi.mocked(withinLimit).mockClear()
+    await getPrices({})
+    expect(withinLimit).toHaveBeenCalledWith('mcp:test', expect.objectContaining({ max: 60 }))
+  })
+
+  it('offers three read-only tools, each titled and marked read-only', () => {
     expect(MCP_TOOLS.map((tool) => tool.name)).toEqual([
       'search_domains',
       'get_prices',
       'create_cart_link',
     ])
-    for (const tool of MCP_TOOLS) expect(tool.annotations?.readOnlyHint).toBe(true)
+    for (const tool of MCP_TOOLS) {
+      expect(tool.annotations).toMatchObject({
+        title: tool.title,
+        readOnlyHint: true,
+        destructiveHint: false,
+      })
+    }
   })
 })

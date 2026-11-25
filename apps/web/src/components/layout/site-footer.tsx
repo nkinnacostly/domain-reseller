@@ -45,6 +45,7 @@ const COLUMNS = [
     links: [
       { href: '/help', label: 'Help centre' },
       { href: '/about', label: 'About us' },
+      { href: '/ai-assistants', label: 'Use with AI assistants' },
       { href: '/contact', label: 'Contact us' },
       { href: '/abuse', label: 'Report abuse' },
       { href: '/status', label: 'Service status' },

@@ -69,6 +69,11 @@ export const LLMS_PAGES = [
   },
   { path: '/help', title: 'Help centre', note: 'answers about buying, pointing and renewing' },
   { path: '/about', title: `About ${BRAND_NAME}`, note: 'who runs the service and how it works' },
+  {
+    path: '/ai-assistants',
+    title: 'Use with AI assistants',
+    note: 'our MCP server: search names and quote prices from Claude and other assistants',
+  },
   { path: '/contact', title: 'Contact', note: `email ${BUSINESS.email}` },
 ] as const
 
