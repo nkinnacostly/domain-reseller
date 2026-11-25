@@ -2,10 +2,11 @@ import { RotateCw } from 'lucide-react'
 import Link from 'next/link'
 import type { PublicPriceRow } from '@/features/pricing/lib/public-row'
 import { toUnicodeLabel } from '../lib/idn'
-import { type SearchPlan, stemIssue, suggestionNamesFor } from '../lib/plan'
+import { type SearchPlan, stemIssue, suggestionNamesFor, withWordIdeas } from '../lib/plan'
 import { searchHref } from '../lib/query'
 import { lengthRow, pickSuggestions, SUGGESTION_COUNT, toSearchRows } from '../lib/rows'
 import { type AvailabilityOutcome, checkAvailability } from '../queries/availability'
+import { getWordIdeas } from '../queries/word-ideas'
 import { ExactResult } from './exact-result'
 import { ResultList } from './result-list'
 
@@ -104,7 +105,9 @@ export async function GridSection({ plan, prices, query }: SectionProps) {
  * leaves fewer than SUGGESTION_COUNT free. Every call spends one of the
  * supplier's two slots (PRD V4), and most searches never need the second.
  */
-export async function Suggestions({ plan, prices, query }: SectionProps) {
+export async function Suggestions({ plan: planned, prices, query }: SectionProps) {
+  // Feature 2: a curated word's pre-built ideas lead, read from a table (ADR-002).
+  const plan = withWordIdeas(planned, await getWordIdeas(planned.stem))
   const [first, second] = plan.suggestionTlds
   // FR-S9: names an extension's length rule refuses are never asked about.
   const firstNames = first ? suggestionNamesFor(plan, first) : []

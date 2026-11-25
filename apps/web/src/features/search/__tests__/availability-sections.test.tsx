@@ -18,6 +18,7 @@ import {
   SuggestionsSkeleton,
 } from '../components/availability-sections'
 import { planSearch } from '../lib/plan'
+import { getWordIdeas } from '../queries/word-ideas'
 
 // env.ts reads process.env once, at import: point it at a test gateway first.
 vi.hoisted(() => {
@@ -27,6 +28,8 @@ vi.hoisted(() => {
 afterAll(() => vi.unstubAllEnvs())
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+// Pre-built ideas are a table read (feature 2); none unless a test says so.
+vi.mock('../queries/word-ideas', () => ({ getWordIdeas: vi.fn(async () => []) }))
 
 const GATEWAY = 'http://gateway.test/v1/availability'
 
@@ -197,6 +200,18 @@ describe('Suggestions', () => {
     expect(second?.label).toBe('More available alternatives')
     expect(second?.domains).toHaveLength(6)
     expect(first?.domains?.[0]).toBe('getshop.com')
+  })
+
+  it('leads with a curated word’s pre-built ideas, in the same one call (feature 2)', async () => {
+    vi.mocked(getWordIdeas).mockResolvedValueOnce(['shopnaija', 'buyhub'])
+    const asked = gateway()
+    render(await Suggestions({ plan: plan('shop', 'com'), prices, query: 'shop.com' }))
+
+    expect(getWordIdeas).toHaveBeenCalledWith('shop')
+    expect(asked).toHaveLength(1)
+    expect(asked[0]?.names.slice(0, 3)).toEqual(['shopnaija', 'buyhub', 'getshop'])
+    expect(asked[0]?.names.length).toBeLessThanOrEqual(20)
+    expect(lists()[0]?.domains?.slice(0, 2)).toEqual(['shopnaija.com', 'buyhub.com'])
   })
 
   it('tops up from the second extension when the first leaves fewer than twelve', async () => {

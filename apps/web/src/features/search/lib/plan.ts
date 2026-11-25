@@ -25,6 +25,26 @@ export const GRID_SIZE = 7
 /** How many extensions suggestions are checked on. */
 export const SUGGESTION_TLDS = 2
 
+/** How many pre-built ideas lead a curated word's suggestions (feature 2). */
+export const WORD_IDEAS_SHOWN = 8
+/** One supplier call answers at most 20 checks; suggestions stay inside one per extension. */
+export const MAX_SUGGESTION_NAMES = 20
+
+/**
+ * A plan whose suggestions lead with a curated word's pre-built ideas, then
+ * the affix names, deduplicated and capped at one supplier call's worth — so
+ * ideas add no call to a search.
+ */
+export function withWordIdeas(plan: SearchPlan, ideas: readonly string[]): SearchPlan {
+  if (ideas.length === 0) return plan
+  return {
+    ...plan,
+    suggestionNames: [...new Set([...ideas, ...plan.suggestionNames])]
+      .filter((name) => name !== plan.stem)
+      .slice(0, MAX_SUGGESTION_NAMES),
+  }
+}
+
 export function suggestionNames(stem: string): string[] {
   // An international name takes its affixes as people read it — `getcafé`,
   // not `getxn--caf-dma` — and goes back to ASCII for the supplier (FR-S8).

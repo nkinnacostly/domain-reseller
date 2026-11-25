@@ -3,3 +3,4 @@
 export * from './deepseek'
 export * from './name-ideas'
 export * from './redact'
+export * from './words'

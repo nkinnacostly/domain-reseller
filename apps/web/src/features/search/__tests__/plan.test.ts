@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { toUnicodeHost } from '../lib/idn'
-import { GRID_SIZE, planSearch, stemIssue, suggestionNames, suggestionNamesFor } from '../lib/plan'
+import {
+  GRID_SIZE,
+  MAX_SUGGESTION_NAMES,
+  planSearch,
+  stemIssue,
+  suggestionNames,
+  suggestionNamesFor,
+  withWordIdeas,
+} from '../lib/plan'
 
 const SOLD = new Set(['com', 'net', 'org', 'africa', 'co', 'app', 'io', 'dev', 'xyz'])
 const FEATURED = ['com', 'net', 'org', 'africa', 'co', 'app']
@@ -121,5 +129,28 @@ describe('planSearch — length rules (FR-S9)', () => {
     const plan = planSearch({ stem: 'ab', tld: null, sold: SOLD, featured: FEATURED })
     expect(plan.lengthRules).toEqual({})
     expect(stemIssue(plan, 'com')).toBeNull()
+  })
+})
+
+describe('withWordIdeas (feature 2)', () => {
+  const base = planSearch({ stem: 'farm', tld: null, sold: SOLD, featured: FEATURED })
+
+  it('leaves a plan without ideas as it is', () => {
+    expect(withWordIdeas(base, [])).toBe(base)
+  })
+
+  it('puts the ideas first, once each, never the word itself, inside one supplier call', () => {
+    const ideas = [
+      'farmhub',
+      'agrolink',
+      'farm',
+      'getfarm',
+      ...Array.from({ length: 30 }, (_, i) => `idea${i}`),
+    ]
+    const plan = withWordIdeas(base, ideas)
+    expect(plan.suggestionNames.slice(0, 3)).toEqual(['farmhub', 'agrolink', 'getfarm'])
+    expect(plan.suggestionNames).not.toContain('farm')
+    expect(new Set(plan.suggestionNames).size).toBe(plan.suggestionNames.length)
+    expect(plan.suggestionNames).toHaveLength(MAX_SUGGESTION_NAMES)
   })
 })

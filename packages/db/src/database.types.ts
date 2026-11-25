@@ -4197,6 +4197,27 @@ export type Database = {
         }
         Relationships: []
       }
+      name_idea_words: {
+        Row: {
+          generated_at: string
+          ideas: Json
+          model: string
+          word: string
+        }
+        Insert: {
+          generated_at?: string
+          ideas: Json
+          model: string
+          word: string
+        }
+        Update: {
+          generated_at?: string
+          ideas?: Json
+          model?: string
+          word?: string
+        }
+        Relationships: []
+      }
       nameserver_presets: {
         Row: {
           assigns_per_zone: boolean

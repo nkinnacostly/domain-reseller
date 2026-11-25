@@ -99,6 +99,12 @@ const schema = z
      * confirmed with Flutterwave first.
      */
     FLUTTERWAVE_SECRET_KEY: z.string().min(1).optional(),
+    /**
+     * DeepSeek, for the overnight name ideas (docs: "Making AI the core of
+     * MyDomainsHub", feature 2). Optional: unset, no ideas are built and
+     * search keeps its affix suggestions.
+     */
+    DEEPSEEK_API_KEY: z.string().min(1).optional(),
     // Overridable only so tests can point at a local mock (N12).
     FLUTTERWAVE_API_URL: z.url().default('https://api.flutterwave.com/v3'),
     REFUND_POLL_MS: z.coerce.number().int().min(1_000).default(15_000),

@@ -15,6 +15,7 @@ import { emailSetupFor } from './email/provider'
 import { createEmailSender } from './email/sender'
 import { createEmailStore } from './email/store'
 import { env } from './env'
+import { ideasJobFor } from './ideas/overnight'
 import { createLedgerSource } from './ledger/source'
 import { createLedgerStore } from './ledger/store'
 import { createLedgerSync } from './ledger/sync'
@@ -292,6 +293,8 @@ const sslCatalogueSync = sslCatalogueScheduleFor(env, logger)
 const delegationCheck = delegationCheckerFor(env, logger)
 // FR-D2: host presets whose nameservers stop resolving are hidden from customers.
 const presetCheck = presetCheckerFor(env, logger)
+// ADR-002 v1.1: name ideas for the curated words, built overnight, never in a search.
+const nameIdeas = ideasJobFor(env, logger)
 
 if (worker) {
   worker.start()
@@ -314,6 +317,7 @@ catalogueSync?.start()
 sslCatalogueSync?.start()
 delegationCheck?.start()
 presetCheck?.start()
+nameIdeas?.start()
 ledgerSync?.start()
 emailSender?.start()
 if (emailSender && email) {
@@ -351,6 +355,7 @@ async function shutdown(signal: string) {
     sslCatalogueSync?.stop(),
     delegationCheck?.stop(),
     presetCheck?.stop(),
+    nameIdeas?.stop(),
     ledgerSync?.stop(),
     emailSender?.stop(),
   ])
