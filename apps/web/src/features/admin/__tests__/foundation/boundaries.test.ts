@@ -326,6 +326,7 @@ describe('admin boundaries', () => {
         'ops_settings',
         'order_item_costs',
         'order_items',
+        'order_screenings',
         'payment_incidents',
         'pricing_settings',
         'reconcile_runs',

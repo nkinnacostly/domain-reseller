@@ -108,6 +108,8 @@ describe('adminHrefForAlertKey', () => {
     [`ssl_job:${id}`, `/admin/queue/ssl-jobs/${id}`],
     [`ssl_status:${id}`, `/admin/ssl/${id}`],
     [`order_stuck:${id}`, `/admin/orders/${id}`],
+    [`order_screening:${id.toUpperCase()}`, `/admin/screening#line-${id}`],
+    ['order_screening:nope', '/admin/screening'],
     [`refund:${id}`, `/admin/refunds/${id}`],
     [`refund_overdue:${id}`, `/admin/refunds/${id}`],
     [`refund_slow:${id.toUpperCase()}`, `/admin/refunds/${id}`],

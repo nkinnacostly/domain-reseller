@@ -293,6 +293,7 @@ test.describe('an enrolled admin', () => {
     for (const [path, title] of [
       ['/admin', 'Overview'],
       ['/admin/orders', 'Orders'],
+      ['/admin/screening', 'Name checks'],
       ['/admin/refunds', 'Refunds'],
       ['/admin/refunds/incidents', 'Payment incidents'],
       ['/admin/queue', 'Queue'],

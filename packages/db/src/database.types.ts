@@ -4492,6 +4492,59 @@ export type Database = {
           },
         ]
       }
+      order_screenings: {
+        Row: {
+          decision: string | null
+          domain: string
+          matched: string[]
+          model: string | null
+          note: string | null
+          order_item_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          screened_at: string
+          test_mode: boolean
+          verdict: string
+        }
+        Insert: {
+          decision?: string | null
+          domain: string
+          matched?: string[]
+          model?: string | null
+          note?: string | null
+          order_item_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          screened_at?: string
+          test_mode: boolean
+          verdict: string
+        }
+        Update: {
+          decision?: string | null
+          domain?: string
+          matched?: string[]
+          model?: string | null
+          note?: string | null
+          order_item_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          screened_at?: string
+          test_mode?: boolean
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_screenings_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: true
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           contact_profile_id: string | null
@@ -6594,6 +6647,15 @@ export type Database = {
           vat_kobo: number
         }[]
       }
+      admin_review_screening: {
+        Args: {
+          p_decision: string
+          p_order_item_id: string
+          p_reason: string
+          p_request_key: string
+        }
+        Returns: Json
+      }
       admin_sales_since: {
         Args: { p_since: string; p_test_mode: boolean }
         Returns: Json
@@ -7072,6 +7134,13 @@ export type Database = {
         Returns: boolean
       }
       note_ssl_job_sent: { Args: { p_job_id: string }; Returns: string }
+      order_lines_to_screen: {
+        Args: { p_limit?: number; p_test_mode: boolean }
+        Returns: {
+          domain: string
+          order_item_id: string
+        }[]
+      }
       orders_to_check: {
         Args: { p_limit: number; p_test_mode: boolean }
         Returns: {

@@ -31,6 +31,7 @@ export const PREFIX_LABEL: Record<AuditPrefix, string> = {
   incident: 'Incidents',
   job: 'Jobs',
   ssl_job: 'Certificate jobs',
+  order: 'Name checks',
   domain: 'Domains',
   email: 'Emails',
   customer: 'Customers',
@@ -110,6 +111,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'supplier.ssl_catalogue_preview': 'Preview the SSL price list',
   'supplier.catalogue_apply': 'Apply the extension price list',
   'supplier.explain_charge': 'Explain a supplier charge',
+  'order.review_screening': 'Review a screened name',
   'supplier.ssl_catalogue_apply': 'Apply the SSL price list',
 }
 
@@ -123,6 +125,7 @@ export const TARGET_LABEL: Record<string, string> = {
   incident: 'Incident',
   job: 'Job',
   ssl_job: 'Certificate job',
+  order_item: 'Order line',
   domain: 'Domain',
   email: 'Email',
   customer: 'Customer',

@@ -34,6 +34,7 @@ export const ALERT_KIND_LABEL: Readonly<Record<string, string>> = {
   ssl_job_needs_attention: 'Certificate job needs a person',
   ssl_status_unrecognised: 'Certificate status not recognised',
   order_stuck: 'Order stuck',
+  order_screening_review: 'New name to check',
   refund_held: 'Refund held for approval',
   refund_needs_attention: 'Refund needs a person',
   refund_failed: 'Refund failed',
@@ -273,6 +274,7 @@ export function destinationLabel(href: string): string {
   if (path.startsWith('/admin/queue/jobs')) return 'Job'
   if (path.startsWith('/admin/refunds/incidents')) return 'Incidents'
   if (path.startsWith('/admin/refunds')) return 'Refund'
+  if (path.startsWith('/admin/screening')) return 'Name checks'
   if (path.startsWith('/admin/orders/')) return 'Order'
   if (path.startsWith('/admin/orders')) return 'Orders'
   if (path.startsWith('/admin/ssl')) return 'Certificate'

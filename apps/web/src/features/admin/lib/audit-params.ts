@@ -24,6 +24,7 @@ export const AUDIT_PREFIXES = [
   'incident',
   'job',
   'ssl_job',
+  'order',
   'domain',
   'email',
   'customer',

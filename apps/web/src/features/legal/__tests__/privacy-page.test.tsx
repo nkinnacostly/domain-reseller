@@ -86,6 +86,10 @@ describe('the privacy notice names DeepSeek only while the name finder is on (N9
     expect(item).toHaveTextContent('with your domain’s name taken out')
     expect(item).toHaveTextContent('email addresses and phone numbers taken out first')
     expect(item).toHaveTextContent('servers in China')
+    // Migration 73: a bought name that contains a listed brand, and only that name.
+    expect(item).toHaveTextContent('that name alone is sent for a second opinion')
+    expect(item).toHaveTextContent('your order is never held for it')
+    expect(item).toHaveTextContent('Nothing that names you is sent')
     expect(abroad()).toHaveTextContent(
       'Türkiye, the United Kingdom, the United States, China (for our AI features) and the country of your extension’s registry',
     )

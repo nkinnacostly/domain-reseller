@@ -298,6 +298,8 @@ export const ADMIN_TABLES = {
     },
     from: (db: Service) => db.from('order_item_costs'),
   },
+  // Migration 73: a name, the listed words it matched and a reviewer's label — nothing personal.
+  order_screenings: { side: TEST_MODE, from: (db: Service) => db.from('order_screenings') },
   refunds: { side: TEST_MODE, from: (db: Service) => db.from('refunds') },
   refund_events: {
     side: {

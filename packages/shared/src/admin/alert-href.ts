@@ -62,6 +62,9 @@ export function adminHrefForAlertKey(key: string): string {
       return byUuid('/admin/ssl', id)
     case 'order_stuck':
       return byUuid('/admin/orders', id)
+    case 'order_screening':
+      // Migration 73: a new name that looks like a brand or a sign-in page.
+      return UUID.test(id) ? `/admin/screening#line-${id.toLowerCase()}` : '/admin/screening'
     case 'refund':
     case 'refund_overdue':
     case 'refund_slow':

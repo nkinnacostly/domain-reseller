@@ -35,6 +35,7 @@ import { createReconciler } from './reconcile/reconciler'
 import { createReconcileStore } from './reconcile/store'
 import { createRefunder } from './refunds/refunder'
 import { createRefundStore } from './refunds/store'
+import { screeningJobFor } from './screening/screen'
 import { createSslClient } from './ssl/client'
 import { createSslPoller } from './ssl/poller'
 import { sslCatalogueScheduleFor } from './ssl/schedule'
@@ -295,6 +296,8 @@ const delegationCheck = delegationCheckerFor(env, logger)
 const presetCheck = presetCheckerFor(env, logger)
 // ADR-002 v1.1: name ideas for the curated words, built overnight, never in a search.
 const nameIdeas = ideasJobFor(env, logger)
+// Migration 73: new paid names that look like a brand or sign-in page go to a person.
+const orderScreening = screeningJobFor(env, logger)
 
 if (worker) {
   worker.start()
@@ -318,6 +321,7 @@ sslCatalogueSync?.start()
 delegationCheck?.start()
 presetCheck?.start()
 nameIdeas?.start()
+orderScreening?.start()
 ledgerSync?.start()
 emailSender?.start()
 if (emailSender && email) {
@@ -356,6 +360,7 @@ async function shutdown(signal: string) {
     delegationCheck?.stop(),
     presetCheck?.stop(),
     nameIdeas?.stop(),
+    orderScreening?.stop(),
     ledgerSync?.stop(),
     emailSender?.stop(),
   ])

@@ -30,8 +30,9 @@ export const metadata: Metadata = pageMetadata({
  * DeepSeek is listed only while the AI features are on (DEEPSEEK_API_KEY,
  * lib/ai.ts): it receives the name finder's description and help centre
  * questions, with email addresses and phone numbers taken out, and, when
- * asked, a domain's nameserver checks with the domain's name taken out —
- * nothing else.
+ * asked, a domain's nameserver checks with the domain's name taken out; and
+ * a newly bought domain's name when it contains a listed brand (migration
+ * 73, apps/gateway/src/screening) — nothing else.
  * Likewise the email processor is the one EMAIL_PROVIDER names — Brevo in
  * France, or Amazon SES in London — never both, never the one not in use.
  *
@@ -47,7 +48,7 @@ export default function PrivacyPage() {
   const emailPlaces = sendsWithSes
     ? 'Türkiye, the United Kingdom, the United States'
     : 'Türkiye, the United Kingdom, the United States, the European Union (for our emails)'
-  // DeepSeek keeps what it receives in China; nothing it receives names anyone.
+  // DeepSeek keeps what it receives in China; nothing it receives names a person.
   const destinations = `${emailPlaces}${usesAi ? ', China (for our AI features)' : ''} and the country of your extension’s registry`
   return (
     <LegalPage
@@ -221,8 +222,11 @@ export default function PrivacyPage() {
               the help centre from our own help pages, and explains a domain’s nameserver checks
               when you ask. It receives only what you type in the name finder or the help centre,
               with email addresses and phone numbers taken out first, and the nameservers and check
-              results, with your domain’s name taken out. It keeps them on servers in China. Nothing
-              that names you or your domain is sent.
+              results, with your domain’s name taken out. When a domain bought from us has a name
+              containing a well-known brand, bank or government service, that name alone is sent for
+              a second opinion on whether a person should check it for phishing — your order is
+              never held for it. DeepSeek keeps what it receives on servers in China. Nothing that
+              names you is sent.
             </li>
           ) : null}
           {hasBotCheck ? (

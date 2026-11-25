@@ -147,6 +147,8 @@ export const ADMIN_ERROR_WORDS: Readonly<Record<string, string>> = {
   NOT_CURRENT: 'That record was already corrected. Correct the newest one.',
   NOT_UNEXPLAINED:
     'There is nothing to explain on that charge: it matches its order’s cost, or it was explained already.',
+  NOT_FOR_REVIEW: 'That name is not waiting for a review: it was cleared, or reviewed already.',
+  BAD_DECISION: 'Choose whether the name looks fine or is abuse.',
 
   // ── The gateway's claim on a note (D22) ──
   ADMIN_NOTE_REFUSED: 'The gateway refused the audit note, so nothing was read. Try again.',

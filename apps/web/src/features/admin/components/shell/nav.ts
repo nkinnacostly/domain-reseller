@@ -8,6 +8,7 @@ import {
   ListChecks,
   Mail,
   Receipt,
+  ScanSearch,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -44,6 +45,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         icon: Receipt,
         badge: { count: (c) => c.stuckOrders, words: 'stuck' },
       },
+      { href: '/admin/screening', label: 'Name checks', icon: ScanSearch },
       {
         href: '/admin/refunds',
         label: 'Refunds',
