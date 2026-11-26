@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { AppSidebar, AppSidebarSkeleton } from '@/components/layout/app-sidebar'
+import { SiteAssistant } from '@/features/assistant/components/site-assistant'
 import { TwoFactorNotice } from '@/features/auth/components/two-factor-notice'
 import { PRIVATE } from '@/features/seo/lib/metadata'
+import { isAiEnabled } from '@/lib/ai'
 import { BUSINESS } from '@/lib/business'
 
 /** Behind sign-in: nothing here to index or follow (robots.txt also closes /app/). */
@@ -49,6 +51,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </footer>
         </div>
       </div>
+      {/* AI phase 5: the same assistant as the public pages; it reads no account data. */}
+      {isAiEnabled() ? <SiteAssistant /> : null}
     </div>
   )
 }

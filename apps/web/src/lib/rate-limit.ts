@@ -58,11 +58,18 @@ export const LIMITS = {
   helpAnswers: { max: 20, windowSeconds: 600 },
   // The portfolio copilot (feature 7), per account: each draft is a model call.
   portfolioCopilot: { max: 15, windowSeconds: 600 },
+  // The site assistant (AI phase 5), per address: one routing call per
+  // message. Names it asks for also count against nameIdeas, and names it
+  // checks against the search allowance, so it opens no wider door than /ideas
+  // or /search.
+  assistant: { max: 30, windowSeconds: 600 },
   // The MCP server (feature 8): every tool call per address, and searches
   // across every assistant together — they share the supplier's two a second.
   mcpCalls: { max: 60, windowSeconds: 600 },
   // Every Claude user arrives from Anthropic's range (features/mcp/lib/addresses.ts).
   mcpClaudeCalls: { max: 600, windowSeconds: 600 },
+  // ChatGPT's users all arrive from OpenAI's published ranges (AI phase 5).
+  mcpOpenAiCalls: { max: 600, windowSeconds: 600 },
   mcpSearchAll: { max: 300, windowSeconds: 600 },
   // Migration 74: the admin ops copilot, per admin. Each answer is a paid model call.
   alertHelp: { max: 30, windowSeconds: 3_600 },

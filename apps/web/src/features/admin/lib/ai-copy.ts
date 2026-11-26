@@ -38,6 +38,7 @@ export const FEATURE_LABEL: Readonly<Record<AiFeature, string>> = {
   alert_help: 'Ops copilot',
   portfolio_copilot: 'Portfolio copilot',
   order_screening: 'Name checks',
+  site_assistant: 'Site assistant',
 }
 
 export function featureLabel(feature: string): string {
@@ -62,6 +63,7 @@ export const PHASES = {
   one: 'Phase 1 — find and point',
   two: 'Phase 2 — answer and watch',
   three: 'Phase 3 — the portfolio copilot and AI buyers',
+  five: 'Phase 5 — one assistant on every page',
 } as const
 
 export const NOT_MEASURED = {
@@ -82,6 +84,8 @@ export const MEASURE = {
   bulk: 'Bulk changes by accounts with 10 or more domains',
   copilot: 'Portfolio copilot',
   assistantLines: 'New domains from AI assistants’ links',
+  siteAssistantLines: 'New domains from the site assistant',
+  siteAssistant: 'Site assistant messages',
 } as const
 
 /** "3 of 40 paid new domains (8%)". */
@@ -120,6 +124,12 @@ export function copilotWords(answered: number, declined: number, failed: number)
   const asked = answered + declined + failed
   if (asked === 0) return 'Not used yet.'
   return `${answered} drafts made, ${declined} questions it asked back or changes it refused, ${failed} with no answer.`
+}
+
+export function assistantWords(answered: number, declined: number, failed: number): string {
+  const asked = answered + declined + failed
+  if (asked === 0) return 'Not used yet.'
+  return `${asked} messages: ${answered} answered, ${declined} it could not help with, ${failed} with no answer.`
 }
 
 export function callsWords(calls: number, failed: number): string {

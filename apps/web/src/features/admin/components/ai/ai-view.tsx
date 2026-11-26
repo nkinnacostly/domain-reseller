@@ -17,6 +17,7 @@ import {
   AI_DESCRIPTION,
   AI_TITLE,
   AI_WINDOW_DAYS,
+  assistantWords,
   BUDGET_LINK,
   budgetWords,
   bulkWords,
@@ -214,6 +215,7 @@ function Impact({ report }: { report: AiReport }) {
   const finder = outcomes(usage('name_finder'))
   const help = outcomes(usage('help_answer'))
   const copilot = outcomes(usage('portfolio_copilot'))
+  const assistant = outcomes(usage('site_assistant'))
   const { lines, delegation, screening, bulk } = report
   return (
     <Panel labelledBy="ai-impact-heading">
@@ -221,7 +223,7 @@ function Impact({ report }: { report: AiReport }) {
         {IMPACT_HEADING}
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">{IMPACT_INTRO}</p>
-      <div className="mt-4 grid gap-6 lg:grid-cols-3">
+      <div className="mt-4 grid gap-6 lg:grid-cols-2 2xl:grid-cols-4">
         <Phase title={PHASES.one}>
           <Measure label={MEASURE.finderLines}>
             {shareWords(lines.nameFinder, lines.paid, 'paid new domains')}
@@ -260,6 +262,16 @@ function Impact({ report }: { report: AiReport }) {
           </Measure>
           <Measure label={MEASURE.assistantLines}>
             {shareWords(lines.assistantLink, lines.paid, 'paid new domains')}
+          </Measure>
+        </Phase>
+        <Phase title={PHASES.five}>
+          <Measure label={MEASURE.siteAssistantLines}>
+            {shareWords(lines.siteAssistant, lines.paid, 'paid new domains')}
+          </Measure>
+          <Measure label={MEASURE.siteAssistant}>
+            {hidden
+              ? SPEND_HIDDEN
+              : assistantWords(assistant.answered, assistant.declined, assistant.failed)}
           </Measure>
         </Phase>
       </div>

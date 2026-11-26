@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { AI_FEATURES } from '@dr/shared/ai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ADDED_VIA } from '@/features/cart/lib/added-via'
 import { logger } from '@/lib/logger'
 import { createServiceClient } from '@/lib/supabase/service'
 
@@ -70,14 +71,30 @@ describe('noteAiUsage (AI phase 4)', () => {
 })
 
 describe('the features counted', () => {
-  it('are exactly the ones migration 75 accepts', () => {
-    const sql = readFileSync(
-      join(__dirname, '../../../../../supabase/migrations/00000000000075_ai_usage_and_impact.sql'),
+  const migration76 = () =>
+    readFileSync(
+      join(__dirname, '../../../../../supabase/migrations/00000000000076_site_assistant.sql'),
       'utf8',
     )
-    const listed = /feature\s+text not null check \(feature in \(([^)]*)\)\)/.exec(sql)?.[1] ?? ''
-    expect([...listed.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]).sort()).toEqual(
-      [...AI_FEATURES].sort(),
-    )
+  const quotedIn = (list: string) =>
+    [...list.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]).sort()
+
+  it('are exactly the ones the newest check accepts (migration 76)', () => {
+    const listed =
+      /add constraint ai_usage_feature_check check \(feature in \(([^)]*)\)\)/.exec(
+        migration76(),
+      )?.[1] ?? ''
+    expect(quotedIn(listed)).toEqual([...AI_FEATURES].sort())
+  })
+
+  it('and a cart line takes exactly the sources the cart sends (migration 76)', () => {
+    const sql = migration76()
+    for (const table of ['cart_items', 'order_items']) {
+      const listed =
+        new RegExp(
+          `add constraint ${table}_added_via_check\\s+check \\(added_via in \\(([^)]*)\\)\\)`,
+        ).exec(sql)?.[1] ?? ''
+      expect(quotedIn(listed)).toEqual([...ADDED_VIA].sort())
+    }
   })
 })

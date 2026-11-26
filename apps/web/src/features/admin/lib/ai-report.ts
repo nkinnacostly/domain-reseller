@@ -2,7 +2,7 @@ import { formatUsdCents } from '@dr/shared/admin'
 import { z } from 'zod'
 
 /**
- * The AI page's numbers (AI phase 4, migration 75 `admin_ai_report`), parsed
+ * The AI page's numbers (AI phase 4, migrations 75–76 `admin_ai_report`), parsed
  * strictly: an answer of any other shape is no answer. Spend is null for a
  * test administrator — one DeepSeek account serves both sides.
  */
@@ -30,7 +30,7 @@ const reportSchema = z.object({
       daily: z.array(z.object({ day: z.string(), costMicro: count })),
     })
     .nullable(),
-  lines: z.object({ paid: count, nameFinder: count, assistantLink: count }),
+  lines: z.object({ paid: count, nameFinder: count, assistantLink: count, siteAssistant: count }),
   delegation: z.object({ registered: count, verifiedIn7: count }),
   screening: z.object({ screened: count, flagged: count, waiting: count }),
   bulk: z.object({ agencies: count, current: count, prior: count }),

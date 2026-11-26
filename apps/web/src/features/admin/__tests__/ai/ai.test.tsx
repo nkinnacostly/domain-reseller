@@ -43,10 +43,14 @@ const REPORT: AiReport = {
     monthMicro: 61_234_567,
     budgetCents: 5_000,
     since: '2026-11-26T07:00:00+00:00',
-    features: [feature('name_finder', { costMicro: 1_250_000 }), feature('help_answer')],
+    features: [
+      feature('name_finder', { costMicro: 1_250_000 }),
+      feature('help_answer'),
+      feature('site_assistant', { calls: 12, failed: 1, declined: 3 }),
+    ],
     daily: [{ day: '2026-11-25', costMicro: 1_254_321 }],
   },
-  lines: { paid: 40, nameFinder: 3, assistantLink: 2 },
+  lines: { paid: 40, nameFinder: 3, assistantLink: 2, siteAssistant: 6 },
   delegation: { registered: 20, verifiedIn7: 9 },
   screening: { screened: 38, flagged: 2, waiting: 1 },
   bulk: { agencies: 4, current: 7, prior: 3 },
@@ -65,7 +69,14 @@ describe('the AI report (migration 75)', () => {
     expect(parseAiReport(REPORT)).toEqual(REPORT)
     expect(parseAiReport({ ...REPORT, spend: null })?.spend).toBeNull()
     expect(
-      parseAiReport({ ...REPORT, lines: { paid: -1, nameFinder: 0, assistantLink: 0 } }),
+      parseAiReport({
+        ...REPORT,
+        lines: { paid: -1, nameFinder: 0, assistantLink: 0, siteAssistant: 0 },
+      }),
+    ).toBeNull()
+    // Migration 76's count is part of the shape: an answer without it is no answer.
+    expect(
+      parseAiReport({ ...REPORT, lines: { paid: 40, nameFinder: 3, assistantLink: 2 } }),
     ).toBeNull()
     expect(parseAiReport({ ...REPORT, bulk: undefined })).toBeNull()
   })
@@ -143,13 +154,23 @@ describe('the AI page', () => {
     ).toBeInTheDocument()
     expect(within(impact).getByText(NOT_MEASURED.searchConversion)).toBeInTheDocument()
     expect(within(impact).getByText(NOT_MEASURED.supportEmails)).toBeInTheDocument()
+    // AI phase 5: the site assistant's lines and its messages.
+    const five = within(impact).getByRole('region', {
+      name: 'Phase 5 — one assistant on every page',
+    })
+    expect(within(five).getByText('6 of 40 paid new domains (15%)')).toBeInTheDocument()
+    expect(
+      within(five).getByText(
+        '12 messages: 8 answered, 3 it could not help with, 1 with no answer.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('gives a test administrator no spend and no usage, and says so', async () => {
     rpcAnswers({ ...REPORT, spend: null })
     render(await AiPanels({ side: 'test', now: new Date('2026-11-26T10:00:00Z') }))
     expect(screen.queryByText(/\$61\.24/)).not.toBeInTheDocument()
-    expect(screen.getAllByText(SPEND_HIDDEN).length).toBe(4)
+    expect(screen.getAllByText(SPEND_HIDDEN).length).toBe(5)
     expect(screen.getByText('3 of 40 paid new domains (8%)')).toBeInTheDocument()
   })
 

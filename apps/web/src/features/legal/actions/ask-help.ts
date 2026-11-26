@@ -2,44 +2,24 @@
 
 import { askForJson, redactContactDetails } from '@dr/shared/ai'
 import { z } from 'zod'
-import { LLMS_PAGES } from '@/features/seo/lib/llms'
-import { plainText } from '@/features/seo/lib/plain-text'
 import { aiSettings, noteAiUsage } from '@/lib/ai'
 import { BUSINESS } from '@/lib/business'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
-import { HELP_TOPICS } from '../components/help-topics'
 import {
   cleanHelpAnswer,
   type HelpAnswer,
-  type HelpTopic,
   helpAnswerRequest,
   helpAnswerSchema,
-  helpCorpus,
-  helpSources,
   QUESTION_MAX,
   QUESTION_MIN,
 } from '../lib/help-assistant'
+import { helpMaterial } from '../queries/help-material'
 
 export type AskHelpResult =
   | { ok: true; help: HelpAnswer }
   | { ok: false; reason: 'off' | 'limited' | 'unavailable' }
-
-let material: { corpus: string; sources: Map<string, string> } | null = null
-
-/** The help centre as text, built once per server: it changes only with a deploy. */
-function helpMaterial() {
-  if (!material) {
-    const topics: HelpTopic[] = HELP_TOPICS.map((topic) => ({
-      id: topic.id,
-      title: topic.title,
-      questions: topic.questions.map((item) => ({ q: item.q, a: plainText(item.a) })),
-    }))
-    material = { corpus: helpCorpus(topics, LLMS_PAGES), sources: helpSources(topics, LLMS_PAGES) }
-  }
-  return material
-}
 
 /**
  * The help assistant's one request (feature 4): a question, answered from the

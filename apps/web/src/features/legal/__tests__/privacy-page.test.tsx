@@ -82,7 +82,10 @@ describe('the privacy notice names DeepSeek only while the name finder is on (N9
     ai.DEEPSEEK_API_KEY = 'sk-test'
     render(<PrivacyPage />)
     const item = recipients().getByText('DeepSeek').closest('li')
-    expect(item).toHaveTextContent('only what you type in the name finder or the help centre')
+    // AI phase 5: the site assistant is named, with the conversation it is sent.
+    expect(item).toHaveTextContent(
+      'only what you type in the name finder, the help centre or the assistant (with the conversation so far)',
+    )
     expect(item).toHaveTextContent('with your domain’s name taken out')
     expect(item).toHaveTextContent('email addresses and phone numbers taken out first')
     expect(item).toHaveTextContent('servers in China')

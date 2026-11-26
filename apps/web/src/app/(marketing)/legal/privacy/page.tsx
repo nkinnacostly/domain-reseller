@@ -35,7 +35,9 @@ export const metadata: Metadata = pageMetadata({
  * 73, apps/gateway/src/screening); and an alert's words, domains and contact
  * details masked, when an admin asks the ops copilot (migration 74); and a
  * customer's instruction to the portfolio copilot, domains and contact
- * details masked, never the account's domains (feature 7) — nothing else.
+ * details masked, never the account's domains (feature 7); and messages to
+ * the site assistant and the conversation before them, with email addresses
+ * and phone numbers taken out (AI phase 5) — nothing else.
  * Likewise the email processor is the one EMAIL_PROVIDER names — Brevo in
  * France, or Amazon SES in London — never both, never the one not in use.
  *
@@ -222,17 +224,19 @@ export default function PrivacyPage() {
           {usesAi ? (
             <li>
               <strong>DeepSeek</strong> — suggests names in our name finder, answers questions in
-              the help centre from our own help pages, and explains a domain’s nameserver checks
-              when you ask. It receives only what you type in the name finder or the help centre,
-              with email addresses and phone numbers taken out first, and the nameservers and check
-              results, with your domain’s name taken out. When a domain bought from us has a name
-              containing a well-known brand, bank or government service, that name alone is sent for
-              a second opinion on whether a person should check it for phishing — your order is
-              never held for it. When our staff ask it about an operations alert, it receives the
-              alert’s text with domain names and contact details taken out. When you ask the copilot
-              on your domains page, it receives your instruction with domain names, email addresses
-              and phone numbers taken out — never your list of domains. DeepSeek keeps what it
-              receives on servers in China. Nothing that names you is sent.
+              the help centre and in the assistant on each page from our own help pages, works out
+              what you are asking the assistant for, and explains a domain’s nameserver checks when
+              you ask. It receives only what you type in the name finder, the help centre or the
+              assistant (with the conversation so far), with email addresses and phone numbers taken
+              out first, and the nameservers and check results, with your domain’s name taken out.
+              When a domain bought from us has a name containing a well-known brand, bank or
+              government service, that name alone is sent for a second opinion on whether a person
+              should check it for phishing — your order is never held for it. When our staff ask it
+              about an operations alert, it receives the alert’s text with domain names and contact
+              details taken out. When you ask the copilot on your domains page, it receives your
+              instruction with domain names, email addresses and phone numbers taken out — never
+              your list of domains. DeepSeek keeps what it receives on servers in China. Nothing
+              that names you is sent.
             </li>
           ) : null}
           {hasBotCheck ? (

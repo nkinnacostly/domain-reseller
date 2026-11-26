@@ -8,7 +8,7 @@ import type { AiAnswer, DeepSeekModel } from './deepseek'
  * `ai_model_rates`, so the AI page and the budget alert read one estimate.
  */
 
-/** Migration 75's `ai_usage.feature` check lists exactly these (a test holds them together). */
+/** The newest `ai_usage.feature` check (migration 76) lists exactly these (a test holds them together). */
 export const AI_FEATURES = [
   'name_finder',
   'name_ideas_overnight',
@@ -17,6 +17,8 @@ export const AI_FEATURES = [
   'alert_help',
   'portfolio_copilot',
   'order_screening',
+  // AI phase 5: the site assistant's routing call (migration 76).
+  'site_assistant',
 ] as const
 
 export type AiFeature = (typeof AI_FEATURES)[number]
