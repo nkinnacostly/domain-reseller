@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   mail: {
     Tables: {
@@ -4209,6 +4209,27 @@ export type Database = {
         }
         Relationships: []
       }
+      name_idea_words: {
+        Row: {
+          generated_at: string
+          ideas: Json
+          model: string
+          word: string
+        }
+        Insert: {
+          generated_at?: string
+          ideas: Json
+          model: string
+          word: string
+        }
+        Update: {
+          generated_at?: string
+          ideas?: Json
+          model?: string
+          word?: string
+        }
+        Relationships: []
+      }
       nameserver_preset_drafts: {
         Row: {
           assigns_per_zone: boolean
@@ -4280,27 +4301,6 @@ export type Database = {
         Update: {
           host?: string
           provider?: string
-        }
-        Relationships: []
-      }
-      name_idea_words: {
-        Row: {
-          generated_at: string
-          ideas: Json
-          model: string
-          word: string
-        }
-        Insert: {
-          generated_at?: string
-          ideas: Json
-          model: string
-          word: string
-        }
-        Update: {
-          generated_at?: string
-          ideas?: Json
-          model?: string
-          word?: string
         }
         Relationships: []
       }
