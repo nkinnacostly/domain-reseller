@@ -350,6 +350,14 @@ begin
   if not pg_temp.has_key(true, 'ledger_gap:test') then
     raise exception 'FAILED 6: a disagreeing snapshot inside the window';
   end if;
+  -- Migration 77: a reading the supplier got wrong, corrected by a later one
+  -- before the read, is no gap; only the newest reading in the window counts.
+  insert into public.supplier_balance_snapshots (test_mode, balance_usd, taken_at) values (true, 5.00, now() - interval '65 minutes');
+  if pg_temp.has_key(true, 'ledger_gap:test') then
+    raise exception 'FAILED 6: a wrong reading corrected by a later one still counts as a gap';
+  end if;
+  delete from public.supplier_balance_snapshots where test_mode and taken_at > now() - interval '66 minutes'
+                                                 and taken_at < now() - interval '64 minutes';
   delete from public.supplier_balance_snapshots where test_mode and balance_usd = 4.00;
   perform public.record_supplier_ledger(true, jsonb_build_array(
     pg_temp.lrow(pg_temp.trace('gc' || v_tag), now() - interval '20 minutes', 5, 1, 0, 3, 'Ziraat Payment (Order: m41-i)', 400, 600)));
