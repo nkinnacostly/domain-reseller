@@ -278,8 +278,17 @@ describe('addDomainsToCart — adding (FR-S5, FR-S8)', () => {
       quotedTotalKobo: tlds[0]?.registration.priceKobo,
       quotedRenewalKobo: tlds[0]?.renewal.priceKobo,
       quotedFxRateId: 'rate-1',
+      addedVia: null,
     })
     expect(jar.set).toHaveBeenCalledWith('dr_cart_count', '2', expect.any(Object))
+  })
+
+  it("marks every name from an assistant's link as such (AI phase 4)", async () => {
+    await addDomainsToCart({ domains: ['getpaid.com'], addedVia: 'assistant_link' })
+    expect(vi.mocked(store.insertLine).mock.calls[0]?.[1]).toMatchObject({
+      domain: 'getpaid.com',
+      addedVia: 'assistant_link',
+    })
   })
 
   it('stores an international name in its ASCII form and names it as read (FR-S8)', async () => {

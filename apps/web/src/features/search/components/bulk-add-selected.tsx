@@ -6,6 +6,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { FormMessage } from '@/components/common/form-parts'
 import { Spinner } from '@/components/ui/spinner'
 import { addDomainsToCart } from '@/features/cart/actions/cart'
+import type { AddedVia } from '@/features/cart/lib/added-via'
 import { announceCartCount } from '@/features/cart/lib/count'
 import { MAX_CART_ITEMS } from '@/features/cart/lib/lines'
 
@@ -19,11 +20,14 @@ import { MAX_CART_ITEMS } from '@/features/cart/lib/lines'
 export function BulkAddSelected({
   domains,
   onAdded,
+  addedVia,
 }: {
   /** ASCII domains, in the order shown. */
   domains: readonly string[]
   /** The names that went in, as the answer writes them — so the page can untick them. */
   onAdded: (added: readonly string[]) => void
+  /** An AI feature the names came from, kept with each cart line (AI phase 4). */
+  addedVia?: AddedVia
 }) {
   const add = useAction(addDomainsToCart, {
     onSuccess: ({ data }) => {
@@ -44,7 +48,9 @@ export function BulkAddSelected({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <button
           type="button"
-          onClick={() => add.execute({ domains: sending })}
+          onClick={() =>
+            add.execute(addedVia ? { domains: sending, addedVia } : { domains: sending })
+          }
           disabled={add.isPending || sending.length === 0}
           aria-busy={add.isPending || undefined}
           className="inline-flex h-11 w-fit items-center justify-center gap-2 rounded-full bg-accent px-5 text-sm font-medium text-accent-foreground transition hover:bg-accent/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"

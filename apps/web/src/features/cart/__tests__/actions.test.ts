@@ -133,6 +133,16 @@ describe('addToCart', () => {
     expect(store.insertLine).not.toHaveBeenCalled()
   })
 
+  it('keeps which AI feature the name came from, and nothing else (AI phase 4)', async () => {
+    await addToCart({ domain: 'getpaid.com', addedVia: 'name_finder' })
+    expect(vi.mocked(store.insertLine).mock.calls[0]?.[1]).toMatchObject({
+      addedVia: 'name_finder',
+    })
+    const refused = await addToCart({ domain: 'getpaid.com', addedVia: 'search' as never })
+    expect(refused?.validationErrors).toBeDefined()
+    expect(store.insertLine).toHaveBeenCalledTimes(1)
+  })
+
   it('quotes from the catalogue and records the rate it was priced at', async () => {
     const result = await addToCart({ domain: 'https://www.GetPaid.com/' })
     expect(store.insertLine).toHaveBeenCalledWith('cart-1', {
@@ -142,6 +152,7 @@ describe('addToCart', () => {
       quotedTotalKobo: com.registration.priceKobo,
       quotedRenewalKobo: com.renewal.priceKobo,
       quotedFxRateId: 'rate-1',
+      addedVia: null,
     })
     expect(result?.data).toEqual({ count: 1 })
     expect(jar.set).toHaveBeenCalledWith('dr_cart_count', '1', expect.anything())
@@ -169,6 +180,7 @@ describe('addToCart', () => {
       quotedTotalKobo: 2 * ai.registration.priceKobo,
       quotedRenewalKobo: ai.renewal.priceKobo,
       quotedFxRateId: 'rate-1',
+      addedVia: null,
     })
   })
 

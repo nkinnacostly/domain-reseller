@@ -47,9 +47,13 @@ export type AiFailure =
 
 export type AiUsage = { promptTokens: number; cachedTokens: number; completionTokens: number }
 
+/**
+ * A failure carries `usage` when DeepSeek answered and said what it billed —
+ * an answer that did not parse still costs its tokens (AI phase 4 counts them).
+ */
 export type AiAnswer<T> =
   | { ok: true; value: T; usage: AiUsage }
-  | { ok: false; reason: AiFailure; status?: number }
+  | { ok: false; reason: AiFailure; status?: number; usage?: AiUsage }
 
 export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
 
@@ -65,7 +69,19 @@ const FAILURE_BY_STATUS: Readonly<Record<number, AiFailure>> = {
 }
 
 const count = (value: unknown): number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
+
+function usageOf(body: unknown): AiUsage | undefined {
+  const usage = (body as { usage?: unknown } | null)?.usage
+  if (!usage || typeof usage !== 'object') return undefined
+  const fields = usage as Record<string, unknown>
+  const promptTokens = count(fields.prompt_tokens)
+  return {
+    promptTokens,
+    cachedTokens: Math.min(count(fields.prompt_cache_hit_tokens), promptTokens),
+    completionTokens: count(fields.completion_tokens),
+  }
+}
 
 export async function askForJson<T>(
   settings: AiSettings,
@@ -123,31 +139,31 @@ export async function askForJson<T>(
   } catch {
     return { ok: false, reason: 'invalid_answer', status }
   }
+  const usage = usageOf(body)
+  const invalid: AiAnswer<T> = {
+    ok: false,
+    reason: 'invalid_answer',
+    status,
+    ...(usage ? { usage } : {}),
+  }
   const choice = (
     body as { choices?: { message?: { content?: unknown }; finish_reason?: unknown }[] }
   ).choices?.[0]
   const content = typeof choice?.message?.content === 'string' ? choice.message.content.trim() : ''
   // JSON mode blanks an answer it cannot shape as JSON; a cut-off one is half a list.
-  if (!content || choice?.finish_reason !== 'stop') {
-    return { ok: false, reason: 'invalid_answer', status }
-  }
+  if (!content || choice?.finish_reason !== 'stop') return invalid
   let json: unknown
   try {
     json = JSON.parse(content)
   } catch {
-    return { ok: false, reason: 'invalid_answer', status }
+    return invalid
   }
   const parsed = schema.safeParse(json)
-  if (!parsed.success) return { ok: false, reason: 'invalid_answer', status }
+  if (!parsed.success) return invalid
 
-  const usage = (body as { usage?: Record<string, unknown> }).usage ?? {}
   return {
     ok: true,
     value: parsed.data,
-    usage: {
-      promptTokens: count(usage.prompt_tokens),
-      cachedTokens: count(usage.prompt_cache_hit_tokens),
-      completionTokens: count(usage.completion_tokens),
-    },
+    usage: usage ?? { promptTokens: 0, cachedTokens: 0, completionTokens: 0 },
   }
 }

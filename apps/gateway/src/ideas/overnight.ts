@@ -13,6 +13,7 @@ import {
 } from '@dr/shared/ai'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Env } from '../env'
+import { countingAsk } from '../lib/ai-usage'
 
 /**
  * Pre-built name ideas for the curated words (docs: "Making AI the core of
@@ -187,7 +188,13 @@ export function ideasJobFor(
     })
   return createIdeasJob({
     store: createIdeasStore(client),
-    ask: (request) => askForJson({ apiKey, model: MODEL }, request, nameIdeasAnswer),
+    ask: countingAsk(
+      (request) => askForJson({ apiKey, model: MODEL }, request, nameIdeasAnswer),
+      'name_ideas_overnight',
+      MODEL,
+      client,
+      log,
+    ),
     everyMs: 3_600_000,
     log,
   })

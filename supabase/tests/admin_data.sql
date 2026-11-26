@@ -448,7 +448,8 @@ begin
     'select public.admin_email_stats(false, 30)', 'select public.admin_alert_stats(false, 30)',
     'select public.admin_ssl_stats(false)',
     'select public.admin_job_ledger(false, gen_random_uuid())',
-    'select public.admin_ssl_job_certificate(false, gen_random_uuid())'
+    'select public.admin_ssl_job_certificate(false, gen_random_uuid())',
+    'select public.admin_ai_report(false, current_date - 7, current_date)'
   ] loop
     begin
       execute v_sql;
@@ -714,6 +715,7 @@ begin
     "admin_record_float_topup":"authenticated", "admin_correct_float_topup":"authenticated",
     "admin_explain_supplier_charge":"authenticated",
     "admin_review_screening":"authenticated", "admin_alert_help":"authenticated",
+    "admin_ai_report":"authenticated",
     "admin_attention_counts":"authenticated", "admin_overview":"authenticated", "admin_revenue":"authenticated",
     "admin_margin":"authenticated", "admin_funnel":"authenticated", "admin_provisioning":"authenticated",
     "admin_refund_stats":"authenticated", "admin_float":"authenticated", "admin_ledger_daily":"authenticated",

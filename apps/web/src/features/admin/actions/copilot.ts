@@ -17,7 +17,7 @@ import {
   toAdminResult,
 } from '@/features/admin/lib/errors'
 import { alertHelpSchema } from '@/features/admin/schemas/copilot'
-import { aiSettings } from '@/lib/ai'
+import { aiSettings, noteAiUsage } from '@/lib/ai'
 import { logger } from '@/lib/logger'
 import { LIMITS, withinLimit } from '@/lib/rate-limit'
 import { adminAction } from '@/lib/safe-action'
@@ -83,10 +83,12 @@ export const askAlertHelp = adminAction('alert.explain', alertHelpSchema).action
       alertHelpAnswer,
     )
     if (!answer.ok) {
+      noteAiUsage('alert_help', settings, answer)
       logger.warn({ auditId, reason: answer.reason }, 'ops copilot: no answer')
       return refused('AI_UNAVAILABLE', auditId)
     }
     const help = cleanAlertHelp(answer.value, parsedInput.mode, masked.names)
+    noteAiUsage('alert_help', settings, answer, !help)
     if (!help) return refused('AI_UNAVAILABLE', auditId)
     return { ok: true, auditId, data: help }
   },

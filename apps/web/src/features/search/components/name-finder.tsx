@@ -12,7 +12,12 @@ import {
 } from '@/components/common/form-parts'
 import { cn } from '@/lib/utils'
 import { findNameIdeas } from '../actions/name-ideas'
-import { DESCRIPTION_MAX, DESCRIPTION_MIN, type NameIdeasResult } from '../lib/name-ideas'
+import {
+  DESCRIPTION_MAX,
+  DESCRIPTION_MIN,
+  NAME_FINDER_LANGUAGES,
+  type NameIdeasResult,
+} from '../lib/name-ideas'
 import { ResultItem } from './result-list'
 
 const REFUSAL: Record<Exclude<NameIdeasResult, { ok: true }>['reason'], string> = {
@@ -30,6 +35,10 @@ const REFUSAL: Record<Exclude<NameIdeasResult, { ok: true }>['reason'], string> 
  *
  * The note under the box says where the description goes (N9b, NDPA): to
  * DeepSeek, with email addresses and phone numbers taken out first.
+ *
+ * AI phase 4: ideas in Pidgin, Yoruba, Igbo or Hausa as well as English — the
+ * names drawn from that language's words, the reasons written in it and
+ * marked with its `lang`. Names added from here are counted on the AI page.
  */
 export function NameFinder({ extensions }: { extensions: readonly string[] }) {
   const id = useId()
@@ -37,6 +46,8 @@ export function NameFinder({ extensions }: { extensions: readonly string[] }) {
   const [result, setResult] = useState<NameIdeasResult | null>(null)
   const [error, setError] = useState<string | undefined>()
   const [tld, setTld] = useState(extensions[0] ?? 'com')
+  const [language, setLanguage] = useState<Language>('en')
+  const [answeredIn, setAnsweredIn] = useState<Language>('en')
 
   const submit = onSubmitWith((form) => {
     const description = String(form.get('description') ?? '').trim()
@@ -46,8 +57,10 @@ export function NameFinder({ extensions }: { extensions: readonly string[] }) {
     }
     setError(undefined)
     const picked = String(form.get('tld') ?? tld)
+    const asked = toLanguage(form.get('language')) ?? language
     startTransition(async () => {
-      const answer = await findNameIdeas({ description, tld: picked })
+      const answer = await findNameIdeas({ description, tld: picked, language: asked })
+      setAnsweredIn(asked)
       setResult(answer?.data ?? { ok: false, reason: 'unavailable' })
     })
   })
@@ -99,21 +112,54 @@ export function NameFinder({ extensions }: { extensions: readonly string[] }) {
               ))}
             </select>
           </div>
+          <div className="sm:w-48">
+            <label htmlFor={`${id}-language`} className="text-sm font-medium text-foreground">
+              Ideas in
+            </label>
+            <select
+              id={`${id}-language`}
+              name="language"
+              value={language}
+              onChange={(event) => setLanguage(toLanguage(event.target.value) ?? 'en')}
+              aria-describedby={`${id}-language-hint`}
+              className={cn(inputClass, 'mt-1.5')}
+            >
+              {NAME_FINDER_LANGUAGES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <SubmitButton pending={pending} pendingLabel="Finding names…" className="sm:w-auto">
             <Sparkle className="size-4" aria-hidden="true" />
             Find names
           </SubmitButton>
         </div>
+        <p id={`${id}-language-hint`} className="text-xs text-muted-foreground">
+          In another language, the names lean on its words and the reason for each is written in it,
+          by the AI. Names are spelt in plain letters, without accents or tone marks, so anyone can
+          type them.
+        </p>
       </form>
 
       <section aria-label="Name ideas" aria-live="polite" aria-busy={pending || undefined}>
-        {pending ? <IdeasSkeleton /> : result ? <IdeasAnswer result={result} /> : null}
+        {pending ? (
+          <IdeasSkeleton />
+        ) : result ? (
+          <IdeasAnswer result={result} language={answeredIn} />
+        ) : null}
       </section>
     </div>
   )
 }
 
-function IdeasAnswer({ result }: { result: NameIdeasResult }) {
+type Language = (typeof NAME_FINDER_LANGUAGES)[number]['code']
+
+const toLanguage = (value: unknown): Language | undefined =>
+  NAME_FINDER_LANGUAGES.find((option) => option.code === value)?.code
+
+function IdeasAnswer({ result, language }: { result: NameIdeasResult; language: Language }) {
   if (!result.ok) {
     return (
       <FormMessage tone="error">
@@ -149,7 +195,13 @@ function IdeasAnswer({ result }: { result: NameIdeasResult }) {
         className="divide-y divide-border/70 rounded-2xl border border-border bg-background"
       >
         {result.ideas.map(({ row, why }) => (
-          <ResultItem key={row.domain} row={row} note={why} />
+          <ResultItem
+            key={row.domain}
+            row={row}
+            note={why}
+            noteLang={language === 'en' ? undefined : language}
+            addedVia="name_finder"
+          />
         ))}
       </ul>
     </div>

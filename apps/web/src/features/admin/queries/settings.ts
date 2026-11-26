@@ -55,7 +55,7 @@ export async function getLimits(
     adminDb(admin, side)
       .from('ops_settings')
       .select(
-        'auto_refund_max_kobo, auto_refund_daily_max_kobo, refund_delay_minutes, stuck_order_minutes, max_domains_per_account_day, velocity_new_max, velocity_trusted_max, velocity_standard_after_days, velocity_trusted_after_days, velocity_trusted_after_paid_orders',
+        'auto_refund_max_kobo, auto_refund_daily_max_kobo, refund_delay_minutes, stuck_order_minutes, max_domains_per_account_day, velocity_new_max, velocity_trusted_max, velocity_standard_after_days, velocity_trusted_after_days, velocity_trusted_after_paid_orders, ai_budget_cents',
       )
       .limit(1)
       .maybeSingle(),
@@ -82,6 +82,7 @@ export async function getLimits(
     velocity_trusted_after_days: num(data.velocity_trusted_after_days),
     velocity_trusted_after_paid_orders: num(data.velocity_trusted_after_paid_orders),
     float_alert_cents: typeof alert === 'number' ? alert : Number.NaN,
+    ai_budget_cents: num(data.ai_budget_cents),
   }
   if (!Object.values(limits).every((value) => Number.isSafeInteger(value))) {
     logger.error('admin settings: the limits answered an unexpected shape')

@@ -8,7 +8,7 @@ import {
   toPortfolioIntent,
 } from '@dr/shared/ai'
 import { z } from 'zod'
-import { aiSettings } from '@/lib/ai'
+import { aiSettings, noteAiUsage } from '@/lib/ai'
 import { logger } from '@/lib/logger'
 import { LIMITS, withinLimit } from '@/lib/rate-limit'
 import { authAction } from '@/lib/safe-action'
@@ -54,6 +54,7 @@ export const draftPortfolioChange = authAction
       portfolioIntentAnswer,
     )
     if (!answer.ok) {
+      noteAiUsage('portfolio_copilot', settings, answer)
       logger.warn({ reason: answer.reason, status: answer.status }, 'portfolio copilot: no answer')
       return { ok: false, reason: 'unavailable' }
     }
@@ -63,6 +64,7 @@ export const draftPortfolioChange = authAction
       presets,
       new Date(),
     )
+    noteAiUsage('portfolio_copilot', settings, answer, draft.kind !== 'draft')
     logger.info(
       {
         kind: draft.kind,

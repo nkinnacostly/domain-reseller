@@ -183,8 +183,8 @@ describe('AdminSidebar', () => {
     expect(screen.getAllByRole('link', { name: 'Refunds' })[0]).toBeInTheDocument()
   })
 
-  it('has a page for every package, B1 to B14, and the name checks (migration 73)', () => {
-    expect(ADMIN_NAV.flatMap((group) => group.items)).toHaveLength(15)
+  it('has a page for every package, B1 to B14, the name checks (migration 73) and AI (migration 75)', () => {
+    expect(ADMIN_NAV.flatMap((group) => group.items)).toHaveLength(16)
     render(<AdminSidebarSkeleton />)
   })
 })

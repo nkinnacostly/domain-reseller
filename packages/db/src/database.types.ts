@@ -2932,6 +2932,89 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_model_rates: {
+        Row: {
+          cached_usd_per_m: number
+          checked_on: string
+          model: string
+          output_usd_per_m: number
+          peak_hours_utc: number[]
+          peak_multiplier: number
+          peak_weekdays_only: boolean
+          source: string
+          uncached_usd_per_m: number
+          updated_at: string
+        }
+        Insert: {
+          cached_usd_per_m: number
+          checked_on: string
+          model: string
+          output_usd_per_m: number
+          peak_hours_utc?: number[]
+          peak_multiplier?: number
+          peak_weekdays_only?: boolean
+          source: string
+          uncached_usd_per_m: number
+          updated_at?: string
+        }
+        Update: {
+          cached_usd_per_m?: number
+          checked_on?: string
+          model?: string
+          output_usd_per_m?: number
+          peak_hours_utc?: number[]
+          peak_multiplier?: number
+          peak_weekdays_only?: boolean
+          source?: string
+          uncached_usd_per_m?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_usage: {
+        Row: {
+          cached_tokens: number
+          calls: number
+          completion_tokens: number
+          declined: number
+          failed: number
+          feature: string
+          hour: string
+          model: string
+          prompt_tokens: number
+        }
+        Insert: {
+          cached_tokens?: number
+          calls?: number
+          completion_tokens?: number
+          declined?: number
+          failed?: number
+          feature: string
+          hour: string
+          model: string
+          prompt_tokens?: number
+        }
+        Update: {
+          cached_tokens?: number
+          calls?: number
+          completion_tokens?: number
+          declined?: number
+          failed?: number
+          feature?: string
+          hour?: string
+          model?: string
+          prompt_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_model_fkey"
+            columns: ["model"]
+            isOneToOne: false
+            referencedRelation: "ai_model_rates"
+            referencedColumns: ["model"]
+          },
+        ]
+      }
       auth_code_intents: {
         Row: {
           created_at: string
@@ -3067,6 +3150,7 @@ export type Database = {
       }
       cart_items: {
         Row: {
+          added_via: string | null
           auto_renew: boolean
           cart_id: string
           created_at: string
@@ -3081,6 +3165,7 @@ export type Database = {
           tld: string
         }
         Insert: {
+          added_via?: string | null
           auto_renew?: boolean
           cart_id: string
           created_at?: string
@@ -3095,6 +3180,7 @@ export type Database = {
           tld: string
         }
         Update: {
+          added_via?: string | null
           auto_renew?: boolean
           cart_id?: string
           created_at?: string
@@ -4319,6 +4405,7 @@ export type Database = {
       }
       ops_settings: {
         Row: {
+          ai_budget_cents: number
           auto_refund_daily_max_kobo: number
           auto_refund_max_kobo: number
           float_alert_usd: number
@@ -4335,6 +4422,7 @@ export type Database = {
           velocity_trusted_max: number
         }
         Insert: {
+          ai_budget_cents?: number
           auto_refund_daily_max_kobo?: number
           auto_refund_max_kobo?: number
           float_alert_usd?: number
@@ -4351,6 +4439,7 @@ export type Database = {
           velocity_trusted_max?: number
         }
         Update: {
+          ai_budget_cents?: number
           auto_refund_daily_max_kobo?: number
           auto_refund_max_kobo?: number
           float_alert_usd?: number
@@ -4399,6 +4488,7 @@ export type Database = {
       }
       order_items: {
         Row: {
+          added_via: string | null
           auto_renew: boolean
           created_at: string
           domain: string
@@ -4420,6 +4510,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          added_via?: string | null
           auto_renew: boolean
           created_at?: string
           domain: string
@@ -4441,6 +4532,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          added_via?: string | null
           auto_renew?: boolean
           created_at?: string
           domain?: string
@@ -6230,6 +6322,10 @@ export type Database = {
         Args: { p_rate_id: string; p_reason: string; p_request_key: string }
         Returns: Json
       }
+      admin_ai_report: {
+        Args: { p_from: string; p_test_mode: boolean; p_to: string }
+        Returns: Json
+      }
       admin_alert_conditions: {
         Args: { p_test_mode: boolean }
         Returns: {
@@ -6758,6 +6854,14 @@ export type Database = {
       }
       admin_url_host: { Args: { p_url: string }; Returns: string }
       admin_whoami: { Args: { p_fresh_minutes?: number }; Returns: Json }
+      ai_spend_micro: {
+        Args: { p_from: string; p_to: string }
+        Returns: number
+      }
+      ai_usage_cost_micro: {
+        Args: { p_usage: Database["public"]["Tables"]["ai_usage"]["Row"] }
+        Returns: number
+      }
       approve_refund: {
         Args: { p_by: string; p_refund_id: string }
         Returns: undefined
@@ -7200,6 +7304,17 @@ export type Database = {
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: boolean
+      }
+      record_ai_usage: {
+        Args: {
+          p_cached_tokens: number
+          p_completion_tokens: number
+          p_feature: string
+          p_model: string
+          p_outcome: string
+          p_prompt_tokens: number
+        }
+        Returns: undefined
       }
       record_deep_sync: {
         Args: {

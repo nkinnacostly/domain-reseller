@@ -69,12 +69,30 @@ describe('askForJson — failures first', () => {
       { status: 200, body: { choices: [] } },
     ]) {
       const { fetch } = recordingFetch(scripted)
-      expect(await askForJson(settings(fetch), request, schema)).toEqual({
+      expect(await askForJson(settings(fetch), request, schema)).toMatchObject({
         ok: false,
         reason: 'invalid_answer',
         status: 200,
       })
     }
+  })
+
+  it('keeps what an unusable answer was billed, cached tokens never above those sent', async () => {
+    const { fetch } = recordingFetch(
+      answer({ names: ['half'] }, 'length', {
+        prompt_tokens: 500,
+        prompt_cache_hit_tokens: 900,
+        completion_tokens: 1200.7,
+      }),
+    )
+    expect(await askForJson(settings(fetch), request, schema)).toEqual({
+      ok: false,
+      reason: 'invalid_answer',
+      status: 200,
+      usage: { promptTokens: 500, cachedTokens: 500, completionTokens: 1200 },
+    })
+    const { fetch: bare } = recordingFetch({ status: 200, body: 'not json' })
+    expect(await askForJson(settings(bare), request, schema)).not.toHaveProperty('usage')
   })
 })
 

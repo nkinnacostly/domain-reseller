@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
 import { actionClient } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/service'
+import { ADDED_VIA } from '../lib/added-via'
 import { MAX_CART_ITEMS, nearestSoldPeriod, quoteFor, sellsPeriod } from '../lib/lines'
 import { existingCartId, ownerForWrite, setCountCookie } from '../queries/owner'
 import {
@@ -40,7 +41,9 @@ type Failure = { error: string }
 const FAILED = 'Something went wrong updating your cart. Please try again.'
 
 export const addToCart = actionClient
-  .inputSchema(z.object({ domain: z.string().min(3).max(253) }))
+  .inputSchema(
+    z.object({ domain: z.string().min(3).max(253), addedVia: z.enum(ADDED_VIA).optional() }),
+  )
   .action(async ({ parsedInput }): Promise<Failure | { count: number }> => {
     const { stem, tld, isValid } = parseSearchQuery(parsedInput.domain)
     if (!isValid || !tld) return { error: 'That is not a domain we can add.' }
@@ -81,6 +84,7 @@ export const addToCart = actionClient
         quotedTotalKobo: quote.totalKobo,
         quotedRenewalKobo: quote.renewalKobo,
         quotedFxRateId: priced.rateId,
+        addedVia: parsedInput.addedVia ?? null,
       })
 
       countCartAdd()
@@ -110,6 +114,7 @@ export const addDomainsToCart = actionClient
   .inputSchema(
     z.object({
       domains: z.array(z.string().min(3).max(253)).min(1).max(MAX_CART_ITEMS),
+      addedVia: z.enum(ADDED_VIA).optional(),
     }),
   )
   .action(
@@ -202,6 +207,7 @@ export const addDomainsToCart = actionClient
             quotedTotalKobo: quote.totalKobo,
             quotedRenewalKobo: quote.renewalKobo,
             quotedFxRateId: priced.rateId,
+            addedVia: parsedInput.addedVia ?? null,
           })
           count += 1
           added.push(shown)

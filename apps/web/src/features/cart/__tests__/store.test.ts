@@ -181,10 +181,28 @@ describe('loadLines', () => {
         quotedTotalKobo: 3_710_000,
         quotedRenewalKobo: 1_870_000,
         quotedAt: '2026-09-23T10:00:00.000Z',
+        addedVia: null,
       },
     ])
     expect(queries[0]?.steps).toContainEqual(['eq', 'cart_id', 'cart-1'])
     expect(queries[0]?.steps).toContainEqual(['order', 'created_at'])
+  })
+
+  it('reads where a line came from, and nothing it does not know (AI phase 4)', async () => {
+    fakeService({
+      cart_items: [
+        {
+          data: [
+            { ...ROW, id: 'a', added_via: 'assistant_link' },
+            { ...ROW, id: 'b', added_via: 'somewhere' },
+          ],
+        },
+      ],
+    })
+    expect((await store.loadLines('cart-1')).map((line) => line.addedVia)).toEqual([
+      'assistant_link',
+      null,
+    ])
   })
 
   it('is empty when the query returns no rows', async () => {
@@ -237,6 +255,7 @@ describe('insertLine', () => {
           quoted_total_kobo: 1_840_000,
           quoted_renewal_kobo: 1_870_000,
           quoted_fx_rate_id: 'rate-1',
+          added_via: null,
         },
         { onConflict: 'cart_id,domain', ignoreDuplicates: true },
       ],

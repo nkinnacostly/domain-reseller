@@ -1,4 +1,5 @@
 import { AddToCartButton } from '@/features/cart/components/add-to-cart-button'
+import type { AddedVia } from '@/features/cart/lib/added-via'
 import { renewalText, yearsText } from '@/features/pricing/lib/terms'
 import { refusalNote, type SearchRow } from '../lib/rows'
 import { AsciiForm, LookalikeWarning } from './idn-notes'
@@ -30,12 +31,18 @@ export function ResultItem({
   row,
   lookalike = false,
   note = null,
+  noteLang,
+  addedVia,
 }: {
   row: SearchRow
   /** Say when the name can pass for a Latin one (FR-S8) — where each row is its own name. */
   lookalike?: boolean
   /** A line under the name — the AI name finder's reason for an idea. */
   note?: string | null
+  /** The note's language when it is not the page's (WCAG 3.1.2): the finder writes in five. */
+  noteLang?: string
+  /** An AI feature the row came from, counted with the cart line (AI phase 4). */
+  addedVia?: AddedVia
 }) {
   const refusal = refusalNote(row)
   return (
@@ -61,7 +68,11 @@ export function ResultItem({
           <p className="mt-1 text-pretty text-xs text-muted-foreground">{refusal}</p>
         ) : null}
         {lookalike ? <LookalikeWarning stem={row.name} compact className="mt-1.5" /> : null}
-        {note ? <p className="mt-1 text-pretty text-sm text-muted-foreground">{note}</p> : null}
+        {note ? (
+          <p lang={noteLang} className="mt-1 text-pretty text-sm text-muted-foreground">
+            {note}
+          </p>
+        ) : null}
       </div>
 
       {row.status === 'available' && row.price ? (
@@ -84,7 +95,7 @@ export function ResultItem({
               </span>
             </span>
           </p>
-          <AddToCartButton domain={row.domain} label={row.display} />
+          <AddToCartButton domain={row.domain} label={row.display} addedVia={addedVia} />
         </div>
       ) : null}
     </li>

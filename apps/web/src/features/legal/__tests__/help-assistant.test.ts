@@ -11,7 +11,13 @@ vi.mock('@/lib/rate-limit', async (original) => ({
   withinLimit: vi.fn(),
 }))
 
+vi.mock('@/lib/ai', async (original) => ({
+  ...(await original<typeof import('@/lib/ai')>()),
+  noteAiUsage: vi.fn(),
+}))
+
 const { askHelp } = await import('../actions/ask-help')
+const { noteAiUsage } = await import('@/lib/ai')
 
 const TOPICS = [
   {
@@ -159,5 +165,25 @@ describe('askHelp', () => {
     expect(sent[0]).toContain('source: /help#')
     expect(sent[0]).toContain('How do I renew? I am at [email]')
     expect(sent[0]).not.toContain('ada@bakes.ng')
+  })
+
+  it('counts each question: answered, pointed to email, or no answer (AI phase 4)', async () => {
+    modelAnswers({
+      answered: true,
+      answer: 'Renew from your domain’s page.',
+      sources: ['/pricing'],
+    })
+    await askHelp({ question: 'How do I renew?' })
+    modelAnswers({ answered: false, answer: '', sources: [] })
+    await askHelp({ question: 'Can you host my email?' })
+    modelAnswers({}, 503)
+    await askHelp({ question: 'How do I renew?' })
+    expect(
+      vi.mocked(noteAiUsage).mock.calls.map((call) => [call[0], call[2].ok, call[3] ?? false]),
+    ).toEqual([
+      ['help_answer', true, false],
+      ['help_answer', true, true],
+      ['help_answer', false, false],
+    ])
   })
 })

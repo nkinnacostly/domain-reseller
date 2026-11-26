@@ -1,7 +1,7 @@
 import { formatUsdCents } from '@dr/shared/admin'
 
 /**
- * The 11 limits in `ops_settings` the owner tunes from Settings
+ * The 12 limits in `ops_settings` the owner tunes from Settings
  * (docs/ADMIN-SPEC.md §3.1.2 `admin_update_ops_settings`, §5.2 B13). Each is
  * held here in the unit the wrapper takes — kobo, cents, minutes, days or a
  * count — with the wrapper's own bounds, so the form refuses what SQL would
@@ -22,13 +22,14 @@ export const LIMIT_KEYS = [
   'velocity_trusted_after_days',
   'velocity_trusted_after_paid_orders',
   'float_alert_cents',
+  'ai_budget_cents',
 ] as const
 
 export type LimitKey = (typeof LIMIT_KEYS)[number]
 
 export type Limits = Readonly<Record<LimitKey, number>>
 
-export type LimitGroup = 'refunds' | 'orders' | 'velocity' | 'float'
+export type LimitGroup = 'refunds' | 'orders' | 'velocity' | 'float' | 'ai'
 
 /** How a limit is typed and read: naira, dollars, or a whole number of something. */
 export type LimitUnit = 'kobo' | 'cents' | 'minutes' | 'days' | 'domains' | 'orders'
@@ -50,6 +51,7 @@ export const LIMIT_GROUPS: readonly { id: LimitGroup; title: string }[] = [
   { id: 'orders', title: 'Orders' },
   { id: 'velocity', title: 'Velocity' },
   { id: 'float', title: 'Float' },
+  { id: 'ai', title: 'AI' },
 ]
 
 export const LIMIT_FIELDS: readonly LimitField[] = [
@@ -152,6 +154,15 @@ export const LIMIT_FIELDS: readonly LimitField[] = [
     min: 0,
     max: 1_000_000,
   },
+  {
+    key: 'ai_budget_cents',
+    group: 'ai',
+    label: 'Alert when AI spend this month passes',
+    help: "DeepSeek's cost, estimated from token counts at its listed prices, in US dollars. Months run in WAT.",
+    unit: 'cents',
+    min: 100,
+    max: 1_000_000,
+  },
 ]
 
 export const LIMIT_FIELD: Readonly<Record<LimitKey, LimitField>> = Object.fromEntries(
@@ -200,7 +211,10 @@ export function limitWords(field: LimitField, value: number): string {
 /** The bounds beside each input: "Up to ₦1,000,000." · "5 to 1,440 minutes." */
 export function boundsWords(field: LimitField): string {
   if (field.unit === 'kobo' || field.unit === 'cents') {
-    return `Up to ${limitWords(field, field.max)}.`
+    // A floor of a whole naira or dollar is said; a floor of one kobo or cent goes without saying.
+    return field.min > 1
+      ? `${limitWords(field, field.min)} to ${limitWords(field, field.max)}.`
+      : `Up to ${limitWords(field, field.max)}.`
   }
   const unit = limitWords(field, field.max).replace(/^[\d,]+ /, '')
   return `${field.min.toLocaleString('en-GB')} to ${field.max.toLocaleString('en-GB')} ${unit}.`

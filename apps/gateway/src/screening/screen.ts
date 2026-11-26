@@ -12,6 +12,7 @@ import {
 } from '@dr/shared/ai'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Env } from '../env'
+import { countingAsk } from '../lib/ai-usage'
 
 /**
  * Order screening (migration 73; docs: "Making AI the core of MyDomainsHub",
@@ -218,7 +219,13 @@ export function screeningJobFor(
   return createScreeningJob({
     store: createScreeningStore(client),
     ask: apiKey
-      ? (request) => askForJson({ apiKey, model: MODEL }, request, screeningAnswer)
+      ? countingAsk(
+          (request) => askForJson({ apiKey, model: MODEL }, request, screeningAnswer),
+          'order_screening',
+          MODEL,
+          client,
+          log,
+        )
       : null,
     testMode: false,
     log,

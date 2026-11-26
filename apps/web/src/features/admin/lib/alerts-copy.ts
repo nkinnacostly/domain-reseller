@@ -35,6 +35,7 @@ export const ALERT_KIND_LABEL: Readonly<Record<string, string>> = {
   ssl_status_unrecognised: 'Certificate status not recognised',
   order_stuck: 'Order stuck',
   order_screening_review: 'New name to check',
+  ai_budget: 'AI spend past the budget',
   refund_held: 'Refund held for approval',
   refund_needs_attention: 'Refund needs a person',
   refund_failed: 'Refund failed',

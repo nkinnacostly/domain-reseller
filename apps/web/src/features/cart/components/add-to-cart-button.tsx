@@ -6,6 +6,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { addToCart } from '../actions/cart'
+import type { AddedVia } from '../lib/added-via'
 import { announceCartCount } from '../lib/count'
 
 /**
@@ -18,6 +19,7 @@ export function AddToCartButton({
   label = domain,
   size = 'default',
   className,
+  addedVia,
 }: {
   /** The ASCII form, which is what the cart stores. */
   domain: string
@@ -25,6 +27,8 @@ export function AddToCartButton({
   label?: string
   size?: 'default' | 'large'
   className?: string
+  /** The AI feature the name came from, kept with the cart line (AI phase 4). */
+  addedVia?: AddedVia
 }) {
   const add = useAction(addToCart, {
     onSuccess: ({ data }) => {
@@ -58,7 +62,7 @@ export function AddToCartButton({
     <div className={cn('flex flex-col gap-1.5', className)}>
       <button
         type="button"
-        onClick={() => add.execute({ domain })}
+        onClick={() => add.execute(addedVia ? { domain, addedVia } : { domain })}
         disabled={add.isPending}
         aria-busy={add.isPending || undefined}
         aria-label={`Add ${label} to cart`}

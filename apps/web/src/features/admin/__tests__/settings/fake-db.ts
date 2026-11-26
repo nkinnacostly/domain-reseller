@@ -100,6 +100,7 @@ export function opsRow(overrides: Record<string, unknown> = {}) {
     velocity_standard_after_days: 9,
     velocity_trusted_after_days: 41,
     velocity_trusted_after_paid_orders: 6,
+    ai_budget_cents: 7_350,
     ...overrides,
   }
 }

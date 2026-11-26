@@ -32,7 +32,7 @@ export default function IdeasPage() {
       <main id="main">
         <PageHero
           title="Find a name for your business"
-          intro="Describe what you do in a sentence. We suggest names, check which are free, and show what each costs now and at renewal."
+          intro="Describe what you do in a sentence. We suggest names — in English, Pidgin, Yoruba, Igbo or Hausa — check which are free, and show what each costs now and at renewal."
           icons={[Lightbulb, MagnifyingGlass, SealCheck]}
         >
           <Suspense fallback={<NameFinderPanelSkeleton />}>

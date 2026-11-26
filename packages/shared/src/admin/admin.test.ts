@@ -110,6 +110,7 @@ describe('adminHrefForAlertKey', () => {
     [`order_stuck:${id}`, `/admin/orders/${id}`],
     [`order_screening:${id.toUpperCase()}`, `/admin/screening#line-${id}`],
     ['order_screening:nope', '/admin/screening'],
+    ['ai_budget:2026-11', '/admin/ai'],
     [`refund:${id}`, `/admin/refunds/${id}`],
     [`refund_overdue:${id}`, `/admin/refunds/${id}`],
     [`refund_slow:${id.toUpperCase()}`, `/admin/refunds/${id}`],

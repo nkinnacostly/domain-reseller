@@ -67,6 +67,7 @@ const LIMITS: Limits = {
   velocity_trusted_after_days: 41,
   velocity_trusted_after_paid_orders: 6,
   float_alert_cents: 4_321,
+  ai_budget_cents: 7_350,
 }
 
 beforeEach(() => vi.clearAllMocks())

@@ -358,6 +358,8 @@ export const placeOrder = authAction
           ...renewalTermColumn(line.renewYears),
           // FR-C10 — a domain's own host wins over the order's (migration 29).
           ...hosts.columnsFor(line.domain),
+          // AI phase 4 (migration 75): counted on the admin AI page, nothing else.
+          added_via: line.addedVia ?? null,
         })),
         // FR-SSL-6 (migration 39): one subscription term; its "renewal" is what a
         // new certificate cost today (N8). Paid, it becomes a certificate and an

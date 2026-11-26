@@ -20,7 +20,7 @@ import {
 
 /**
  * The limits form (docs/ADMIN-SPEC.md §3.1.2 `admin_update_ops_settings`,
- * §5.2 B13): exactly the 11 keys the wrapper takes, each with the wrapper's
+ * §5.2 B13): exactly the 12 keys the wrapper takes — migration 75's version — each with the wrapper's
  * own bounds, read as decimal text — never through a float — and the two
  * rules that span fields. Every figure here is a non-default limit, so no
  * wording can pass by repeating a default.
@@ -39,20 +39,24 @@ const LIMITS: Limits = {
   velocity_trusted_after_days: 41,
   velocity_trusted_after_paid_orders: 6,
   float_alert_cents: 4_321,
+  ai_budget_cents: 7_350,
 }
 
+// Migration 75 redefines the wrapper with the AI budget; the latest definition is the one that runs.
 const MIGRATION = readFileSync(
-  join(__dirname, '../../../../../../../supabase/migrations/00000000000040_admin.sql'),
+  join(
+    __dirname,
+    '../../../../../../../supabase/migrations/00000000000075_ai_usage_and_impact.sql',
+  ),
   'utf8',
 )
+const WRAPPER = /create (?:or replace )?function public\.admin_update_ops_settings/i
 
-describe('the 11 limits', () => {
-  it('are exactly the keys admin_update_ops_settings accepts, grouped Refunds · Orders · Velocity · Float', () => {
+describe('the 12 limits', () => {
+  it('are exactly the keys admin_update_ops_settings accepts, grouped Refunds · Orders · Velocity · Float · AI', () => {
     expect(LIMIT_FIELDS.map((field) => field.key)).toEqual([...LIMIT_KEYS])
-    expect(LIMIT_KEYS).toHaveLength(11)
-    const body = MIGRATION.slice(
-      MIGRATION.indexOf('create function public.admin_update_ops_settings'),
-    )
+    expect(LIMIT_KEYS).toHaveLength(12)
+    const body = MIGRATION.slice(MIGRATION.search(WRAPPER))
     const accepted = /if v_key not in \(([^)]*)\)/.exec(body)?.[1] ?? ''
     const sqlKeys = [...accepted.matchAll(/'([a-z_]+)'/g)].map((match) => match[1])
     expect([...sqlKeys].sort()).toEqual([...LIMIT_KEYS].sort())
@@ -61,6 +65,7 @@ describe('the 11 limits', () => {
       'Orders',
       'Velocity',
       'Float',
+      'AI',
     ])
     for (const field of LIMIT_FIELDS) {
       expect(LIMIT_GROUPS.map((group) => group.id)).toContain(field.group)
@@ -68,9 +73,7 @@ describe('the 11 limits', () => {
   })
 
   it("carry the wrapper's own bounds, key by key", () => {
-    const body = MIGRATION.slice(
-      MIGRATION.indexOf('create function public.admin_update_ops_settings'),
-    )
+    const body = MIGRATION.slice(MIGRATION.search(WRAPPER))
     for (const field of LIMIT_FIELDS) {
       const bound = new RegExp(
         `v_key = '${field.key}' and v_num not between (\\d+) and (\\d+)`,
@@ -90,6 +93,7 @@ describe('the 11 limits', () => {
       '0 to 1,000 paid orders.',
     )
     expect(boundsWords(LIMIT_FIELD.float_alert_cents)).toBe('Up to $10,000.00.')
+    expect(boundsWords(LIMIT_FIELD.ai_budget_cents)).toBe('$1.00 to $10,000.00.')
   })
 })
 

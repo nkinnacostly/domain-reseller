@@ -1,3 +1,4 @@
+import type { NameIdeaLanguage } from '@dr/shared/ai'
 import type { SearchRow } from './rows'
 
 /**
@@ -12,6 +13,19 @@ export const DESCRIPTION_MAX = 400
 
 /** The extensions offered, in order, where the catalogue prices them. */
 export const NAME_FINDER_EXTENSIONS = ['com', 'ng', 'com.ng', 'co', 'io', 'org'] as const
+
+/**
+ * The languages the finder answers in (AI phase 4), for the picker: the
+ * codes `@dr/shared/ai` takes (a test holds them together), written here
+ * because a client component may not import the AI module.
+ */
+export const NAME_FINDER_LANGUAGES: readonly { code: NameIdeaLanguage; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'pcm', label: 'Pidgin' },
+  { code: 'yo', label: 'Yoruba' },
+  { code: 'ig', label: 'Igbo' },
+  { code: 'ha', label: 'Hausa' },
+]
 
 export type NameIdeaRow = { row: SearchRow; why: string | null }
 

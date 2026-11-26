@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger'
 import { isMissingTable } from '@/lib/supabase/missing-table'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { ADDED_VIA, type AddedVia } from '../lib/added-via'
 import type { StoredLine } from '../lib/lines'
 import type { StoredSslLine } from '../lib/ssl-lines'
 import { CART_COOKIE, hashCartToken } from '../lib/token'
@@ -23,7 +24,7 @@ import { CART_COOKIE, hashCartToken } from '../lib/token'
 export type Owner = { kind: 'user'; userId: string } | { kind: 'anon'; tokenHash: string }
 
 const LINE_COLUMNS =
-  'id, domain, tld, period_years, privacy, auto_renew, quoted_total_kobo, quoted_renewal_kobo, quoted_at'
+  'id, domain, tld, period_years, privacy, auto_renew, quoted_total_kobo, quoted_renewal_kobo, quoted_at, added_via'
 
 function toLine(row: {
   id: string
@@ -35,6 +36,7 @@ function toLine(row: {
   quoted_total_kobo: number
   quoted_renewal_kobo: number
   quoted_at: string
+  added_via: string | null
 }): StoredLine {
   return {
     id: row.id,
@@ -46,8 +48,12 @@ function toLine(row: {
     quotedTotalKobo: Number(row.quoted_total_kobo),
     quotedRenewalKobo: Number(row.quoted_renewal_kobo),
     quotedAt: row.quoted_at,
+    addedVia: toAddedVia(row.added_via),
   }
 }
+
+const toAddedVia = (value: string | null): AddedVia | null =>
+  ADDED_VIA.find((via) => via === value) ?? null
 
 /** Who is shopping: the signed-in user, else the anonymous token, else nobody yet. */
 export async function currentOwner(): Promise<{ owner: Owner | null; anonToken: string | null }> {
@@ -183,22 +189,27 @@ export type NewLine = {
   quotedTotalKobo: number
   quotedRenewalKobo: number
   quotedFxRateId: string
+  /** AI phase 4: the AI feature the name came from, if any. */
+  addedVia?: AddedVia | null
 }
 
 /** Adds a line; adding a domain already in the cart is a no-op, not an error. */
 export async function insertLine(cartId: string, line: NewLine): Promise<void> {
-  const { error } = await createServiceClient().from('cart_items').upsert(
-    {
-      cart_id: cartId,
-      domain: line.domain,
-      tld: line.tld,
-      period_years: line.periodYears,
-      quoted_total_kobo: line.quotedTotalKobo,
-      quoted_renewal_kobo: line.quotedRenewalKobo,
-      quoted_fx_rate_id: line.quotedFxRateId,
-    },
-    { onConflict: 'cart_id,domain', ignoreDuplicates: true },
-  )
+  const { error } = await createServiceClient()
+    .from('cart_items')
+    .upsert(
+      {
+        cart_id: cartId,
+        domain: line.domain,
+        tld: line.tld,
+        period_years: line.periodYears,
+        quoted_total_kobo: line.quotedTotalKobo,
+        quoted_renewal_kobo: line.quotedRenewalKobo,
+        quoted_fx_rate_id: line.quotedFxRateId,
+        added_via: line.addedVia ?? null,
+      },
+      { onConflict: 'cart_id,domain', ignoreDuplicates: true },
+    )
   if (error) throw error
 }
 

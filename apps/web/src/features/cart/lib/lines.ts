@@ -1,4 +1,5 @@
 import { periodTotalKobo, type TldPricing } from '@dr/shared'
+import type { AddedVia } from './added-via'
 import type { PricedSslLine } from './ssl-lines'
 
 /**
@@ -20,6 +21,8 @@ export type StoredLine = {
   quotedTotalKobo: number
   quotedRenewalKobo: number
   quotedAt: string
+  /** AI phase 4: the AI feature the name came from, copied to the order line. */
+  addedVia?: AddedVia | null
 }
 
 /**

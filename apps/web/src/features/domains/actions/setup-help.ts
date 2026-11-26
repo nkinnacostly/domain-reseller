@@ -2,7 +2,7 @@
 
 import { askForJson } from '@dr/shared/ai'
 import { z } from 'zod'
-import { aiSettings } from '@/lib/ai'
+import { aiSettings, noteAiUsage } from '@/lib/ai'
 import { BUSINESS } from '@/lib/business'
 import { logger } from '@/lib/logger'
 import { LIMITS, withinLimit } from '@/lib/rate-limit'
@@ -64,6 +64,7 @@ export const explainSetup = authAction
       setupHelpRequest(facts, BUSINESS.email),
       setupHelpAnswer,
     )
+    noteAiUsage('setup_help', settings, answer)
     if (!answer.ok) {
       logger.warn({ reason: answer.reason, status: answer.status }, 'setup help: no answer')
       return { ok: false, reason: 'unavailable' }

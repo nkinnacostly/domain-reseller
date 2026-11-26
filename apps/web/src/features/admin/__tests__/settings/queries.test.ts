@@ -52,7 +52,7 @@ function rpcs(rpc: Rpc) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('the limits', () => {
-  it('reads ten columns, and the float alert already in cents from admin_float (D24)', async () => {
+  it('reads eleven columns, and the float alert already in cents from admin_float (D24)', async () => {
     const reads = fakeService(() => ({ data: opsRow() }))
     const session = rpcs({ admin_float: { data: { alertCents: 4_321, balanceCents: 1 } } })
     const admin = await principal({ role: 'owner' })
@@ -68,6 +68,7 @@ describe('the limits', () => {
       velocity_trusted_after_days: 41,
       velocity_trusted_after_paid_orders: 6,
       float_alert_cents: 4_321,
+      ai_budget_cents: 7_350,
     })
     expect(reads[0]?.table).toBe('ops_settings')
     // No dollar figure is read under features/admin.

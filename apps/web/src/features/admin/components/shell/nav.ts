@@ -12,6 +12,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  Sparkles,
   Truck,
   Users,
 } from 'lucide-react'
@@ -46,6 +47,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         badge: { count: (c) => c.stuckOrders, words: 'stuck' },
       },
       { href: '/admin/screening', label: 'Name checks', icon: ScanSearch },
+      { href: '/admin/ai', label: 'AI', icon: Sparkles },
       {
         href: '/admin/refunds',
         label: 'Refunds',

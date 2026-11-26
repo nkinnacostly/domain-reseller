@@ -681,6 +681,44 @@ describe('placeOrder — creating the order', () => {
     ])
   })
 
+  it('copies where a line came from to the order line, and nothing for an ordinary one (AI phase 4)', async () => {
+    const fromFinder = {
+      ...LINE,
+      id: 'line-2',
+      domain: 'getpaid.co',
+      tld: 'co',
+      addedVia: 'name_finder',
+    }
+    vi.mocked(getCartView).mockResolvedValue({
+      state: 'ready',
+      certificates: [],
+      lines: [LINE, fromFinder],
+      totals: TOTALS,
+      vatPct: 7.5,
+      lockMinutes: 30,
+    } as never)
+    vi.mocked(checkAvailability).mockImplementation(async (stems, [tld]) => ({
+      ok: true,
+      results: stems.map((name) => ({
+        name,
+        tld: tld ?? '',
+        domain: `${name}.${tld}`,
+        status: 'available' as const,
+      })),
+    }))
+    answers.tlds = [
+      { name: 'com', register_usd: 11.31, renew_usd: 11.51, is_country_code: false },
+      { name: 'co', register_usd: 19.49, renew_usd: 38.99, is_country_code: true },
+    ]
+
+    await placeOrder(INPUT)
+
+    expect(inserted.items[0]).toEqual([
+      expect.objectContaining({ domain: 'getpaid.com', added_via: null }),
+      expect.objectContaining({ domain: 'getpaid.co', added_via: 'name_finder' }),
+    ])
+  })
+
   it('gives Flutterwave the registrant’s email when the account has none', async () => {
     userClient({ email: null })
     await placeOrder(INPUT)

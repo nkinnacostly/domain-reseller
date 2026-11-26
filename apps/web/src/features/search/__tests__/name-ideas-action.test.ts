@@ -17,8 +17,13 @@ vi.mock('@/lib/rate-limit', async (original) => ({
   withinLimit: vi.fn(),
 }))
 vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
+vi.mock('@/lib/ai', async (original) => ({
+  ...(await original<typeof import('@/lib/ai')>()),
+  noteAiUsage: vi.fn(),
+}))
 
 const { findNameIdeas } = await import('../actions/name-ideas')
+const { noteAiUsage } = await import('@/lib/ai')
 const { LIMITS } = await import('@/lib/rate-limit')
 
 const DEEPSEEK = 'https://api.deepseek.com/chat/completions'
@@ -169,5 +174,39 @@ describe('findNameIdeas', () => {
     modelAnswers([{ label: 'shortname' }])
     expect(await ask()).toEqual({ ok: true, ideas: [], checked: 0 })
     expect(checkAvailability).not.toHaveBeenCalled()
+  })
+})
+
+describe('findNameIdeas — AI phase 4', () => {
+  it('names the language after the quoted description, and counts the call', async () => {
+    modelAnswers([{ label: 'akaraoja', why: 'Ó rọrùn' }])
+    await findNameIdeas({
+      description: 'A buka in Lagos selling akara',
+      tld: 'com',
+      language: 'ha',
+    })
+    const messages = (sent[0]?.body.messages ?? []) as { content: string }[]
+    expect(messages[1]?.content).toMatch(/"""\nLanguage: Hausa$/)
+    expect(noteAiUsage).toHaveBeenCalledWith(
+      'name_finder',
+      expect.objectContaining({ model: 'deepseek-flash' }),
+      expect.objectContaining({ ok: true }),
+    )
+  })
+
+  it('counts a failed call too, and refuses a language it does not offer', async () => {
+    modelAnswers([], 503)
+    expect(await ask()).toEqual({ ok: false, reason: 'unavailable' })
+    expect(noteAiUsage).toHaveBeenCalledWith(
+      'name_finder',
+      expect.anything(),
+      expect.objectContaining({ ok: false }),
+    )
+    const refused = await findNameIdeas({
+      description: 'A bakery in Ibadan that delivers bread',
+      tld: 'com',
+      language: 'fr' as never,
+    })
+    expect(refused?.validationErrors).toBeDefined()
   })
 })

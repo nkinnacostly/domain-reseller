@@ -4,7 +4,7 @@ import { askForJson, redactContactDetails } from '@dr/shared/ai'
 import { z } from 'zod'
 import { LLMS_PAGES } from '@/features/seo/lib/llms'
 import { plainText } from '@/features/seo/lib/plain-text'
-import { aiSettings } from '@/lib/ai'
+import { aiSettings, noteAiUsage } from '@/lib/ai'
 import { BUSINESS } from '@/lib/business'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
@@ -64,10 +64,12 @@ export const askHelp = actionClient
       helpAnswerSchema,
     )
     if (!answer.ok) {
+      noteAiUsage('help_answer', settings, answer)
       logger.warn({ reason: answer.reason, status: answer.status }, 'help answer: no answer')
       return { ok: false, reason: 'unavailable' }
     }
     const help = cleanHelpAnswer(answer.value, sources)
+    noteAiUsage('help_answer', settings, answer, !help.answered)
     logger.info(
       {
         answered: help.answered,
