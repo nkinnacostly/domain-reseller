@@ -285,6 +285,15 @@ export const handlers = [
 
   ...adminHandlers(),
 
+  // OpenAI's published ChatGPT connector ranges (AI phase 5): a short list in
+  // the published shape. The MCP server gives these one shared bucket.
+  http.get('https://openai.com/chatgpt-connectors.json', () =>
+    HttpResponse.json({
+      creationTime: '2026-11-25T07:22:21.491929',
+      prefixes: [{ ipv4Prefix: '104.210.139.192/28' }, { ipv4Prefix: '12.105.90.64/27' }],
+    }),
+  ),
+
   // Cloudflare Turnstile siteverify (SEC-9): a person, as Cloudflare answers a
   // good token. Tests override per case for refusals and outages.
   http.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', () =>

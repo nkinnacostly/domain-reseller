@@ -10,6 +10,14 @@ export const MCP_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] 
 export const MCP_SERVER_INFO = { name: 'mydomainshub', title: 'MyDomainsHub', version: '1.0.0' }
 export const MCP_INSTRUCTIONS =
   'Search and price domain names at MyDomainsHub, a domain registrar for Nigeria. Prices are in naira, shown with their renewal price, before VAT. This server never takes payment or changes anything. Buying happens on mydomainshub.com: create_cart_link makes a link where the person adds the names to their cart and pays.'
+/**
+ * /mcp/chatgpt (AI phase 5): OpenAI's plugin rules (5.1) let a plugin sell
+ * only physical goods and forbid linking straight to a checkout, so the
+ * ChatGPT server has no cart link — it answers, and the person buys on our
+ * site of their own accord.
+ */
+export const MCP_INSTRUCTIONS_READ_ONLY =
+  'Search and price domain names at MyDomainsHub, a domain registrar for Nigeria. Prices are in naira, shown with their renewal price, before VAT. This server only reads: it never takes payment, adds to a cart or changes anything.'
 
 export type JsonSchema = Record<string, unknown>
 
@@ -52,7 +60,11 @@ const result = (id: Id, value: Record<string, unknown>): McpReply => ({
 })
 
 /** One JSON-RPC message in, one answer out; a notification or a response is accepted with no body. */
-export async function handleMcp(message: unknown, tools: readonly McpTool[]): Promise<McpReply> {
+export async function handleMcp(
+  message: unknown,
+  tools: readonly McpTool[],
+  instructions: string = MCP_INSTRUCTIONS,
+): Promise<McpReply> {
   if (!isRecord(message) || message.jsonrpc !== '2.0') {
     return rpcError(null, RPC.invalidRequest, 'Expected one JSON-RPC 2.0 message.', 400)
   }
@@ -72,7 +84,7 @@ export async function handleMcp(message: unknown, tools: readonly McpTool[]): Pr
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
         serverInfo: MCP_SERVER_INFO,
-        instructions: MCP_INSTRUCTIONS,
+        instructions,
       })
     }
     case 'ping':

@@ -1,10 +1,10 @@
 import 'server-only'
 
-import { formatNaira, type TldPricing } from '@dr/shared'
+import { formatNaira } from '@dr/shared'
 import { headers } from 'next/headers'
 import { cartAddHref, MAX_LINK_DOMAINS } from '@/features/cart/lib/add-link'
+import { priceOf, priceWords } from '@/features/pricing/lib/price-words'
 import { POPULAR_TLDS } from '@/features/pricing/lib/public-row'
-import { priceWithRenewal } from '@/features/pricing/lib/terms'
 import { getPricedCatalogue, type PricedCatalogue } from '@/features/pricing/queries/pricing'
 import { toUnicodeHost } from '@/features/search/lib/idn'
 import { planSearch, stemIssue } from '@/features/search/lib/plan'
@@ -15,7 +15,7 @@ import { clientAddress } from '@/lib/client-ip'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { addressKey, LIMITS, withinLimit } from '@/lib/rate-limit'
-import { isAnthropicAddress } from '../lib/addresses'
+import { isAnthropicAddress, isOpenAiAddress } from '../lib/addresses'
 import type { McpTool, ToolResult } from '../lib/protocol'
 import {
   CART_LINK_SCHEMA,
@@ -27,6 +27,7 @@ import {
   searchInput,
   VAT_NOTE,
 } from '../lib/tools'
+import { openAiPrefixes } from './openai-ranges'
 
 /**
  * The MCP tools at work (feature 8). Prices come from the tables, never from
@@ -45,35 +46,28 @@ const BUSY: ToolResult = {
   isError: true,
 }
 
-function priceOf(pricing: TldPricing) {
-  return {
-    firstTerm: { naira: formatNaira(pricing.firstTerm.priceKobo), years: pricing.firstTerm.years },
-    renewal: {
-      naira: formatNaira(pricing.renewalTerm.priceKobo),
-      years: pricing.renewalTerm.years,
-    },
-  }
-}
-
-/** "₦18,300 for the first year, then ₦18,700 a year" — never a price without its renewal (N8). */
-function priceWords(pricing: TldPricing): string {
-  const price = priceOf(pricing)
-  return priceWithRenewal(
-    pricing.tld,
-    { price: price.firstTerm.naira, years: price.firstTerm.years },
-    { price: price.renewal.naira, years: price.renewal.years },
-  )
-}
-
 const absolute = (path: string) => new URL(path, env.NEXT_PUBLIC_APP_URL).toString()
 
+/**
+ * The bucket a request draws on: Claude's users all arrive from Anthropic's
+ * range and ChatGPT's from OpenAI's published list, so each assistant gets one
+ * larger bucket; anyone else is limited per address.
+ */
+async function callBucket(): Promise<{
+  key: string
+  limit: { max: number; windowSeconds: number }
+}> {
+  const address = clientAddress(await headers())
+  if (isAnthropicAddress(address)) return { key: 'mcp:anthropic', limit: LIMITS.mcpClaudeCalls }
+  if (isOpenAiAddress(address, await openAiPrefixes())) {
+    return { key: 'mcp:openai', limit: LIMITS.mcpOpenAiCalls }
+  }
+  return { key: await addressKey('mcp'), limit: LIMITS.mcpCalls }
+}
+
 async function limited(scope: 'calls' | 'search'): Promise<boolean> {
-  // Claude's users all arrive from Anthropic's range: one larger bucket for them.
-  const fromClaude = isAnthropicAddress(clientAddress(await headers()))
-  const ok = fromClaude
-    ? await withinLimit('mcp:anthropic', LIMITS.mcpClaudeCalls)
-    : await withinLimit(await addressKey('mcp'), LIMITS.mcpCalls)
-  if (!ok) return true
+  const bucket = await callBucket()
+  if (!(await withinLimit(bucket.key, bucket.limit))) return true
   if (scope === 'search' && !(await withinLimit('mcp_search:all', LIMITS.mcpSearchAll))) return true
   return false
 }
@@ -272,3 +266,12 @@ export const MCP_TOOLS: McpTool[] = [
     run: createCartLink,
   },
 ]
+
+/**
+ * The tools ChatGPT is offered at /mcp/chatgpt (AI phase 5): search and
+ * prices only. OpenAI's plugin rules (5.1) forbid linking straight to a
+ * checkout, which `create_cart_link` does.
+ */
+export const MCP_TOOLS_READ_ONLY: McpTool[] = MCP_TOOLS.filter(
+  (tool) => tool.name !== 'create_cart_link',
+)

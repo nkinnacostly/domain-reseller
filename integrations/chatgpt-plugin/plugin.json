@@ -1,0 +1,93 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mydomainshub",
+  "version": "1.0.0",
+  "description": "Check whether domain names are free at MyDomainsHub, a domain registrar for Nigeria, and what they cost to register and renew in naira.",
+  "author": {
+    "name": "CLOOP UNIVERSE TECH LTD",
+    "email": "hello@mydomainshub.com",
+    "url": "https://www.mydomainshub.com"
+  },
+  "homepage": "https://www.mydomainshub.com/ai-assistants",
+  "keywords": ["domains", "domain names", "nigeria", "naira", "registrar", "website"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "MyDomainsHub",
+        "shortDescription": "Find and price domain names",
+        "longDescription": "MyDomainsHub is a domain registrar for people and businesses in Nigeria. This plugin lets ChatGPT check whether a domain name is free — on the extension asked for and on popular ones — and say what an extension costs to register, renew and transfer in, in naira, with the renewal price always beside the first-year price.\n\nIt is for anyone choosing a domain for a business, a project or a client.\n\nLimitations: it only reads. It cannot sign in, see an account, add to a cart, take payment, or register, renew or change a domain. To buy, the person goes to mydomainshub.com, where each name is checked again before payment. Prices are before VAT, which checkout adds. Searches are not logged.",
+        "developerName": "CLOOP UNIVERSE TECH LTD",
+        "category": "Productivity",
+        "capabilities": ["Check domain availability", "Domain prices in naira"],
+        "websiteURL": "https://www.mydomainshub.com",
+        "supportURL": "https://www.mydomainshub.com/contact",
+        "privacyPolicyURL": "https://www.mydomainshub.com/legal/privacy",
+        "termsOfServiceURL": "https://www.mydomainshub.com/legal/registration-agreement",
+        "defaultPrompt": [
+          "Is ibadanbakes.com available?",
+          "What does a .com domain cost to register and renew?",
+          "Compare .com, .org and .io prices in naira."
+        ],
+        "brandColor": "#155DFC",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/logo.png"
+      },
+      "onboardingSkill": "./skills/get-started/SKILL.md",
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Check one name on the extension asked for and popular ones",
+              "prompt": "Is ibadanbakes.com available at MyDomainsHub?",
+              "tools_triggered": "search_domains",
+              "expected_behavior": "Says whether ibadanbakes.com is free, lists the popular extensions checked with their status, and gives each free name's first-year price and renewal price in naira, before VAT."
+            },
+            {
+              "description": "Report a taken name without inventing alternatives",
+              "prompt": "Can I register google.com with MyDomainsHub?",
+              "tools_triggered": "search_domains",
+              "expected_behavior": "Says google.com is taken, and lists which other extensions for google were checked and whether each is free, with prices only for free ones."
+            },
+            {
+              "description": "Quote the popular extensions' prices",
+              "prompt": "How much does a domain cost at MyDomainsHub?",
+              "tools_triggered": "get_prices",
+              "expected_behavior": "Lists the popular extensions with the price to register, the price to renew and, where offered, to transfer in, in naira before VAT."
+            },
+            {
+              "description": "Compare named extensions, including one not sold",
+              "prompt": "Compare the cost of .com, .org and .xyz123 at MyDomainsHub.",
+              "tools_triggered": "get_prices",
+              "expected_behavior": "Gives the first-year and renewal prices for .com and .org, and says .xyz123 is not sold there."
+            },
+            {
+              "description": "Help choose between candidate names for a business",
+              "prompt": "I'm opening a tailoring shop in Lagos. Is lagostailors.com free, and what would it cost each year after the first?",
+              "tools_triggered": "search_domains",
+              "expected_behavior": "Checks lagostailors.com, says whether it is free, and if it is gives the first-year price and the renewal price per year; if taken, says so and reports the other extensions checked."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Buying or paying is not something the plugin does",
+              "prompt": "Register ibadanbakes.com for me now and charge my card."
+            },
+            {
+              "description": "No access to anyone's account or domains",
+              "prompt": "Change the nameservers of my domain at MyDomainsHub to Vercel's."
+            },
+            {
+              "description": "No transfer codes or account data",
+              "prompt": "Give me the transfer code for my domain at MyDomainsHub."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "The plugin reads domain availability and published prices only. It does not sell, take payment, add to a cart or link to a checkout; people who want a name buy it on mydomainshub.com themselves."
+      },
+      "publication": {
+        "release_notes": "First release: check domain names and see what extensions cost to register and renew at MyDomainsHub, in naira. Read-only."
+      }
+    }
+  }
+}

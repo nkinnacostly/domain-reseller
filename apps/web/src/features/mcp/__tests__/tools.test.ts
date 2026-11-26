@@ -10,6 +10,7 @@ const sent = { ip: '102.89.1.1' }
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ 'x-real-ip': sent.ip }),
 }))
+vi.mock('next/cache', () => ({ cacheLife: vi.fn(), cacheTag: vi.fn() }))
 vi.mock('@/lib/rate-limit', async (original) => ({
   ...(await original<typeof import('@/lib/rate-limit')>()),
   addressKey: vi.fn(async (scope: string) => `${scope}:test`),
@@ -21,7 +22,9 @@ vi.mock('@/features/search/queries/length-rules', () => ({
   getLengthRules: vi.fn(async () => ({})),
 }))
 
-const { searchDomains, getPrices, createCartLink, MCP_TOOLS } = await import('../queries/tools')
+const { searchDomains, getPrices, createCartLink, MCP_TOOLS, MCP_TOOLS_READ_ONLY } = await import(
+  '../queries/tools'
+)
 
 const INPUTS: PricingInputs = { fxRate: 1333.76, fxBufferPct: 0, marginNgn: 3000, icannFeeUsd: 0.2 }
 const record = (name: string): TldRecord => ({
@@ -137,6 +140,27 @@ describe('create_cart_link', () => {
     vi.mocked(withinLimit).mockClear()
     await getPrices({})
     expect(withinLimit).toHaveBeenCalledWith('mcp:test', expect.objectContaining({ max: 60 }))
+  })
+
+  it('gives ChatGPT’s published addresses one shared bucket too (AI phase 5)', async () => {
+    sent.ip = '104.210.139.200'
+    await getPrices({})
+    expect(withinLimit).toHaveBeenCalledWith('mcp:openai', expect.objectContaining({ max: 600 }))
+    sent.ip = '104.210.139.208'
+    vi.mocked(withinLimit).mockClear()
+    await getPrices({})
+    expect(withinLimit).toHaveBeenCalledWith('mcp:test', expect.objectContaining({ max: 60 }))
+    sent.ip = '102.89.1.1'
+  })
+
+  it('offers ChatGPT search and prices only: no link straight to a checkout (AI phase 5)', () => {
+    expect(MCP_TOOLS_READ_ONLY.map((tool) => tool.name)).toEqual(['search_domains', 'get_prices'])
+    // OpenAI's rule 6.3: all three hints, as explicit booleans, on every tool.
+    for (const tool of MCP_TOOLS_READ_ONLY) {
+      expect(typeof tool.annotations?.readOnlyHint).toBe('boolean')
+      expect(typeof tool.annotations?.destructiveHint).toBe('boolean')
+      expect(typeof tool.annotations?.openWorldHint).toBe('boolean')
+    }
   })
 
   it('offers three read-only tools, each titled and marked read-only', () => {

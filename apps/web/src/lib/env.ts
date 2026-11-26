@@ -74,6 +74,11 @@ export const env = createEnv({
     // Optional: without it the AI features say they are off and everything
     // else works. Server only; never sent personal data (lib/ai.ts).
     DEEPSEEK_API_KEY: z.string().min(1).optional(),
+    // AI phase 5: the token OpenAI's plugin dashboard asks us to serve at
+    // /.well-known/openai-apps-challenge to prove we own the MCP server's
+    // host. Not a secret — it is served to anyone who asks — but it changes
+    // per submission, so it is set on Vercel, not written in code.
+    OPENAI_APPS_CHALLENGE: z.string().trim().min(1).max(512).optional(),
     SENTRY_DSN: z.string().optional(),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   },
